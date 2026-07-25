@@ -6,7 +6,7 @@ toc: true
 ---
 
 **Last updated:** 2026-07-15  
-**Contact:** support@sconts.com  
+**Contact:** support@ddl.sconts.com  
 **Operator:** Project Super Team  
 **Site:** https://super.docs.sconts.com/
 
@@ -43,7 +43,7 @@ Order and license ledger: for the active subscription and **3 years** after it e
 
 ## 6. Your choices
 
-Email **support@sconts.com** to correct name/email, request a copy of order-related data we hold, or ask deletion where legally possible (we may keep minimal records for accounting, anti-fraud, or legal duty).
+Email **support@ddl.sconts.com** to correct name/email, request a copy of order-related data we hold, or ask deletion where legally possible (we may keep minimal records for accounting, anti-fraud, or legal duty).
 
 ## 7. Children
 

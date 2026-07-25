@@ -2,7 +2,7 @@ baseURL: "https://super.docs.sconts.com/"
 title: Project Super
 author:
   name: "Project Super Team"
-  email: "support@sconts.com"
+  email: "support@ddl.sconts.com"
 theme: hextra
 publishDir: "public"
 

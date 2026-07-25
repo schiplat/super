@@ -15,11 +15,11 @@ Compare editions in the [feature matrix](/docs/07-editions/feature-matrix/). Aft
 
 ## Checkout
 
-{{< purchase-cta label="Continue to checkout" empty="Checkout is not linked yet. Please check back soon, or email support@sconts.com." >}}
+{{< purchase-cta label="Continue to checkout" empty="Checkout is not linked yet. Please check back soon, or email support@ddl.sconts.com." >}}
 
 By continuing to checkout you agree to the [Terms of Service](/legal/terms/) and [Privacy Policy](/legal/privacy/).
 
-**Payment is completed on Afdian (爱发电), a third-party platform.** Super does not process your card or wallet directly. **Refunds and chargebacks follow Afdian’s platform rules**; see [Terms §6](/legal/terms/#6-refunds). Contact **support@sconts.com** if fulfillment is delayed after payment clears.
+**Payment is completed on Afdian, a third-party platform.** Super does not process your card or wallet directly. **Refunds and chargebacks follow Afdian’s platform rules**; see [Terms §6](/legal/terms/#6-refunds). Contact **support@ddl.sconts.com** if fulfillment is delayed after payment clears.
 
 Checkout is hosted on a third-party page so we can change payment providers without republishing Super itself. This docs page (`/go/pro/`) stays the stable link from the homepage and docs.
 
@@ -28,8 +28,44 @@ Checkout is hosted on a third-party page so we can change payment providers with
 On the checkout page:
 
 1. Choose the **Super Pro** plan (not the open-source supporter tier).
-2. Prefer **annual payment** (按年支付) — one annual payment maps to a **365-day** license.
+2. Prefer **annual payment** — one annual payment maps to a **365-day** license term.
 3. Fill in: display name, OS + arch (e.g. Linux arm64), and email.
 4. Delivery is typically within **24 hours** after payment clears.
 
 Open-source supporter tips do **not** include plugins or a license key.
+
+> **After the 365-day term ends, you can still use Super Pro plugins** on the Super versions your key already authorizes (see below). Expiry does **not** turn plugins off. Renew when you want to follow **newer** Super releases beyond that version span.
+
+## License version coverage
+
+Your key is **issued for a specific Super release line** at fulfillment. It also **includes free use of newer minor lines up to a signed maximum**.
+
+That version span stays valid **after the 365-day term**: you may keep running Pro plugins offline on those versions without renewing. What ends at day 365 is not “permission to use Pro,” but the window for **following newer Super lines** (and receiving a new key with a higher max). Beyond the signed maximum — or a new major — renew to get a new key.
+
+### Version timeline
+
+The chart below shows what a key covers (example for a key issued on the `1.2.x` line). The green range remains usable **during and after** the 365-day term:
+
+{{< license-version-span issued="1.2.x" through="1.4.x" next="1.5.x" >}}
+
+```mermaid
+flowchart LR
+  I["Issued for<br/>Super 1.2.x"] --> F["Free newer versions<br/>1.3.x … 1.4.x"]
+  F --> K["Keep using after<br/>365-day term ends"]
+  F --> R["Needs renewal<br/>1.5.x+ / next major"]
+  style I fill:#0f766e,stroke:#0f766e,color:#fff
+  style F fill:#14b8a6,stroke:#0f766e,color:#fff
+  style K fill:#ecfdf5,stroke:#0f766e,color:#134e4a
+  style R fill:#f3f2ef,stroke:#c4bfb4,color:#6b6760
+```
+
+| | What it means |
+|---|---|
+| **Issued for** | The Super line stamped when your key is created (example: `1.2.x`). |
+| **Free newer versions** | Newer minor lines through the signed max (example: `1.3.x` and `1.4.x`) — no extra payment. |
+| **After 365 days** | **Still usable** on that same issued→max span. Plugins are not revoked at expiry. |
+| **Needs renewal** | Past the max (example: `1.5.x+`) or a new major — renew to follow newer releases. |
+
+Current policy example: issued minor line **plus two** newer minor lines (`1.2.x` → through `1.4.x`). Your key shows the exact span.
+
+**Summary:** 365 days is the annual term; the **version span** is what you keep using afterward. The open-source `superd` / `super` binaries remain usable at any version without plugins.

@@ -396,8 +396,10 @@ The plugin re-reads `conf/notify.toml` and applies the new channel list immediat
 
 | Method | Path | Role | Description |
 |--------|------|------|-------------|
-| `GET` | `/api/v1/system/notify` | any (redacted for non-Admin) | Read current config |
+| `GET` | `/api/v1/system/notify` | any (secrets redacted for Viewer) | Read current config |
 | `PUT` | `/api/v1/system/notify` | Admin, Operator | Replace entire config |
+| `PUT` | `/api/v1/system/notify/channel` | Admin, Operator | Upsert a single channel |
+| `GET` | `/api/v1/system/notify/stats` | any authenticated | Delivery metrics / snapshots |
 | `POST` | `/api/v1/system/notify/test` | Admin, Operator | Send test notification |
 
 ### Read configuration
@@ -407,7 +409,7 @@ curl -H "Authorization: Bearer $TOKEN" \
   http://127.0.0.1:9002/api/v1/system/notify
 ```
 
-Sensitive fields (`secret`, `token`, `key`, `authorization`, etc.) are automatically masked as `********` for non-Admin users.
+Sensitive fields (`secret`, `token`, `key`, `authorization`, etc.) are automatically masked as `********` for Viewer.
 
 ### Update configuration
 

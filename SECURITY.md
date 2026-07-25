@@ -8,7 +8,7 @@ Security fixes are applied to the latest release on the `master` branch and back
 
 **Please do not open public GitHub issues for security vulnerabilities.**
 
-Email **support@sconts.com** with:
+Email **support@ddl.sconts.com** with:
 
 - Description of the issue and impact
 - Steps to reproduce

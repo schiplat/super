@@ -7,7 +7,7 @@
   {{- $url = .checkout_url | default "" -}}
 {{- end -}}
 {{- $label := .Get "label" | default "Continue to checkout" -}}
-{{- $empty := .Get "empty" | default "Checkout link is not configured yet. Check back soon, or email support@sconts.com." -}}
+{{- $empty := .Get "empty" | default "Checkout link is not configured yet. Check back soon, or email support@ddl.sconts.com." -}}
 {{- if $url -}}
 <p><a class="super-purchase-cta" href="{{ $url }}" rel="noopener noreferrer" target="_blank">{{ $label }}</a></p>
 {{- else -}}
