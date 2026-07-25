@@ -317,7 +317,7 @@ pub fn licensed_max_super_minor(claims: &LicenseClaims) -> Option<u32> {
 }
 
 /// Human-readable maximum licensed superd version for logs and CLI.
-pub fn licensed_version_span(claims: &LicenseClaims) -> String {
+pub fn licensed_version_scope(claims: &LicenseClaims) -> String {
     if let Some(issued) = license_issued_for_version(claims) {
         format!("{issued} → max {}", license_max_superd_version(claims))
     } else {

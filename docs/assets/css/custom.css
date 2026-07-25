@@ -108,18 +108,18 @@ a.hextra-nav-cta:hover {
 }
 
 /* /go/pro/ — license version coverage timeline */
-.license-span {
+.license-scope {
   margin: 1.25rem 0 1.5rem;
   padding: 1.1rem 1.15rem 1rem;
   border: 1px solid #e8e6e1;
   border-radius: 0.75rem;
   background: #fafaf7;
 }
-.dark .license-span {
+.dark .license-scope {
   border-color: #2a2a25;
   background: #161613;
 }
-.license-span__labels {
+.license-scope__labels {
   display: flex;
   flex-wrap: wrap;
   align-items: baseline;
@@ -132,31 +132,31 @@ a.hextra-nav-cta:hover {
   text-transform: uppercase;
   color: #6b6760;
 }
-.dark .license-span__labels {
+.dark .license-scope__labels {
   color: #9c9890;
 }
-.license-span__label--issued,
-.license-span__label--free {
+.license-scope__label--issued,
+.license-scope__label--free {
   color: #0f766e;
 }
-.dark .license-span__label--issued,
-.dark .license-span__label--free {
+.dark .license-scope__label--issued,
+.dark .license-scope__label--free {
   color: #2dd4bf;
 }
-.license-span__label--free {
+.license-scope__label--free {
   flex: 1;
   text-align: center;
 }
-.license-span__label--renew {
+.license-scope__label--renew {
   color: #9c9890;
 }
-.license-span__track {
+.license-scope__track {
   display: flex;
   align-items: stretch;
   gap: 0;
   min-height: 4.25rem;
 }
-.license-span__covered {
+.license-scope__covered {
   flex: 1 1 72%;
   display: flex;
   align-items: stretch;
@@ -166,7 +166,7 @@ a.hextra-nav-cta:hover {
   overflow: hidden;
   box-shadow: inset 0 0 0 1px rgb(15 118 110 / 0.25);
 }
-.license-span__seg {
+.license-scope__seg {
   flex: 1;
   display: flex;
   flex-direction: column;
@@ -177,27 +177,27 @@ a.hextra-nav-cta:hover {
   border-right: 1px solid rgb(255 255 255 / 0.22);
   text-align: center;
 }
-.license-span__seg:last-child {
+.license-scope__seg:last-child {
   border-right: none;
 }
-.license-span__seg--anchor {
+.license-scope__seg--anchor {
   background: rgb(0 0 0 / 0.12);
 }
-.license-span__ver {
+.license-scope__ver {
   font-size: 0.95rem;
   font-weight: 700;
   font-variant-numeric: tabular-nums;
   letter-spacing: -0.02em;
   line-height: 1.2;
 }
-.license-span__tag {
+.license-scope__tag {
   font-size: 0.65rem;
   font-weight: 600;
   letter-spacing: 0.04em;
   text-transform: uppercase;
   opacity: 0.9;
 }
-.license-span__gap {
+.license-scope__gap {
   flex: 0 0 0.45rem;
   background: repeating-linear-gradient(
     -45deg,
@@ -207,7 +207,7 @@ a.hextra-nav-cta:hover {
     #d6d3cd 5px
   );
 }
-.dark .license-span__gap {
+.dark .license-scope__gap {
   background: repeating-linear-gradient(
     -45deg,
     transparent,
@@ -216,7 +216,7 @@ a.hextra-nav-cta:hover {
     #3f3f38 5px
   );
 }
-.license-span__beyond {
+.license-scope__beyond {
   flex: 0 0 22%;
   min-width: 4.5rem;
   display: flex;
@@ -231,54 +231,54 @@ a.hextra-nav-cta:hover {
   color: #6b6760;
   text-align: center;
 }
-.dark .license-span__beyond {
+.dark .license-scope__beyond {
   border-color: #3f3f38;
   background: #1c1c18;
   color: #a19e96;
 }
-.license-span__footnote {
+.license-scope__footnote {
   margin: 0.75rem 0 0;
   font-size: 0.8125rem;
   line-height: 1.45;
   color: #6b6760;
 }
-.dark .license-span__footnote {
+.dark .license-scope__footnote {
   color: #9c9890;
 }
-.license-span__footnote strong {
+.license-scope__footnote strong {
   color: inherit;
   font-weight: 650;
 }
 @media (max-width: 640px) {
-  .license-span__labels {
+  .license-scope__labels {
     justify-content: flex-start;
   }
-  .license-span__label--free {
+  .license-scope__label--free {
     flex: none;
     text-align: left;
   }
-  .license-span__track {
+  .license-scope__track {
     flex-direction: column;
     gap: 0.4rem;
   }
-  .license-span__covered {
+  .license-scope__covered {
     flex-direction: column;
   }
-  .license-span__seg {
+  .license-scope__seg {
     border-right: none;
     border-bottom: 1px solid rgb(255 255 255 / 0.22);
     flex-direction: row;
     justify-content: space-between;
     padding: 0.55rem 0.85rem;
   }
-  .license-span__seg:last-child {
+  .license-scope__seg:last-child {
     border-bottom: none;
   }
-  .license-span__gap {
+  .license-scope__gap {
     flex: 0 0 0.35rem;
     min-height: 0.35rem;
   }
-  .license-span__beyond {
+  .license-scope__beyond {
     flex: none;
     flex-direction: row;
     justify-content: space-between;

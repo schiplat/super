@@ -1,0 +1,39 @@
+{{- /*
+  Version-coverage timeline for /go/pro/.
+  Shows issued Super line vs free newer minors vs renew-required.
+
+  Usage:
+    {{< license-version-scope >}}
+    {{< license-version-scope issued="1.2.x" through="1.4.x" next="1.5.x" >}}
+*/ -}}
+{{- $issued := .Get "issued" | default "1.2.x" -}}
+{{- $through := .Get "through" | default "1.4.x" -}}
+{{- $next := .Get "next" | default "1.5.x" -}}
+<div class="license-scope not-prose" role="img" aria-label="License covers Super {{ $issued }} through {{ $through }}; {{ $next }} and newer need renewal">
+  <div class="license-scope__labels">
+    <span class="license-scope__label license-scope__label--issued">Issued for</span>
+    <span class="license-scope__label license-scope__label--free">Free newer versions (included)</span>
+    <span class="license-scope__label license-scope__label--renew">Renew</span>
+  </div>
+  <div class="license-scope__track">
+    <div class="license-scope__covered">
+      <div class="license-scope__seg license-scope__seg--anchor">
+        <span class="license-scope__ver">{{ $issued }}</span>
+        <span class="license-scope__tag">Issued</span>
+      </div>
+      <div class="license-scope__seg">
+        <span class="license-scope__ver">…</span>
+      </div>
+      <div class="license-scope__seg license-scope__seg--max">
+        <span class="license-scope__ver">{{ $through }}</span>
+        <span class="license-scope__tag">Max included</span>
+      </div>
+    </div>
+    <div class="license-scope__gap" aria-hidden="true"></div>
+    <div class="license-scope__beyond">
+      <span class="license-scope__ver">{{ $next }}+</span>
+      <span class="license-scope__tag">New key</span>
+    </div>
+  </div>
+  <p class="license-scope__footnote">Green range = Pro plugins you can keep using <strong>after the 365-day term</strong> (same versions). Example policy: issued minor plus <strong>two</strong> newer lines ({{ $issued }} → {{ $through }}). Your key shows the exact scope.</p>
+</div>

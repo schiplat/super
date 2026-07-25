@@ -34,19 +34,19 @@ On the checkout page:
 
 Open-source supporter tips do **not** include plugins or a license key.
 
-> **After the 365-day term ends, you can still use Super Pro plugins** on the Super versions your key already authorizes (see below). Expiry does **not** turn plugins off. Renew when you want to follow **newer** Super releases beyond that version span.
+> **After the 365-day term ends, you can still use Super Pro plugins** on the Super versions your key already authorizes (see below). Expiry does **not** turn plugins off. Renew when you want to follow **newer** Super releases beyond that version scope.
 
 ## License version coverage
 
 Your key is **issued for a specific Super release line** at fulfillment. It also **includes free use of newer minor lines up to a signed maximum**.
 
-That version span stays valid **after the 365-day term**: you may keep running Pro plugins offline on those versions without renewing. What ends at day 365 is not “permission to use Pro,” but the window for **following newer Super lines** (and receiving a new key with a higher max). Beyond the signed maximum — or a new major — renew to get a new key.
+That version scope stays valid **after the 365-day term**: you may keep running Pro plugins offline on those versions without renewing. What ends at day 365 is not “permission to use Pro,” but the window for **following newer Super lines** (and receiving a new key with a higher max). Beyond the signed maximum — or a new major — renew to get a new key.
 
 ### Version timeline
 
 The chart below shows what a key covers (example for a key issued on the `1.2.x` line). The green range remains usable **during and after** the 365-day term:
 
-{{< license-version-span issued="1.2.x" through="1.4.x" next="1.5.x" >}}
+{{< license-version-scope issued="1.2.x" through="1.4.x" next="1.5.x" >}}
 
 ```mermaid
 flowchart LR
@@ -63,9 +63,9 @@ flowchart LR
 |---|---|
 | **Issued for** | The Super line stamped when your key is created (example: `1.2.x`). |
 | **Free newer versions** | Newer minor lines through the signed max (example: `1.3.x` and `1.4.x`) — no extra payment. |
-| **After 365 days** | **Still usable** on that same issued→max span. Plugins are not revoked at expiry. |
+| **After 365 days** | **Still usable** on that same issued→max scope. Plugins are not revoked at expiry. |
 | **Needs renewal** | Past the max (example: `1.5.x+`) or a new major — renew to follow newer releases. |
 
-Current policy example: issued minor line **plus two** newer minor lines (`1.2.x` → through `1.4.x`). Your key shows the exact span.
+Current policy example: issued minor line **plus two** newer minor lines (`1.2.x` → through `1.4.x`). Your key shows the exact scope.
 
-**Summary:** 365 days is the annual term; the **version span** is what you keep using afterward. The open-source `superd` / `super` binaries remain usable at any version without plugins.
+**Summary:** 365 days is the annual term; the **version scope** is what you keep using afterward. The open-source `superd` / `super` binaries remain usable at any version without plugins.

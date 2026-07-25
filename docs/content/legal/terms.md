@@ -32,7 +32,7 @@ See the [feature matrix](/docs/07-editions/feature-matrix/); purchase guide: [Ge
 
 Checkout and payment are completed on a **third-party platform** (currently **Afdian**). Super does not process card or wallet payments itself. **That platform’s terms apply to payment, settlement, and refunds initiated through their checkout.** We receive only the order details needed to fulfill (see [Privacy Policy](/legal/privacy/)).
 
-**Super Pro** is sold for **annual coverage**: one annual payment maps to a **365-day** license term. After that term, you may **continue using** Pro plugins on the Super version span signed into your key; renewal is for following newer releases beyond that span (see [Get Super Pro](/go/pro/#license-version-coverage)).
+**Super Pro** is sold for **annual coverage**: one annual payment maps to a **365-day** license term. After that term, you may **continue using** Pro plugins on the Super version scope signed into your key; renewal is for following newer releases beyond that scope (see [Get Super Pro](/go/pro/#license-version-coverage)).
 
 Open-source supporter tips **do not** include official plugins or a license key.
 
@@ -42,8 +42,8 @@ After payment clears and required order notes are complete (display name, OS + a
 
 ## 5. License use
 
-- The key is for your licensed use of official plugins with a **signed Super version span**: an issued release line plus newer minor lines up to a maximum written into the key (see [Get Super Pro — License version coverage](/go/pro/#license-version-coverage)).
-- **After the 365-day term ends, you can still use** official plugins on that same signed version span (grants are retained by default). Renewal is required to follow Super releases beyond the maximum (or a new major), via a new key.
+- The key is for your licensed use of official plugins with a **signed Super version scope**: an issued release line plus newer minor lines up to a maximum written into the key (see [Get Super Pro — License version coverage](/go/pro/#license-version-coverage)).
+- **After the 365-day term ends, you can still use** official plugins on that same signed version scope (grants are retained by default). Renewal is required to follow Super releases beyond the maximum (or a new major), via a new key.
 - Do not redistribute private plugin packages or license keys to third parties.
 - We may refuse fulfillment or revoke a key for fraud, chargeback abuse, or material breach (a refunded key is void).
 - Phase 1 uses offline signed keys plus local expiry / version checks; there is **no** always-on license server required to start.

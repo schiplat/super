@@ -3,7 +3,7 @@ use anyhow::Context;
 use common::config::resolve_license_key;
 use common::license::{
     LICENSE_UPGRADE_URL, LicenseClaims, LicenseExpiryStatus, check_superd_version,
-    licensed_version_span, verify_license_for_superd,
+    licensed_version_scope, verify_license_for_superd,
 };
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
@@ -117,7 +117,7 @@ impl PluginHost {
                 info!(
                     "License verified for '{}' (superd {}, grants: {:?})",
                     claims.issued_to,
-                    licensed_version_span(claims),
+                    licensed_version_scope(claims),
                     claims.grants
                 );
 
