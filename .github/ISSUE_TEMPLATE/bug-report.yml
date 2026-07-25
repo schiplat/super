@@ -1,0 +1,62 @@
+name: Bug report
+description: Report a defect in superd or the super CLI
+title: "[Bug] "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting a bug. Please fill in as much as you can — logs and a minimal config help us reproduce quickly.
+  - type: textarea
+    id: what_happened
+    attributes:
+      label: What happened?
+      description: A clear description of the bug and what you expected instead.
+      placeholder: e.g. superd exits immediately after adding a program with autorestart=always...
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Steps to reproduce
+      description: Minimal steps (and config, if relevant) to trigger the bug.
+      placeholder: |
+        1. superd --conf minimal.toml
+        2. super add worker --cmd "sleep 10"
+        3. ...
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Super version
+      description: Output of `superd --version` (or the release tag you installed).
+      placeholder: e.g. superd 1.2.2
+    validations:
+      required: true
+  - type: dropdown
+    id: platform
+    attributes:
+      label: Platform
+      options:
+        - linux/amd64
+        - linux/arm64
+        - darwin/arm64
+        - darwin/amd64
+        - freebsd/amd64
+        - other (specify in notes)
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant logs
+      description: Paste relevant superd/CLI output (redact secrets). `super doctor` output is also helpful.
+      render: shell
+    validations:
+      required: false
+  - type: textarea
+    id: notes
+    attributes:
+      label: Notes (optional)
+      description: Anything else — workarounds you found, related issues, etc.

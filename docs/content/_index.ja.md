@@ -1,91 +1,151 @@
 ---
 title: ""
 description: "Project Super とは何か、インストールと運用方法。"
+width: full
+toc: false
 ---
 
+<div class="home-wrapper">
 
-<section class="home-hero">
-    <h1>Project Super</h1>
-    <p class="hero-lead">エッジデバイスとサーバー向けの軽量プロセスオーケストレーター — Supervisor や PM2 に代わる API ファーストの現代的な選択肢。</p>
-    <p>Rust 製プロセスマネージャ <code>superd</code> — デプロイは 1 バイナリ。TOML または REST API でプログラムを定義。自動再起動、依存順起動、ヘルスチェック。CLI、ブラウザ、HTTP API で操作。</p>
-  </section>
+<section class="hp-section" style="padding-bottom: 2.5rem;">
+<div class="hp-container hero">
+<div>
+<div class="hero-badge">
+<span class="hero-badge-dot"></span>Rust · API-First · 単一バイナリ
+</div>
+<h1 class="hero-title">
+自信を持って<br>サービスを動かす
+</h1>
+<p class="hero-desc">再起動・起動順・ヘルスチェック・OTA を扱う軽量プロセスマネージャ。プログラムは TOML または REST で定義。</p>
+<div class="hero-actions">
+<a href="/docs/01-getting-started/quick-start/" class="hp-btn hp-btn--primary">はじめる →</a>
+<a href="https://github.com/hzbd/super" class="hp-btn hp-btn--outline" target="_blank" rel="noopener">
+<svg width="16" height="16" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" viewBox="0 0 24 24"><path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 00-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0020 4.77 5.07 5.07 0 0019.91 1S18.73.65 16 2.48a13.38 13.38 0 00-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 005 4.77a5.44 5.44 0 00-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 009 18.13V22"></path></svg>
+  GitHub
+</a>
+</div>
+</div>
 
-  <nav class="home-docnav" aria-label="ドキュメント">
-    <ul class="home-docnav-list">
-      <li><a href="/docs/">概要</a></li>
-      <li><a href="/docs/01-getting-started/">Getting Started</a></li>
-      <li><a href="/docs/02-essentials/">Core Essentials</a></li>
-      <li><a href="/docs/03-orchestration/">Orchestration</a></li>
-      <li><a href="/docs/05-advanced-management/">Advanced Management</a></li>
-      <li><a href="/docs/06-internals/api-reference/">API Reference</a></li>
-    </ul>
-  </nav>
+<div class="hero-card">
+<img src="/images/stack_flow.gif" alt="Super がサービススタックをオーケストレーション" loading="eager" />
+<div class="hero-card-caption">依存順でサービススタックが起動 — 上流のヘルスチェック通過後に依存先が起動します。</div>
+</div>
+</div>
 
-  <section class="home-section">
-    <h2 class="home-section-title">コア機能</h2>
-    <div class="home-grid home-grid--3">
-      <article class="home-feature">
-        <h3>依存関係オーケストレーション</h3>
-        <p><code>depends_on</code> と起動順序を宣言 — 上流が健全になるまで依存プログラムの起動を待ちます。</p>
-        <a href="/docs/03-orchestration/dependencies">依存関係 →</a>
-      </article>
-      <article class="home-feature">
-        <h3>アトミック OTA 更新</h3>
-        <p>ダウンロード、チェックサム検証、成果物の入れ替え、再起動 — ヘルスチェック失敗時は自動ロールバック。</p>
-        <a href="/docs/03-orchestration/ota-updates">OTA フロー →</a>
-      </article>
-      <article class="home-feature">
-        <h3>ヘルスチェック</h3>
-        <p>スケジュールに沿った TCP/HTTP プローブ。失敗時は unhealthy となり、依存プログラムの起動をブロックします。</p>
-        <a href="/docs/03-orchestration/health-checks">ヘルスチェック →</a>
-      </article>
-      <article class="home-feature">
-        <h3>ライフサイクルフック</h3>
-        <p><code>pre_start</code>、<code>post_start</code>、<code>post_stop</code> でシェルスクリプトを実行。</p>
-        <a href="/docs/03-orchestration/lifecycle-hooks">ライフサイクルフック →</a>
-      </article>
-      <article class="home-feature">
-        <h3>イベントフック</h3>
-        <p><code>process_fatal</code> などのシステムイベントにローカルスクリプトで反応 — API 駆動。</p>
-        <a href="/docs/03-orchestration/event-hooks">イベントフック →</a>
-      </article>
-      <article class="home-feature">
-        <h3>自動復旧</h3>
-        <p>Supervisor 互換の <code>autorestart</code>、<code>exitcodes</code>、<code>startsecs</code>。</p>
-        <a href="/docs/04-production-scenarios/migrations/vs-supervisor">Supervisor 比較 →</a>
-      </article>
-      <article class="home-feature">
-        <h3>Cron スケジューリング</h3>
-        <p>cron 式でプログラムを実行 — 外部スケジューラ不要。</p>
-        <a href="/docs/02-essentials/scheduled-tasks">スケジュールタスク →</a>
-      </article>
-      <article class="home-feature">
-        <h3>HTTP リモート運用</h3>
-        <p>CLI・スクリプト・リモート制御が同じ REST API（プログラム、ログ、OTA）。コミュニティ版（OSS）には<strong>API 認証がありません</strong> — バインドはループバックのままにしてください。ライセンス版は security プラグインで Bearer 認証を追加します。</p>
-        <a href="/docs/04-production-scenarios/observability/programmatic-control">プログラマブル運用 →</a>
-      </article>
-    </div>
-  </section>
+<div class="hp-container">
+<nav class="quick-nav" aria-label="ドキュメント区分">
+<a href="/docs/01-getting-started/"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>Getting Started</a>
+<a href="/docs/02-essentials/"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4"/></svg>Essentials</a>
+<a href="/docs/03-orchestration/"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>Orchestration</a>
+<a href="/docs/04-production-scenarios/"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M5 12h14M5 12a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v4a2 2 0 01-2 2M5 12a2 2 0 00-2 2v4a2 2 0 002 2h14a2 2 0 002-2v-4a2 2 0 00-2-2m-2-4h.01M17 16h.01"/></svg>Production</a>
+<a href="/docs/05-advanced-management/"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/></svg>Advanced</a>
+<a href="/docs/06-internals/api-reference/"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M8 9l3 3-3 3m5 0h3M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>API Reference</a>
+</nav>
+</div>
+</section>
 
-  {{< home-premium >}}
+<section class="hp-section hp-section--alt">
+<div class="hp-container">
+<div class="hp-label">機能</div>
+<h2 class="hp-heading">バイナリはひとつ。<br>ランタイム依存はゼロ。</h2>
+<p class="hp-lead" style="margin-top: 0.75rem;">本番でサービスを動かし、監視し、復旧するために必要なもの。</p>
 
-  <section class="home-section">
-    <h2 class="home-section-title">API ファースト</h2>
-    <div class="home-split">
-      <div class="home-split-text">
-        <h3>REST と WebSocket</h3>
-        <p>HTTP でプログラムを登録・制御。CLI も同じエンドポイント。スクリプトや CI からローカル／リモート運用が可能。ログは WebSocket。</p>
-        <a href="/docs/06-internals/api-reference">API リファレンス →</a>
-      </div>
-      <div class="home-split-code">
-        <pre><code>curl -X POST http://127.0.0.1:9002/api/v1/programs \
-  -H "Content-Type: application/json" \
-  -d '{
+<div class="feat-grid" style="margin-top: 2.5rem;">
+<div class="feat-card">
+<div class="feat-card-icon"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4"/></svg></div>
+<h3>ライフサイクルフック</h3>
+<p><code>pre_start</code> / <code>post_start</code> / <code>post_stop</code> でシェルを実行 — 環境準備、通知、クリーンアップ。</p>
+<a href="/docs/03-orchestration/lifecycle-hooks" class="feat-card-link">Hooks →</a>
+</div>
+<div class="feat-card">
+<div class="feat-card-icon"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"/></svg></div>
+<h3>イベントフック</h3>
+<p><code>process_fatal</code> などのシステムイベントにローカルスクリプトで反応 — Supervisor 風、API 駆動。</p>
+<a href="/docs/03-orchestration/event-hooks" class="feat-card-link">Events →</a>
+</div>
+<div class="feat-card">
+<div class="feat-card-icon"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"/></svg></div>
+<h3>自動復旧</h3>
+<p>Supervisor 互換の <code>autorestart</code>、<code>exitcodes</code>、<code>startsecs</code> — 移行しやすい。</p>
+<a href="/docs/04-production-scenarios/migrations/vs-supervisor" class="feat-card-link">vs Supervisor →</a>
+</div>
+<div class="feat-card">
+<div class="feat-card-icon"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg></div>
+<h3>Cron スケジュール</h3>
+<p>cron 式でプログラムを実行。外部スケジューラや crontab は不要。</p>
+<a href="/docs/02-essentials/scheduled-tasks" class="feat-card-link">Scheduling →</a>
+</div>
+<div class="feat-card">
+<div class="feat-card-icon"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9"/></svg></div>
+<h3>HTTP 運用</h3>
+<p>CLI・スクリプト・遠隔操作用の単一 REST API。プラグインで Bearer 認証を追加可能。</p>
+<a href="/docs/04-production-scenarios/observability/programmatic-control" class="feat-card-link">API →</a>
+</div>
+<div class="feat-card">
+<div class="feat-card-icon"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"/></svg></div>
+<h3>ライブログ</h3>
+<p>WebSocket でリアルタイムにログを配信。どこからでも監視。</p>
+<a href="/docs/02-essentials/logging" class="feat-card-link">Logging →</a>
+</div>
+</div>
+</div>
+</section>
+
+{{< home-premium >}}
+
+<section class="hp-section hp-section--dark">
+<div class="hp-container api-grid">
+<div>
+<div class="hp-label" style="color: var(--hp-accent);">開発者体験</div>
+<h2 class="hp-heading">API ファースト。<br>すべての操作は HTTP 呼び出し。</h2>
+<p class="hp-lead" style="margin-top: 0.75rem;">CLI も同じエンドポイントを使います。スクリプトや CI で運用し、WebSocket でログを流す。専用 SDK は不要。</p>
+
+<ul class="api-list">
+<li>プログラム・スタック・システム設定の CRUD</li>
+<li>リアルタイム WebSocket ログ</li>
+<li>Prometheus メトリクス <code>/metrics</code></li>
+<li><code>enable_docs = true</code> 時の Swagger UI</li>
+</ul>
+<a href="/docs/06-internals/api-reference" class="hp-btn hp-btn--outline">API リファレンス →</a>
+</div>
+
+<div class="hp-terminal">
+<div class="hp-terminal-bar">
+<div class="hp-terminal-dots"><span></span><span></span><span></span></div>
+<span>~/project/super-demo</span>
+<span style="opacity:0">—</span>
+</div>
+<div class="hp-terminal-body">
+<pre><code><span style="color:#5c5a55"># 3 回の呼び出しで作成して起動</span>
+<span style="color:#6b6760">curl -X POST</span> http://127.0.0.1:9002/api/v1/programs \
+  -H <span style="color:#c4b87a">"Content-Type: application/json"</span> \
+  -d <span style="color:#c4b87a">'{
     "name": "api-server",
     "command": "./app",
-    "autostart": true,
-    "autorestart": "unexpected"
-  }'</code></pre>
-      </div>
-    </div>
-  </section>
+    "depends_on": ["postgres", "redis"],
+    "health_check": {
+      "type": "http",
+      "url": "http://127.0.0.1:8080/health"
+    }
+  }'</span>
+<span style="color:#5c5a55"># 起動してストリーム</span>
+<span style="color:#6b6760">curl -X POST</span> http://127.0.0.1:9002/api/v1/programs/{id}/start
+ws://127.0.0.1:9002/ws</code></pre>
+</div>
+</div>
+</div>
+</section>
+
+<section class="cta">
+<div class="hp-container">
+<h2 class="cta-title">いつでも始められます。</h2>
+<p class="cta-desc">バイナリを入手し、スタックを定義すれば、数分でサービスが動きます。</p>
+<div class="hero-actions" style="justify-content: center;">
+<a href="/docs/01-getting-started/quick-start/" class="hp-btn hp-btn--primary">構築を開始 →</a>
+<a href="/docs/01-getting-started/installation/" class="hp-btn hp-btn--outline">インストール</a>
+<a href="https://github.com/hzbd/super" class="hp-btn hp-btn--outline" target="_blank" rel="noopener">GitHub</a>
+</div>
+</div>
+</section>
+
+</div>

@@ -1715,6 +1715,7 @@ impl Manager {
                 status,
                 pid,
                 uptime_sec: uptime,
+                created_at: config.created_at,
                 updated_at: config.updated_at,
                 last_error: self.registry.startup_errors.get(id).cloned(),
                 health_error: self

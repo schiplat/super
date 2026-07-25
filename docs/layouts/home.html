@@ -7,15 +7,21 @@
       {{- $homeCss = .Content -}}
     {{- end -}}
   {{- end -}}
-  <div class='hx:mx-auto hx:flex hextra-max-page-width'>
-    {{ partial "sidebar.html" (dict "context" . "disableSidebar" true "displayPlaceholder" true) }}
-    {{ partial "toc.html" . }}
-    <article class="hx:w-full hx:break-words hx:flex hx:min-h-[calc(100vh-var(--navbar-height))] hx:min-w-0 hx:justify-center hx:pb-8 hx:pr-[calc(env(safe-area-inset-right)-1.5rem)]">
-      <main id="content" class="hx:w-full hx:min-w-0 hextra-max-content-width hx:px-6 hx:pt-4 hx:md:px-12">
+  {{- $full := eq .Params.width "full" -}}
+  <div class='hx:mx-auto hx:flex {{ if $full }}hx:max-w-none hx:w-full home-layout--wide{{ else }}hextra-max-page-width{{ end }}'>
+    {{ if not $full }}
+      {{ partial "sidebar.html" (dict "context" . "disableSidebar" true "displayPlaceholder" true) }}
+      {{ partial "toc.html" . }}
+    {{ end }}
+    <article class="hx:w-full hx:break-words hx:flex hx:min-h-[calc(100vh-var(--navbar-height))] hx:min-w-0 hx:justify-center {{ if $full }}hx:pb-0 hx:pr-0{{ else }}hx:pb-8 hx:pr-[calc(env(safe-area-inset-right)-1.5rem)]{{ end }}">
+      <main
+        id="content"
+        class="hx:w-full hx:min-w-0 {{ if $full }}hx:max-w-none hx:px-0 hx:pt-0{{ else }}hextra-max-content-width hx:px-6 hx:pt-4 hx:md:px-12{{ end }}"
+      >
         {{ if .Title }}<h1 class="hx:text-center hx:mt-2 hx:text-4xl hx:font-bold hx:tracking-tight hx:text-slate-900 hx:dark:text-slate-100">{{ .Title }}</h1>{{ end }}
-        <div class="content">
+        <div class="content{{ if $full }} content--home-wide{{ end }}">
           {{- with $homeCss -}}<style>{{ . | safeCSS }}</style>{{- end -}}
-          <div class="docs-home not-prose">
+          <div class="docs-home not-prose{{ if $full }} docs-home--wide{{ end }}">
             {{ .Content }}
           </div>
         </div>

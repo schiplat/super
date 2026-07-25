@@ -30,6 +30,17 @@ jobs:
       - name: Test
         run: cargo test --workspace
 
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Audit dependencies (RustSec advisories)
+        uses: rustsec/audit-check@v2
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
   docs:
     runs-on: ubuntu-latest
     steps:

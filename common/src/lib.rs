@@ -342,6 +342,10 @@ pub struct ProgramSummary {
     pub status: ProcessStatus,
     pub pid: Option<u32>,
     pub uptime_sec: Option<u64>,
+
+    /// Unix timestamp when the program was created.
+    #[serde(default)]
+    pub created_at: u64,
     pub updated_at: u64,
     pub cpu_usage: Option<f32>,
     pub mem_usage: Option<u64>,

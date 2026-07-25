@@ -1,0 +1,35 @@
+name: Feature request
+description: Suggest an idea or improvement for Super
+title: "[Feature] "
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Suggest a feature or improvement. Check the [docs](https://super.docs.sconts.com/) and existing issues first to avoid duplicates.
+  - type: textarea
+    id: problem
+    attributes:
+      label: What problem does this solve?
+      description: Describe the use case or pain point — what are you trying to do that Super doesn't handle well today?
+      placeholder: e.g. I run 30+ programs and want to group-restart them by tag instead of one by one...
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed solution
+      description: What would you like Super to do? A rough idea is fine — CLI shape, config snippet, or API sketch all help.
+      placeholder: e.g. `super restart --tag web` or a `[group] restart_together = true` config option...
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered (optional)
+      description: Other tools or workarounds you've tried, and why they fall short.
+  - type: textarea
+    id: notes
+    attributes:
+      label: Notes (optional)
+      description: Anything else — links to prior art (PM2 / Supervisor / systemd features), related issues, etc.

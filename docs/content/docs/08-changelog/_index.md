@@ -12,9 +12,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+---
+
+## [1.2.2] - 2026-07-25
+
+### Added
+- Notification storm suppression docs and dashboard UX: Webhooks + Inhibition (When → Mute targets → For), Delivery Strategy defaults.
+- OSS `/` notice page points to [Get Super Pro](https://super.docs.sconts.com/go/pro/).
+
 ### Changed
-- HTTP business APIs are versioned under **`/api/v1/…`**; liveness is **`GET /health`**; Swagger (when enabled) is **`/api/docs`** (`/api/v1/openapi.json`).
-- With the `security` plugin: `auth_secret` remains usable by default; Admins can **explicitly disable** it after creating an Admin Access Token. Viewer/Operator may renew their own tokens. **Operator** may create programs and manage notification channels; stack reads stay redacted for non-Admins; notify config is plaintext for Admin/Operator and redacted for Viewer.
+- Public docs homepage redesigned (wide layout) for all languages (en, zh-cn, ja, es, ru).
+- Dashboard Notification Settings tabs renamed to **Webhooks** / **Inhibition**.
+
+### Notes
+- Pair OSS `1.2.2` with matching commercial plugin packages (`super-plugins-1.2.2-…`).
 
 ---
 

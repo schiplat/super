@@ -21,79 +21,79 @@ const OSS_UI_MESSAGE: &str = r#"<!DOCTYPE html>
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Super Process Manager</title>
+  <title>Super — OSS</title>
   <style>
     :root { color-scheme: light dark; }
     body {
       font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-      max-width: 42rem;
+      max-width: 40rem;
       margin: 0 auto;
       padding: 3rem 1.25rem 4rem;
       line-height: 1.6;
-      background: #fafafa;
+      background: #fafaf7;
     }
     .card {
       background: #fff;
-      color: #18181b;
-      border: 1px solid #e4e4e7;
+      color: #171613;
+      border: 1px solid #e8e6e1;
       border-radius: 1rem;
       padding: 1.75rem 1.5rem;
       box-shadow: 0 1px 2px rgba(0,0,0,.04);
     }
-    h1 { font-size: 1.5rem; margin: 0 0 .5rem; letter-spacing: -0.02em; color: inherit; }
-    .lead { font-size: 1.05rem; margin: 0 0 1rem; color: #52525b; }
-    p { margin: 0 0 .85rem; color: inherit; }
-    ul { margin: .5rem 0 1rem; padding-left: 1.25rem; color: inherit; }
-    li { margin: .25rem 0; }
-    code { background: #f4f4f5; color: #18181b; padding: .12rem .35rem; border-radius: .25rem; font-size: .92em; }
-    .actions { display: flex; flex-wrap: wrap; gap: .65rem; margin-top: 1.25rem; }
+    h1 { font-size: 1.375rem; margin: 0 0 .4rem; letter-spacing: -0.02em; font-weight: 700; color: inherit; }
+    .lead { font-size: 0.975rem; margin: 0 0 1rem; color: #6b6760; }
+    p { margin: 0 0 .85rem; color: inherit; font-size: 0.9375rem; }
+    ul { margin: .35rem 0 1rem; padding-left: 1.2rem; color: inherit; font-size: 0.9375rem; }
+    li { margin: .2rem 0; }
+    code { background: #f3f2ef; color: #171613; padding: .1rem .35rem; border-radius: .25rem; font-size: .9em; }
+    .actions { display: flex; flex-wrap: wrap; gap: .6rem; margin-top: 1.25rem; }
     .actions a {
       display: inline-block;
-      padding: .55rem 1rem;
+      padding: .5rem .95rem;
       border-radius: .5rem;
-      font-size: .925rem;
+      font-size: .875rem;
       font-weight: 600;
       text-decoration: none;
       transition: opacity .15s;
     }
     .actions a:hover { opacity: .88; }
-    .cta-primary { background: #4f46e5; color: #fff; }
+    .cta-primary { background: #0d9488; color: #fff; }
     .cta-secondary {
-      background: #f4f4f5;
-      color: #18181b;
-      border: 1px solid #e4e4e7;
+      background: #f3f2ef;
+      color: #171613;
+      border: 1px solid #e8e6e1;
     }
-    .muted { font-size: .85rem; color: #71717a; margin-top: 1.25rem; }
+    .muted { font-size: .8125rem; color: #9c9890; margin-top: 1.25rem; margin-bottom: 0; }
     @media (prefers-color-scheme: dark) {
-      body { background: #09090b; }
-      .card { background: #18181b; color: #fafafa; border-color: #27272a; }
-      .lead { color: #d4d4d8; }
-      code { background: #27272a; color: #fafafa; }
-      .muted { color: #a1a1aa; }
-      .cta-secondary { background: #27272a; color: #fafafa; border-color: #3f3f46; }
+      body { background: #0d0d0c; }
+      .card { background: #161613; color: #ededeb; border-color: #2a2a25; }
+      .lead { color: #a19e96; }
+      code { background: #1c1c18; color: #ededeb; }
+      .muted { color: #6e6b64; }
+      .cta-primary { background: #14b8a6; }
+      .cta-secondary { background: #1c1c18; color: #ededeb; border-color: #2a2a25; }
     }
   </style>
 </head>
 <body>
   <div class="card">
-    <h1>Super Process Manager</h1>
-    <p class="lead"><code>superd</code> is up — you're on the open-source build.</p>
-    <p>Everything you need for automation is already here:</p>
+    <h1>Super is running</h1>
+    <p class="lead">Open-source build — manage processes with the CLI and HTTP API.</p>
+    <p>Included in this binary:</p>
     <ul>
-      <li><code>super</code> CLI for day-to-day operations</li>
-      <li><code>/api/v1/*</code> for integrations and CI/CD</li>
-      <li><code>/metrics</code> for Prometheus monitoring</li>
+      <li><code>super</code> CLI for day-to-day control</li>
+      <li><code>/api/v1/*</code> for scripts and CI/CD</li>
+      <li><code>/metrics</code> for Prometheus</li>
     </ul>
     <p>
-      Prefer a visual control plane? A valid subscription key and authorized plugin
-      libraries can unlock a <strong>dashboard</strong>, plus optional
-      <strong>API authentication</strong>, <strong>notifications</strong>, and
-      <strong>resource limits</strong> — same <code>superd</code> binary.
+      There is no built-in dashboard in OSS.
+      <strong>Super Pro</strong> loads signed plugins on this same <code>superd</code>
+      binary: Web UI, API auth, notifications, and Linux resource limits.
     </p>
     <div class="actions">
-      <a class="cta-primary" href="https://super.docs.sconts.com/" rel="noopener noreferrer">Learn about subscriptions</a>
-      <a class="cta-secondary" href="https://super.docs.sconts.com/docs/07-editions/feature-matrix" rel="noopener noreferrer">OSS vs licensed</a>
-      <a class="cta-secondary" href="https://super.docs.sconts.com/docs/" rel="noopener noreferrer">Overview</a>
+      <a class="cta-primary" href="https://super.docs.sconts.com/go/pro/" rel="noopener noreferrer">Get Super Pro</a>
+      <a class="cta-secondary" href="https://super.docs.sconts.com/docs/07-editions/feature-matrix" rel="noopener noreferrer">Feature matrix</a>
+      <a class="cta-secondary" href="https://super.docs.sconts.com/docs/" rel="noopener noreferrer">Docs</a>
     </div>
     <p class="muted">Version VERSION_PLACEHOLDER · MIT open-source core</p>
   </div>

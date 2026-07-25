@@ -8,16 +8,16 @@ aliases:
   - /docs/02-essentials/web-ui
 ---
 
-> **Licensed plugin 💎:** The dashboard requires the **`ui`** plugin in `[license].key`. OSS `superd` serves a static notice at `/` instead.
+> **Licensed plugin 💎:** The dashboard requires the **`ui`** plugin in `[license].key`. OSS `superd` serves a short notice at `/` instead of a dashboard.
 
 ## OSS vs subscription
 
 | Edition | Web UI at `/` |
 | :--- | :--- |
-| **OSS** (no plugins) | Static notice — **no dashboard**. Use `super` CLI or `/api/v1/*`. |
+| **OSS** (no plugins) | Static notice — **no dashboard**. Use `super` CLI or `/api/v1/*`. Links to [Get Super Pro](https://super.docs.sconts.com/go/pro/) and the [feature matrix](/docs/07-editions/feature-matrix). |
 | **Licensed** | Full dashboard served by the authorized UI plugin. |
 
-OSS `superd` does **not** embed a dashboard binary. The optional **`ui`** plugin serves the web dashboard via `super_plugin_ui_v1`.
+OSS `superd` does **not** embed a dashboard. The optional **`ui`** plugin serves it at runtime via `super_plugin_ui_v1` after you add a license key and plugin libraries — see [Get Super Pro](https://super.docs.sconts.com/go/pro/).
 
 ## Accessing the dashboard (licensed)
 
@@ -62,7 +62,12 @@ Reload plugin or dashboard assets without a full daemon restart (development wor
   {{< /tab >}}
 
   {{< tab name="Notifications" icon="bell" >}}
-Notification channels and routing when the **`notify`** plugin is licensed (see [Event notifications](/docs/05-advanced-management/event-notifications)).
+Notification Settings when the **`notify`** plugin is licensed — two tabs:
+
+- **Webhooks** — destinations, triggers, and per-webhook Delivery Strategy
+- **Inhibition** — When → Mute targets → For (cross-event storm suppression)
+
+See [Event notifications](/docs/05-advanced-management/event-notifications#storm-suppression).
 
 {{< ui-screenshot src="/images/notify.png" alt="Notification settings" >}}
   {{< /tab >}}
@@ -82,7 +87,7 @@ Restart `superd` after updating plugins.
 | **Overview** | Process counts, host metrics, filters, list/graph views |
 | **Program detail** | Config, hooks, health checks, live logs, start/stop/restart |
 | **Hot reload** | Reload plugins/dashboard without restarting `superd` |
-| **Notifications** | Channel config (`notify` plugin) |
+| **Notifications** | Webhooks + Inhibition (`notify` plugin) |
 
 The dashboard also includes create/edit forms, a [declarative stack editor](/docs/04-production-scenarios/delivery/declarative-stack), API token management, and a license page — not shown above.
 
