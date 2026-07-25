@@ -16,6 +16,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [1.2.3] - 2026-07-25
 
+### Changed
+- [Web UI](/docs/05-advanced-management/web-ui/): dashboard tour screenshots refreshed (overview, program detail/logs, inhibition rules).
+
 ### Notes
 - Pair OSS `1.2.3` with matching commercial plugin packages (`super-plugins-1.2.3-…`).
 

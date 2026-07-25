@@ -33,43 +33,34 @@ Log in with an **Access Token** (`sk-…`) when the **`security`** plugin is ena
 
 ## Dashboard tour
 
-Screenshots below are from a licensed deployment. Use the tabs to browse each area — images are capped in width; **click to enlarge**.
+Screenshots below are from a licensed deployment (`docs/static/images/`). Use the tabs to browse each area — images are capped in width; **click to enlarge**.
 
 {{< tabs >}}
 
   {{< tab name="Overview" icon="view-grid" >}}
 Process list with host CPU/memory metrics (from the machine running **superd**), status filters, search, and topology view.
 
-{{< ui-screenshot src="/images/overview.png" alt="Dashboard overview — process list and host metrics" >}}
+{{< ui-screenshot src="/images/overview.png" alt="Dashboard overview — process list and host metrics" caption="Overview — programs, host metrics, filters" >}}
   {{< /tab >}}
 
   {{< tab name="Program detail" icon="cog" >}}
-Configuration drawer: command, hooks, health checks, resource limits, and environment for a selected program.
+Process detail drawer: actions, configuration (command, hooks, health checks, resource limits, environment).
 
-{{< ui-screenshot src="/images/program_config.png" alt="Program configuration drawer" >}}
+{{< ui-screenshot src="/images/program_config.png" alt="Program configuration in the detail drawer" caption="Program detail — Configuration" >}}
   {{< /tab >}}
 
   {{< tab name="Logs" icon="terminal" >}}
-Live stdout/stderr streaming from the process detail drawer.
+Live stdout/stderr streaming from the process detail drawer, plus file log history.
 
-{{< ui-screenshot src="/images/program_logtails.png" alt="Live program log tail" >}}
+{{< ui-screenshot src="/images/program_logtails.png" alt="Live program log tail in the detail drawer" caption="Program detail — Logs" >}}
   {{< /tab >}}
 
-  {{< tab name="Hot reload" icon="refresh" >}}
-Reload plugin or dashboard assets without a full daemon restart (development workflow).
-
-{{< ui-screenshot src="/images/reload_online.png" alt="Online reload controls" >}}
-  {{< /tab >}}
-
-  {{< tab name="Notifications" icon="bell" >}}
-Notification Settings when the **`notify`** plugin is licensed — two tabs:
-
-- **Webhooks** — destinations, triggers, and per-webhook Delivery Strategy
-- **Inhibition rules** — When → Mute targets → For (cross-event storm suppression)
+  {{< tab name="Inhibition rules" icon="bell" >}}
+**Notifications → Inhibition rules** when the **`notify`** plugin is licensed: When → Mute targets → For (cross-event storm suppression).
 
 See [Event notifications](/docs/05-advanced-management/event-notifications#storm-suppression).
 
-{{< ui-screenshot src="/images/notify.png" alt="Notification settings" >}}
+{{< ui-screenshot src="/images/notify_mute.png" alt="Notification settings — Inhibition rules tab" caption="Notifications — Inhibition rules" >}}
   {{< /tab >}}
 
 {{< /tabs >}}
@@ -86,10 +77,9 @@ Restart `superd` after updating plugins.
 | :--- | :--- |
 | **Overview** | Process counts, host metrics, filters, list/graph views |
 | **Program detail** | Config, hooks, health checks, live logs, start/stop/restart |
-| **Hot reload** | Reload plugins/dashboard without restarting `superd` |
 | **Notifications** | Webhooks + Inhibition rules (`notify` plugin) |
 
-The dashboard also includes create/edit forms, a [declarative stack editor](/docs/04-production-scenarios/delivery/declarative-stack), API token management, and a license page — not shown above.
+The dashboard also includes create/edit program forms, a [stack editor](/docs/04-production-scenarios/delivery/declarative-stack), API token management, and a license page — not shown above.
 
 ## Security
 
