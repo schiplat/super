@@ -522,7 +522,7 @@ In the licensed **Web UI** ([Notification Settings](/docs/05-advanced-management
 | Dashboard tab | Configures |
 |---------------|------------|
 | **Webhooks** | Destinations, triggers, headers, and per-webhook **Delivery Strategy** |
-| **Inhibition** | Global rules: **When** → **Mute targets** → **For** (duration) |
+| **Inhibition rules** | Global rules: **When** → **Mute targets** → **For** (duration) |
 
 ### Delivery Strategy
 

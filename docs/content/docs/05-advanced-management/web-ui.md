@@ -65,7 +65,7 @@ Reload plugin or dashboard assets without a full daemon restart (development wor
 Notification Settings when the **`notify`** plugin is licensed — two tabs:
 
 - **Webhooks** — destinations, triggers, and per-webhook Delivery Strategy
-- **Inhibition** — When → Mute targets → For (cross-event storm suppression)
+- **Inhibition rules** — When → Mute targets → For (cross-event storm suppression)
 
 See [Event notifications](/docs/05-advanced-management/event-notifications#storm-suppression).
 
@@ -87,7 +87,7 @@ Restart `superd` after updating plugins.
 | **Overview** | Process counts, host metrics, filters, list/graph views |
 | **Program detail** | Config, hooks, health checks, live logs, start/stop/restart |
 | **Hot reload** | Reload plugins/dashboard without restarting `superd` |
-| **Notifications** | Webhooks + Inhibition (`notify` plugin) |
+| **Notifications** | Webhooks + Inhibition rules (`notify` plugin) |
 
 The dashboard also includes create/edit forms, a [declarative stack editor](/docs/04-production-scenarios/delivery/declarative-stack), API token management, and a license page — not shown above.
 

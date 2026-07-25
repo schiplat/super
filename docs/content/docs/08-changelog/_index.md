@@ -23,7 +23,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 - Public docs homepage redesigned (wide layout) for all languages (en, zh-cn, ja, es, ru).
 - [Get Super Pro](/go/pro/): license version coverage (issued line → free newer minors → renew) plus Terms alignment.
-- Dashboard Notification Settings tabs renamed to **Webhooks** / **Inhibition**.
+- Dashboard Notification Settings tabs renamed to **Webhooks** / **Inhibition rules**.
 
 ### Notes
 - Pair OSS `1.2.2` with matching commercial plugin packages (`super-plugins-1.2.2-…`).
