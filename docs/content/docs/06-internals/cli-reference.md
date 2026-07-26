@@ -9,6 +9,17 @@ The `super` binary is the primary way to interact with the daemon.
 **Global Flags:**
 *   `--server <URL>`: Override the server URL (default: `http://127.0.0.1:9002`).
 
+## Starting `superd` (daemon binary)
+
+`superd` is separate from the `super` CLI. It reads `$SUPER_ROOT/conf/super.toml` and listens for API/CLI traffic.
+
+| Mode | Command / config | When to use |
+| :--- | :--- | :--- |
+| Foreground (default) | `superd` or `superd --foreground` | systemd (`Type=simple`), Docker, debugging |
+| Self-daemonize (Unix) | `superd --daemon` or `[server] daemon = true` | Bare metal without systemd; writes `$SUPER_ROOT/run/superd.pid` by default |
+
+CLI overrides: `--daemon` / `--foreground` / `--pidfile <PATH>`. See [Config reference](/docs/06-internals/config-reference/#server) and [Installation — Systemd](/docs/01-getting-started/installation/#method-3-systemd-vm--bare-metal). Program control (`start` / `stop` / `shutdown`) is unchanged either way.
+
 ## Core Management
 
 ### `list`
@@ -142,10 +153,24 @@ super export
 ```
 
 ### `shutdown`
-Gracefully shut down the Super daemon and all child processes.
+Gracefully shut down the Super daemon and all child processes (works for foreground and `--daemon` instances).
 
 ```bash
 super shutdown
+```
+
+### `doctor`
+One-shot diagnostics: config check, daemon health, license status, and local `[server].daemon` / pidfile hints (systemd conflict, stale pidfile).
+
+```bash
+super doctor
+```
+
+### `check`
+Validate `super.toml` (syntax, bind, licensed-mode requirements) without requiring a running daemon.
+
+```bash
+super check
 ```
 
 ## Security (requires `security` plugin 💎)

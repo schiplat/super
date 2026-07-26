@@ -6,7 +6,11 @@
 use crate::check;
 use crate::client;
 use colored::Colorize;
-use common::{HealthResponse, LicenseInfo};
+use common::config::ServerConfig;
+use common::{
+    HealthResponse, LicenseInfo, PidfileStatus, inspect_pidfile, pidfile_parent_unwritable,
+    resolve_pidfile_path, resolve_super_root, under_systemd,
+};
 
 pub async fn run(base_url: &str, token: Option<&String>) -> anyhow::Result<()> {
     println!("{}", "Super Doctor".bold());
@@ -20,11 +24,13 @@ pub async fn run(base_url: &str, token: Option<&String>) -> anyhow::Result<()> {
             println!("   {}", format!("config check reported: {e}").yellow());
         }
     }
+    report_daemon_config();
 
     // 2. Daemon connectivity + health.
     println!("\n{}", "== Daemon ==".bold());
     let base_url = base_url.trim_end_matches('/');
     println!("   Server URL:      {}", base_url.cyan());
+    report_pidfile_status();
 
     let client = match client::build_client(token) {
         Ok(c) => c,
@@ -121,4 +127,88 @@ pub async fn run(base_url: &str, token: Option<&String>) -> anyhow::Result<()> {
     }
 
     Ok(())
+}
+
+fn load_server_config() -> Option<(std::path::PathBuf, ServerConfig)> {
+    let root = resolve_super_root();
+    let path = root.join("conf/super.toml");
+    let content = std::fs::read_to_string(&path).ok()?;
+    let cfg = toml::from_str::<ServerConfig>(&content).ok()?;
+    Some((root, cfg))
+}
+
+fn report_daemon_config() {
+    let Some((root, cfg)) = load_server_config() else {
+        return;
+    };
+    let daemon = cfg.server.daemon;
+    println!(
+        "   daemon:         {}",
+        if daemon {
+            "true".yellow().to_string()
+        } else {
+            "false".green().to_string()
+        }
+    );
+    if daemon && under_systemd() {
+        println!(
+            "   {}",
+            "ERROR: [server].daemon = true under systemd — set daemon = false and use Type=simple / superd --foreground"
+                .red()
+        );
+    } else if daemon {
+        println!(
+            "   {}",
+            "info: self-daemonize enabled; stop with `super shutdown` (not for systemd/Docker)"
+                .cyan()
+        );
+    }
+
+    let pidfile = resolve_pidfile_path(&root, cfg.server.pidfile.as_deref());
+    println!("   pidfile:        {}", pidfile.display());
+    if (daemon || cfg.server.pidfile.is_some()) && pidfile_parent_unwritable(&pidfile) {
+        let parent = pidfile
+            .parent()
+            .map(|p| p.display().to_string())
+            .unwrap_or_else(|| "(none)".into());
+        println!(
+            "   {}",
+            format!("ERROR: pidfile parent is not writable: {parent}").red()
+        );
+    }
+}
+
+fn report_pidfile_status() {
+    let Some((root, cfg)) = load_server_config() else {
+        return;
+    };
+    // Only report when daemon mode or an explicit pidfile is configured.
+    if !cfg.server.daemon && cfg.server.pidfile.is_none() {
+        return;
+    }
+    let path = resolve_pidfile_path(&root, cfg.server.pidfile.as_deref());
+    match inspect_pidfile(&path) {
+        PidfileStatus::Missing => {
+            println!("   Pidfile:         {} (missing)", path.display());
+        }
+        PidfileStatus::Invalid => {
+            println!(
+                "   {}",
+                format!("Pidfile:         {} (invalid contents)", path.display()).yellow()
+            );
+        }
+        PidfileStatus::Stale { pid } => {
+            println!(
+                "   {}",
+                format!(
+                    "WARN: pidfile {} is stale (pid {pid} not running)",
+                    path.display()
+                )
+                .yellow()
+            );
+        }
+        PidfileStatus::Alive { pid } => {
+            println!("   Pidfile:         {} (pid {pid} alive)", path.display());
+        }
+    }
 }

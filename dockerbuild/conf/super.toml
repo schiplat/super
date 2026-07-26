@@ -11,6 +11,7 @@
 #   conf/conf.d/*.json    — optional program stacks (loaded on start & reload)
 #   data/snapshot.json    — persisted program registry (auto-created)
 #   logs/                 — superd + child process logs (auto-created)
+#   run/                  — runtime (pidfile only if you enable daemonize; keep off in Docker)
 #
 # Override: copy dockerbuild/conf/ and mount, e.g.
 #   -v ./my-conf:/app/super/conf -v ./my-data:/app/super/data
@@ -23,6 +24,9 @@ port = 9002
 
 # OSS has no API auth — must opt in when binding beyond loopback (required for 0.0.0.0).
 allow_insecure_public_bind = true
+
+# Containers/systemd: keep foreground (daemon = false). Never set daemon = true as PID 1.
+# daemon = false
 
 # Graceful shutdown: seconds to wait after SIGTERM before SIGKILL.
 shutdown_timeout = 10

@@ -14,6 +14,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.2.5] - 2026-07-26
+
+### Added
+- `superd --daemon` / `[server] daemon` (Unix): optional self-daemonize with pidfile (`run/superd.pid` by default, overridable via `[server] pidfile` / `--pidfile`). Refuses to start under systemd or as PID 1. `super doctor` reports conflicts and stale pidfiles. Keep foreground under systemd (`superd --foreground`).
+
+### Notes
+- Pair OSS `1.2.5` with matching commercial plugin packages (`super-plugins-1.2.5-…`).
+
+---
+
 ## [1.2.4] - 2026-07-26
 
 ### Changed

@@ -90,6 +90,9 @@ Mapping your muscle memory from `supervisorctl` to `super`:
 | **Group Action** | `supervisorctl restart <group>:` | `super restart @<group>` |
 | **Reload app config** | `supervisorctl signal HUP <name>` | `super reload <name>` |
 | **Reload daemon config** | `supervisorctl reload` | `super reload` *(no target)* |
+| **Stop the manager** | `supervisorctl shutdown` | `super shutdown` |
+
+`supervisord` often daemonizes by default; `superd` stays in the **foreground** unless you pass `--daemon` / set `[server] daemon = true` (Unix, not for systemd/Docker). Child programs must still run with `daemon off` — see [Process Management Contract](/docs/02-essentials/process-management-contract/).
 
 ## Supervisor Migration: `reread` / `update` / `reload`
 

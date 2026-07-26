@@ -55,7 +55,8 @@ docker run --rm -p 9002:9002 -v ./dockerbuild/conf:/app/super/conf containerpi/s
 ```bash
 git clone https://github.com/hzbd/super.git && cd super
 make build
-./target/release/superd
+./target/release/superd              # foreground (default; use under systemd/Docker)
+# ./target/release/superd --daemon   # optional Unix self-daemonize without systemd
 ```
 
 ### CLI
@@ -64,13 +65,16 @@ make build
 super add --name redis --autostart /usr/bin/redis-server
 super list
 super logs <id> --tail
+super shutdown                       # stop superd (foreground or --daemon)
 ```
 
-Diagnose a setup (config, daemon connectivity, license) in one shot:
+Diagnose a setup (config, daemon connectivity, license, daemon/pidfile hints) in one shot:
 
 ```bash
 super doctor
 ```
+
+See [Installation](https://super.docs.sconts.com/docs/01-getting-started/installation/) for systemd units (`superd --foreground`) and optional `--daemon` / `[server] daemon`.
 
 ## Toward GA
 
@@ -91,7 +95,7 @@ Track progress in the [changelog](https://super.docs.sconts.com/docs/08-changelo
 | Getting started | [Docs](https://super.docs.sconts.com/docs/01-getting-started/) |
 | Configuration | [Config reference](https://super.docs.sconts.com/docs/06-internals/config-reference/) |
 | API | [API reference](https://super.docs.sconts.com/docs/06-internals/api-reference/) |
-| Changelog | [v1.2.4](https://super.docs.sconts.com/docs/08-changelog/) |
+| Changelog | [v1.2.5](https://super.docs.sconts.com/docs/08-changelog/) |
 | Editions / Pro plugins | [Feature matrix](https://super.docs.sconts.com/docs/07-editions/feature-matrix/) |
 
 ## Contributing

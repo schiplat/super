@@ -27,12 +27,19 @@ shutdown_timeout = 10
 flapping_window = 60
 flapping_threshold = 5
 
+# Self-daemonize (Unix only). Keep false under systemd/Docker.
+# CLI overrides: --daemon / --foreground. See Config reference.
+# daemon = false
+# pidfile = "run/superd.pid"   # default when daemonizing; relative to SUPER_ROOT
+
 [logging]
 # Daemon's own log level (debug, info, warn, error)
 log_level = "info"
 ```
 
 > **OSS security:** OSS builds ship with `host = "127.0.0.1"` and `allow_insecure_public_bind = false`. To bind on `0.0.0.0` or another non-loopback address you must either set `allow_insecure_public_bind = true` (acknowledging that the API is open to the network) or load the **`security` plugin** for token-based auth. Protect the port with a firewall or reverse proxy in either case.
+
+> **Process model:** Default is **foreground** (correct for systemd `Type=simple` and containers). Optional `[server] daemon = true` / `superd --daemon` detaches without systemd; do not combine with a systemd unit. Full keys: [Config reference — `[server]`](/docs/06-internals/config-reference/#server).
 
 ### OSS security defaults (fail-closed)
 

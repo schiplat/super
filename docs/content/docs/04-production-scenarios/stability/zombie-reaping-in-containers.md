@@ -55,6 +55,7 @@ If your managed processes do not spawn short-lived shell children, Super alone i
 FROM ubuntu:22.04
 COPY superd /usr/local/bin/superd
 COPY super.toml /etc/super/super.toml
+# Foreground only — do not use superd --daemon or [server] daemon = true as PID 1
 ENTRYPOINT ["/usr/local/bin/superd"]
 ```
 
@@ -70,7 +71,7 @@ COPY super.toml /etc/super/super.toml
 ENTRYPOINT ["/usr/bin/tini", "--", "/usr/local/bin/superd"]
 ```
 
-`tini` handles PID 1 reaping; Super handles multi-service orchestration, health checks, and graceful shutdown.
+`tini` handles PID 1 reaping; Super handles multi-service orchestration, health checks, and graceful shutdown. Keep `superd` in the foreground under both patterns.
 
 ## Summary
 

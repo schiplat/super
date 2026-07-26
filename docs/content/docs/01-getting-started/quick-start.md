@@ -29,11 +29,13 @@ If you use the repo's [example config](https://github.com/hzbd/super/blob/master
 
 ## 2. Start the Daemon (OSS)
 
-Run the daemon in the foreground. It will start up and wait for API commands.
+Run the daemon in the foreground (default — required under systemd/Docker):
 
 ```bash
 superd
 ```
+
+Without systemd, you may detach with `superd --daemon` (writes `$SUPER_ROOT/run/superd.pid` by default). Control programs and stop the daemon the same way either way (`super …`, `super shutdown`).
 
 Expected output includes `Super Core starting...` and the listen address.
 
@@ -107,6 +109,8 @@ Commercial features use the **same OSS `superd` and `super` binaries** — drop 
 $SUPER_ROOT/
   conf/super.toml           # [license].key + auth_secret (when subscribed)
   plugins/                  # Authorized libraries from subscription package
+  run/                      # Optional: superd.pid when using --daemon
+  data/  logs/
 ```
 
 **Install licensed plugins** (from your subscription delivery package):

@@ -23,6 +23,7 @@ $SUPER_ROOT/
 ├── conf/
 │   ├── super.toml       # Main daemon config
 │   └── notify.toml      # Webhooks + inhibition rules (this file)
+├── run/                 # Optional pidfile when using superd --daemon
 ├── plugins/
 │   └── notify.so        # Required plugin
 ```
@@ -208,7 +209,7 @@ When `type = "webhook"`, Super sends this structured JSON payload:
   "event": "process_fatal",
   "system": {
     "hostname": "prod-server-1",
-    "version": "1.2.4"
+    "version": "1.2.5"
   },
   "summary": "[Fatal] worker on prod-server-1: Stopped after 3 retries.",
   "markdown": "### Process Fatal Alert\n- Service: worker\n- Host: prod-server-1\n...",
@@ -605,7 +606,7 @@ max_events = 10          # Cap individual event summaries at 10
   "event": "batch_summary",
   "system": {
     "hostname": "prod-server-1",
-    "version": "1.2.4"
+    "version": "1.2.5"
   },
   "summary": "[Batch] 5 events in 30s: 3 process_fatal, 2 process_backoff",
   "data": {

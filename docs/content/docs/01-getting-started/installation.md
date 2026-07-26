@@ -114,9 +114,11 @@ After=network.target
 
 [Service]
 Type=simple
-ExecStart=/usr/local/bin/superd
+# Must stay in the foreground. Do not set [server].daemon = true or pass --daemon.
+ExecStart=/usr/local/bin/superd --foreground
 Restart=always
 User=root
+Environment=SUPER_ROOT=/opt/super
 
 [Install]
 WantedBy=multi-user.target
@@ -130,4 +132,6 @@ sudo systemctl enable --now superd
 sudo systemctl status superd
 ```
 
-> **Note**: Default configuration paths are `/etc/super/super.toml` (system) or `~/.super/super.toml` (user). Set `SUPER_ROOT` if your layout differs.
+> **Note**: Default layout is `$SUPER_ROOT/conf/super.toml`. Set `SUPER_ROOT` if your layout differs.
+>
+> **Daemonize without systemd:** `superd --daemon` (or `[server] daemon = true`) writes `$SUPER_ROOT/run/superd.pid` by default. Do **not** combine that with this unit — `superd` refuses to start if both are detected. Stop with `super shutdown` as usual.

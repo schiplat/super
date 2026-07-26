@@ -11,6 +11,9 @@ allow_insecure_public_bind = false
 # Graceful shutdown timeout (seconds)
 shutdown_timeout = 7
 enable_docs = false  # set true only on trusted localhost deployments
+# Self-daemonize (Unix). Keep false under systemd/Docker; use: superd --daemon
+# daemon = false
+# pidfile = "run/superd.pid"   # default when daemonizing; relative to SUPER_ROOT
 
 # [logging] Superd daemon log settings
 [logging]

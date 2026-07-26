@@ -8,7 +8,9 @@ Before you add programs to Super, read this page. It defines the **contract** be
 
 ## 1. Foreground only
 
-Every application under Super must run in **foreground / non-daemonized** mode.
+Every **application managed by Super** must run in **foreground / non-daemonized** mode.
+
+This rule applies to child programs (`[[programs]]`), **not** to how you start `superd` itself. `superd` may run in the foreground (default, required under systemd/Docker) or optionally self-daemonize with `superd --daemon` / `[server] daemon = true` when you are not using an init system — see [Installation — Systemd](/docs/01-getting-started/installation/#method-3-systemd-vm--bare-metal).
 
 Managed programs must **not**:
 

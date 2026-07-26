@@ -79,6 +79,9 @@ Two reference profiles ship under `dockerbuild/conf/`:
 | `/app/super/conf/conf.d/*.json` | Optional program stacks on startup |
 | `/app/super/data/` | Persisted program registry (`snapshot.json`) |
 | `/app/super/logs/` | superd and child process logs |
+| `/app/super/run/` | Runtime (optional pidfile); keep `[server].daemon = false` in containers |
+
+> Containers must run `superd` in the **foreground** (image `ENTRYPOINT` already does). Do not set `daemon = true` or pass `--daemon` — `superd` refuses to daemonize as PID 1.
 
 Copy and edit defaults from `dockerbuild/conf/`:
 

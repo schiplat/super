@@ -6,6 +6,7 @@ use utoipa::ToSchema;
 
 pub mod auth;
 pub mod config;
+pub mod daemon;
 pub mod license;
 pub mod paths;
 pub mod plugin_abi;
@@ -16,6 +17,11 @@ pub mod plugin_ui_abi;
 pub mod resources;
 pub mod security;
 
+pub use daemon::{
+    DEFAULT_PIDFILE_REL, PidfileStatus, claim_pidfile, inspect_pidfile, pid_is_alive,
+    pidfile_parent_unwritable, release_pidfile, resolve_daemonize, resolve_pidfile_path,
+    should_write_pidfile, under_systemd,
+};
 pub use paths::{resolve_super_root, resolve_super_root_for_config};
 pub use security::{
     FetchUrlPolicy, MAX_LICENSE_B64_LEN, MAX_LICENSE_JSON_LEN, is_loopback_bind_host, mask_env_map,

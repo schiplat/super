@@ -3,7 +3,14 @@ use axum::{
     http::{HeaderValue, StatusCode, Uri, header},
     response::{IntoResponse, Response},
 };
+use clap::Parser;
+use common::config::ServerConfig;
 use common::license::{LicenseInfo, superd_within_license};
+use common::{
+    claim_pidfile, release_pidfile, resolve_daemonize, resolve_pidfile_path, should_write_pidfile,
+    under_systemd,
+};
+use std::path::{Path, PathBuf};
 use super_core::{
     ManagerHandle, api, bootstrap,
     plugin::{
@@ -14,7 +21,34 @@ use super_core::{
 };
 use tokio::signal;
 
+#[cfg(unix)]
+mod daemonize;
+
 const VERSION: &str = env!("CARGO_PKG_VERSION");
+
+#[derive(Debug, Parser)]
+#[command(
+    name = "superd",
+    version = VERSION,
+    about = "Project Super daemon",
+    long_about = "Long-running process manager. Configuration: $SUPER_ROOT/conf/super.toml\n\
+Docs: https://super.docs.sconts.com/docs/"
+)]
+struct Cli {
+    /// Self-daemonize (Unix). Overrides `[server].daemon = false`.
+    #[arg(long, conflicts_with = "foreground")]
+    daemon: bool,
+
+    /// Stay in the foreground (default). Overrides `[server].daemon = true`.
+    /// Use under systemd/Docker.
+    #[arg(long, conflicts_with = "daemon")]
+    foreground: bool,
+
+    /// Pidfile path (absolute or relative to SUPER_ROOT).
+    /// When daemonizing and unset, defaults to run/superd.pid.
+    #[arg(long, value_name = "PATH")]
+    pidfile: Option<PathBuf>,
+}
 
 const OSS_UI_MESSAGE: &str = r#"<!DOCTYPE html>
 <html lang="en">
@@ -221,32 +255,78 @@ async fn shutdown_signal(mut rx: tokio::sync::broadcast::Receiver<()>, manager: 
     }
 }
 
-#[tokio::main]
-async fn main() -> anyhow::Result<()> {
-    // superd takes no positional arguments; support only --version/--help so
-    // operators can identify the binary without starting the daemon.
-    if let Some(arg) = std::env::args().nth(1) {
-        match arg.as_str() {
-            "-V" | "--version" => {
-                println!("superd {VERSION}");
-                return Ok(());
+fn main() -> anyhow::Result<()> {
+    let cli = Cli::parse();
+    let root = resolve_root();
+    let (config_daemon, config_pidfile) = peek_server_daemon_settings(&root);
+    let daemonize = resolve_daemonize(cli.foreground, cli.daemon, config_daemon);
+    let explicit_pidfile = cli.pidfile.is_some() || config_pidfile.is_some();
+    let write_pid = should_write_pidfile(daemonize, explicit_pidfile);
+    let pidfile_path = if write_pid {
+        Some(resolve_pidfile_path(
+            &root,
+            cli.pidfile.as_deref().or(config_pidfile.as_deref()),
+        ))
+    } else {
+        None
+    };
+
+    if daemonize {
+        #[cfg(not(unix))]
+        {
+            anyhow::bail!("self-daemonize (--daemon / [server].daemon) is only supported on Unix");
+        }
+        #[cfg(unix)]
+        {
+            if under_systemd() {
+                anyhow::bail!(
+                    "daemonize is enabled but this process was started by systemd \
+                     (INVOCATION_ID/NOTIFY_SOCKET set). Set [server].daemon = false and use \
+                     Type=simple with a foreground ExecStart (e.g. superd --foreground)."
+                );
             }
-            "-h" | "--help" => {
-                println!("superd {VERSION} — Project Super daemon");
-                println!("Usage: superd [--version] [--help]");
-                println!();
-                println!("Configuration is read from $SUPER_ROOT/conf/super.toml");
-                println!("(SUPER_ROOT defaults to the executable-relative layout or cwd).");
-                println!("Docs: https://super.docs.sconts.com/docs/");
-                return Ok(());
+            if daemonize::is_pid1() {
+                anyhow::bail!(
+                    "refusing to daemonize as PID 1 (container/init). Run in the foreground."
+                );
             }
-            other => {
-                eprintln!("superd: unrecognized argument '{other}' (try --help)");
-                std::process::exit(2);
+            if let Some(ref path) = pidfile_path {
+                daemonize::preflight_pidfile(path)?;
             }
+            daemonize::daemonize()?;
         }
     }
 
+    if let Some(ref path) = pidfile_path {
+        claim_pidfile(path, std::process::id() as i32)?;
+    }
+
+    let pidfile_for_cleanup = pidfile_path.clone();
+    let result = tokio::runtime::Builder::new_multi_thread()
+        .enable_all()
+        .build()?
+        .block_on(async_main());
+
+    if let Some(ref path) = pidfile_for_cleanup {
+        release_pidfile(path, std::process::id() as i32);
+    }
+    result
+}
+
+/// Read only `[server].daemon` / `[server].pidfile` before full bootstrap.
+fn peek_server_daemon_settings(root: &Path) -> (bool, Option<PathBuf>) {
+    let path = root.join("conf/super.toml");
+    let Ok(content) = std::fs::read_to_string(&path) else {
+        return (false, None);
+    };
+    let Ok(cfg) = toml::from_str::<ServerConfig>(&content) else {
+        // Full bootstrap will surface parse errors.
+        return (false, None);
+    };
+    (cfg.server.daemon, cfg.server.pidfile)
+}
+
+async fn async_main() -> anyhow::Result<()> {
     let root = resolve_root();
 
     let plugin_host = PluginHost::discover(&root, VERSION);

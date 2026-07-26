@@ -198,9 +198,8 @@ pub fn make_api_router(
     {
         if config.server.enable_docs && mount_docs {
             let openapi = ApiDoc::openapi();
-            api_router = api_router.merge(
-                SwaggerUi::new("/api/docs").url("/api/v1/openapi.json", openapi),
-            );
+            api_router =
+                api_router.merge(SwaggerUi::new("/api/docs").url("/api/v1/openapi.json", openapi));
         }
     }
 

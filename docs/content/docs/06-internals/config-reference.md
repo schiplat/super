@@ -26,6 +26,17 @@ description: "Complete schema for super.toml."
 
 > **OSS security:** See [Configuration — OSS security defaults](/docs/02-essentials/configuration#oss-security-defaults-fail-closed) for fail-closed bind, log path confinement, and other defensive defaults.
 
+## Instance layout (`SUPER_ROOT`)
+
+| Path | Purpose |
+| :--- | :--- |
+| `conf/super.toml` | Daemon settings (this file) |
+| `conf/notify.toml` | Licensed notify plugin config (optional) |
+| `data/` | Persisted registry / auth state |
+| `logs/` | Daemon (`app.log`) and child process logs |
+| `run/` | Runtime files; default pidfile `run/superd.pid` when self-daemonizing |
+| `plugins/` | Licensed `.so` / `.dylib` libraries |
+
 ## `[server]`
 
 Global settings for the daemon.
@@ -39,6 +50,15 @@ Global settings for the daemon.
 | `flapping_window` | int | `60` | Time window (seconds) to detect restart loops. |
 | `flapping_threshold` | int | `5` | Max restarts allowed within the window. |
 | `enable_docs` | bool | `false` | Enable Swagger UI (`/api/docs`) when the binary is built with the docs feature. |
+| `daemon` | bool | `false` | Unix only: self-daemonize after start (like nginx `daemon on`). Keep **`false`** under systemd/Docker (`Type=simple` / PID 1). CLI: `--daemon` / `--foreground` override this. |
+| `pidfile` | string | — | Optional pidfile path. Relative paths resolve under `SUPER_ROOT`. When daemonizing and unset, defaults to `run/superd.pid`. Foreground writes a pidfile only when this (or `--pidfile`) is set. CLI: `--pidfile`. |
+
+```toml
+[server]
+# Optional self-daemonize when not using systemd/Docker:
+# daemon = true
+# pidfile = "run/superd.pid"   # default when daemonizing
+```
 
 ## Root keys (Licensed 💎)
 

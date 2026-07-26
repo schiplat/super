@@ -73,6 +73,7 @@ pub async fn bootstrap(extension: Box<dyn Extension>) -> anyhow::Result<SystemCo
     let conf_dir = root.join("conf");
     let data_dir = root.join("data");
     let log_dir = root.join("logs");
+    let run_dir = root.join("run");
 
     let paths = SystemPaths {
         root: root.clone(),
@@ -91,10 +92,11 @@ pub async fn bootstrap(extension: Box<dyn Extension>) -> anyhow::Result<SystemCo
     println!("   Config: {:?}", paths.config_file);
     println!("   Data:   {:?}", paths.state_file);
 
-    // 2. Create directories
+    // 2. Create directories (run/ holds optional pidfile for --daemon)
     tokio::fs::create_dir_all(&conf_dir).await?;
     tokio::fs::create_dir_all(&data_dir).await?;
     tokio::fs::create_dir_all(&log_dir).await?;
+    tokio::fs::create_dir_all(&run_dir).await?;
 
     // 3. Load config (strict: parse errors fail fast)
     let server_config = if paths.config_file.exists() {

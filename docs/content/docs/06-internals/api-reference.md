@@ -201,7 +201,7 @@ Update the entire system state to match a JSON definition.
 ```
 
 ### Shutdown
-Gracefully stop the daemon.
+Gracefully stop the daemon (same for foreground and `superd --daemon` instances).
 
 *   **POST** `/api/v1/system/shutdown`
 

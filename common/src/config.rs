@@ -99,6 +99,16 @@ pub struct ServerSection {
     /// Allow binding to a non-loopback address without the security plugin (OSS only).
     #[serde(default)]
     pub allow_insecure_public_bind: bool,
+
+    /// Self-daemonize after startup (Unix only). Default false — use foreground under
+    /// systemd/Docker. Conflicts with systemd service environments.
+    #[serde(default)]
+    pub daemon: bool,
+
+    /// Optional pidfile path. Relative paths resolve under `SUPER_ROOT`.
+    /// When daemonizing and unset, defaults to `run/superd.pid`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub pidfile: Option<PathBuf>,
 }
 
 // Manual Default impl using helper functions above
@@ -113,6 +123,8 @@ impl Default for ServerSection {
             flapping_threshold: default_flapping_threshold(),
             enable_docs: default_enable_docs(),
             allow_insecure_public_bind: false,
+            daemon: false,
+            pidfile: None,
         }
     }
 }

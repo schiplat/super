@@ -3,7 +3,7 @@
 #
 # Usage:
 #   curl -fsSL https://raw.githubusercontent.com/hzbd/super/master/install.sh | sh
-#   curl -fsSL ... | sh -s -- --version 1.2.4 --prefix /usr/local
+#   curl -fsSL ... | sh -s -- --version 1.2.5 --prefix /usr/local
 #
 # Options:
 #   --version X.Y.Z   Install a specific release (default: latest)
@@ -163,7 +163,8 @@ fi
 cat <<EOF
 
 Quick start:
-  superd &                      # start the daemon (API on 127.0.0.1:9002)
+  superd                        # foreground (default; use under systemd/Docker)
+  # superd --daemon             # optional Unix self-daemonize (pidfile: run/superd.pid)
   super add --name demo sleep 1000
   super list
   super doctor                  # diagnose config + daemon + license

@@ -439,12 +439,13 @@ dependencies = [
 
 [[package]]
 name = "common"
-version = "1.2.4"
+version = "1.2.5"
 dependencies = [
  "anyhow",
  "base64 0.22.1",
  "chrono",
  "ed25519-dalek",
+ "libc",
  "rand 0.8.7",
  "serde",
  "serde_json",
@@ -3098,7 +3099,7 @@ checksum = "13c2bddecc57b384dee18652358fb23172facb8a2c51ccc10d74c157bdea3292"
 
 [[package]]
 name = "super-cli"
-version = "1.2.4"
+version = "1.2.5"
 dependencies = [
  "anyhow",
  "chrono",
@@ -3125,7 +3126,7 @@ dependencies = [
 
 [[package]]
 name = "super-core"
-version = "1.2.4"
+version = "1.2.5"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -3162,15 +3163,17 @@ dependencies = [
 
 [[package]]
 name = "superd"
-version = "1.2.4"
+version = "1.2.5"
 dependencies = [
  "anyhow",
  "axum",
  "bytes",
  "clap",
  "common",
+ "nix 0.27.1",
  "super-core",
  "tokio",
+ "toml",
  "tracing",
 ]
 

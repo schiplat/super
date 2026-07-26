@@ -8,7 +8,7 @@ members = [
 ]
 
 [workspace.package]
-version = "1.2.4"
+version = "1.2.5"
 edition = "2024"
 license = "MIT"
 
@@ -43,7 +43,7 @@ futures-util = "0.3"
 toml = "0.8"
 
 # Signal handling (Unix only)
-nix = { version = "0.27", features = ["signal", "process", "user"] }
+nix = { version = "0.27", features = ["signal", "process", "user", "fs"] }
 
 
 [profile.release]

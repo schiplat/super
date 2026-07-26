@@ -41,6 +41,7 @@ flowchart TB
     CONF["conf/super.toml"]
     SNAP["data/snapshot.json"]
     LOGS["logs/"]
+    RUN["run/superd.pid"]
     PLUG["plugins/*.so"]
   end
 
@@ -72,13 +73,14 @@ flowchart TB
 
 | Component | Role |
 | :--- | :--- |
-| **`superd`** | Long-running daemon: spawns processes, health checks, OTA updates, persistence, API. |
-| **`super` CLI** | Local or remote control against the API (create/start/logs/stack). |
+| **`superd`** | Long-running daemon: spawns processes, health checks, OTA updates, persistence, API. Runs in the **foreground** by default; optional Unix `--daemon` / `[server] daemon` when not under systemd/Docker. |
+| **`super` CLI** | Local or remote control against the API (create/start/logs/stack). Same commands whether `superd` is foreground or self-daemonized. |
 | **REST + WebSocket** | Declarative control and live log streaming for automation. |
 | **`/metrics`** | Prometheus scrape endpoint (OSS). |
-| **`conf/super.toml`** | Daemon settings, optional `[license].key`, `auth_secret` when subscribed. |
+| **`conf/super.toml`** | Daemon settings (including optional `daemon` / `pidfile`), optional `[license].key`, `auth_secret` when subscribed. |
 | **`data/snapshot.json`** | Durable program registry (atomic writes). |
 | **`logs/`** | Daemon and child process logs (rotation configurable). |
+| **`run/`** | Runtime state; default pidfile `run/superd.pid` when self-daemonizing. |
 | **Plugins** | Optional `.so` / `.dylib` loaded at runtime after license verification. |
 
 **OSS (default):** loopback-first bind, no built-in dashboard, API open only on the bind address you configure. See [Configuration — OSS security defaults](/docs/02-essentials/configuration#oss-security-defaults-fail-closed).
