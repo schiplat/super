@@ -14,6 +14,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.2.4] - 2026-07-26
+
+### Changed
+- License docs/API wording: version span → **version scope**.
+- [Web UI](/docs/05-advanced-management/web-ui/): tour screenshots refreshed (notify/stack, program config).
+
+### Notes
+- Pair OSS `1.2.4` with matching commercial plugin packages (`super-plugins-1.2.4-…`).
+
+---
+
 ## [1.2.3] - 2026-07-25
 
 ### Changed
