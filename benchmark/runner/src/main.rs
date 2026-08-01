@@ -1,12 +1,12 @@
 use clap::{Parser, ValueEnum};
-use std::fs::OpenOptions;
 use std::path::PathBuf;
 use std::process::{Command, Stdio};
 use std::thread;
 use std::time::{Duration, Instant};
-use sysinfo::{Pid, ProcessExt, System, SystemExt};
+use sysinfo::{Pid, System};
 
 #[derive(Parser)]
+#[command(version)]
 struct Args {
     #[arg(long)]
     target: Target,
@@ -47,18 +47,18 @@ fn main() -> anyhow::Result<()> {
 
     while start_time.elapsed().as_secs() < args.duration {
         // Refresh metrics for the target PID
-        if system.refresh_process(Pid::from(daemon_pid as usize)) {
-            if let Some(process) = system.process(Pid::from(daemon_pid as usize)) {
-                let cpu = process.cpu_usage(); // %
-                let mem = process.memory() as f64 / 1024.0 / 1024.0; // MB
-                let elapsed = start_time.elapsed().as_millis();
+        let pid = Pid::from(daemon_pid as usize);
+        system.refresh_processes();
+        if let Some(process) = system.process(pid) {
+            let cpu = process.cpu_usage(); // %
+            let mem = process.memory() as f64 / 1024.0 / 1024.0; // MB
+            let elapsed = start_time.elapsed().as_millis();
 
-                wtr.write_record(&[
-                    elapsed.to_string(),
-                    format!("{:.2}", cpu),
-                    format!("{:.2}", mem),
-                ])?;
-            }
+            wtr.write_record(&[
+                elapsed.to_string(),
+                format!("{:.2}", cpu),
+                format!("{:.2}", mem),
+            ])?;
         } else {
             eprintln!("Process {} died!", daemon_pid);
             break;

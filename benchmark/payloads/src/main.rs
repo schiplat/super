@@ -5,6 +5,7 @@ use std::thread;
 use std::time::{Duration, Instant};
 
 #[derive(Parser)]
+#[command(version)]
 struct Args {
     #[arg(short, long)]
     mode: Mode,

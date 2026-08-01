@@ -3,6 +3,7 @@ use std::fs;
 use std::path::PathBuf;
 
 #[derive(Parser)]
+#[command(version)]
 struct Args {
     #[arg(long, default_value = "50")]
     count: usize,
