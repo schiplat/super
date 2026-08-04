@@ -23,15 +23,14 @@ help:
 	@echo ""
 	@echo "Targets:"
 	@echo "  build       Build OSS binaries (superd + super CLI)"
-	@echo "  fetch-keys  Maintainer: refresh common/keys/ from Manager API"
+	@echo "  fetch-keys  Local/debug: fetch Manager keyring into common/keys/ (do not commit by default)"
 	@echo "  clean       Clean up build artifacts (target/)"
 	@echo "  check       Run cargo check"
 	@echo "  docker      Build containerpi/super image (native arch, local load)"
 	@echo "  docker-multi  Build and push linux/amd64 image"
 	@echo ""
-	@echo "Daily: make build uses committed common/keys/*.public.key (no Manager)."
-	@echo "Release CI fetches Manager keyring before packaging binaries."
-	@echo "Optional: make fetch-keys then commit keys so OSS stays in sync."
+	@echo "Daily: make build uses hand-curated common/keys/*.public.key (no Manager)."
+	@echo "Release CI fetches Manager keyring before packaging (build tree only)."
 	@echo ""
 
 # ==========================================

@@ -1,9 +1,12 @@
 #!/usr/bin/env bash
-# Refresh verifying keys from Manager into common/keys/.
+# Refresh verifying keys from Manager into common/keys/ (build tree).
 #
-# - make fetch-keys: optional maintainer sync (then commit for OSS/CI).
-# - Release CI: runs this before packaging official binaries.
-# - make build / PR CI: do NOT call this — use committed *.public.key only.
+# Intended use:
+# - Release CI: run before packaging so official binaries embed Manager's live ring
+#   (upserted on top of whatever is already checked out under common/keys/).
+# - make fetch-keys: local/debug only — inspect Manager output; do NOT commit results
+#   unless a maintainer deliberately curates a key into the repo by hand.
+# - make build / PR CI: never call this — embed only committed (hand-picked) keys.
 #
 # Env (all required — no script defaults; Release CI → hzbd/super Actions secrets):
 #   MANAGER_BASE, MANAGER_PATH_PREFIX, MANAGER_TOKEN, PRODUCT_ID
@@ -12,9 +15,8 @@
 # Also loads KEY=VALUE from repo-root `.env` when present (gitignored).
 # Missing/empty required vars fail closed when REQUIRE_MANAGER_KEYRING is on.
 #
-# Writes Manager keyring entries into common/keys/ (upsert by kid). Existing
-# *.public.key files are never deleted — the directory is a cumulative ring.
-# After a successful fetch, commit new/updated keys so OSS/CI stay in sync.
+# Upserts Manager entries by kid; never deletes existing *.public.key files.
+# Git `common/keys/` stays a hand-curated set; Release CI fetch is ephemeral to the job.
 
 set -euo pipefail
 
@@ -192,11 +194,14 @@ if written == 0:
 print(
     f"==> upserted from Manager: added={added} updated={updated} unchanged={unchanged}"
 )
-print(f"==> keys directory (cumulative): {oss}")
+print(f"==> keys directory (build tree): {oss}")
 for path in sorted(oss.glob("*.public.key")):
     print(f"  present {path.name} ({path.stat().st_size} bytes)")
 legacy = oss / "public.key"
 if legacy.is_file():
     print(f"  present {legacy.name} ({legacy.stat().st_size} bytes)")
-print("==> Commit new/updated common/keys/*.public.key so OSS embeds the full ring.")
+print(
+    "==> Release CI: these files are for this build only. "
+    "Do not commit unless deliberately curating a key into the repo."
+)
 PY
