@@ -61,12 +61,13 @@ Before opening a PR that touches docs or license-related code, confirm the chang
 | `make fetch-keys` | Optional maintainer sync from Manager → write keys (then commit) |
 | GitHub **Release** (`v*` tag) | Fetches Manager keyring in CI, then builds binaries |
 
-Public verifying keys are not secrets — keep a committed copy so anyone can build. Official release artifacts always embed the live Manager ring (`MANAGER_BASE` + `MANAGER_TOKEN` secrets on `hzbd/super`).
+Public verifying keys are not secrets — keep a committed copy so anyone can build. Official release artifacts always embed the live Manager ring (`MANAGER_BASE`, `MANAGER_PATH_PREFIX`, `MANAGER_TOKEN`, `PRODUCT_ID` secrets on `hzbd/super`; **no script defaults**).
 
 After rotate, also commit refreshed keys so self-built OSS binaries stay compatible:
 
 ```bash
-cp .env.example .env   # products.read token
+# All four required — set via env or gitignored .env (no script defaults)
+export MANAGER_BASE=… MANAGER_PATH_PREFIX=… MANAGER_TOKEN=… PRODUCT_ID=…
 make fetch-keys
 git add common/keys/*.public.key && git commit -m "Update verifying keyring"
 ```

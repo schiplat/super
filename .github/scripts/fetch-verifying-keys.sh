@@ -5,11 +5,12 @@
 # - Release CI: runs this before packaging official binaries.
 # - make build / PR CI: do NOT call this — use committed *.public.key only.
 #
-# Env (configure these; Release CI → hzbd/super Actions secrets):
+# Env (all required — no script defaults; Release CI → hzbd/super Actions secrets):
 #   MANAGER_BASE, MANAGER_PATH_PREFIX, MANAGER_TOKEN, PRODUCT_ID
 # Also: REQUIRE_MANAGER_KEYRING, KEEP_LEGACY_PUBLIC_KEY
 #
 # Also loads KEY=VALUE from repo-root `.env` when present (gitignored).
+# Missing/empty required vars fail closed when REQUIRE_MANAGER_KEYRING is on.
 #
 # After a successful fetch, commit updated common/keys/*.public.key so the next
 # OSS/CI/Release build embeds the new ring.
@@ -18,7 +19,6 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 OSS_KEYS="${OSS_KEYS:-$ROOT/common/keys}"
-PRODUCT_ID="${PRODUCT_ID:-super-pro}"
 REQUIRE="${REQUIRE_MANAGER_KEYRING:-1}"
 KEEP_LEGACY="${KEEP_LEGACY_PUBLIC_KEY:-0}"
 
@@ -65,8 +65,8 @@ fail_or_skip() {
   local msg="$1"
   if require_on; then
     echo "ERROR: $msg (REQUIRE_MANAGER_KEYRING is set)" >&2
-    echo "Hint: configure MANAGER_BASE, MANAGER_PATH_PREFIX, MANAGER_TOKEN, PRODUCT_ID" >&2
-    echo "      (env, super/.env, or hzbd/super Actions secrets)." >&2
+    echo "Hint: set all of MANAGER_BASE, MANAGER_PATH_PREFIX, MANAGER_TOKEN, PRODUCT_ID" >&2
+    echo "      (env, super/.env, or hzbd/super Actions secrets). No script defaults." >&2
     echo "      OSS contributors: skip this script; make build uses committed keys." >&2
     exit 1
   fi
@@ -74,24 +74,25 @@ fail_or_skip() {
   exit 0
 }
 
+# Required — no defaults (empty Actions secrets must fail closed).
 token="${MANAGER_TOKEN:-}"
-if [[ -z "$token" ]]; then
+base="${MANAGER_BASE:-}"
+prefix_raw="${MANAGER_PATH_PREFIX:-}"
+PRODUCT_ID="${PRODUCT_ID:-}"
+
+if [[ -z "${token// }" ]]; then
   fail_or_skip "MANAGER_TOKEN is not set"
 fi
-
-# Empty Actions secret becomes "" and must not disable the default.
+if [[ -z "${base// }" ]]; then
+  fail_or_skip "MANAGER_BASE is not set"
+fi
+if [[ -z "${prefix_raw// }" ]]; then
+  fail_or_skip "MANAGER_PATH_PREFIX is not set"
+fi
 if [[ -z "${PRODUCT_ID// }" ]]; then
-  PRODUCT_ID="super-pro"
+  fail_or_skip "PRODUCT_ID is not set"
 fi
 
-if [[ -z "${MANAGER_BASE:-}" ]]; then
-  if require_on; then
-    fail_or_skip "MANAGER_BASE is not set"
-  fi
-  base="http://127.0.0.1:8787"
-else
-  base="$MANAGER_BASE"
-fi
 base="${base%/}"
 # Strip accidental API/path tails so BASE is scheme://host[:port] only.
 while true; do
@@ -103,16 +104,11 @@ while true; do
   base="${base%/}"
 done
 
-# Normalize like manager-server: single segment → "/{segment}" (default /pi).
-# Empty secret "" must fall back to pi (same as unset).
-prefix_raw="${MANAGER_PATH_PREFIX:-pi}"
-if [[ -z "${prefix_raw// }" ]]; then
-  prefix_raw="pi"
-fi
+# Normalize like manager-server: single segment → "/{segment}".
 prefix_raw="${prefix_raw#/}"
 prefix_raw="${prefix_raw%/}"
 if [[ -z "$prefix_raw" || "$prefix_raw" == *"/"* ]]; then
-  fail_or_skip "MANAGER_PATH_PREFIX must be a single path segment (got '${MANAGER_PATH_PREFIX:-}')"
+  fail_or_skip "MANAGER_PATH_PREFIX must be a single path segment (got '${MANAGER_PATH_PREFIX}')"
 fi
 prefix="/${prefix_raw}"
 # Footgun: MANAGER_BASE=https://host/pi + PREFIX=pi → /pi/pi/api/...
@@ -142,17 +138,17 @@ preview="$(printf '%s' "$json" | tr '\n' ' ' | head -c 240)"
 if [[ "$http_code" != "200" ]]; then
   fail_or_skip "Manager keyring HTTP ${http_code} — body: ${preview:-<empty>}
 Hint: product must exist with a 32-byte private_key; token needs products.read.
-      MANAGER_BASE=scheme://host (no /pi); MANAGER_PATH_PREFIX=pi"
+      MANAGER_BASE=scheme://host (no path prefix); set MANAGER_PATH_PREFIX separately"
 fi
 
 if [[ -z "$json" ]]; then
   fail_or_skip "Manager keyring returned empty body (HTTP 200)
-Hint: check MANAGER_BASE / MANAGER_PATH_PREFIX (avoid doubling /pi)"
+Hint: check MANAGER_BASE / MANAGER_PATH_PREFIX (avoid doubling the path prefix)"
 fi
 
 if ! printf '%s' "$json" | python3 -c 'import json,sys; json.load(sys.stdin)' 2>/dev/null; then
   fail_or_skip "Manager keyring response is not JSON (HTTP ${http_code}) — body: ${preview:-<empty>}
-Hint: wrong URL often returns Admin SPA HTML; BASE must not include /pi when PREFIX=pi"
+Hint: wrong URL often returns Admin SPA HTML; do not put the path prefix in MANAGER_BASE"
 fi
 
 KEEP_LEGACY_PUBLIC_KEY="$KEEP_LEGACY" PRODUCT_ID="$PRODUCT_ID" OSS_KEYS="$OSS_KEYS" python3 - "$json" <<'PY'
