@@ -79,6 +79,11 @@ if [[ -z "$token" ]]; then
   fail_or_skip "MANAGER_TOKEN is not set"
 fi
 
+# Empty Actions secret becomes "" and must not disable the default.
+if [[ -z "${PRODUCT_ID// }" ]]; then
+  PRODUCT_ID="super-pro"
+fi
+
 if [[ -z "${MANAGER_BASE:-}" ]]; then
   if require_on; then
     fail_or_skip "MANAGER_BASE is not set"
@@ -88,24 +93,67 @@ else
   base="$MANAGER_BASE"
 fi
 base="${base%/}"
+# Strip accidental API/path tails so BASE is scheme://host[:port] only.
+while true; do
+  case "$base" in
+    */api/v1) base="${base%/api/v1}" ;;
+    */api) base="${base%/api}" ;;
+    *) break ;;
+  esac
+  base="${base%/}"
+done
+
 # Normalize like manager-server: single segment → "/{segment}" (default /pi).
+# Empty secret "" must fall back to pi (same as unset).
 prefix_raw="${MANAGER_PATH_PREFIX:-pi}"
+if [[ -z "${prefix_raw// }" ]]; then
+  prefix_raw="pi"
+fi
 prefix_raw="${prefix_raw#/}"
 prefix_raw="${prefix_raw%/}"
 if [[ -z "$prefix_raw" || "$prefix_raw" == *"/"* ]]; then
   fail_or_skip "MANAGER_PATH_PREFIX must be a single path segment (got '${MANAGER_PATH_PREFIX:-}')"
 fi
 prefix="/${prefix_raw}"
+# Footgun: MANAGER_BASE=https://host/pi + PREFIX=pi → /pi/pi/api/...
+if [[ "$base" == *"$prefix" ]]; then
+  echo "NOTICE: MANAGER_BASE already ends with ${prefix} — stripping so path is not doubled" >&2
+  base="${base%"$prefix"}"
+  base="${base%/}"
+fi
 api_root="${base}${prefix}/api/v1"
 mkdir -p "$OSS_KEYS"
 
-echo "==> GET ${api_root}/products/${PRODUCT_ID}/public-keyring"
-json=$(curl -fsS \
-  -H "Authorization: Bearer $token" \
-  -H "Accept: application/json" \
-  "${api_root}/products/${PRODUCT_ID}/public-keyring") || {
-  fail_or_skip "Manager keyring request failed"
+url="${api_root}/products/${PRODUCT_ID}/public-keyring"
+echo "==> GET ${url}"
+tmp="$(mktemp)"
+trap 'rm -f "$tmp"' EXIT
+http_code="$(
+  curl -sS -o "$tmp" -w '%{http_code}' \
+    -H "Authorization: Bearer $token" \
+    -H "Accept: application/json" \
+    "$url"
+)" || {
+  fail_or_skip "Manager keyring curl failed (network/TLS)"
 }
+json="$(cat "$tmp")"
+preview="$(printf '%s' "$json" | tr '\n' ' ' | head -c 240)"
+
+if [[ "$http_code" != "200" ]]; then
+  fail_or_skip "Manager keyring HTTP ${http_code} — body: ${preview:-<empty>}
+Hint: product must exist with a 32-byte private_key; token needs products.read.
+      MANAGER_BASE=scheme://host (no /pi); MANAGER_PATH_PREFIX=pi"
+fi
+
+if [[ -z "$json" ]]; then
+  fail_or_skip "Manager keyring returned empty body (HTTP 200)
+Hint: check MANAGER_BASE / MANAGER_PATH_PREFIX (avoid doubling /pi)"
+fi
+
+if ! printf '%s' "$json" | python3 -c 'import json,sys; json.load(sys.stdin)' 2>/dev/null; then
+  fail_or_skip "Manager keyring response is not JSON (HTTP ${http_code}) — body: ${preview:-<empty>}
+Hint: wrong URL often returns Admin SPA HTML; BASE must not include /pi when PREFIX=pi"
+fi
 
 KEEP_LEGACY_PUBLIC_KEY="$KEEP_LEGACY" PRODUCT_ID="$PRODUCT_ID" OSS_KEYS="$OSS_KEYS" python3 - "$json" <<'PY'
 import base64, json, os, sys
