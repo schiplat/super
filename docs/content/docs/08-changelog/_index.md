@@ -14,6 +14,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.3.1] - 2026-08-04
+
+### Fixed
+- Release CI Manager keyring fetch: require explicit env (no defaults); harden HTTP/JSON errors; **upsert** verifying keys without deleting existing `common/keys/*.public.key` (cumulative ring).
+
+### Notes
+- Pair with commercial plugins on the 1.3.x line (`super-plugins-1.3.0-…` or newer when published).
+
+---
+
+## [1.3.0] - 2026-08-04
+
+### Notes
+- Workspace version bump to 1.3.0 (pair with matching commercial plugin packages).
+
+---
+
 ## [1.2.5] - 2026-07-26
 
 ### Added
