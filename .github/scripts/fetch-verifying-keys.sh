@@ -7,20 +7,20 @@
 #
 # Env (all required — no script defaults; Release CI → hzbd/super Actions secrets):
 #   MANAGER_BASE, MANAGER_PATH_PREFIX, MANAGER_TOKEN, PRODUCT_ID
-# Also: REQUIRE_MANAGER_KEYRING, KEEP_LEGACY_PUBLIC_KEY
+# Also: REQUIRE_MANAGER_KEYRING
 #
 # Also loads KEY=VALUE from repo-root `.env` when present (gitignored).
 # Missing/empty required vars fail closed when REQUIRE_MANAGER_KEYRING is on.
 #
-# After a successful fetch, commit updated common/keys/*.public.key so the next
-# OSS/CI/Release build embeds the new ring.
+# Writes Manager keyring entries into common/keys/ (upsert by kid). Existing
+# *.public.key files are never deleted — the directory is a cumulative ring.
+# After a successful fetch, commit new/updated keys so OSS/CI stay in sync.
 
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 OSS_KEYS="${OSS_KEYS:-$ROOT/common/keys}"
 REQUIRE="${REQUIRE_MANAGER_KEYRING:-1}"
-KEEP_LEGACY="${KEEP_LEGACY_PUBLIC_KEY:-0}"
 
 load_dotenv() {
   local f="$ROOT/.env"
@@ -45,17 +45,9 @@ load_dotenv() {
 
 load_dotenv
 REQUIRE="${REQUIRE_MANAGER_KEYRING:-$REQUIRE}"
-KEEP_LEGACY="${KEEP_LEGACY_PUBLIC_KEY:-$KEEP_LEGACY}"
 
 require_on() {
   case "$(printf '%s' "$REQUIRE" | tr '[:upper:]' '[:lower:]')" in
-    1|true|yes|on) return 0 ;;
-    *) return 1 ;;
-  esac
-}
-
-keep_legacy_on() {
-  case "$(printf '%s' "$KEEP_LEGACY" | tr '[:upper:]' '[:lower:]')" in
     1|true|yes|on) return 0 ;;
     *) return 1 ;;
   esac
@@ -151,7 +143,7 @@ if ! printf '%s' "$json" | python3 -c 'import json,sys; json.load(sys.stdin)' 2>
 Hint: wrong URL often returns Admin SPA HTML; do not put the path prefix in MANAGER_BASE"
 fi
 
-KEEP_LEGACY_PUBLIC_KEY="$KEEP_LEGACY" PRODUCT_ID="$PRODUCT_ID" OSS_KEYS="$OSS_KEYS" python3 - "$json" <<'PY'
+PRODUCT_ID="$PRODUCT_ID" OSS_KEYS="$OSS_KEYS" python3 - "$json" <<'PY'
 import base64, json, os, sys
 from pathlib import Path
 
@@ -159,29 +151,16 @@ def sanitize(raw: str) -> str:
     s = "".join(c if (c.isalnum() or c in "-_.") else "_" for c in raw.strip())
     return s or "_"
 
-def truthy(raw: str) -> bool:
-    return raw.strip().lower() in ("1", "true", "yes", "on")
-
 data = json.loads(sys.argv[1])
 product_id = os.environ["PRODUCT_ID"]
 oss = Path(os.environ["OSS_KEYS"])
-keep_legacy = truthy(os.environ.get("KEEP_LEGACY_PUBLIC_KEY", "0"))
 entries = data.get("entries") or []
 if not entries:
     sys.exit("ERROR: keyring has no entries")
 
-prefix = f"{sanitize(product_id)}."
-for path in sorted(oss.glob("*.public.key")):
-    if path.name.startswith(prefix):
-        path.unlink()
-        print(f"  removed stale {path.name}")
-
-legacy = oss / "public.key"
-if legacy.is_file() and not keep_legacy:
-    legacy.unlink()
-    print(f"  removed legacy {legacy.name}")
-
-written = 0
+# Cumulative ring: never delete existing *.public.key (or legacy public.key).
+# Only upsert kids returned by Manager so old verifying keys stay embeddable.
+added = updated = unchanged = 0
 for e in entries:
     kid = (e.get("kid") or "").strip()
     b64 = (e.get("public_key_b64") or "").strip()
@@ -192,16 +171,32 @@ for e in entries:
         sys.exit(f"ERROR: kid={kid} decoded to {len(raw)} bytes (expected 32)")
     stem = f"{sanitize(product_id)}.{sanitize(kid)}"
     out = oss / f"{stem}.public.key"
-    out.write_bytes(raw)
     active = " active" if e.get("active") else ""
-    print(f"  wrote {out.name} (32 bytes) kid={kid}{active}")
-    written += 1
+    if out.is_file():
+        if out.read_bytes() == raw:
+            print(f"  unchanged {out.name} kid={kid}{active}")
+            unchanged += 1
+        else:
+            out.write_bytes(raw)
+            print(f"  updated {out.name} (32 bytes) kid={kid}{active}")
+            updated += 1
+    else:
+        out.write_bytes(raw)
+        print(f"  added {out.name} (32 bytes) kid={kid}{active}")
+        added += 1
 
+written = added + updated + unchanged
 if written == 0:
     sys.exit("ERROR: no keyring entries written")
 
-if keep_legacy and legacy.is_file():
-    print(f"  kept {legacy.name} (KEEP_LEGACY_PUBLIC_KEY)")
-print(f"==> {written} verifying key(s) ready under {oss}")
-print("==> Commit common/keys/*.public.key so CI/Release embed this ring.")
+print(
+    f"==> upserted from Manager: added={added} updated={updated} unchanged={unchanged}"
+)
+print(f"==> keys directory (cumulative): {oss}")
+for path in sorted(oss.glob("*.public.key")):
+    print(f"  present {path.name} ({path.stat().st_size} bytes)")
+legacy = oss / "public.key"
+if legacy.is_file():
+    print(f"  present {legacy.name} ({legacy.stat().st_size} bytes)")
+print("==> Commit new/updated common/keys/*.public.key so OSS embeds the full ring.")
 PY
