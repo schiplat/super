@@ -5,12 +5,9 @@
 # - Release CI: runs this before packaging official binaries.
 # - make build / PR CI: do NOT call this — use committed *.public.key only.
 #
-# Env:
-#   MANAGER_BASE   — e.g. http://127.0.0.1:8787 or production Manager URL
-#   MANAGER_TOKEN  — Bearer token with products.read
-#   PRODUCT_ID     — default super-pro
-#   REQUIRE_MANAGER_KEYRING — default 1 for this script
-#   KEEP_LEGACY_PUBLIC_KEY — if 1, keep common/keys/public.key
+# Env (configure these; Release CI → hzbd/super Actions secrets):
+#   MANAGER_BASE, MANAGER_PATH_PREFIX, MANAGER_TOKEN, PRODUCT_ID
+# Also: REQUIRE_MANAGER_KEYRING, KEEP_LEGACY_PUBLIC_KEY
 #
 # Also loads KEY=VALUE from repo-root `.env` when present (gitignored).
 #
@@ -68,9 +65,9 @@ fail_or_skip() {
   local msg="$1"
   if require_on; then
     echo "ERROR: $msg (REQUIRE_MANAGER_KEYRING is set)" >&2
-    echo "Hint: set MANAGER_BASE + MANAGER_TOKEN in the environment or super/.env" >&2
-    echo "      (API token with products.read). OSS contributors: skip this script;" >&2
-    echo "      make build uses committed common/keys/*.public.key." >&2
+    echo "Hint: configure MANAGER_BASE, MANAGER_PATH_PREFIX, MANAGER_TOKEN, PRODUCT_ID" >&2
+    echo "      (env, super/.env, or hzbd/super Actions secrets)." >&2
+    echo "      OSS contributors: skip this script; make build uses committed keys." >&2
     exit 1
   fi
   echo "NOTICE: $msg — leaving common/keys/ unchanged"
@@ -82,15 +79,31 @@ if [[ -z "$token" ]]; then
   fail_or_skip "MANAGER_TOKEN is not set"
 fi
 
-base="${MANAGER_BASE:-http://127.0.0.1:8787}"
+if [[ -z "${MANAGER_BASE:-}" ]]; then
+  if require_on; then
+    fail_or_skip "MANAGER_BASE is not set"
+  fi
+  base="http://127.0.0.1:8787"
+else
+  base="$MANAGER_BASE"
+fi
 base="${base%/}"
+# Normalize like manager-server: single segment → "/{segment}" (default /pi).
+prefix_raw="${MANAGER_PATH_PREFIX:-pi}"
+prefix_raw="${prefix_raw#/}"
+prefix_raw="${prefix_raw%/}"
+if [[ -z "$prefix_raw" || "$prefix_raw" == *"/"* ]]; then
+  fail_or_skip "MANAGER_PATH_PREFIX must be a single path segment (got '${MANAGER_PATH_PREFIX:-}')"
+fi
+prefix="/${prefix_raw}"
+api_root="${base}${prefix}/api/v1"
 mkdir -p "$OSS_KEYS"
 
-echo "==> GET $base/v1/products/${PRODUCT_ID}/public-keyring"
+echo "==> GET ${api_root}/products/${PRODUCT_ID}/public-keyring"
 json=$(curl -fsS \
   -H "Authorization: Bearer $token" \
   -H "Accept: application/json" \
-  "$base/v1/products/${PRODUCT_ID}/public-keyring") || {
+  "${api_root}/products/${PRODUCT_ID}/public-keyring") || {
   fail_or_skip "Manager keyring request failed"
 }
 
