@@ -37,7 +37,7 @@ Installs `superd` and `super` into `/usr/local/bin` (or `~/.local/bin` when not 
 
 ### Docker
 
-Docker image (`linux/amd64`). The OSS image has **no API authentication** — bind to loopback on the host unless you add the `security` plugin and a license:
+Docker image (`linux/amd64`, `linux/arm64`). The OSS image has **no API authentication** — bind to loopback on the host unless you add the `security` plugin and a license:
 
 ```bash
 docker pull containerpi/super:latest
@@ -51,6 +51,8 @@ docker run --rm -p 127.0.0.1:9002:9002 -v ./dockerbuild/conf:/app/super/conf con
 ```
 
 ### From source
+
+Requires **Rust 1.85+** (stable):
 
 ```bash
 git clone https://github.com/hzbd/super.git && cd super

@@ -1,5 +1,5 @@
 use clap::{Parser, ValueEnum};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::thread;
 use std::time::{Duration, Instant};
@@ -43,7 +43,7 @@ fn main() -> anyhow::Result<()> {
     // 2. Monitoring Loop
     let start_time = Instant::now();
     let mut wtr = csv::Writer::from_path(&args.output_csv)?;
-    wtr.write_record(&["time_ms", "cpu_usage", "memory_mb"])?;
+    wtr.write_record(["time_ms", "cpu_usage", "memory_mb"])?;
 
     while start_time.elapsed().as_secs() < args.duration {
         // Refresh metrics for the target PID
@@ -75,7 +75,7 @@ fn main() -> anyhow::Result<()> {
 
 fn start_target(
     target: &Target,
-    config_dir: &PathBuf,
+    config_dir: &Path,
 ) -> anyhow::Result<(u32, Option<std::process::Child>)> {
     match target {
         Target::Super => {
@@ -140,7 +140,7 @@ fn start_target(
     }
 }
 
-fn stop_target(target: &Target, _config_dir: &PathBuf) {
+fn stop_target(target: &Target, _config_dir: &Path) {
     match target {
         Target::Super => {
             let _ = Command::new("pkill").arg("superd").output();

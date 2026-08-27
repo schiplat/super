@@ -4,7 +4,7 @@ A scientifically rigorous benchmark suite comparing `super`, `supervisord`, and 
 
 ## Prerequisites
 
-- **Rust**: Latest stable
+- **Rust**: Stable **1.85+** (matches the main workspace `rust-version`)
 - **Python**: 3.8+ (with `pandas`, `matplotlib`)
 - **Targets**:
   - `superd` (in PATH)

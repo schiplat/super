@@ -11,6 +11,7 @@ members = [
 version = "1.3.0"
 edition = "2024"
 license = "MIT"
+rust-version = "1.85"
 
 [workspace.dependencies]
 super-core = { path = "./core" }

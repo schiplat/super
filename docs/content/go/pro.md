@@ -15,7 +15,7 @@ Compare editions in the [feature matrix](/docs/07-editions/feature-matrix/). Aft
 
 ## Checkout
 
-{{< purchase-cta label="Continue to checkout" empty="Checkout is not linked yet. Please check back soon, or email support@ddl.sconts.com." >}}
+{{< purchase-cta label="Continue to checkout" >}}
 
 By continuing to checkout you agree to the [Terms of Service](/legal/terms/) and [Privacy Policy](/legal/privacy/).
 

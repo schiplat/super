@@ -5,7 +5,7 @@ Thank you for your interest in contributing to **Project Super** (OSS, MIT).
 ## Getting started
 
 1. Fork [hzbd/super](https://github.com/hzbd/super) and clone your fork.
-2. Install [Rust](https://rust.rust-lang.org/tools/install) (stable).
+2. Install [Rust](https://rust.rust-lang.org/tools/install) **1.85 or newer** (stable; required for edition 2024).
 3. Build: `make build` (`superd` + `super` CLI).
 4. Run tests: `cargo test --workspace` and `cargo clippy --workspace --all-targets -- -D warnings`.
 

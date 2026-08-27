@@ -12,6 +12,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- CI runs `cargo test` / clippy / fmt on **Ubuntu and macOS**; `benchmark/` workspace is built in CI.
+- Docker Hub image publishes **`linux/amd64`** and **`linux/arm64`** manifests again.
+- Document minimum **Rust 1.85+** for building from source (edition 2024).
+
+### Fixed
+- `lru` advisory (RUSTSEC-2026-0253) via dependency update in the CLI TUI stack.
+
 ---
 
 ## [1.3.0] - 2026-08-04

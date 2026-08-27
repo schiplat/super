@@ -12,7 +12,7 @@ The container runs as UID **65532**. When bind-mounting host directories, ensure
 
 ## Platforms
 
-Published CI images target **`linux/amd64`** only (Intel/AMD servers and most cloud VMs). Native `docker build` on your machine uses your host architecture for local testing.
+Published CI images target **`linux/amd64`** and **`linux/arm64`**. Native `docker build` on your machine uses your host architecture for local testing.
 
 Verify a published image:
 
@@ -52,7 +52,7 @@ Multi-arch publish (requires `docker login`):
 ```bash
 make docker-multi
 # or:
-docker buildx build --platform linux/amd64 \
+docker buildx build --platform linux/amd64,linux/arm64 \
   -f dockerbuild/Dockerfile -t containerpi/super:latest --push .
 ```
 
@@ -119,8 +119,8 @@ Workflow: [`.github/workflows/docker-publish.yml`](../.github/workflows/docker-p
 
 | Trigger | Tags pushed |
 | :--- | :--- |
-| Push to `master` (relevant paths) | `containerpi/super:latest` (`linux/amd64`) |
-| Push tag `v*` | semver tags + `latest` (`linux/amd64`) |
+| Push to `master` (relevant paths) | `containerpi/super:latest` (`linux/amd64`, `linux/arm64`) |
+| Push tag `v*` | semver tags + `latest` (`linux/amd64`, `linux/arm64`) |
 | Manual **workflow_dispatch** | Same rules as above |
 
 Add repository secrets (**Settings → Secrets → Actions**):
@@ -140,7 +140,7 @@ git push origin v1.1.9
 ### Manual push
 
 ```bash
-docker buildx build --platform linux/amd64 \
+docker buildx build --platform linux/amd64,linux/arm64 \
   -f dockerbuild/Dockerfile \
   -t containerpi/super:latest \
   -t containerpi/super:1.1.9 \

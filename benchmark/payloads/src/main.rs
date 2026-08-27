@@ -22,7 +22,6 @@ enum Mode {
 
 fn main() {
     let args = Args::parse();
-    let pid = std::process::id();
 
     match args.mode {
         Mode::Idle => {
@@ -46,7 +45,7 @@ fn main() {
             let start = Instant::now();
 
             for i in 0..total_lines {
-                if let Err(_) = writeln!(handle, "{} - {}", i, payload) {
+                if writeln!(handle, "{} - {}", i, payload).is_err() {
                     break; // Pipe broken
                 }
             }
