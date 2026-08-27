@@ -1,0 +1,54 @@
+{{- $api := .Site.Params.contact.api_url | default "https://open.schiplat.com/api/v1/demands" -}}
+<section class="hp-section contact-section" id="contact">
+<div class="hp-container">
+<div class="contact-grid">
+<div class="contact-intro">
+<div class="hp-label">お問い合わせ</div>
+<h2 class="hp-heading">ご質問は<br>こちらから</h2>
+<p class="hp-lead">Pro トライアル、ライセンス、バグ報告、一般的なご質問 — フォームからお送りください。折り返しご連絡します。</p>
+<ul class="contact-alt">
+<li>バグ・機能要望：<a href="https://github.com/hzbd/super/issues" target="_blank" rel="noopener">GitHub Issues</a></li>
+<li>Pro トライアル：<a href="https://github.com/hzbd/super/issues/new?template=pro-trial.yml" target="_blank" rel="noopener">トライアル申請</a></li>
+<li>セキュリティ問題：<a href="mailto:support@ddl.sconts.com">support@ddl.sconts.com</a> へメール（このフォームは使用しないでください）</li>
+</ul>
+</div>
+<form class="contact-form" id="superContactForm" novalidate
+  data-api-url="{{ $api }}"
+  data-msg-required="お名前、メールアドレス、メッセージを入力してください。"
+  data-msg-email="有効なメールアドレスを入力してください。"
+  data-msg-sending="送信中…"
+  data-msg-success="送信しました。折り返しご連絡します。"
+  data-msg-error="送信に失敗しました。しばらくしてから再試行するか、メールでご連絡ください。"
+  data-btn-send="送信"
+  data-btn-sent="送信済み">
+<div class="contact-row">
+<div class="contact-field">
+<label for="superContactName">お名前</label>
+<input id="superContactName" name="name" type="text" autocomplete="name" required placeholder="お名前またはニックネーム">
+</div>
+<div class="contact-field">
+<label for="superContactEmail">メール</label>
+<input id="superContactEmail" name="email" type="email" autocomplete="email" required placeholder="you@example.com">
+</div>
+</div>
+<div class="contact-field">
+<label for="superContactTopic">トピック</label>
+<select id="superContactTopic" name="budget">
+<option value="super/general">一般的な質問</option>
+<option value="super/bug">バグ / 機能要望</option>
+<option value="super/pro-trial">Pro トライアル / サブスクリプション</option>
+<option value="super/commercial">商用 / エンタープライズ</option>
+<option value="super/docs">ドキュメントフィードバック</option>
+</select>
+</div>
+<div class="contact-field">
+<label for="superContactMessage">メッセージ</label>
+<textarea id="superContactMessage" name="message" rows="5" required placeholder="バージョン、プラットフォーム、再現手順など（任意）"></textarea>
+</div>
+<button type="submit" class="hp-btn hp-btn--primary contact-submit">送信</button>
+<p class="contact-status" id="superContactStatus" role="status" aria-live="polite"></p>
+</form>
+</div>
+</div>
+</section>
+{{ partial "contact-form/script.html" . }}

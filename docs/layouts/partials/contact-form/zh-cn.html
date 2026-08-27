@@ -1,0 +1,54 @@
+{{- $api := .Site.Params.contact.api_url | default "https://open.schiplat.com/api/v1/demands" -}}
+<section class="hp-section contact-section" id="contact">
+<div class="hp-container">
+<div class="contact-grid">
+<div class="contact-intro">
+<div class="hp-label">联系</div>
+<h2 class="hp-heading">有问题？<br>告诉我们</h2>
+<p class="hp-lead">试用 Pro、商业授权或一般问题 —— 填写表单，我们会尽快回复。</p>
+<ul class="contact-alt">
+<li>Bug 与功能建议：<a href="https://github.com/hzbd/super/issues" target="_blank" rel="noopener">GitHub Issues</a></li>
+<li>Pro 试用：<a href="https://github.com/hzbd/super/issues/new?template=pro-trial.yml" target="_blank" rel="noopener">提交试用申请</a></li>
+<li>安全漏洞请邮件 <a href="mailto:support@ddl.sconts.com">support@ddl.sconts.com</a>（勿在此表单提交）</li>
+</ul>
+</div>
+<form class="contact-form" id="superContactForm" novalidate
+  data-api-url="{{ $api }}"
+  data-msg-required="请填写称呼、邮箱和留言。"
+  data-msg-email="请输入有效的邮箱地址。"
+  data-msg-sending="发送中…"
+  data-msg-success="已收到！我们会尽快回复。"
+  data-msg-error="发送失败，请稍后重试或直接发邮件。"
+  data-btn-send="发送"
+  data-btn-sent="已发送">
+<div class="contact-row">
+<div class="contact-field">
+<label for="superContactName">称呼</label>
+<input id="superContactName" name="name" type="text" autocomplete="name" required placeholder="怎么称呼你？">
+</div>
+<div class="contact-field">
+<label for="superContactEmail">邮箱</label>
+<input id="superContactEmail" name="email" type="email" autocomplete="email" required placeholder="you@example.com">
+</div>
+</div>
+<div class="contact-field">
+<label for="superContactTopic">主题</label>
+<select id="superContactTopic" name="budget">
+<option value="super/general">一般问题</option>
+<option value="super/bug">Bug / 功能建议</option>
+<option value="super/pro-trial">Pro 试用 / 订阅</option>
+<option value="super/commercial">商业授权 / 企业</option>
+<option value="super/docs">文档反馈</option>
+</select>
+</div>
+<div class="contact-field">
+<label for="superContactMessage">留言</label>
+<textarea id="superContactMessage" name="message" rows="5" required placeholder="版本、平台、复现步骤等（如有）"></textarea>
+</div>
+<button type="submit" class="hp-btn hp-btn--primary contact-submit">发送</button>
+<p class="contact-status" id="superContactStatus" role="status" aria-live="polite"></p>
+</form>
+</div>
+</div>
+</section>
+{{ partial "contact-form/script.html" . }}

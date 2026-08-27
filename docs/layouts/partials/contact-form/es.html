@@ -1,0 +1,54 @@
+{{- $api := .Site.Params.contact.api_url | default "https://open.schiplat.com/api/v1/demands" -}}
+<section class="hp-section contact-section" id="contact">
+<div class="hp-container">
+<div class="contact-grid">
+<div class="contact-intro">
+<div class="hp-label">Contacto</div>
+<h2 class="hp-heading">¿Preguntas?<br>Escríbenos</h2>
+<p class="hp-lead">Prueba Pro, licencias, errores o consultas generales — envíanos un mensaje y responderemos pronto.</p>
+<ul class="contact-alt">
+<li>Errores y funciones: <a href="https://github.com/hzbd/super/issues" target="_blank" rel="noopener">GitHub Issues</a></li>
+<li>Prueba Pro: <a href="https://github.com/hzbd/super/issues/new?template=pro-trial.yml" target="_blank" rel="noopener">Solicitar prueba</a></li>
+<li>Seguridad: escribe a <a href="mailto:support@ddl.sconts.com">support@ddl.sconts.com</a> (no uses este formulario)</li>
+</ul>
+</div>
+<form class="contact-form" id="superContactForm" novalidate
+  data-api-url="{{ $api }}"
+  data-msg-required="Completa tu nombre, correo y mensaje."
+  data-msg-email="Introduce una dirección de correo válida."
+  data-msg-sending="Enviando…"
+  data-msg-success="¡Recibido! Te responderemos pronto."
+  data-msg-error="No se pudo enviar — inténtalo más tarde o escríbenos por correo."
+  data-btn-send="Enviar mensaje"
+  data-btn-sent="Enviado">
+<div class="contact-row">
+<div class="contact-field">
+<label for="superContactName">Nombre</label>
+<input id="superContactName" name="name" type="text" autocomplete="name" required placeholder="¿Cómo te llamamos?">
+</div>
+<div class="contact-field">
+<label for="superContactEmail">Correo</label>
+<input id="superContactEmail" name="email" type="email" autocomplete="email" required placeholder="you@example.com">
+</div>
+</div>
+<div class="contact-field">
+<label for="superContactTopic">Tema</label>
+<select id="superContactTopic" name="budget">
+<option value="super/general">Consulta general</option>
+<option value="super/bug">Error / solicitud de función</option>
+<option value="super/pro-trial">Prueba Pro / suscripción</option>
+<option value="super/commercial">Licencia comercial / empresa</option>
+<option value="super/docs">Comentarios sobre la documentación</option>
+</select>
+</div>
+<div class="contact-field">
+<label for="superContactMessage">Mensaje</label>
+<textarea id="superContactMessage" name="message" rows="5" required placeholder="Versión, plataforma, pasos para reproducir, etc."></textarea>
+</div>
+<button type="submit" class="hp-btn hp-btn--primary contact-submit">Enviar mensaje</button>
+<p class="contact-status" id="superContactStatus" role="status" aria-live="polite"></p>
+</form>
+</div>
+</div>
+</section>
+{{ partial "contact-form/script.html" . }}

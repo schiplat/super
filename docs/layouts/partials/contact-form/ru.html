@@ -1,0 +1,54 @@
+{{- $api := .Site.Params.contact.api_url | default "https://open.schiplat.com/api/v1/demands" -}}
+<section class="hp-section contact-section" id="contact">
+<div class="hp-container">
+<div class="contact-grid">
+<div class="contact-intro">
+<div class="hp-label">Контакты</div>
+<h2 class="hp-heading">Есть вопросы?<br>Напишите нам</h2>
+<p class="hp-lead">Pro trial, лицензии, баги или общие вопросы — отправьте сообщение, мы ответим в ближайшее время.</p>
+<ul class="contact-alt">
+<li>Баги и функции: <a href="https://github.com/hzbd/super/issues" target="_blank" rel="noopener">GitHub Issues</a></li>
+<li>Pro trial: <a href="https://github.com/hzbd/super/issues/new?template=pro-trial.yml" target="_blank" rel="noopener">Запросить trial</a></li>
+<li>Уязвимости: пишите на <a href="mailto:support@ddl.sconts.com">support@ddl.sconts.com</a> (не используйте эту форму)</li>
+</ul>
+</div>
+<form class="contact-form" id="superContactForm" novalidate
+  data-api-url="{{ $api }}"
+  data-msg-required="Заполните имя, email и сообщение."
+  data-msg-email="Введите корректный email."
+  data-msg-sending="Отправка…"
+  data-msg-success="Получено! Мы скоро ответим."
+  data-msg-error="Не удалось отправить — попробуйте позже или напишите на email."
+  data-btn-send="Отправить"
+  data-btn-sent="Отправлено">
+<div class="contact-row">
+<div class="contact-field">
+<label for="superContactName">Имя</label>
+<input id="superContactName" name="name" type="text" autocomplete="name" required placeholder="Как к вам обращаться?">
+</div>
+<div class="contact-field">
+<label for="superContactEmail">Email</label>
+<input id="superContactEmail" name="email" type="email" autocomplete="email" required placeholder="you@example.com">
+</div>
+</div>
+<div class="contact-field">
+<label for="superContactTopic">Тема</label>
+<select id="superContactTopic" name="budget">
+<option value="super/general">Общий вопрос</option>
+<option value="super/bug">Баг / запрос функции</option>
+<option value="super/pro-trial">Pro trial / подписка</option>
+<option value="super/commercial">Коммерческая лицензия / enterprise</option>
+<option value="super/docs">Обратная связь по документации</option>
+</select>
+</div>
+<div class="contact-field">
+<label for="superContactMessage">Сообщение</label>
+<textarea id="superContactMessage" name="message" rows="5" required placeholder="Версия, платформа, шаги воспроизведения и т.д."></textarea>
+</div>
+<button type="submit" class="hp-btn hp-btn--primary contact-submit">Отправить</button>
+<p class="contact-status" id="superContactStatus" role="status" aria-live="polite"></p>
+</form>
+</div>
+</div>
+</section>
+{{ partial "contact-form/script.html" . }}

@@ -1,0 +1,57 @@
+<script>
+(function () {
+  var form = document.getElementById("superContactForm");
+  if (!form) return;
+  var status = document.getElementById("superContactStatus");
+  var btn = form.querySelector(".contact-submit");
+  var apiUrl = form.dataset.apiUrl;
+
+  function setStatus(text, ok) {
+    status.className = "contact-status" + (ok === true ? " ok" : ok === false ? " err" : "");
+    status.textContent = text;
+  }
+
+  form.addEventListener("submit", function (e) {
+    e.preventDefault();
+    var name = form.elements.name.value.trim();
+    var email = form.elements.email.value.trim();
+    var topic = form.elements.budget.value;
+    var msg = form.elements.message.value.trim();
+    if (!name || !email || !msg) {
+      setStatus(form.dataset.msgRequired, false);
+      return;
+    }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      setStatus(form.dataset.msgEmail, false);
+      return;
+    }
+    var body =
+      "[Project Super · docs homepage]\n" +
+      "Topic: " + topic + "\n\n" +
+      msg;
+    btn.disabled = true;
+    btn.textContent = form.dataset.msgSending;
+    setStatus("", null);
+    fetch(apiUrl, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: name, email: email, budget: topic, message: body }),
+    })
+      .then(function (r) {
+        if (!r.ok) throw new Error(String(r.status));
+        return r.json();
+      })
+      .then(function (data) {
+        if (data && data.ok === false) throw new Error("api");
+        setStatus(form.dataset.msgSuccess, true);
+        form.reset();
+        btn.textContent = form.dataset.btnSent;
+      })
+      .catch(function () {
+        setStatus(form.dataset.msgError, false);
+        btn.disabled = false;
+        btn.textContent = form.dataset.btnSend;
+      });
+  });
+})();
+</script>
