@@ -54,5 +54,5 @@ nix = { workspace = true }
 tokio = { version = "1", features = ["full", "test-util"] }
 tempfile = "3.8"
 anyhow = "1.0"
-wiremock = "0.5"
+wiremock = "0.6"
 common = { path = "../common" }

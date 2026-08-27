@@ -6,8 +6,10 @@ body:
   - type: markdown
     attributes:
       value: |
-        Super is in a **public trial** — not for production yet.
-        Fill this out and we will email a **free 1-year** license key and plugin package.
+        Super is in **public beta**. OSS core is MIT; Pro plugins are available with a
+        **free 1-year license** during the beta (no payment required).
+        We recommend staging and non-critical workloads until GA.
+        Fill this out and we will email the license key and plugin package.
   - type: input
     id: email
     attributes:

@@ -37,17 +37,17 @@ Installs `superd` and `super` into `/usr/local/bin` (or `~/.local/bin` when not 
 
 ### Docker
 
-Docker image (`linux/amd64`):
+Docker image (`linux/amd64`). The OSS image has **no API authentication** — bind to loopback on the host unless you add the `security` plugin and a license:
 
 ```bash
 docker pull containerpi/super:latest
-docker run --rm -p 9002:9002 containerpi/super:latest
+docker run --rm -p 127.0.0.1:9002:9002 containerpi/super:latest
 ```
 
 With a custom config directory:
 
 ```bash
-docker run --rm -p 9002:9002 -v ./dockerbuild/conf:/app/super/conf containerpi/super:latest
+docker run --rm -p 127.0.0.1:9002:9002 -v ./dockerbuild/conf:/app/super/conf containerpi/super:latest
 ```
 
 ### From source
@@ -95,7 +95,7 @@ Track progress in the [changelog](https://super.docs.sconts.com/docs/08-changelo
 | Getting started | [Docs](https://super.docs.sconts.com/docs/01-getting-started/) |
 | Configuration | [Config reference](https://super.docs.sconts.com/docs/06-internals/config-reference/) |
 | API | [API reference](https://super.docs.sconts.com/docs/06-internals/api-reference/) |
-| Changelog | [v1.2.5](https://super.docs.sconts.com/docs/08-changelog/) |
+| Changelog | [v1.3.0](https://super.docs.sconts.com/docs/08-changelog/) |
 | Editions / Pro plugins | [Feature matrix](https://super.docs.sconts.com/docs/07-editions/feature-matrix/) |
 
 ## Contributing

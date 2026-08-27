@@ -12,15 +12,15 @@ The official OSS image ships `superd` and `super` (API + CLI). There is no embed
 
 ### Pull and run
 
-The image ships with a default config at `/app/super/conf/super.toml` (`host = "0.0.0.0"`, port `9002`, and `allow_insecure_public_bind = true` so the container can listen on all interfaces). No volume mount is required for a first try.
+The image ships with a default config at `/app/super/conf/super.toml` (`host = "0.0.0.0"`, port `9002`, and `allow_insecure_public_bind = true` so the container can listen on all interfaces). **The OSS image has no API authentication** — on the host, bind to loopback unless you deploy the `security` plugin and a valid license.
 
 ```bash
 docker pull containerpi/super:latest
 
-docker run --rm -p 9002:9002 containerpi/super:latest
+docker run --rm -p 127.0.0.1:9002:9002 containerpi/super:latest
 ```
 
-Open **http://localhost:9002** for the OSS HTML notice and HTTP API. Add programs via the CLI or API (or load the `ui` plugin for the dashboard).
+Open **http://127.0.0.1:9002** for the OSS HTML notice and HTTP API. Add programs via the CLI or API (or load the `ui` plugin for the dashboard).
 
 Images are published for **linux/amd64** (Intel/AMD servers and most cloud VMs).
 
@@ -29,7 +29,7 @@ Images are published for **linux/amd64** (Intel/AMD servers and most cloud VMs).
 Mount your own `conf/` (and optionally `data/` for persistence):
 
 ```bash
-docker run --rm -p 9002:9002 \
+docker run --rm -p 127.0.0.1:9002:9002 \
   -v /path/to/conf:/app/super/conf \
   -v /path/to/data:/app/super/data \
   containerpi/super:latest

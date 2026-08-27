@@ -6,10 +6,10 @@
 use crate::check;
 use crate::client;
 use colored::Colorize;
-use common::config::ServerConfig;
+use common::config::{ServerConfig, resolve_license_key};
 use common::{
     HealthResponse, LicenseInfo, PidfileStatus, inspect_pidfile, pidfile_parent_unwritable,
-    resolve_pidfile_path, resolve_super_root, under_systemd,
+    resolve_pidfile_path, resolve_super_root, under_systemd, verify_license_for_superd,
 };
 
 pub async fn run(base_url: &str, token: Option<&String>) -> anyhow::Result<()> {
@@ -75,14 +75,40 @@ pub async fn run(base_url: &str, token: Option<&String>) -> anyhow::Result<()> {
 
     // 3. License / edition (404 in OSS mode is expected, not an error).
     println!("\n{}", "== License ==".bold());
+    let config_license = config_license_status();
     let license_url = format!("{base_url}/api/v1/system/license");
     match client.get(&license_url).send().await {
-        Ok(r) if r.status() == reqwest::StatusCode::NOT_FOUND => {
-            println!(
-                "   Mode:            {}",
-                "OSS (no license configured)".cyan()
-            );
-        }
+        Ok(r) if r.status() == reqwest::StatusCode::NOT_FOUND => match &config_license {
+            ConfigLicenseStatus::Invalid { reason } => {
+                println!(
+                    "   Mode:            {}",
+                    "OSS (license verification failed)".yellow()
+                );
+                println!(
+                    "   Config key:      {}",
+                    format!("invalid — {reason}").red()
+                );
+                println!(
+                    "   Hint:            superd ignores invalid keys and runs without plugins; fix the key or remove [license].key"
+                );
+            }
+            ConfigLicenseStatus::Valid => {
+                println!(
+                    "   Mode:            {}",
+                    "OSS (daemon license endpoint unavailable)".yellow()
+                );
+                println!(
+                    "   Config key:      {}",
+                    "valid in config — restart superd or check SUPER_LICENSE override".green()
+                );
+            }
+            ConfigLicenseStatus::None => {
+                println!(
+                    "   Mode:            {}",
+                    "OSS (no license configured)".cyan()
+                );
+            }
+        },
         Ok(r) if r.status().is_success() => match r.json::<LicenseInfo>().await {
             Ok(info) => {
                 println!("   Mode:            {}", "Licensed".green());
@@ -127,6 +153,27 @@ pub async fn run(base_url: &str, token: Option<&String>) -> anyhow::Result<()> {
     }
 
     Ok(())
+}
+
+enum ConfigLicenseStatus {
+    None,
+    Valid,
+    Invalid { reason: String },
+}
+
+/// Inspect `[license].key` / `SUPER_LICENSE` before interpreting the daemon license API.
+fn config_license_status() -> ConfigLicenseStatus {
+    let root = resolve_super_root();
+    let path = root.join("conf/super.toml");
+    let Ok(Some(key)) = resolve_license_key(&path) else {
+        return ConfigLicenseStatus::None;
+    };
+    match verify_license_for_superd(&key) {
+        Ok(_) => ConfigLicenseStatus::Valid,
+        Err(e) => ConfigLicenseStatus::Invalid {
+            reason: e.to_string(),
+        },
+    }
 }
 
 fn load_server_config() -> Option<(std::path::PathBuf, ServerConfig)> {
