@@ -7,10 +7,10 @@
 # Config is COPY'd from dockerbuild/conf/ into the image — no -v at build time.
 #
 # Run (default config already inside the image):
-#   docker run --rm -p 9002:9002 containerpi/super:latest
+#   docker run --rm -p 127.0.0.1:9002:9002 containerpi/super:latest
 #
 # Run with your own conf/data (optional override):
-#   docker run --rm -p 9002:9002 \
+#   docker run --rm -p 127.0.0.1:9002:9002 \
 #     -v ./my-conf:/app/super/conf -v ./my-data:/app/super/data \
 #     containerpi/super:latest
 #

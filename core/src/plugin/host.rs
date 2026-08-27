@@ -2,7 +2,7 @@ use crate::plugin::loader::{PluginRuntime, load_authorized_plugins};
 use anyhow::Context;
 use common::config::resolve_license_key;
 use common::license::{
-    LICENSE_UPGRADE_URL, LicenseClaims, LicenseExpiryStatus, check_superd_version,
+    LicenseClaims, LicenseExpiryStatus, check_superd_version, license_help_footer,
     licensed_version_scope, verify_license_for_superd,
 };
 use std::collections::HashSet;
@@ -21,8 +21,8 @@ pub fn log_license_degradation(reason: &str) {
     error!("{}", LICENSE_BANNER);
     error!("License error: {}", reason);
     error!(
-        "Paid plugins are disabled until the key verifies. More: {}",
-        LICENSE_UPGRADE_URL
+        "Paid plugins are disabled until the key verifies. {}",
+        license_help_footer()
     );
 }
 
@@ -30,7 +30,7 @@ fn emit_license_degradation_stderr(reason: &str) {
     eprintln!("{LICENSE_BANNER}");
     eprintln!("License error: {reason}");
     eprintln!("Hint: run `super check` or `super doctor`. Paid plugins will not load.");
-    eprintln!("More: {LICENSE_UPGRADE_URL}");
+    eprintln!("{}", license_help_footer());
 }
 
 /// Whether superd is running with paid plugins active.
@@ -274,8 +274,8 @@ fn resolve_license(config_file: &Path) -> LicenseOutcome {
         Ok((claims, expiry)) => {
             if expiry == LicenseExpiryStatus::Expired {
                 warn!(
-                    "License subscription expired; licensed plugins remain available offline. \
-                     Renew for newer superd releases: {LICENSE_UPGRADE_URL}"
+                    "License subscription expired; licensed plugins remain available offline. {}",
+                    license_help_footer()
                 );
             }
             LicenseOutcome::Valid(claims)

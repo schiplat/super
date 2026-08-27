@@ -34,7 +34,8 @@ pub use auth::{
     UserContext, UserRole,
 };
 pub use license::{
-    LICENSE_UPGRADE_URL, LicenseClaims, LicenseExpiryStatus, LicenseInfo, license_expiry_status,
+    LICENSE_TRIAL_URL, LICENSE_UPGRADE_URL, LicenseClaims, LicenseExpiryStatus, LicenseInfo,
+    license_expiry_status, license_help_footer,
     verify_license, verify_license_for_superd,
 };
 pub use plugin_abi::{PLUGIN_API_VERSION, PLUGIN_SYMBOL, SuperPluginV1, read_plugin_version};

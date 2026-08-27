@@ -12,13 +12,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+---
+
+## [1.3.1] - 2026-08-27
+
+### Added
+- `CODE_OF_CONDUCT.md` (Contributor Covenant).
+
 ### Changed
-- CI runs `cargo test` / clippy / fmt on **Ubuntu and macOS**; `benchmark/` workspace is built in CI.
-- Docker Hub image publishes **`linux/amd64`** and **`linux/arm64`** manifests again.
-- Document minimum **Rust 1.85+** for building from source (edition 2024).
+- **Public beta** messaging aligned across README, docs, and GitHub issue templates.
+- CI: `cargo fmt --check`, **macOS** test matrix, `benchmark/` workspace build.
+- Docker Hub publishes **`linux/amd64`** and **`linux/arm64`** again; docs use loopback port mapping.
+- Document minimum **Rust 1.85+**; workspace `rust-version = "1.85"`.
+- License help links point to the [feature matrix](https://super.docs.sconts.com/docs/07-editions/feature-matrix/) and [Pro trial](https://github.com/hzbd/super/issues/new?template=pro-trial.yml).
+- Remove unsupported `[webhook]` from `super.toml` (use `[[event_hooks]]` or `conf/notify.toml`).
+- Invalid license: prominent startup warnings; improved `super doctor` triage.
+- `/go/pro/` license examples updated for the **1.3.x** release line.
 
 ### Fixed
-- `lru` advisory (RUSTSEC-2026-0253) via dependency update in the CLI TUI stack.
+- `h2` and `lru` RustSec advisories via dependency updates.
+- `/go/pro/` checkout CTA uses configured purchase URL.
+
+### Notes
+- Workspace **1.3.1**; pair with commercial plugin packages `super-plugins-1.3.1-…`.
 
 ---
 

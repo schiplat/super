@@ -28,11 +28,11 @@ docker buildx imagetools inspect containerpi/super:latest
 | **`docker run`** (default) | No | Uses the config **inside the image** — ready to use |
 | **`docker run`** (custom) | Optional | `-v ./my-conf:/app/super/conf` replaces the baked-in config |
 
-Verify the image starts (distroless has no shell — use the HTTP port or healthcheck):
+Verify the image starts (distroless has no shell — use the HTTP port or healthcheck). **OSS image has no API authentication** — bind to loopback on the host:
 
 ```bash
-docker run --rm -d -p 9002:9002 --name super-test containerpi/super:latest
-curl -sf http://localhost:9002/ >/dev/null && echo OK
+docker run --rm -d -p 127.0.0.1:9002:9002 --name super-test containerpi/super:latest
+curl -sf http://127.0.0.1:9002/ >/dev/null && echo OK
 docker stop super-test
 ```
 
@@ -58,11 +58,13 @@ docker buildx build --platform linux/amd64,linux/arm64 \
 
 ## Run
 
+The baked-in OSS config listens on `0.0.0.0` inside the container. On the host, map **loopback only** unless you deploy the `security` plugin and a valid license:
+
 ```bash
-docker run --rm -p 9002:9002 containerpi/super:latest
+docker run --rm -p 127.0.0.1:9002:9002 containerpi/super:latest
 ```
 
-HTTP API / OSS notice: http://localhost:9002 (no embedded dashboard in the OSS image)
+HTTP API / OSS notice: http://127.0.0.1:9002 (no embedded dashboard in the OSS image)
 
 ## Configuration
 
@@ -92,7 +94,7 @@ cp -r dockerbuild/conf ./my-super-conf
 # Subscription — start from the licensed example, add plugins/ + license key
 cp dockerbuild/conf/super.subscription.example.toml ./my-super-conf/super.toml
 # copy plugins/*.so into ./my-super-plugins/ and mount as /app/super/plugins
-docker run --rm -p 9002:9002 \
+docker run --rm -p 127.0.0.1:9002:9002 \
   -v ./my-super-conf:/app/super/conf \
   -v ./my-super-plugins:/app/super/plugins \
   -v ./my-super-data:/app/super/data \
@@ -103,7 +105,7 @@ Minimal OSS mount (config only):
 
 ```bash
 cp -r dockerbuild/conf ./my-super-conf
-docker run --rm -p 9002:9002 \
+docker run --rm -p 127.0.0.1:9002:9002 \
   -v ./my-super-conf:/app/super/conf \
   -v ./my-super-data:/app/super/data \
   containerpi/super:latest

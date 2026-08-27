@@ -11,7 +11,7 @@ One subscription unlocks the official plugin set on the same **`superd`** / **`s
 - **notify** — webhooks
 - **isolation** — Linux cgroup limits
 
-Compare editions in the [feature matrix](/docs/07-editions/feature-matrix/). After purchase you receive the plugin archive for your platform, a license key, and a short config snippet (`[license].key` + `auth_secret`).
+Compare editions in the [feature matrix](/docs/07-editions/feature-matrix/). During public beta you can also request a **[free 1-year Pro trial](https://github.com/hzbd/super/issues/new?template=pro-trial.yml)** (no payment). After purchase or trial fulfillment you receive the plugin archive for your platform, a license key, and a short config snippet (`[license].key` + `auth_secret`).
 
 ## Checkout
 
@@ -44,15 +44,15 @@ That version scope stays valid **after the 365-day term**: you may keep running 
 
 ### Version timeline
 
-The chart below shows what a key covers (example for a key issued on the `1.2.x` line). The green range remains usable **during and after** the 365-day term:
+The chart below shows what a key covers (example for a key issued on the **1.3.x** line). The green range remains usable **during and after** the 365-day term:
 
-{{< license-version-scope issued="1.2.x" through="1.4.x" next="1.5.x" >}}
+{{< license-version-scope issued="1.3.x" through="1.5.x" next="1.6.x" >}}
 
 ```mermaid
 flowchart LR
-  I["Issued for<br/>Super 1.2.x"] --> F["Free newer versions<br/>1.3.x … 1.4.x"]
+  I["Issued for<br/>Super 1.3.x"] --> F["Free newer versions<br/>1.4.x … 1.5.x"]
   F --> K["Keep using after<br/>365-day term ends"]
-  F --> R["Needs renewal<br/>1.5.x+ / next major"]
+  F --> R["Needs renewal<br/>1.6.x+ / next major"]
   style I fill:#0f766e,stroke:#0f766e,color:#fff
   style F fill:#14b8a6,stroke:#0f766e,color:#fff
   style K fill:#ecfdf5,stroke:#0f766e,color:#134e4a
@@ -61,11 +61,11 @@ flowchart LR
 
 | | What it means |
 |---|---|
-| **Issued for** | The Super line stamped when your key is created (example: `1.2.x`). |
-| **Free newer versions** | Newer minor lines through the signed max (example: `1.3.x` and `1.4.x`) — no extra payment. |
+| **Issued for** | The Super line stamped when your key is created (example: `1.3.x`). |
+| **Free newer versions** | Newer minor lines through the signed max (example: `1.4.x` and `1.5.x`) — no extra payment. |
 | **After 365 days** | **Still usable** on that same issued→max scope. Plugins are not revoked at expiry. |
-| **Needs renewal** | Past the max (example: `1.5.x+`) or a new major — renew to follow newer releases. |
+| **Needs renewal** | Past the max (example: `1.6.x+`) or a new major — renew to follow newer releases. |
 
-Current policy example: issued minor line **plus two** newer minor lines (`1.2.x` → through `1.4.x`). Your key shows the exact scope.
+Current policy example: issued minor line **plus two** newer minor lines (`1.3.x` → through `1.5.x`). Your key shows the exact scope.
 
 **Summary:** 365 days is the annual term; the **version scope** is what you keep using afterward. The open-source `superd` / `super` binaries remain usable at any version without plugins.
