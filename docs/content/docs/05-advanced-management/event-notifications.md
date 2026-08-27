@@ -14,7 +14,7 @@ Super acts as an intelligent observer. Instead of just logging errors, it can ac
 
 Notifications are configured in a separate file **`conf/notify.toml`** (sibling to `super.toml`). This separation allows you to hot-reload alerting rules without restarting your processes.
 
-> **Not `super.toml` `[webhook]`:** The OSS config schema includes an optional `[webhook]` section in `super.toml`, but it is **not wired at runtime** (parsed only). Licensed alerting uses `notify.toml` with the `notify` plugin. See [Config Reference — `[webhook]` reserved](/docs/06-internals/config-reference#webhook--reserved-not-active).
+> **Alerts live in `conf/notify.toml`**, not in `super.toml`. There is no `[webhook]` section in the daemon config schema. Licensed alerting uses `notify.toml` with the `notify` plugin — see [Config Reference — `[[event_hooks]]`](/docs/06-internals/config-reference#event_hooks-oss) for OSS script hooks.
 
 ### File location
 

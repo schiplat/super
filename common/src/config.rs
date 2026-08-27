@@ -55,8 +55,6 @@ pub struct ServerConfig {
     #[serde(default)]
     pub child_logging: ChildLoggingSection,
 
-    pub webhook: Option<WebhookSection>,
-
     #[serde(default)]
     pub include: IncludeSection,
 
@@ -64,6 +62,17 @@ pub struct ServerConfig {
     #[serde(default)]
     pub event_hooks: Vec<EventHookConfig>,
 }
+
+/// Detect a legacy `[webhook]` table in raw `super.toml` content (removed from schema).
+pub fn legacy_webhook_section_present(content: &str) -> bool {
+    content.lines().any(|line| {
+        let header = line.split('#').next().unwrap_or("").trim();
+        header == "[webhook]"
+    })
+}
+
+/// User-facing message when `[webhook]` is still present in `super.toml`.
+pub const LEGACY_WEBHOOK_SECTION_MSG: &str = "[webhook] in super.toml is not supported — use [[event_hooks]] for local scripts or conf/notify.toml with the notify plugin for HTTP/IM alerts";
 
 #[derive(Debug, Deserialize, Clone, Default)]
 pub struct IncludeSection {
@@ -205,15 +214,7 @@ impl Default for ChildLoggingSection {
     }
 }
 
-#[derive(Debug, Deserialize, Clone, Default)]
-pub struct WebhookSection {
-    pub url: String,
-    // Notification type, default "generic" (standard JSON)
-    #[serde(default = "default_webhook_type")]
-    pub r#type: String,
-}
-
-// Defaults Helper Functions
+// Defaults helper functions
 fn default_host() -> String {
     "127.0.0.1".to_string()
 }
@@ -240,9 +241,6 @@ fn default_log_max_mb() -> u64 {
 }
 fn default_log_backups() -> u32 {
     5
-}
-fn default_webhook_type() -> String {
-    "generic".to_string()
 }
 fn default_child_max_mb() -> u64 {
     10
@@ -301,4 +299,22 @@ pub fn resolve_license_key(config_path: &Path) -> anyhow::Result<Option<String>>
         }
     }
     read_license_key(config_path)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn legacy_webhook_section_detection() {
+        assert!(legacy_webhook_section_present(
+            "[webhook]\nurl = \"http://x\"\n"
+        ));
+        assert!(!legacy_webhook_section_present(
+            "[[event_hooks]]\ncommand = \"./h.sh\"\n"
+        ));
+        assert!(!legacy_webhook_section_present(
+            "# [webhook] legacy example\n"
+        ));
+    }
 }

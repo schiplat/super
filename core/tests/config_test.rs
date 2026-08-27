@@ -18,15 +18,11 @@ fn test_default_config() {
 }
 
 #[test]
-fn test_webhook_config() {
-    let toml_str = r#"
-        [webhook]
-        url = "http://localhost:9999"
-    "#;
-    let config: ServerConfig = toml::from_str(toml_str).unwrap();
-
-    assert!(config.webhook.is_some());
-    assert_eq!(config.webhook.unwrap().url, "http://localhost:9999");
+fn test_legacy_webhook_section_rejected_by_check_helper() {
+    use common::config::legacy_webhook_section_present;
+    assert!(legacy_webhook_section_present(
+        "[webhook]\nurl = \"http://localhost:9999\"\n"
+    ));
 }
 
 #[test]

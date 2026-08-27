@@ -22,8 +22,6 @@ description: "Complete schema for super.toml."
 | `[[programs]]` | `[programs.resource_limits]` (`cpu_quota`, `memory_limit`) 💎 |
 | `conf/notify.toml` *(separate file)* | `[[channels]]` 💎 — see [Event Notifications](/docs/05-advanced-management/event-notifications) |
 
-> **Not licensed-only:** `[webhook]` in `super.toml` is parsed but **not wired** at runtime. `[programs.hooks]` and `[[event_hooks]]` work in OSS.
-
 > **OSS security:** See [Configuration — OSS security defaults](/docs/02-essentials/configuration#oss-security-defaults-fail-closed) for fail-closed bind, log path confinement, and other defensive defaults.
 
 ## Instance layout (`SUPER_ROOT`)
@@ -80,26 +78,6 @@ Optional section in `conf/super.toml`. When present and valid, `superd` loads au
 [license]
 key = "eyJjbGFpbXMiOnsiaXNzdWVkX3RvIjoi..."
 ```
-
-## `[webhook]` — schema compatibility only (not wired)
-
-`super.toml` accepts an optional `[webhook]` block for **Supervisor migration compatibility**. **The OSS daemon does not read or use this section at runtime** — setting it has no effect. If present, `superd` logs a startup warning pointing you to the alternatives below.
-
-| Key | Type | Description |
-| :--- | :--- | :--- |
-| `url` | string | Parsed but **not connected** to any notifier. |
-| `type` | string | Default `generic`. Ignored at runtime. |
-
-### What to use instead
-
-| Need | OSS option | Pro option |
-| :--- | :--- | :--- |
-| Run a local script on events | `[[event_hooks]]` in `super.toml` | Same (OSS) |
-| HTTP / Slack / IM notifications | — | `conf/notify.toml` + `notify` plugin |
-
-We intentionally keep `[webhook]` as a **parse-only placeholder** rather than re-implementing a second notification stack in OSS. OSS already ships `[[event_hooks]]` for script-based reactions; HTTP webhook delivery lives in the **`notify` plugin** (`conf/notify.toml`, `type = "webhook"` channels) so licensed deployments get retries, channel presets, and hot reload without duplicating that logic in the core daemon.
-
-> Do not confuse `[webhook]` in `super.toml` with `type = "webhook"` channels in `notify.toml` — only the latter is functional.
 
 ## `[storage]` / `[logging]` / `[child_logging]`
 
@@ -190,6 +168,8 @@ Per-program lifecycle shell hooks. Full behavior table: [Lifecycle Hooks](/docs/
 
 Global event listeners (local scripts, JSON on stdin). Distinct from licensed `conf/notify.toml` webhooks (`notify` plugin). Full reference: [Event Hooks](/docs/03-orchestration/event-hooks).
 
+> **`[webhook]` is not supported** in `super.toml`. `superd` and `super check` reject configs that still contain a `[webhook]` table. For HTTP/IM alerts, use `conf/notify.toml` with the `notify` plugin.
+
 | Key | Type | Default | Description |
 | :--- | :--- | :--- | :--- |
 | `command` | string | *(required)* | Shell command (`sh -c`). Receives JSON on stdin. |
@@ -212,4 +192,3 @@ Super emits [System Events](/docs/03-orchestration/system-events) (`process_fata
 | Lifecycle hooks | `[[programs]]` → `[programs.hooks]` | OSS | ✅ Active |
 | Event hooks | `super.toml` → `[[event_hooks]]` | OSS | ✅ [Event Hooks](/docs/03-orchestration/event-hooks) |
 | Webhook notifications | `conf/notify.toml` | 💎 Licensed (`notify`) | ✅ [Event Notifications](/docs/05-advanced-management/event-notifications) |
-| `[webhook]` in `super.toml` | `[webhook]` | — | ⚠️ Parsed only — not wired |

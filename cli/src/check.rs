@@ -1,5 +1,7 @@
 use colored::Colorize;
-use common::config::{ServerConfig, resolve_license_key};
+use common::config::{
+    LEGACY_WEBHOOK_SECTION_MSG, ServerConfig, legacy_webhook_section_present, resolve_license_key,
+};
 use common::is_loopback_bind_host;
 use common::resolve_super_root_for_config;
 use common::verify_license_for_superd;
@@ -37,6 +39,10 @@ pub fn run(file_path: Option<PathBuf>) -> anyhow::Result<()> {
 
     let mut errors: Vec<String> = Vec::new();
     let mut warnings: Vec<String> = Vec::new();
+
+    if legacy_webhook_section_present(&content) {
+        errors.push(LEGACY_WEBHOOK_SECTION_MSG.to_string());
+    }
 
     // 3. Check server config (port availability and privileges)
     let bind_addr = format!("{}:{}", config.server.host, config.server.port);

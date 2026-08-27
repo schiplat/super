@@ -97,6 +97,9 @@ pub async fn bootstrap(extension: Box<dyn Extension>) -> anyhow::Result<SystemCo
     // 3. Load config (strict: parse errors fail fast)
     let server_config = if paths.config_file.exists() {
         let content = tokio::fs::read_to_string(&paths.config_file).await?;
+        if common::config::legacy_webhook_section_present(&content) {
+            return Err(anyhow::anyhow!(common::config::LEGACY_WEBHOOK_SECTION_MSG));
+        }
         match toml::from_str::<ServerConfig>(&content) {
             Ok(c) => c,
             Err(e) => {
@@ -135,13 +138,6 @@ pub async fn bootstrap(extension: Box<dyn Extension>) -> anyhow::Result<SystemCo
 
     tracing::info!("Super Core starting...");
     tracing::info!(root = ?root, config = ?paths.config_file, data = ?paths.state_file);
-
-    if server_config.webhook.is_some() {
-        tracing::warn!(
-            "[webhook] in super.toml is parsed but not wired in OSS — use [[event_hooks]] for local scripts \
-             or conf/notify.toml with the notify plugin for HTTP webhooks; see config reference"
-        );
-    }
 
     if !paths.config_file.exists() {
         tracing::warn!("Config file not found, using defaults");
