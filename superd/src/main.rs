@@ -14,8 +14,8 @@ use std::path::{Path, PathBuf};
 use super_core::{
     ManagerHandle, api, bootstrap,
     plugin::{
-        PluginHost, RunMode, attach_http_plugins, load_ui_plugin, normalize_ui_path,
-        validate_licensed_auth_secret, validate_licensed_security,
+        PluginHost, RunMode, attach_http_plugins, load_ui_plugin, log_license_degradation,
+        normalize_ui_path, validate_licensed_auth_secret, validate_licensed_security,
     },
     resolve_root,
 };
@@ -339,6 +339,10 @@ async fn async_main() -> anyhow::Result<()> {
     let ui_plugin = load_ui_plugin(&plugin_runtime);
 
     let core = bootstrap(extension).await?;
+
+    if let Some(reason) = plugin_host.license_degraded_reason.as_deref() {
+        log_license_degradation(reason);
+    }
 
     validate_licensed_security(
         plugin_host.mode,

@@ -17,7 +17,7 @@ enable_docs = false  # set true only on trusted localhost deployments
 
 # [logging] Superd daemon log settings
 [logging]
-log_level = "trace"  # trace, debug, info, warn, error
+log_level = "info"  # trace, debug, info, warn, error
 log_max_mb = 50     # max size per log file
 log_backups = 3     # number of rotated files to keep
 

@@ -81,16 +81,23 @@ Optional section in `conf/super.toml`. When present and valid, `superd` loads au
 key = "eyJjbGFpbXMiOnsiaXNzdWVkX3RvIjoi..."
 ```
 
-## `[webhook]` — reserved, not active
+## `[webhook]` — schema compatibility only (not wired)
 
-`super.toml` accepts an optional `[webhook]` block for historical schema compatibility. **The OSS daemon does not read or use this section at runtime** — setting it has no effect today.
+`super.toml` accepts an optional `[webhook]` block for **Supervisor migration compatibility**. **The OSS daemon does not read or use this section at runtime** — setting it has no effect. If present, `superd` logs a startup warning pointing you to the alternatives below.
 
 | Key | Type | Description |
 | :--- | :--- | :--- |
 | `url` | string | Parsed but **not connected** to any notifier. |
 | `type` | string | Default `generic`. Ignored at runtime. |
 
-**Use licensed notifications instead:** configure webhooks in a separate `conf/notify.toml` file (`[[channels]]`), not in `super.toml`. Requires the `notify` plugin. See [Event Notifications](/docs/05-advanced-management/event-notifications).
+### What to use instead
+
+| Need | OSS option | Pro option |
+| :--- | :--- | :--- |
+| Run a local script on events | `[[event_hooks]]` in `super.toml` | Same (OSS) |
+| HTTP / Slack / IM notifications | — | `conf/notify.toml` + `notify` plugin |
+
+We intentionally keep `[webhook]` as a **parse-only placeholder** rather than re-implementing a second notification stack in OSS. OSS already ships `[[event_hooks]]` for script-based reactions; HTTP webhook delivery lives in the **`notify` plugin** (`conf/notify.toml`, `type = "webhook"` channels) so licensed deployments get retries, channel presets, and hot reload without duplicating that logic in the core daemon.
 
 > Do not confuse `[webhook]` in `super.toml` with `type = "webhook"` channels in `notify.toml` — only the latter is functional.
 

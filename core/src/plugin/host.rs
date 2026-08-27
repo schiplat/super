@@ -10,10 +10,28 @@ use std::path::{Path, PathBuf};
 use tracing::{error, info, warn};
 
 const LICENSE_BANNER: &str = "\
-====================================================================\n\
-LICENSE ERROR: verification failed. Running OSS mode only.\n\
-No paid plugins will be loaded. Check [license].key in conf/super.toml\n\
-====================================================================";
+======================================================================\n\
+LICENSE ERROR: verification failed — running OSS mode only.\n\
+No paid plugins will be loaded. Fix [license].key in conf/super.toml\n\
+Run: super check   or   super doctor\n\
+======================================================================";
+
+/// Log license degradation after tracing is initialized (superd bootstrap).
+pub fn log_license_degradation(reason: &str) {
+    error!("{}", LICENSE_BANNER);
+    error!("License error: {}", reason);
+    error!(
+        "Paid plugins are disabled until the key verifies. More: {}",
+        LICENSE_UPGRADE_URL
+    );
+}
+
+fn emit_license_degradation_stderr(reason: &str) {
+    eprintln!("{LICENSE_BANNER}");
+    eprintln!("License error: {reason}");
+    eprintln!("Hint: run `super check` or `super doctor`. Paid plugins will not load.");
+    eprintln!("More: {LICENSE_UPGRADE_URL}");
+}
 
 /// Whether superd is running with paid plugins active.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -45,6 +63,8 @@ pub struct PluginHost {
     pub loaded_plugins: Vec<String>,
     pub runtime: PluginRuntime,
     pub plugins_dir: PathBuf,
+    /// Set when a license key was configured but verification failed (silent OSS fallback).
+    pub license_degraded_reason: Option<String>,
 }
 
 impl PluginHost {
@@ -74,9 +94,11 @@ impl PluginHost {
                     loaded_plugins: Vec::new(),
                     runtime: PluginRuntime::empty(),
                     plugins_dir,
+                    license_degraded_reason: None,
                 }
             }
             LicenseOutcome::Invalid { reason } => {
+                emit_license_degradation_stderr(reason);
                 error!("{}", LICENSE_BANNER);
                 error!("License error: {}", reason);
                 if !installed_plugins.is_empty() {
@@ -92,10 +114,12 @@ impl PluginHost {
                     loaded_plugins: Vec::new(),
                     runtime: PluginRuntime::empty(),
                     plugins_dir,
+                    license_degraded_reason: Some(reason.clone()),
                 }
             }
             LicenseOutcome::Valid(claims) => {
                 if let Err(reason) = check_superd_version(claims, superd_version) {
+                    emit_license_degradation_stderr(&reason);
                     error!("{}", LICENSE_BANNER);
                     error!("License error: {}", reason);
                     if !installed_plugins.is_empty() {
@@ -111,6 +135,7 @@ impl PluginHost {
                         loaded_plugins: Vec::new(),
                         runtime: PluginRuntime::empty(),
                         plugins_dir,
+                        license_degraded_reason: Some(reason),
                     };
                 }
 
@@ -157,6 +182,7 @@ impl PluginHost {
                     loaded_plugins: runtime.loaded_ids.clone(),
                     runtime,
                     plugins_dir,
+                    license_degraded_reason: None,
                 }
             }
         }

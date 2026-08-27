@@ -88,10 +88,6 @@ pub async fn bootstrap(extension: Box<dyn Extension>) -> anyhow::Result<SystemCo
     // Ensure plugin directory exists (drop-in `.so` files at startup).
     tokio::fs::create_dir_all(&paths.plugins_dir).await?;
 
-    println!("System Root: {:?}", root);
-    println!("   Config: {:?}", paths.config_file);
-    println!("   Data:   {:?}", paths.state_file);
-
     // 2. Create directories (run/ holds optional pidfile for --daemon)
     tokio::fs::create_dir_all(&conf_dir).await?;
     tokio::fs::create_dir_all(&data_dir).await?;
@@ -112,7 +108,6 @@ pub async fn bootstrap(extension: Box<dyn Extension>) -> anyhow::Result<SystemCo
             }
         }
     } else {
-        println!("Config file not found, using defaults.");
         ServerConfig::default()
     };
 
@@ -139,6 +134,18 @@ pub async fn bootstrap(extension: Box<dyn Extension>) -> anyhow::Result<SystemCo
         .try_init();
 
     tracing::info!("Super Core starting...");
+    tracing::info!(root = ?root, config = ?paths.config_file, data = ?paths.state_file);
+
+    if server_config.webhook.is_some() {
+        tracing::warn!(
+            "[webhook] in super.toml is parsed but not wired in OSS — use [[event_hooks]] for local scripts \
+             or conf/notify.toml with the notify plugin for HTTP webhooks; see config reference"
+        );
+    }
+
+    if !paths.config_file.exists() {
+        tracing::warn!("Config file not found, using defaults");
+    }
 
     // 5. Load persisted runtime snapshot
     let initial_programs = match store::load_with_recovery(&paths.state_file).await {

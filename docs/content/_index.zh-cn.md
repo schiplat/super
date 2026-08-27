@@ -17,6 +17,7 @@ toc: false
 自信地<br>运行你的服务
 </h1>
 <p class="hero-desc">轻量级进程管理器：自动重启、依赖启动顺序、健康检查与 OTA 更新 —— 用 TOML 或 REST 定义程序。</p>
+<p class="hero-desc" style="font-size: 0.875rem; color: #9c9890; margin-top: -0.5rem;">文档正文目前为英文；切换语言仅影响本站首页。</p>
 <div class="hero-actions">
 <a href="/docs/01-getting-started/quick-start/" class="hp-btn hp-btn--primary">快速开始 →</a>
 <a href="https://github.com/hzbd/super" class="hp-btn hp-btn--outline" target="_blank" rel="noopener">
