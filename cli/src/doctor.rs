@@ -89,7 +89,7 @@ pub async fn run(base_url: &str, token: Option<&String>) -> anyhow::Result<()> {
                     format!("invalid — {reason}").red()
                 );
                 println!(
-                    "   Hint:            superd ignores invalid keys and runs without plugins; fix the key or remove [license].key"
+                    "   Hint:            superd refuses startup when strict or licensed deployment signals apply; otherwise runs OSS without plugins"
                 );
             }
             ConfigLicenseStatus::Valid => {

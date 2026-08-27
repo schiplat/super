@@ -4,7 +4,10 @@ use common::config::{
 };
 use common::is_loopback_bind_host;
 use common::resolve_super_root_for_config;
-use common::verify_license_for_superd;
+use common::{
+    licensed_deployment_intent, resolve_license_strict, scan_plugin_stems,
+    verify_license_for_superd,
+};
 use std::fs;
 use std::net::TcpListener;
 use std::path::{Path, PathBuf};
@@ -277,9 +280,21 @@ fn check_licensed_deployment(
     };
 
     let Ok((claims, _status)) = verify_license_for_superd(&license_key) else {
-        warnings.push(
-            "License key present but verification failed — superd will run in OSS mode".into(),
-        );
+        let plugins_dir = resolve_super_root_for_config(config_path).join("plugins");
+        let installed = scan_plugin_stems(&plugins_dir);
+        let strict = resolve_license_strict(config_path).unwrap_or(false);
+        let intent = licensed_deployment_intent(config, &installed);
+        let base = "License key present but verification failed";
+        if strict || intent {
+            errors.push(format!(
+                "{base} — superd will refuse startup (strict mode or licensed deployment signals: \
+                 plugins on disk, auth_secret, or non-loopback bind). Fix [license].key or remove licensed-only config."
+            ));
+        } else {
+            warnings.push(format!(
+                "{base} — superd will run in OSS mode without plugins. Set [license].strict = true to refuse startup instead."
+            ));
+        }
         return false;
     };
 

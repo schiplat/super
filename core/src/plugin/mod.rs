@@ -13,8 +13,8 @@ mod ui_host;
 
 pub use abi::{PLUGIN_API_VERSION, PLUGIN_SYMBOL, SuperPluginV1};
 pub use host::{
-    LicenseOutcome, PluginHost, RunMode, log_license_degradation, validate_licensed_auth_secret,
-    validate_licensed_security,
+    LicenseOutcome, PluginHost, RunMode, enforce_license_degradation_policy,
+    log_license_degradation, validate_licensed_auth_secret, validate_licensed_security,
 };
 pub use http_host::attach_http_plugins;
 pub use loader::{PluginRuntime, load_authorized_plugins, resolve_plugin_path};

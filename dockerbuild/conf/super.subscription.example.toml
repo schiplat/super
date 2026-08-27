@@ -12,6 +12,7 @@
 auth_secret = "CHANGE-ME-strong-random-secret"
 
 [license]
+strict = true
 key = "PASTE-BASE64-LICENSE-KEY"
 
 [server]

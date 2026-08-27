@@ -1,0 +1,112 @@
+{{- $lang := .Page.Language.Lang -}}
+{{- $isZh := eq $lang "zh-cn" -}}
+{{- $api := .Site.Params.contact.api_url | default "https://open.schiplat.com/api/v1/demands" -}}
+<section class="hp-section contact-section" id="contact">
+<div class="hp-container">
+<div class="contact-grid">
+<div class="contact-intro">
+<div class="hp-label">{{ if $isZh }}联系{{ else }}Contact{{ end }}</div>
+<h2 class="hp-heading">{{ if $isZh }}有问题？告诉我们{{ else }}Questions?<br>Get in touch{{ end }}</h2>
+<p class="hp-lead">{{ if $isZh }}试用 Pro、商业授权或一般问题 —— 填写表单，我们会尽快回复。{{ else }}Pro trial, licensing, bugs, or general questions — send a note and we’ll reply soon.{{ end }}</p>
+<ul class="contact-alt">
+<li>{{ if $isZh }}Bug 与功能建议：{{ else }}Bugs &amp; features:{{ end }} <a href="https://github.com/hzbd/super/issues" target="_blank" rel="noopener">GitHub Issues</a></li>
+<li>{{ if $isZh }}Pro 试用：{{ else }}Pro trial:{{ end }} <a href="https://github.com/hzbd/super/issues/new?template=pro-trial.yml" target="_blank" rel="noopener">{{ if $isZh }}提交试用申请{{ else }}Open a trial request{{ end }}</a></li>
+<li>{{ if $isZh }}安全漏洞请邮件{{ else }}Security issues: email{{ end }} <a href="mailto:support@ddl.sconts.com">support@ddl.sconts.com</a> {{ if $isZh }}（勿在此表单提交）{{ else }}(do not use this form){{ end }}</li>
+</ul>
+</div>
+<form class="contact-form" id="superContactForm" novalidate
+  data-api-url="{{ $api }}"
+  data-msg-required="{{ if $isZh }}请填写称呼、邮箱和留言。{{ else }}Please fill in your name, email, and message.{{ end }}"
+  data-msg-email="{{ if $isZh }}请输入有效的邮箱地址。{{ else }}Please enter a valid email address.{{ end }}"
+  data-msg-sending="{{ if $isZh }}发送中…{{ else }}Sending…{{ end }}"
+  data-msg-success="{{ if $isZh }}已收到！我们会尽快回复。{{ else }}Thanks! We’ll get back to you soon.{{ end }}"
+  data-msg-error="{{ if $isZh }}发送失败，请稍后重试或直接发邮件。{{ else }}Could not send — try again later or email us.{{ end }}"
+  data-btn-send="{{ if $isZh }}发送{{ else }}Send message{{ end }}"
+  data-btn-sent="{{ if $isZh }}已发送{{ else }}Sent{{ end }}">
+<div class="contact-row">
+<div class="contact-field">
+<label for="superContactName">{{ if $isZh }}称呼{{ else }}Name{{ end }}</label>
+<input id="superContactName" name="name" type="text" autocomplete="name" required placeholder="{{ if $isZh }}怎么称呼你？{{ else }}How should we address you?{{ end }}">
+</div>
+<div class="contact-field">
+<label for="superContactEmail">{{ if $isZh }}邮箱{{ else }}Email{{ end }}</label>
+<input id="superContactEmail" name="email" type="email" autocomplete="email" required placeholder="you@example.com">
+</div>
+</div>
+<div class="contact-field">
+<label for="superContactTopic">{{ if $isZh }}主题{{ else }}Topic{{ end }}</label>
+<select id="superContactTopic" name="budget">
+<option value="super/general">{{ if $isZh }}一般问题{{ else }}General question{{ end }}</option>
+<option value="super/bug">{{ if $isZh }}Bug / 功能建议{{ else }}Bug / feature request{{ end }}</option>
+<option value="super/pro-trial">{{ if $isZh }}Pro 试用 / 订阅{{ else }}Pro trial / subscription{{ end }}</option>
+<option value="super/commercial">{{ if $isZh }}商业授权 / 企业{{ else }}Commercial / enterprise{{ end }}</option>
+<option value="super/docs">{{ if $isZh }}文档反馈{{ else }}Documentation feedback{{ end }}</option>
+</select>
+</div>
+<div class="contact-field">
+<label for="superContactMessage">{{ if $isZh }}留言{{ else }}Message{{ end }}</label>
+<textarea id="superContactMessage" name="message" rows="5" required placeholder="{{ if $isZh }}版本、平台、复现步骤等（如有）{{ else }}Version, platform, steps to reproduce, etc.{{ end }}"></textarea>
+</div>
+<button type="submit" class="hp-btn hp-btn--primary contact-submit">{{ if $isZh }}发送{{ else }}Send message{{ end }}</button>
+<p class="contact-status" id="superContactStatus" role="status" aria-live="polite"></p>
+</form>
+</div>
+</div>
+</section>
+<script>
+(function () {
+  var form = document.getElementById("superContactForm");
+  if (!form) return;
+  var status = document.getElementById("superContactStatus");
+  var btn = form.querySelector(".contact-submit");
+  var apiUrl = form.dataset.apiUrl;
+
+  function setStatus(text, ok) {
+    status.className = "contact-status" + (ok === true ? " ok" : ok === false ? " err" : "");
+    status.textContent = text;
+  }
+
+  form.addEventListener("submit", function (e) {
+    e.preventDefault();
+    var name = form.elements.name.value.trim();
+    var email = form.elements.email.value.trim();
+    var topic = form.elements.budget.value;
+    var msg = form.elements.message.value.trim();
+    if (!name || !email || !msg) {
+      setStatus(form.dataset.msgRequired, false);
+      return;
+    }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      setStatus(form.dataset.msgEmail, false);
+      return;
+    }
+    var body =
+      "[Project Super · docs homepage]\n" +
+      "Topic: " + topic + "\n\n" +
+      msg;
+    btn.disabled = true;
+    btn.textContent = form.dataset.msgSending;
+    setStatus("", null);
+    fetch(apiUrl, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: name, email: email, budget: topic, message: body }),
+    })
+      .then(function (r) {
+        if (!r.ok) throw new Error(String(r.status));
+        return r.json();
+      })
+      .then(function (data) {
+        if (data && data.ok === false) throw new Error("api");
+        setStatus(form.dataset.msgSuccess, true);
+        form.reset();
+        btn.textContent = form.dataset.btnSent;
+      })
+      .catch(function () {
+        setStatus(form.dataset.msgError, false);
+        btn.disabled = false;
+        btn.textContent = form.dataset.btnSend;
+      });
+  });
+})();
+</script>

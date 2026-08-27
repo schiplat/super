@@ -35,8 +35,9 @@ pub use auth::{
 };
 pub use license::{
     LICENSE_TRIAL_URL, LICENSE_UPGRADE_URL, LicenseClaims, LicenseExpiryStatus, LicenseInfo,
-    license_expiry_status, license_help_footer,
-    verify_license, verify_license_for_superd,
+    license_degradation_refusal_message, license_expiry_status, license_help_footer,
+    licensed_deployment_intent, resolve_license_strict, scan_plugin_stems,
+    should_refuse_license_degradation, verify_license, verify_license_for_superd,
 };
 pub use plugin_abi::{PLUGIN_API_VERSION, PLUGIN_SYMBOL, SuperPluginV1, read_plugin_version};
 pub use plugin_error::{set_last_plugin_error, take_last_plugin_error};

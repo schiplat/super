@@ -70,12 +70,22 @@ Top-level fields in `super.toml` (sibling to `[server]`, not inside it):
 
 Optional section in `conf/super.toml`. When present and valid, `superd` loads authorized plugins from `plugins/` and **requires the bundled `security` plugin** (`security.so` + `auth_secret`) or refuses startup. See [Licensed deployments require security](/docs/05-advanced-management/authentication#licensed-deployments-require-security).
 
+When a key is present but **does not verify**, behavior depends on deployment signals:
+
+| Condition | Invalid key behavior |
+| :--- | :--- |
+| Loopback OSS dev (no plugins, no `auth_secret`) | **Degrade** to OSS with stderr/tracing warnings |
+| **Licensed intent** (plugins on disk, `auth_secret` set, or non-loopback bind) | **Refuse startup** |
+| `[license].strict = true` (or `SUPER_LICENSE_STRICT=1`) | **Refuse startup** always |
+
 | Key | Type | Default | Description |
 | :--- | :--- | :--- | :--- |
 | `key` 💎 | string | — | Base64-encoded signed subscription key. Obtain from your subscription vendor. Override: `SUPER_LICENSE` env (same format). |
+| `strict` 💎 | bool | `false` | When `true`, invalid or incompatible keys refuse startup instead of degrading to OSS. Recommended for production licensed deployments. Override: `SUPER_LICENSE_STRICT=1`. |
 
 ```toml
 [license]
+strict = true
 key = "eyJjbGFpbXMiOnsiaXNzdWVkX3RvIjoi..."
 ```
 

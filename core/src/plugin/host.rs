@@ -3,7 +3,7 @@ use anyhow::Context;
 use common::config::resolve_license_key;
 use common::license::{
     LicenseClaims, LicenseExpiryStatus, check_superd_version, license_help_footer,
-    licensed_version_scope, verify_license_for_superd,
+    licensed_version_scope, scan_plugin_stems, verify_license_for_superd,
 };
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
@@ -14,7 +14,30 @@ const LICENSE_BANNER: &str = "\
 LICENSE ERROR: verification failed — running OSS mode only.\n\
 No paid plugins will be loaded. Fix [license].key in conf/super.toml\n\
 Run: super check   or   super doctor\n\
+(Set [license].strict = true to refuse startup instead of degrading.)\n\
 ======================================================================";
+
+const LICENSE_REFUSAL_BANNER: &str = "\
+======================================================================\n\
+LICENSE ERROR: verification failed — startup refused.\n\
+Fix [license].key or remove licensed-only config (plugins/, auth_secret).\n\
+Run: super check   or   super doctor\n\
+======================================================================";
+
+/// Stderr banner when strict mode or deployment intent blocks OSS fallback.
+pub fn emit_license_refusal_stderr(reason: &str, strict: bool, intent: bool) {
+    eprintln!("{LICENSE_REFUSAL_BANNER}");
+    eprintln!("License error: {reason}");
+    if strict {
+        eprintln!("Cause: [license].strict or SUPER_LICENSE_STRICT is enabled.");
+    }
+    if intent {
+        eprintln!(
+            "Cause: licensed deployment signals (plugins on disk, auth_secret, or non-loopback bind)."
+        );
+    }
+    eprintln!("{}", license_help_footer());
+}
 
 /// Log license degradation after tracing is initialized (superd bootstrap).
 pub fn log_license_degradation(reason: &str) {
@@ -63,7 +86,7 @@ pub struct PluginHost {
     pub loaded_plugins: Vec<String>,
     pub runtime: PluginRuntime,
     pub plugins_dir: PathBuf,
-    /// Set when a license key was configured but verification failed (silent OSS fallback).
+    /// Set when a license key was configured but verification failed (OSS fallback unless strict/intent refuses).
     pub license_degraded_reason: Option<String>,
 }
 
@@ -76,7 +99,7 @@ impl PluginHost {
         let config_file = root.join("conf").join("super.toml");
 
         let license_outcome = resolve_license(&config_file);
-        let installed_plugins = scan_plugin_files(&plugins_dir);
+        let installed_plugins = scan_plugin_stems(&plugins_dir);
 
         match &license_outcome {
             LicenseOutcome::Missing => {
@@ -256,6 +279,24 @@ pub fn validate_licensed_auth_secret(
     );
 }
 
+/// Refuse startup when license verification failed but strict or licensed intent applies.
+pub fn enforce_license_degradation_policy(
+    reason: &str,
+    config: &common::config::ServerConfig,
+    installed_plugins: &[String],
+    config_path: &Path,
+) -> anyhow::Result<()> {
+    let strict = common::resolve_license_strict(config_path)?;
+    let intent = common::licensed_deployment_intent(config, installed_plugins);
+    if common::should_refuse_license_degradation(config, installed_plugins, strict) {
+        emit_license_refusal_stderr(reason, strict, intent);
+        anyhow::bail!(common::license_degradation_refusal_message(
+            reason, strict, intent
+        ));
+    }
+    Ok(())
+}
+
 fn resolve_license(config_file: &Path) -> LicenseOutcome {
     let key = match resolve_license_key(config_file) {
         Ok(k) => k,
@@ -286,30 +327,6 @@ fn resolve_license(config_file: &Path) -> LicenseOutcome {
     }
 }
 
-/// List plugin library stems under `plugins/` (`.so` / `.dylib`).
-fn scan_plugin_files(plugins_dir: &Path) -> Vec<String> {
-    let mut ids = Vec::new();
-
-    let entries = match std::fs::read_dir(plugins_dir) {
-        Ok(e) => e,
-        Err(_) => return ids,
-    };
-
-    for entry in entries.flatten() {
-        let path = entry.path();
-        let is_plugin_lib = path
-            .extension()
-            .is_some_and(|ext| ext == "so" || ext == "dylib");
-        if is_plugin_lib && let Some(stem) = path.file_stem().and_then(|s| s.to_str()) {
-            ids.push(stem.to_string());
-        }
-    }
-
-    ids.sort();
-    ids.dedup();
-    ids
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -324,7 +341,7 @@ mod tests {
         std::fs::write(plugins.join("security.so"), b"fake").unwrap();
         std::fs::write(plugins.join("readme.txt"), b"x").unwrap();
 
-        let ids = scan_plugin_files(&plugins);
+        let ids = scan_plugin_stems(&plugins);
         assert_eq!(ids, vec!["security"]);
     }
 
@@ -335,7 +352,7 @@ mod tests {
         std::fs::create_dir_all(&plugins).unwrap();
         std::fs::write(plugins.join("isolation.dylib"), b"fake").unwrap();
 
-        let ids = scan_plugin_files(&plugins);
+        let ids = scan_plugin_stems(&plugins);
         assert_eq!(ids, vec!["isolation"]);
     }
 
@@ -348,7 +365,35 @@ mod tests {
     }
 
     #[test]
-    fn invalid_license_rejects_plugins() {
+    fn invalid_license_with_plugins_refuses_when_enforced() {
+        let tmp = TempDir::new().unwrap();
+        let conf = tmp.path().join("conf");
+        std::fs::create_dir_all(&conf).unwrap();
+        std::fs::write(
+            conf.join("super.toml"),
+            "[license]\nkey = \"not-a-license\"\n",
+        )
+        .unwrap();
+        let plugins = tmp.path().join("plugins");
+        std::fs::create_dir_all(&plugins).unwrap();
+        std::fs::write(plugins.join("notify.so"), b"fake").unwrap();
+
+        let host = PluginHost::discover(tmp.path(), "1.1.9");
+        let reason = host.license_degraded_reason.as_deref().unwrap();
+        let config = common::config::ServerConfig::default();
+        assert!(
+            enforce_license_degradation_policy(
+                reason,
+                &config,
+                &host.installed_plugins,
+                &conf.join("super.toml"),
+            )
+            .is_err()
+        );
+    }
+
+    #[test]
+    fn invalid_license_loopback_dev_allows_degrade() {
         let tmp = TempDir::new().unwrap();
         let conf = tmp.path().join("conf");
         std::fs::create_dir_all(&conf).unwrap();
@@ -358,13 +403,16 @@ mod tests {
         )
         .unwrap();
 
-        let plugins = tmp.path().join("plugins");
-        std::fs::create_dir_all(&plugins).unwrap();
-        std::fs::write(plugins.join("notify.so"), b"fake").unwrap();
-
         let host = PluginHost::discover(tmp.path(), "1.1.9");
-        assert_eq!(host.mode, RunMode::Oss);
-        assert!(host.loaded_plugins.is_empty());
+        let reason = host.license_degraded_reason.as_deref().unwrap();
+        let config = common::config::ServerConfig::default();
+        enforce_license_degradation_policy(
+            reason,
+            &config,
+            &host.installed_plugins,
+            &conf.join("super.toml"),
+        )
+        .unwrap();
     }
 
     #[test]

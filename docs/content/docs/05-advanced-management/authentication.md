@@ -21,10 +21,23 @@ OSS deployments without a valid `[license].key` have no API auth; public bind re
 
 Other licensed plugins (`ui`, `notify`, `isolation`, …) load only after these checks pass. OSS deployments (no valid license) are unchanged.
 
+### Invalid or incompatible license key
+
+If `[license].key` is set but verification fails (bad signature, expired with `retain_grants_after_expiry = false`, or superd version outside the signed range), `superd` does **not** treat the deployment as licensed:
+
+| Signal | Behavior |
+| :--- | :--- |
+| Dev-style OSS (loopback, no plugins, no `auth_secret`) | **Degrade** — run OSS without plugins; stderr banner + `super check` / `super doctor` warnings |
+| Licensed intent (plugins under `plugins/`, `auth_secret` set, or non-loopback bind) | **Refuse startup** — avoids silent loss of API auth or Pro features |
+| `[license].strict = true` or `SUPER_LICENSE_STRICT=1` | **Refuse startup** always |
+
+Production subscription templates ship with `strict = true`. Fix the key, renew, or remove licensed-only configuration to run in OSS mode.
+
 | Mode | API auth | Startup if `security` missing |
 | :--- | :--- | :--- |
 | OSS | ❌ Open (loopback-first) | N/A — runs without plugins |
 | **Licensed** | ✅ Required (via `security`) | **Hard fail** |
+| **Invalid key + licensed intent / strict** | — | **Hard fail** (no OSS fallback) |
 
 > **Legacy keys** without `security` in claims must be re-issued. **Partial installs** (license OK, `ui.so` present, `security.so` missing) also fail fast with an actionable error.
 

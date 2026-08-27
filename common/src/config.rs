@@ -34,6 +34,9 @@ fn default_true() -> bool {
 #[derive(Debug, Deserialize, Clone, Default)]
 pub struct LicenseSection {
     pub key: Option<String>,
+    /// When true, invalid or incompatible license keys refuse startup (no OSS fallback).
+    #[serde(default)]
+    pub strict: bool,
 }
 
 #[derive(Debug, Deserialize, Clone, Default)]

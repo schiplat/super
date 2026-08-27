@@ -59,6 +59,8 @@ params:
   # Change checkout_url and redeploy docs only (no superd release).
   purchase:
     checkout_url: "https://ifdian.net/a/hibdmm"
+  contact:
+    api_url: "https://open.schiplat.com/api/v1/demands"
   externalLinkDecoration: true
   theme:
     default: light
