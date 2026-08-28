@@ -1,93 +1,114 @@
 use clap::{Parser, ValueEnum};
-use rand::Rng;
+use rand::rngs::StdRng;
+use rand::{Rng, SeedableRng};
 use std::io::{self, Write};
 use std::thread;
 use std::time::{Duration, Instant};
 
 #[derive(Parser)]
-#[command(version)]
+#[command(
+    version,
+    about = "Deterministic bench payload (idle / log / crash / mem-eat / cpu-burn)"
+)]
 struct Args {
     #[arg(short, long)]
     mode: Mode,
+
+    /// mem-eat: stop growing after this many MiB and hold (safety cap).
+    #[arg(long, default_value_t = 512)]
+    cap_mb: usize,
+
+    /// crash-random: RNG seed so all arms share the same crash schedule when configs are shared.
+    #[arg(long, default_value_t = 1)]
+    seed: u64,
+
+    /// log-throughput: milliseconds between BENCH_RESULT lines on stderr.
+    #[arg(long, default_value_t = 2000)]
+    report_interval_ms: u64,
 }
 
 #[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, ValueEnum)]
 enum Mode {
-    Idle,          // Idle: measure Super baseline overhead
-    LogThroughput, // Log throughput: measure Super pipe consumption (critical)
-    CrashRandom,   // Random crash: measure Super recovery logic
-    MemEat,        // Memory growth: measure Super OOM handling
-    CpuBurn,       // CPU burn mode
+    Idle,
+    LogThroughput,
+    CrashRandom,
+    MemEat,
+    CpuBurn,
 }
 
 fn main() {
     let args = Args::parse();
 
     match args.mode {
-        Mode::Idle => {
-            // Just stay alive with minimal resource use
-            loop {
-                thread::sleep(Duration::from_secs(3600));
-            }
-        }
+        Mode::Idle => loop {
+            thread::sleep(Duration::from_secs(3600));
+        },
 
         Mode::LogThroughput => {
-            // [Critical test]
-            // Write stdout as fast as possible. Blocks if Super reads slowly.
-            // Measure Super overhead via actual write throughput.
-            let total_lines = 500_000;
-            let payload = "INFO: 2024-01-01 This is a benchmark log line to test throughput performance 1234567890";
-
-            // BufWriter reduces syscalls so the payload is not the bottleneck
+            // Sustained write until SIGTERM. Finite 500k-then-exit would turn
+            // long scenarios into restart storms instead of log backpressure.
+            let payload = "INFO: 2026-01-01 bench log line 1234567890";
             let stdout = io::stdout();
-            let mut handle = io::BufWriter::new(stdout.lock());
+            let mut handle = io::BufWriter::with_capacity(64 * 1024, stdout.lock());
+            let mut window_start = Instant::now();
+            let mut window_lines: u64 = 0;
+            let mut total: u64 = 0;
+            let report = Duration::from_millis(args.report_interval_ms.max(200));
 
-            let start = Instant::now();
-
-            for i in 0..total_lines {
-                if writeln!(handle, "{} - {}", i, payload).is_err() {
-                    break; // Pipe broken
+            loop {
+                if writeln!(handle, "{total} - {payload}").is_err() {
+                    break;
+                }
+                window_lines += 1;
+                total += 1;
+                if window_start.elapsed() >= report {
+                    let _ = handle.flush();
+                    let secs = window_start.elapsed().as_secs_f64().max(1e-6);
+                    let lps = window_lines as f64 / secs;
+                    eprintln!("BENCH_RESULT:{lps:.2}");
+                    window_start = Instant::now();
+                    window_lines = 0;
                 }
             }
-            let _ = handle.flush();
-
-            let duration = start.elapsed();
-            let speed = total_lines as f64 / duration.as_secs_f64();
-
-            // Print result to stderr (Super may capture stderr; scripts only need this number)
-            // Format: BENCH_RESULT:<LINES_PER_SEC>
-            eprintln!("BENCH_RESULT:{:.2}", speed);
         }
 
         Mode::CrashRandom => {
-            let mut rng = rand::thread_rng();
+            let mut rng = StdRng::seed_from_u64(args.seed);
             let sleep_ms = rng.gen_range(100..2000);
             thread::sleep(Duration::from_millis(sleep_ms));
             std::process::exit(1);
         }
 
         Mode::MemEat => {
-            // Allocate 5MB every 100ms to simulate rapid memory leak
-            let mut container = Vec::new();
-            println!("Starting Memory Leak...");
-            loop {
-                // 5MB per chunk
-                let chunk = vec![0u8; 5 * 1024 * 1024];
-                container.push(chunk);
-                // Prevent optimization; log current size
-                if container.len() % 10 == 0 {
-                    println!("Allocated: {} MB", container.len() * 5);
+            // Touch every page so Linux actually accounts the RSS (zero-fill is lazy).
+            let cap_bytes = args.cap_mb.saturating_mul(1024 * 1024);
+            let chunk_size = 5 * 1024 * 1024;
+            let mut held: Vec<Vec<u8>> = Vec::new();
+            let mut allocated = 0usize;
+            eprintln!("Starting mem-eat cap_mb={}", args.cap_mb);
+            while allocated + chunk_size <= cap_bytes {
+                let mut chunk = vec![0u8; chunk_size];
+                for i in (0..chunk_size).step_by(4096) {
+                    chunk[i] = 1;
+                }
+                allocated += chunk_size;
+                held.push(chunk);
+                if held.len() % 8 == 0 {
+                    println!("Allocated: {} MB", allocated / (1024 * 1024));
                 }
                 thread::sleep(Duration::from_millis(100));
+            }
+            println!("Holding {} MB (cap reached)", allocated / (1024 * 1024));
+            loop {
+                thread::sleep(Duration::from_secs(3600));
+                let _ = held.len();
             }
         }
 
         Mode::CpuBurn => {
-            // CPU-bound loop targeting ~100% of one core
             println!("Starting CPU Burn...");
             let mut x: f64 = 0.0;
             loop {
-                // Simple float ops to prevent compiler from optimizing away the loop
                 x = (x + 1.0).sin().cos().tan();
                 if x > 1000.0 {
                     x = 0.0;

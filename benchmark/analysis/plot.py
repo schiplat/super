@@ -1,59 +1,70 @@
-import pandas as pd
-import matplotlib.pyplot as plt
-import sys
-import os
+"""Plot one scenario directory: CSVs named {super-oss,super-pro,supervisord,pm2}.csv."""
+from __future__ import annotations
+
 import argparse
+import os
 
-def plot(data_dir, mode):
-    plt.figure(figsize=(10, 8))
+import matplotlib.pyplot as plt
+import pandas as pd
 
-    # 定义颜色
-    colors = {'super': '#e74c3c', 'supervisor': '#3498db', 'pm2': '#2ecc71'}
-    tools = ['super', 'supervisor', 'pm2'] if mode == 'compare' else ['super']
+# Same hue for Super editions; dash vs solid + hatch in bars (summarize.py).
+SERIES = [
+    ("super-oss", "#b45309", "solid", "o"),
+    ("super-pro", "#f59e0b", "dashed", "s"),
+    ("supervisord", "#2563eb", "solid", "^"),
+    ("pm2", "#16a34a", "solid", "D"),
+]
 
-    # --- 子图 1: 内存 (最关键指标) ---
-    plt.subplot(2, 1, 1)
-    has_data = False
-    for tool in tools:
-        csv_path = os.path.join(data_dir, f"{tool}.csv")
-        if os.path.exists(csv_path):
-            df = pd.read_csv(csv_path)
-            plt.plot(df['time_ms'] / 1000, df['memory_mb'],
-                     label=tool.upper(), color=colors.get(tool), linewidth=2)
-            has_data = True
 
-    plt.title('Memory Usage (Lower is Better)')
-    plt.ylabel('RSS Memory (MB)')
-    plt.grid(True, linestyle='--', alpha=0.5)
-    plt.legend()
+def plot(data_dir: str, title: str) -> None:
+    fig, axes = plt.subplots(2, 1, figsize=(11, 8), sharex=True)
+    has = False
+    for name, color, ls, marker in SERIES:
+        path = os.path.join(data_dir, f"{name}.csv")
+        if not os.path.exists(path):
+            continue
+        df = pd.read_csv(path)
+        if "time_ms" not in df.columns:
+            continue
+        t = df["time_ms"] / 1000.0
+        mem = df["memory_mb"] if "memory_mb" in df.columns else None
+        cpu = df["cpu_usage"] if "cpu_usage" in df.columns else None
+        if mem is not None:
+            axes[0].plot(t, mem, label=name, color=color, linestyle=ls, linewidth=2)
+            has = True
+        if cpu is not None:
+            axes[1].plot(
+                t,
+                cpu.rolling(3, min_periods=1).mean(),
+                label=name,
+                color=color,
+                linestyle=ls,
+                linewidth=1.6,
+                marker=marker,
+                markevery=max(len(df) // 12, 1),
+                markersize=4,
+            )
 
-    # --- 子图 2: CPU (稳定性指标) ---
-    plt.subplot(2, 1, 2)
-    for tool in tools:
-        csv_path = os.path.join(data_dir, f"{tool}.csv")
-        if os.path.exists(csv_path):
-            df = pd.read_csv(csv_path)
-            # 使用滑动窗口平滑曲线，让趋势更清晰
-            plt.plot(df['time_ms'] / 1000, df['cpu_usage'].rolling(3).mean(),
-                     label=tool.upper(), color=colors.get(tool), linewidth=1.5)
+    axes[0].set_ylabel("Daemon-set RSS (MiB)")
+    axes[0].set_title(title or "Daemon RSS (not whole-host; RSS not PSS)")
+    axes[0].grid(True, linestyle="--", alpha=0.4)
+    axes[0].legend(loc="best", fontsize=9)
+    axes[1].set_ylabel("CPU % (one core = 100)")
+    axes[1].set_xlabel("Time (s)")
+    axes[1].grid(True, linestyle="--", alpha=0.4)
+    if not has:
+        axes[0].text(0.5, 0.5, "no CSV", ha="center", transform=axes[0].transAxes)
+    fig.tight_layout()
+    out = os.path.join(data_dir, "report.png")
+    fig.savefig(out, dpi=120)
+    plt.close()
+    print(f"Graph saved to {out}")
 
-    plt.title('CPU Usage (Stability check)')
-    plt.xlabel('Time (seconds)')
-    plt.ylabel('CPU (%)')
-    plt.grid(True, linestyle='--', alpha=0.5)
-
-    if mode == 'self':
-        plt.ylim(bottom=0) # 自身测试时，Y轴从0开始看波动
-
-    plt.tight_layout()
-    output_path = os.path.join(data_dir, 'report.png')
-    plt.savefig(output_path)
-    print(f"Graph saved to {output_path}")
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser()
-    parser.add_argument("dir", help="Directory containing csv files")
-    parser.add_argument("--mode", choices=['compare', 'self'], default='compare')
-    args = parser.parse_args()
-
-    plot(args.dir, args.mode)
+    p = argparse.ArgumentParser()
+    p.add_argument("dir")
+    p.add_argument("--title", default="")
+    p.add_argument("--mode", choices=["compare", "self"], default="compare")
+    args = p.parse_args()
+    plot(args.dir, args.title)
