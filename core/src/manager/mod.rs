@@ -17,7 +17,8 @@ use self::registry::ProcessRegistry;
 use common::{
     BatchAction, BatchProgramRequest, BatchProgramResponse, CreateProgramRequest, HealthResponse,
     ProcessStatus, ProgramConfig, ProgramInfo, ProgramSummary, ResourceLimits, StackApplyRequest,
-    UpdateProgramRequest, WsMessage, resolve_confined_log_path,
+    UpdateProgramRequest, WsMessage, resolve_confined_log_path, validate_create_program_request,
+    validate_update_program_request, with_program_location,
 };
 use glob::glob;
 use nix::sys::signal::Signal;
@@ -59,42 +60,6 @@ fn validate_resource_limits_patch(limits: &ResourceLimits) -> anyhow::Result<()>
         && cpu != -1.0
     {
         return Err(anyhow::anyhow!("CPU quota must be positive"));
-    }
-    Ok(())
-}
-
-/// Validate an OTA artifact config at the API boundary.
-///
-/// URL policy (HTTPS, private/link-local blocking) is enforced separately at
-/// download time in `artifact::download_to_staging`; here we only reject
-/// configs that are structurally unusable, so a bad request fails fast with a
-/// 400 instead of an opaque background download error.
-fn validate_artifact_config(artifact: &common::ArtifactConfig) -> anyhow::Result<()> {
-    if artifact.source.trim().is_empty() {
-        return Err(anyhow::anyhow!("artifact.source must not be empty"));
-    }
-    if artifact.destination.trim().is_empty() {
-        return Err(anyhow::anyhow!("artifact.destination must not be empty"));
-    }
-    let sum = artifact.checksum.trim();
-    if sum.len() != 64 || !sum.bytes().all(|b| b.is_ascii_hexdigit()) {
-        return Err(anyhow::anyhow!(
-            "artifact.checksum must be a 64-char hex SHA256 digest"
-        ));
-    }
-    Ok(())
-}
-
-fn validate_program_log_paths(
-    log_dir: &Path,
-    stdout_logfile: Option<&str>,
-    stderr_logfile: Option<&str>,
-) -> anyhow::Result<()> {
-    if let Some(path) = stdout_logfile.filter(|s| !s.trim().is_empty()) {
-        resolve_confined_log_path(log_dir, path)?;
-    }
-    if let Some(path) = stderr_logfile.filter(|s| !s.trim().is_empty()) {
-        resolve_confined_log_path(log_dir, path)?;
     }
     Ok(())
 }
@@ -587,8 +552,14 @@ impl Manager {
     //
 
     async fn handle_update(&mut self, id: Uuid, req: UpdateProgramRequest) -> anyhow::Result<()> {
+        let existing_name = self.registry.get_config(&id).map(|c| c.name.clone());
+        validate_update_program_request(&req, &self.config.storage.log_dir).map_err(|e| {
+            with_program_location(e, req.name.as_deref().or(existing_name.as_deref()), None)
+        })?;
         if req.cron.is_some() {
-            self.validate_parameters(req.cron.as_deref())?;
+            self.validate_parameters(req.cron.as_deref()).map_err(|e| {
+                with_program_location(e, req.name.as_deref().or(existing_name.as_deref()), None)
+            })?;
         }
 
         if let Some(limits) = &req.resource_limits {
@@ -632,7 +603,6 @@ impl Manager {
 
             // [Trigger Logic] Checksum change detection to trigger OTA
             if let Some(v) = &req.artifact {
-                validate_artifact_config(v)?;
                 let old_sum = config
                     .artifact
                     .as_ref()
@@ -1298,15 +1268,16 @@ impl Manager {
 
         self.validate_stack_service_names(&req.services)?;
 
-        for service_req in &req.services {
-            for config in self.expand_request(service_req) {
-                self.validate_parameters(config.cron.as_deref())?;
-                validate_program_log_paths(
-                    &self.config.storage.log_dir,
-                    config.stdout_logfile.as_deref(),
-                    config.stderr_logfile.as_deref(),
-                )?;
-            }
+        for (i, service_req) in req.services.iter().enumerate() {
+            validate_create_program_request(service_req, &self.config.storage.log_dir)
+                .map_err(|e| with_program_location(e, service_req.name.as_deref(), Some(i)))?;
+            self.validate_parameters(service_req.cron.as_deref())
+                .map_err(|e| with_program_location(e, service_req.name.as_deref(), Some(i)))?;
+            warn_if_resource_limits_unenforced(
+                self.extension.as_ref(),
+                &service_req.resource_limits,
+                "apply stack",
+            );
         }
 
         for service_req in req.services {
@@ -1552,93 +1523,62 @@ impl Manager {
         req: CreateProgramRequest,
         reply: tokio::sync::oneshot::Sender<anyhow::Result<Vec<Uuid>>>,
     ) {
-        let configs = self.expand_request(&req);
-        let mut validation_error = None;
-        for cfg in &configs {
-            if let Err(e) = self.validate_parameters(cfg.cron.as_deref()) {
-                validation_error = Some(e);
-                break;
-            }
-
-            if let Err(e) = validate_program_log_paths(
-                &self.config.storage.log_dir,
-                cfg.stdout_logfile.as_deref(),
-                cfg.stderr_logfile.as_deref(),
-            ) {
-                validation_error = Some(e);
-                break;
-            }
-
-            if let Some(l) = &cfg.resource_limits {
-                if let Some(c) = l.cpu_quota
-                    && c <= 0.0
-                {
-                    validation_error = Some(anyhow::anyhow!("CPU quota must be > 0"));
-                    break;
-                }
-                if let Some(m) = l.memory_limit
-                    && m == 0
-                {
-                    validation_error = Some(anyhow::anyhow!("Memory limit must be > 0"));
-                    break;
-                }
-                warn_if_resource_limits_unenforced(
-                    self.extension.as_ref(),
-                    &cfg.resource_limits,
-                    "create program",
-                );
-            }
-
-            if let Some(a) = &cfg.artifact
-                && let Err(e) = validate_artifact_config(a)
-            {
-                validation_error = Some(e);
-                break;
-            }
-        }
-
-        if let Some(e) = validation_error {
+        if let Err(e) = validate_create_program_request(&req, &self.config.storage.log_dir) {
+            let e = with_program_location(e, req.name.as_deref(), None);
             tracing::warn!("CreateProgram validation failed: {}", e);
             let _ = reply.send(Err(e));
-        } else {
-            for cfg in &configs {
-                if let Err(e) = self.ensure_program_name_available(&cfg.name, None) {
-                    tracing::warn!("CreateProgram name conflict: {}", e);
-                    let _ = reply.send(Err(e));
-                    return;
-                }
-            }
-
-            let mut created_ids = Vec::new();
-            for config in configs {
-                let id = Uuid::new_v4();
-                let should_start = config.autostart;
-                let name = config.name.clone();
-
-                if let Some(cron_expr) = &config.cron {
-                    self.scheduler.upsert(id, cron_expr);
-                }
-
-                self.registry.programs.insert(id, config);
-                created_ids.push(id);
-                tracing::info!("Program created: {} ({})", name, id);
-
-                if should_start
-                    && self.scheduler.get_next_run(&id).is_none()
-                    && let Err(e) = self
-                        .controller
-                        .spawn_program(&mut self.registry, id, 0)
-                        .await
-                {
-                    tracing::error!("Failed to autostart {}: {}", id, e);
-                }
-            }
-            self.registry.mark_dirty();
-            if let Err(e) = self.flush_to_disk().await {
-                tracing::error!("Failed to persist new program(s): {}", e);
-            }
-            let _ = reply.send(Ok(created_ids));
+            return;
         }
+        if let Err(e) = self.validate_parameters(req.cron.as_deref()) {
+            let e = with_program_location(e, req.name.as_deref(), None);
+            tracing::warn!("CreateProgram validation failed: {}", e);
+            let _ = reply.send(Err(e));
+            return;
+        }
+
+        let configs = self.expand_request(&req);
+        for cfg in &configs {
+            if let Err(e) = self.ensure_program_name_available(&cfg.name, None) {
+                tracing::warn!("CreateProgram name conflict: {}", e);
+                let _ = reply.send(Err(e));
+                return;
+            }
+            warn_if_resource_limits_unenforced(
+                self.extension.as_ref(),
+                &cfg.resource_limits,
+                "create program",
+            );
+        }
+
+        let mut created_ids = Vec::new();
+        for config in configs {
+            let id = Uuid::new_v4();
+            let should_start = config.autostart;
+            let name = config.name.clone();
+
+            if let Some(cron_expr) = &config.cron {
+                self.scheduler.upsert(id, cron_expr);
+            }
+
+            self.registry.programs.insert(id, config);
+            created_ids.push(id);
+            tracing::info!("Program created: {} ({})", name, id);
+
+            if should_start
+                && self.scheduler.get_next_run(&id).is_none()
+                && let Err(e) = self
+                    .controller
+                    .spawn_program(&mut self.registry, id, 0)
+                    .await
+            {
+                tracing::error!("Failed to autostart {}: {}", id, e);
+            }
+        }
+        self.registry.mark_dirty();
+        if let Err(e) = self.flush_to_disk().await {
+            tracing::error!("Failed to persist new program(s): {}", e);
+        }
+        let _ = reply.send(Ok(created_ids));
     }
 
     async fn handle_reload(&mut self) -> anyhow::Result<()> {
@@ -2147,7 +2087,7 @@ impl Manager {
         if let Some(c) = cron
             && cron::Schedule::from_str(c).is_err()
         {
-            return Err(anyhow::anyhow!("Invalid cron: {}", c));
+            return Err(anyhow::anyhow!("cron: invalid expression {c:?}"));
         }
         Ok(())
     }
@@ -2246,51 +2186,5 @@ mod resource_limits_tests {
             memory_limit: Some(0),
         })
         .unwrap();
-    }
-}
-
-#[cfg(test)]
-mod artifact_config_tests {
-    use super::validate_artifact_config;
-    use common::ArtifactConfig;
-
-    fn valid() -> ArtifactConfig {
-        ArtifactConfig {
-            source: "https://example.com/app.tar.gz".to_string(),
-            checksum: "a".repeat(64),
-            extract: false,
-            destination: "/opt/app/bin/app".to_string(),
-            restart_policy: "immediate".to_string(),
-        }
-    }
-
-    #[test]
-    fn accepts_valid_config() {
-        validate_artifact_config(&valid()).unwrap();
-    }
-
-    #[test]
-    fn rejects_empty_source() {
-        let mut a = valid();
-        a.source = "   ".to_string();
-        assert!(validate_artifact_config(&a).is_err());
-    }
-
-    #[test]
-    fn rejects_empty_destination() {
-        let mut a = valid();
-        a.destination = String::new();
-        assert!(validate_artifact_config(&a).is_err());
-    }
-
-    #[test]
-    fn rejects_bad_checksum() {
-        let mut a = valid();
-        a.checksum = "not-hex".to_string();
-        assert!(validate_artifact_config(&a).is_err());
-
-        let mut b = valid();
-        b.checksum = "abc".to_string(); // too short
-        assert!(validate_artifact_config(&b).is_err());
     }
 }

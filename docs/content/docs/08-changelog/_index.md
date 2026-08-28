@@ -17,8 +17,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `[license].strict` and deployment-intent detection: invalid keys refuse startup when `strict = true`, plugin libraries are present, `auth_secret` is set, or bind is non-loopback; otherwise OSS degrade with warnings (`SUPER_LICENSE_STRICT` env override).
 
 ### Changed
+- Create / update program (HTTP, CLI `add`/`update`, dashboard, stack apply) run a shared structural check. Failures return **400** with a `message` that names the field (`command:`, `health_check.url:`), the program or `services[i] (name=…)`, and for JSON syntax / unknown keys `JSON line N column M`. `super check` reports include problems as `path:line:col:` or `path: services[i] (name=…): field:`.
 - `super check` reports invalid license as an error when strict or licensed deployment signals apply.
 - License verification requires a `kid` claim on every license; the legacy `v1` kid and compile-time fallback are removed. Signing key ids use `k_<8hex>` (derived from the Ed25519 public key). Re-issue licenses from your vendor if verification fails with “missing signing key id”.
+- Docs: [Troubleshooting license verification](/docs/05-advanced-management/authentication#troubleshooting-license-verification) — suggested `super check`, `super doctor`, and `super keyring` for self-service diagnosis.
 
 ---
 

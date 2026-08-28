@@ -67,6 +67,10 @@ Register a new process dynamically.
 
 > **Migration note**: `autostart` controls boot-time start only. To disable crash auto-restart, set `"autorestart": "false"`.
 
+**Response:** `201 Created` with the new UUID(s). Validation failures return `400` with `{ "status": "error", "message": "..." }`. The message names the field (`command: …`, `health_check.url: …`) and, when a name is set, `program '…':`. JSON syntax / unknown fields include `JSON line N column M`. Duplicate names return `409`.
+
+CLI `super add` / `super update` and the dashboard use the same Manager checks. `super check` applies the create-body rules to `[include]` JSON stacks (offline, no daemon).
+
 ### Get Details
 Get full configuration and state for a specific program.
 
@@ -140,7 +144,7 @@ curl -X PUT "http://127.0.0.1:9002/api/v1/programs/${PROGRAM_ID}" \
 
 **With `security` plugin**: add `-H "Authorization: Bearer <token>"`.
 
-**Response:** `200 OK` on success; `400` if the program is not found or validation fails.
+**Response:** `200 OK` on success; `400` if the program is not found or validation fails. The `message` names the field (and `program '…'` when known). JSON syntax / unknown fields include `JSON line N column M`.
 
 ### Control Actions
 
@@ -199,6 +203,8 @@ Update the entire system state to match a JSON definition.
   "services": [ ... list of program configs ... ]
 }
 ```
+
+**Response:** `200 OK` with apply log lines. Invalid JSON or program bodies return `400`; `message` names `services[i] (name=…)` and the field, or `JSON line N column M` for parse errors.
 
 ### Shutdown
 Gracefully stop the daemon (same for foreground and `superd --daemon` instances).

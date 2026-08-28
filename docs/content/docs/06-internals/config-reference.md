@@ -80,7 +80,7 @@ When a key is present but **does not verify**, behavior depends on deployment si
 
 | Key | Type | Default | Description |
 | :--- | :--- | :--- | :--- |
-| `key` 💎 | string | — | Base64-encoded signed subscription key. Obtain from your subscription vendor. Override: `SUPER_LICENSE` env (same format). |
+| `key` 💎 | string | — | Base64-encoded signed subscription key. Obtain from your subscription vendor. Override: `SUPER_LICENSE` env (same format). Every valid license includes a signing key id (`kid`, e.g. `k_0ac64a3f`) that must match a verifying key embedded in your `superd` build — see [Troubleshooting license verification](/docs/05-advanced-management/authentication#troubleshooting-license-verification). |
 | `strict` 💎 | bool | `false` | When `true`, invalid or incompatible keys refuse startup instead of degrading to OSS. Recommended for production licensed deployments. Override: `SUPER_LICENSE_STRICT=1`. |
 
 ```toml

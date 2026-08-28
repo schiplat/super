@@ -41,6 +41,25 @@ Production subscription templates ship with `strict = true`. Fix the key, renew,
 
 > **Legacy keys** without `security` in claims must be re-issued. **Partial installs** (license OK, `ui.so` present, `security.so` missing) also fail fast with an actionable error.
 
+#### Troubleshooting license verification
+
+When startup, `super check`, or `super doctor` reports a bad or incompatible license, try these steps locally (no daemon required for `check` / `keyring`):
+
+1. **`super check`** — re-validates `conf/super.toml`, including the license string and licensed-mode requirements.
+2. **`super doctor`** — runs the same config check, then probes a running daemon; prints a **Verifying keys** line (embedded signing key ids in this CLI binary).
+3. **`super keyring`** — lists every verifying key id (`kid`) compiled into this build; use `--json` for scripts.
+
+Typical messages and what to do:
+
+| Symptom | Likely cause | What to try |
+| :--- | :--- | :--- |
+| Missing signing key id (`kid`) | License predates the current format | Ask your vendor to **re-issue** the license |
+| Unknown / unrecognized `kid` | License signed with a key this `superd` build does not embed yet (common after key rotation) | Run `super keyring` on the **same** `super` / `superd` version you deploy; upgrade to an official release that includes that `kid`, or keep your previous license file until you upgrade |
+| Signature mismatch for a listed `kid` | Wrong, truncated, or tampered key string | Restore the exact key from your vendor portal; avoid editing `[license].key` |
+| Expired or version out of range | Policy or Super version span | Renew or upgrade per your subscription terms — see [feature matrix](/docs/07-editions/feature-matrix/) |
+
+Official release binaries may embed **more** verifying keys than a local `cargo build` from git alone. Compare against the release you actually run in production, not only a dev build.
+
 ## Enabling Authentication (Subscription)
 
 1. Add a valid `[license].key` in `conf/super.toml` (must authorize `security` — included with every subscription).

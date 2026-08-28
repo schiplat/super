@@ -160,21 +160,21 @@ super shutdown
 ```
 
 ### `doctor`
-One-shot diagnostics: config check, daemon health, license status, and local `[server].daemon` / pidfile hints (systemd conflict, stale pidfile).
+One-shot diagnostics: config check (`super check` output), daemon health, license status, a **Verifying keys** summary line (same ids as [`super keyring`](#keyring)), and local `[server].daemon` / pidfile hints (systemd conflict, stale pidfile). See [Troubleshooting license verification](/docs/05-advanced-management/authentication#troubleshooting-license-verification).
 
 ```bash
 super doctor
 ```
 
 ### `check`
-Validate `super.toml` (syntax, bind, licensed-mode requirements) without requiring a running daemon.
+Validate `super.toml` **without a running daemon**: TOML syntax, bind/port, log/data paths, licensed-mode requirements, `[include]` JSON stacks (`StackApplyRequest`, including the same program-body checks as create), and rejected leftovers (`[webhook]`, `[[program]]` tables that Super does not load). Include errors name the file and location: `path:line:col:` for JSON syntax, `path: services[i] (name=…): field:` for invalid services. Non-zero exit if any error is found. Use with [`super keyring`](#keyring) when diagnosing license verification failures.
 
 ```bash
 super check
 ```
 
 ### `keyring`
-List Ed25519 verifying key ids (`kid`) compiled into this `super` binary — one row per key, so multiple rotation keys are all visible. Each `kid` uses the `k_<8hex>` convention (first four bytes of the public key as hex). Use when a license fails with an unknown signing key or to compare a local build with an official release.
+List Ed25519 verifying key ids (`kid`) compiled into this `super` binary — one row per key, so multiple rotation keys are all visible. Each `kid` uses the `k_<8hex>` convention (first four bytes of the public key as hex). Suggested when a license fails with an unknown signing key or to compare a local build with an official release. See [Troubleshooting license verification](/docs/05-advanced-management/authentication#troubleshooting-license-verification).
 
 ```bash
 super keyring

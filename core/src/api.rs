@@ -3,8 +3,9 @@ use crate::config::ServerConfig;
 use axum::response::Response;
 use axum::{
     Json, Router,
+    body::Bytes,
     extract::{
-        DefaultBodyLimit, Extension, Path, Query, State, WebSocketUpgrade,
+        DefaultBodyLimit, Extension, FromRequest, Path, Query, Request, State, WebSocketUpgrade,
         ws::{Message, WebSocket},
     },
     http::StatusCode,
@@ -24,6 +25,7 @@ use crate::logger::{self, LogSource};
 
 use nix::sys::signal::Signal;
 use serde::Deserialize;
+use serde::de::DeserializeOwned;
 use tokio::sync::broadcast;
 use uuid::Uuid;
 
@@ -63,6 +65,41 @@ fn map_program_mutation_error(default: StatusCode, err: anyhow::Error) -> AppErr
         AppError(StatusCode::CONFLICT, err)
     } else {
         AppError(default, err)
+    }
+}
+
+/// JSON body with field path + line:column in the 400 message.
+struct LocatedJson<T>(T);
+
+impl<S, T> FromRequest<S> for LocatedJson<T>
+where
+    T: DeserializeOwned,
+    S: Send + Sync,
+{
+    type Rejection = AppError;
+
+    async fn from_request(req: Request, state: &S) -> Result<Self, Self::Rejection> {
+        let bytes = Bytes::from_request(req, state).await.map_err(|e| {
+            AppError(
+                StatusCode::BAD_REQUEST,
+                anyhow::anyhow!("request body: {e}"),
+            )
+        })?;
+        let mut de = serde_json::Deserializer::from_slice(&bytes);
+        match serde_path_to_error::deserialize(&mut de) {
+            Ok(value) => Ok(LocatedJson(value)),
+            Err(err) => {
+                let path = err.path().to_string();
+                let inner = err.inner();
+                let loc = format!("line {} column {}", inner.line(), inner.column());
+                let msg = if path.is_empty() || path == "." {
+                    format!("JSON {loc}: {inner}")
+                } else {
+                    format!("{path} (JSON {loc}): {inner}")
+                };
+                Err(AppError(StatusCode::BAD_REQUEST, anyhow::anyhow!("{msg}")))
+            }
+        }
     }
 }
 
@@ -290,18 +327,20 @@ async fn list_programs(
     request_body = CreateProgramRequest,
     responses(
         (status = 201, description = "Program created", body = Vec<Uuid>),
+        (status = 400, description = "Invalid program body (message names the field / JSON line:column)"),
+        (status = 409, description = "Program name already exists"),
         (status = 500, description = "Server error")
     )
 )]
 async fn create_program(
     State(state): State<AppState>,
-    Json(payload): Json<CreateProgramRequest>,
+    LocatedJson(payload): LocatedJson<CreateProgramRequest>,
 ) -> Result<(StatusCode, Json<Vec<Uuid>>), AppError> {
     let ids = state
         .manager
         .create_program(payload)
         .await
-        .map_err(|e| map_program_mutation_error(StatusCode::INTERNAL_SERVER_ERROR, e))?;
+        .map_err(|e| map_program_mutation_error(StatusCode::BAD_REQUEST, e))?;
     if ids.is_empty() {
         return Err(map_program_mutation_error(
             StatusCode::CONFLICT,
@@ -437,13 +476,13 @@ async fn start_program(
     request_body = UpdateProgramRequest,
     responses(
         (status = 200, description = "Program updated"),
-        (status = 400, description = "Bad request")
+        (status = 400, description = "Invalid program body (message names the field / JSON line:column)")
     )
 )]
 async fn update_program(
     State(state): State<AppState>,
     Path(id): Path<Uuid>,
-    Json(payload): Json<UpdateProgramRequest>,
+    LocatedJson(payload): LocatedJson<UpdateProgramRequest>,
 ) -> Result<StatusCode, AppError> {
     state
         .manager
@@ -724,12 +763,13 @@ async fn health_check(State(state): State<AppState>) -> Result<impl IntoResponse
     request_body = StackApplyRequest,
     responses(
         (status = 200, description = "Stack applied", body = Vec<String>),
+        (status = 400, description = "Invalid stack / program body (message names services[i] and the field)"),
         (status = 500, description = "Internal error")
     )
 )]
 async fn apply_stack(
     State(state): State<AppState>,
-    Json(payload): Json<StackApplyRequest>,
+    LocatedJson(payload): LocatedJson<StackApplyRequest>,
 ) -> Result<Json<Vec<String>>, AppError> {
     let logs = state
         .manager

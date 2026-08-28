@@ -255,6 +255,50 @@ async fn test_duplicate_program_name_rejected() {
 }
 
 #[tokio::test]
+async fn test_create_rejects_empty_command() {
+    let (handle, _tmp, _notify) = setup_manager().await;
+
+    let err = handle
+        .create_program(common::CreateProgramRequest {
+            name: Some("empty-cmd".to_string()),
+            command: "   ".to_string(),
+            autostart: false,
+            ..Default::default()
+        })
+        .await
+        .unwrap_err();
+    assert!(
+        err.to_string().contains("command:"),
+        "expected command validation error, got: {err}"
+    );
+    assert!(
+        err.to_string().contains("empty-cmd"),
+        "expected program name in error, got: {err}"
+    );
+}
+
+#[tokio::test]
+async fn test_stack_validation_names_service_index() {
+    let (handle, _tmp, _notify) = setup_manager().await;
+
+    let err = handle
+        .apply_stack(common::StackApplyRequest {
+            services: vec![common::CreateProgramRequest {
+                name: Some("web".to_string()),
+                command: "  ".to_string(),
+                autostart: false,
+                ..Default::default()
+            }],
+            prune: false,
+        })
+        .await
+        .unwrap_err();
+    let msg = err.to_string();
+    assert!(msg.contains("services[0] (name=web)"), "got: {msg}");
+    assert!(msg.contains("command:"), "got: {msg}");
+}
+
+#[tokio::test]
 async fn test_duplicate_names_in_stack_rejected() {
     let (handle, _tmp, _notify) = setup_manager().await;
 

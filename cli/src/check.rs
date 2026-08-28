@@ -5,8 +5,9 @@ use common::config::{
 use common::is_loopback_bind_host;
 use common::resolve_super_root_for_config;
 use common::{
-    licensed_deployment_intent, resolve_license_strict, scan_plugin_stems,
-    verify_license_for_superd,
+    StackApplyRequest, format_serde_json_error, licensed_deployment_intent, resolve_license_strict,
+    scan_plugin_stems, validate_create_program_request, verify_license_for_superd,
+    with_program_location,
 };
 use std::fs;
 use std::net::TcpListener;
@@ -33,8 +34,8 @@ pub fn run(file_path: Option<PathBuf>) -> anyhow::Result<()> {
     let config: ServerConfig = match toml::from_str(&content) {
         Ok(c) => c,
         Err(e) => {
-            eprintln!("TOML Syntax Error: {}", e);
-            return Err(anyhow::anyhow!("Invalid config format"));
+            eprintln!("TOML syntax error in {}: {}", path.display(), e);
+            return Err(anyhow::anyhow!("invalid super.toml: {e}"));
         }
     };
 
@@ -45,6 +46,13 @@ pub fn run(file_path: Option<PathBuf>) -> anyhow::Result<()> {
 
     if legacy_webhook_section_present(&content) {
         errors.push(LEGACY_WEBHOOK_SECTION_MSG.to_string());
+    }
+    if stray_program_tables_in_toml(&content) {
+        errors.push(
+            "[[program]] / [[programs]] in super.toml is ignored — programs load from \
+             [include] JSON (conf/conf.d/*.json), the API, or data/snapshot.json."
+                .into(),
+        );
     }
 
     // 3. Check server config (port availability and privileges)
@@ -172,26 +180,15 @@ pub fn run(file_path: Option<PathBuf>) -> anyhow::Result<()> {
         }
     }
 
-    // 6. Check include config (glob patterns)
-    if !config.include.files.is_empty() {
-        println!(
-            "   Includes:    Found {} patterns",
-            config.include.files.len()
-        );
-        for pattern in &config.include.files {
-            match glob::glob(pattern) {
-                Err(_) => errors.push(format!("Invalid glob pattern: {}", pattern)),
-                Ok(paths) => {
-                    let count = paths.count();
-                    if count == 0 {
-                        println!("     - '{}': No matching files (Warning)", pattern);
-                    } else {
-                        println!("     - '{}': Matches {} files", pattern, count);
-                    }
-                }
-            }
-        }
-    }
+    // 6. Include globs + JSON stack syntax (daemon skips invalid include files)
+    let root = resolve_super_root_for_config(&path);
+    check_include_stacks(
+        &root,
+        &config.include.files,
+        &config.storage.log_dir,
+        &mut errors,
+        &mut warnings,
+    );
 
     // 7. Print summary
     if !warnings.is_empty() {
@@ -245,6 +242,100 @@ fn check_ancestor_writable(target_path: &Path) -> (bool, PathBuf) {
 
     // Found an existing directory; check writability
     (is_writable(&current), current)
+}
+
+/// `[[program]]` in super.toml is not part of `ServerConfig` and is silently ignored.
+fn stray_program_tables_in_toml(content: &str) -> bool {
+    content.lines().any(|line| {
+        let header = line.split('#').next().unwrap_or("").trim();
+        header == "[[program]]" || header == "[[programs]]"
+    })
+}
+
+/// Resolve include globs like superd (`process_includes`) and parse each JSON stack.
+fn check_include_stacks(
+    root: &Path,
+    patterns: &[String],
+    log_dir: &Path,
+    errors: &mut Vec<String>,
+    warnings: &mut Vec<String>,
+) {
+    if patterns.is_empty() {
+        return;
+    }
+    println!("   Includes:    {} pattern(s)", patterns.len());
+    for pattern in patterns {
+        let pattern_path = Path::new(pattern);
+        let full_pattern = if pattern_path.is_relative() {
+            root.join(pattern).to_string_lossy().into_owned()
+        } else if pattern_path.starts_with(root) {
+            pattern.clone()
+        } else {
+            warnings.push(format!(
+                "Skipping include pattern outside SUPER_ROOT ({root}): {pattern}",
+                root = root.display()
+            ));
+            println!("     - '{pattern}': skipped (outside instance root)");
+            continue;
+        };
+
+        match glob::glob(&full_pattern) {
+            Err(_) => errors.push(format!("Invalid include glob: {pattern}")),
+            Ok(paths) => {
+                let matched: Vec<_> = paths.flatten().collect();
+                if matched.is_empty() {
+                    warnings.push(format!("Include glob matched no files: {pattern}"));
+                    println!("     - '{pattern}': no files");
+                    continue;
+                }
+                println!("     - '{pattern}': {} file(s)", matched.len());
+                for entry in matched {
+                    match fs::read_to_string(&entry) {
+                        Err(e) => {
+                            errors.push(format!("Cannot read include {}: {e}", entry.display()))
+                        }
+                        Ok(body) => match serde_json::from_str::<StackApplyRequest>(&body) {
+                            Ok(stack) => {
+                                if stack.services.is_empty() {
+                                    warnings.push(format!(
+                                        "{} has an empty services array",
+                                        entry.display()
+                                    ));
+                                } else {
+                                    let mut invalid = false;
+                                    for (i, svc) in stack.services.iter().enumerate() {
+                                        if let Err(e) =
+                                            validate_create_program_request(svc, log_dir)
+                                        {
+                                            invalid = true;
+                                            errors.push(format!(
+                                                "{}: {}",
+                                                entry.display(),
+                                                with_program_location(
+                                                    e,
+                                                    svc.name.as_deref(),
+                                                    Some(i)
+                                                )
+                                            ));
+                                        }
+                                    }
+                                    if !invalid {
+                                        println!(
+                                            "       {}: {} service(s) OK",
+                                            entry.display(),
+                                            stack.services.len()
+                                        );
+                                    }
+                                }
+                            }
+                            Err(e) => errors
+                                .push(format_serde_json_error(&entry.display().to_string(), &e)),
+                        },
+                    }
+                }
+            }
+        }
+    }
 }
 
 /// Resolve default config file path
@@ -409,6 +500,107 @@ mod tests {
             errors
                 .iter()
                 .any(|e| e.contains("allow_insecure_public_bind")),
+            "{errors:?}"
+        );
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn stray_program_tables_detected() {
+        assert!(stray_program_tables_in_toml("[[program]]\nname = \"x\"\n"));
+        assert!(stray_program_tables_in_toml("[[programs]]\n"));
+        assert!(!stray_program_tables_in_toml("# [[program]]\n[server]\n"));
+        assert!(!stray_program_tables_in_toml("[include]\nfiles = []\n"));
+    }
+
+    #[test]
+    fn include_json_syntax_error_is_reported() {
+        let dir = std::env::temp_dir().join(format!(
+            "super-check-inc-{}",
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        let confd = dir.join("conf").join("conf.d");
+        fs::create_dir_all(&confd).unwrap();
+        fs::write(confd.join("bad.json"), "{ not json ").unwrap();
+        let mut errors = Vec::new();
+        let mut warnings = Vec::new();
+        check_include_stacks(
+            &dir,
+            &["conf/conf.d/*.json".into()],
+            &dir.join("logs"),
+            &mut errors,
+            &mut warnings,
+        );
+        assert!(
+            errors
+                .iter()
+                .any(|e| e.contains("bad.json:") && e.contains(":1:")),
+            "{errors:?}"
+        );
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn include_json_valid_stack_ok() {
+        let dir = std::env::temp_dir().join(format!(
+            "super-check-inc-ok-{}",
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        let confd = dir.join("conf").join("conf.d");
+        fs::create_dir_all(&confd).unwrap();
+        fs::write(
+            confd.join("ok.json"),
+            r#"{"services":[{"name":"a","command":"/bin/true"}]}"#,
+        )
+        .unwrap();
+        let mut errors = Vec::new();
+        let mut warnings = Vec::new();
+        check_include_stacks(
+            &dir,
+            &["conf/conf.d/*.json".into()],
+            &dir.join("logs"),
+            &mut errors,
+            &mut warnings,
+        );
+        assert!(errors.is_empty(), "{errors:?}");
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn include_json_empty_command_is_reported() {
+        let dir = std::env::temp_dir().join(format!(
+            "super-check-inc-empty-{}",
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        let confd = dir.join("conf").join("conf.d");
+        fs::create_dir_all(&confd).unwrap();
+        fs::write(
+            confd.join("empty.json"),
+            r#"{"services":[{"name":"a","command":"  "}]}"#,
+        )
+        .unwrap();
+        let mut errors = Vec::new();
+        let mut warnings = Vec::new();
+        check_include_stacks(
+            &dir,
+            &["conf/conf.d/*.json".into()],
+            &dir.join("logs"),
+            &mut errors,
+            &mut warnings,
+        );
+        assert!(
+            errors.iter().any(|e| {
+                e.contains("services[0] (name=a)") && e.contains("command: must not be empty")
+            }),
             "{errors:?}"
         );
         let _ = fs::remove_dir_all(&dir);

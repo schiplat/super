@@ -14,6 +14,7 @@ pub mod plugin_async;
 pub mod plugin_error;
 pub mod plugin_http_abi;
 pub mod plugin_ui_abi;
+pub mod program_validate;
 pub mod resources;
 pub mod security;
 
@@ -45,6 +46,10 @@ pub use plugin_abi::{PLUGIN_API_VERSION, PLUGIN_SYMBOL, SuperPluginV1, read_plug
 pub use plugin_error::{set_last_plugin_error, take_last_plugin_error};
 pub use plugin_http_abi::{HTTP_PLUGIN_API_VERSION, HTTP_PLUGIN_SYMBOL, SuperPluginHttpV1};
 pub use plugin_ui_abi::{SuperPluginUiV1, UI_PLUGIN_API_VERSION, UI_PLUGIN_SYMBOL};
+pub use program_validate::{
+    format_serde_json_error, validate_artifact_config, validate_create_program_request,
+    validate_program_log_paths, validate_update_program_request, with_program_location,
+};
 pub use resources::ResourceLimits;
 
 // Helpers
@@ -265,6 +270,7 @@ pub struct ArtifactConfig {
 
 /// API request: create program
 #[derive(Debug, Deserialize, Serialize, Default, Clone, ToSchema)]
+#[serde(deny_unknown_fields)]
 pub struct CreateProgramRequest {
     pub name: Option<String>,
     pub command: String,
@@ -314,6 +320,7 @@ pub struct CreateProgramRequest {
 
 /// API request: update program (partial)
 #[derive(Debug, Deserialize, Serialize, Default, ToSchema)]
+#[serde(deny_unknown_fields)]
 pub struct UpdateProgramRequest {
     pub name: Option<String>,
     pub command: Option<String>,
