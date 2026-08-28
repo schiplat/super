@@ -1,58 +1,65 @@
 ---
 title: "vs PM2"
 weight: 2
-description: "Escape the Node.js runtime tax. Managing binaries with minimal overhead."
+description: "When PM2 is a Node.js process manager, and when Super is a better fit for mixed binaries."
 ---
 
-[PM2](https://pm2.keymetrics.io/) is an excellent process manager for the Node.js ecosystem. However, it is often misused as a general-purpose supervisor for Go, Python, or Java applications.
+[PM2](https://pm2.keymetrics.io/) is an excellent process manager for the Node.js ecosystem. It is often also used as a general-purpose supervisor for Go, Python, or Java applications.
 
-When used outside of Node.js, PM2 imposes a heavy **"Runtime Tax"**. Project Super offers a lighter, faster alternative.
+That second use case is where the tools diverge: PM2’s control plane runs on Node.js; Super’s daemon is a single native binary that treats every child the same, whether or not it is a Node app.
 
-## 1. The Memory Overhead
+## 1. Control-plane overhead
 
-PM2 is written in JavaScript and runs on top of Node.js. This means even if you are managing a tiny 2MB Go binary, you must run a Node.js virtual machine (the PM2 daemon) in the background.
+PM2 is written in JavaScript and runs on Node.js. Managing a small native binary still means running a Node.js VM (the PM2 God daemon, and typically `pm2-agent`) in the background.
 
-**Benchmark: Idle Daemon Memory Usage**
+Super’s daemon is a Rust binary with no JavaScript runtime. **Idle RSS still depends on OS, version, how many children you manage, and whether licensed plugins are loaded** — it is not a single number. Do not treat any megabyte range on this page as a measurement.
 
-| Process Manager | Memory Footprint (RSS) | Overhead |
-| :--- | :--- | :--- |
-| **PM2 (Node.js)** | ~40 MB - 100 MB | High |
-| **Project Super (Rust)** | **~3 MB - 8 MB** | **Minimal** |
+A dated, same-workload comparison (OSS Super, licensed Super, `supervisord`, and PM2) lives in the in-tree [benchmark plan](https://github.com/hzbd/super/tree/master/benchmark). Until that lab publishes a snapshot, compare the tools on your own host rather than quoting a marketing RSS figure.
 
-For memory-constrained environments (like t3.micro instances, Raspberry Pis, or high-density containers), running PM2 is wasteful.
+## 2. Resource limits (cgroups)
 
-## 2. Resource Limits (Cgroups)
+PM2 generally relies on the OS or Docker for CPU and memory caps. It does not enforce Linux cgroups itself.
 
-PM2 generally relies on the OS or Docker to handle resource limits. It does not have native support for strictly limiting a child process's CPU or Memory usage via Linux Cgroups.
-
-**Super** integrates natively with Linux Cgroups v2:
+OSS Super **stores** optional `resource_limits` on a program but **does not enforce** them. Linux cgroup v2 CPU/memory limits require the subscription **`isolation` plugin** on Linux. See [Resource Isolation](/docs/05-advanced-management/resource-isolation) and the [feature matrix](/docs/07-editions/feature-matrix).
 
 ```toml
-# super.toml
-[programs.resource_limits]
-memory_limit = 268435456 # 256MB
-cpu_quota = 25.0         # 0.25 Core
+# Stored on the program; enforced only when the isolation plugin is loaded on Linux.
+# Example shape — check the config reference for the current schema.
 ```
 
-If your worker process leaks memory, Super's Cgroup enforcement will kill it before it crashes the entire server. PM2 cannot do this directly.
+```json
+{
+  "name": "worker",
+  "command": "/usr/local/bin/worker",
+  "resource_limits": {
+    "memory_limit": 268435456,
+    "cpu_quota": 25.0
+  }
+}
+```
 
-## 3. Language Agnostic
+Without that plugin, Super logs that limits are stored only. Do not describe cgroup enforcement as an OSS built-in.
 
-PM2 treats non-Node applications as "fork mode" citizens. Advanced features like "cluster mode" (load balancing) only work for Node.js scripts.
+## 3. Language agnostic
 
-**Super** treats **all** binaries equally. Whether it's a Rust binary, a Python script, or a Java JAR, they all get:
-*   Unified Logging
-*   Health Checks
-*   Graceful Shutdown
-*   Dependency Orchestration
+PM2 treats non-Node applications as fork-mode processes. Cluster mode (in-process load balancing) applies to Node.js scripts.
 
-## 4. Log Rotation
+Super treats **all** binaries the same. A Rust binary, a Python script, or a Java JAR all get:
 
-PM2 requires installing an extra module (`pm2-logrotate`) to handle log rotation.
+* Unified logging
+* Health checks
+* Graceful shutdown
+* Dependency orchestration
 
-**Super** has [Log Rotation](/docs/02-essentials/logging) built into the core. You don't need to install plugins or manage external dependencies to keep your disk from filling up.
+## 4. Log rotation
+
+PM2 needs an extra module (`pm2-logrotate`) for rotation.
+
+Super rotates child logs in the OSS daemon. You do not install a plugin to keep disks from filling up. See [Logging](/docs/02-essentials/logging).
 
 ## Summary
 
-*   **Stick with PM2** if you are running a pure Node.js stack and need the specific "Cluster Mode" for zero-downtime Node.js reloads.
-*   **Switch to Super** if you are running Go, Rust, Python, Java, or a mix of languages, and want to save ~50MB of RAM per instance while gaining better isolation features.
+* **Stick with PM2** if you run a Node.js stack and want cluster mode for zero-downtime Node reloads.
+* **Look at Super** if you manage mixed binaries (Go, Rust, Python, Java, or a combination) and want a native control plane, built-in log rotation, and — with a subscription on Linux — optional cgroup limits.
+
+Do not cite a fixed “saves N MB per instance” figure from this page. Measure on your hardware, or wait for a published benchmark snapshot with versions and methodology.
