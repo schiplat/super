@@ -5,6 +5,7 @@ mod config;
 mod display;
 mod doctor;
 mod handlers;
+mod keyring;
 mod session;
 mod top;
 
@@ -23,6 +24,10 @@ async fn main() -> anyhow::Result<()> {
     // Handle Check command (no HTTP client required)
     if let Commands::Check { file } = &args.command {
         return check::run(file.clone());
+    }
+
+    if let Commands::Keyring { json } = &args.command {
+        return keyring::run(*json);
     }
 
     if let Some(s) = args.server {

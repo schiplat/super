@@ -160,7 +160,7 @@ entries = data.get("entries") or []
 if not entries:
     sys.exit("ERROR: keyring has no entries")
 
-# Cumulative ring: never delete existing *.public.key (or legacy public.key).
+# Cumulative ring: never delete existing *.public.key.
 # Only upsert kids returned by Manager so old verifying keys stay embeddable.
 added = updated = unchanged = 0
 for e in entries:
@@ -197,9 +197,6 @@ print(
 print(f"==> keys directory (build tree): {oss}")
 for path in sorted(oss.glob("*.public.key")):
     print(f"  present {path.name} ({path.stat().st_size} bytes)")
-legacy = oss / "public.key"
-if legacy.is_file():
-    print(f"  present {legacy.name} ({legacy.stat().st_size} bytes)")
 print(
     "==> Release CI: these files are for this build only. "
     "Do not commit unless deliberately curating a key into the repo."

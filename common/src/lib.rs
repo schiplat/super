@@ -34,7 +34,9 @@ pub use auth::{
     UserContext, UserRole,
 };
 pub use license::{
-    LICENSE_TRIAL_URL, LICENSE_UPGRADE_URL, LicenseClaims, LicenseExpiryStatus, LicenseInfo,
+    EmbeddedVerifyingKeyInfo, LICENSE_TRIAL_URL, LICENSE_UPGRADE_URL, LicenseClaims,
+    LicenseExpiryStatus, LicenseInfo, embedded_keyring_summary, embedded_verifying_key_ids,
+    embedded_verifying_keys, format_keyring_summary, kid_for_public_bytes,
     license_degradation_refusal_message, license_expiry_status, license_help_footer,
     licensed_deployment_intent, resolve_license_strict, scan_plugin_stems,
     should_refuse_license_degradation, verify_license, verify_license_for_superd,

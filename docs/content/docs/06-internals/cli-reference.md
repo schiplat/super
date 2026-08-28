@@ -173,6 +173,14 @@ Validate `super.toml` (syntax, bind, licensed-mode requirements) without requiri
 super check
 ```
 
+### `keyring`
+List Ed25519 verifying key ids (`kid`) compiled into this `super` binary — one row per key, so multiple rotation keys are all visible. Each `kid` uses the `k_<8hex>` convention (first four bytes of the public key as hex). Use when a license fails with an unknown signing key or to compare a local build with an official release.
+
+```bash
+super keyring
+super keyring --json
+```
+
 ## Security (requires `security` plugin 💎)
 
 When the `security` plugin is loaded, use the same `super` CLI:

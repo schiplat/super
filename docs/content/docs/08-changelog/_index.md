@@ -13,10 +13,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- `super keyring` lists license verifying key ids embedded in the CLI binary; `super doctor` prints the same summary line.
 - `[license].strict` and deployment-intent detection: invalid keys refuse startup when `strict = true`, plugin libraries are present, `auth_secret` is set, or bind is non-loopback; otherwise OSS degrade with warnings (`SUPER_LICENSE_STRICT` env override).
 
 ### Changed
 - `super check` reports invalid license as an error when strict or licensed deployment signals apply.
+- License verification requires a `kid` claim on every license; the legacy `v1` kid and compile-time fallback are removed. Signing key ids use `k_<8hex>` (derived from the Ed25519 public key). Re-issue licenses from your vendor if verification fails with “missing signing key id”.
 
 ---
 

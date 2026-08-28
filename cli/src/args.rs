@@ -289,6 +289,13 @@ pub enum Commands {
 
     /// Diagnose local setup and a running daemon (config, connectivity, license)
     Doctor,
+
+    /// List license verifying key ids embedded in this super binary (compile-time keyring)
+    Keyring {
+        /// Output JSON (for scripts / monitoring)
+        #[arg(long)]
+        json: bool,
+    },
 }
 
 #[derive(Subcommand)]

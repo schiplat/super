@@ -8,8 +8,7 @@ pub struct LicenseClaims {
     /// Product this key belongs to (e.g. `super-pro`). Absent on legacy keys = Super Pro.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub product_id: Option<String>,
-    /// Signing-key generation id (e.g. `v1`). Absent on legacy keys = default embedded key.
-    /// Used so older superd builds can explain unknown keys and suggest upgrade vs keep-old-license.
+    /// Signing-key id (e.g. `k_0ac64a3f`) — required on all new licenses; must match a key in superd's compile-time ring.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub kid: Option<String>,
     pub issued_to: String,

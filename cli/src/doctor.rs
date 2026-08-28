@@ -8,13 +8,15 @@ use crate::client;
 use colored::Colorize;
 use common::config::{ServerConfig, resolve_license_key};
 use common::{
-    HealthResponse, LicenseInfo, PidfileStatus, inspect_pidfile, pidfile_parent_unwritable,
-    resolve_pidfile_path, resolve_super_root, under_systemd, verify_license_for_superd,
+    HealthResponse, LicenseInfo, PidfileStatus, embedded_keyring_summary, inspect_pidfile,
+    pidfile_parent_unwritable, resolve_pidfile_path, resolve_super_root, under_systemd,
+    verify_license_for_superd,
 };
 
 pub async fn run(base_url: &str, token: Option<&String>) -> anyhow::Result<()> {
     println!("{}", "Super Doctor".bold());
     println!("   CLI version:     {}", env!("CARGO_PKG_VERSION"));
+    println!("   Verifying keys:  {}", embedded_keyring_summary().cyan());
 
     // 1. Config file validation (reuse `super check`; it prints its own report).
     println!("\n{}", "== Configuration ==".bold());
