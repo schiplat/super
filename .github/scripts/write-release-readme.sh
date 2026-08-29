@@ -62,9 +62,9 @@ from a subscription package provides the full web dashboard.
 
 Source & documentation
 ----------------------
-  Upstream:  https://github.com/hzbd/super
+  Upstream:  https://github.com/schiplat/super
   Docs:      https://super.docs.sconts.com/docs/
-  Release:   https://github.com/hzbd/super/releases/tag/v${version}
+  Release:   https://github.com/schiplat/super/releases/tag/v${version}
   License:   MIT License
 
 Built by the Project Super GitHub Actions release workflow from tag v${version}.

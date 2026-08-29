@@ -71,7 +71,7 @@ To build a custom extension, compile your own binary linking against `super-core
 
 ```toml
 [dependencies]
-super-core = { git = "https://github.com/hzbd/super" }
+super-core = { git = "https://github.com/schiplat/super" }
 ```
 
 In your `main.rs`:

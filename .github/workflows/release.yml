@@ -1,6 +1,6 @@
 # Builds release archives. Fetches Manager verifying keyring before compile.
-# Configure secrets: MANAGER_BASE, MANAGER_PATH_PREFIX, MANAGER_TOKEN, PRODUCT_ID.
-# Daily make build / CI use committed common/keys/*.public.key only.
+# Variables: SUPER_MANAGER_BASE, SUPER_MANAGER_PATH_PREFIX, SUPER_PRODUCT_ID.
+# Secret: SUPER_MANAGER_TOKEN. Daily make build / CI use committed common/keys/*.public.key only.
 name: Release
 
 on:
@@ -64,10 +64,10 @@ jobs:
 
       - name: Fetch verifying keys from Manager
         env:
-          MANAGER_BASE: ${{ secrets.MANAGER_BASE }}
-          MANAGER_PATH_PREFIX: ${{ secrets.MANAGER_PATH_PREFIX }}
-          MANAGER_TOKEN: ${{ secrets.MANAGER_TOKEN }}
-          PRODUCT_ID: ${{ secrets.PRODUCT_ID }}
+          SUPER_MANAGER_BASE: ${{ vars.SUPER_MANAGER_BASE }}
+          SUPER_MANAGER_PATH_PREFIX: ${{ vars.SUPER_MANAGER_PATH_PREFIX }}
+          SUPER_MANAGER_TOKEN: ${{ secrets.SUPER_MANAGER_TOKEN }}
+          SUPER_PRODUCT_ID: ${{ vars.SUPER_PRODUCT_ID }}
           REQUIRE_MANAGER_KEYRING: '1'
         run: bash .github/scripts/fetch-verifying-keys.sh
 
@@ -99,10 +99,10 @@ jobs:
 
       - name: Fetch verifying keys from Manager
         env:
-          MANAGER_BASE: ${{ secrets.MANAGER_BASE }}
-          MANAGER_PATH_PREFIX: ${{ secrets.MANAGER_PATH_PREFIX }}
-          MANAGER_TOKEN: ${{ secrets.MANAGER_TOKEN }}
-          PRODUCT_ID: ${{ secrets.PRODUCT_ID }}
+          SUPER_MANAGER_BASE: ${{ vars.SUPER_MANAGER_BASE }}
+          SUPER_MANAGER_PATH_PREFIX: ${{ vars.SUPER_MANAGER_PATH_PREFIX }}
+          SUPER_MANAGER_TOKEN: ${{ secrets.SUPER_MANAGER_TOKEN }}
+          SUPER_PRODUCT_ID: ${{ vars.SUPER_PRODUCT_ID }}
           REQUIRE_MANAGER_KEYRING: '1'
         run: bash .github/scripts/fetch-verifying-keys.sh
 

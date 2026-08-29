@@ -49,12 +49,12 @@ If you add licensed plugins, **`security.so` and `auth_secret` are required** fo
 ### Build from this repository
 
 ```bash
-git clone https://github.com/hzbd/super.git
+git clone https://github.com/schiplat/super.git
 cd super
 docker build -f dockerbuild/Dockerfile -t containerpi/super:latest .
 ```
 
-Or: `make docker`. See [dockerbuild/README.md](https://github.com/hzbd/super/blob/master/dockerbuild/README.md) for publish notes.
+Or: `make docker`. See [dockerbuild/README.md](https://github.com/schiplat/super/blob/master/dockerbuild/README.md) for publish notes.
 
 ### Use as a base image in your stack
 
@@ -76,7 +76,7 @@ For container signal handling and `tini` guidance, see [Zombie reaping in contai
 
 ## Method 2: GitHub Releases or build from source
 
-Pre-built archives are published on [GitHub Releases](https://github.com/hzbd/super/releases). Extract and run `bin/superd`.
+Pre-built archives are published on [GitHub Releases](https://github.com/schiplat/super/releases). Extract and run `bin/superd`.
 
 | Archive | Platform |
 | :--- | :--- |
@@ -93,7 +93,7 @@ Each archive contains `bin/superd`, `bin/super`, and a `README` with quick-start
 To build locally (requires **Rust 1.85+**):
 
 ```bash
-git clone https://github.com/hzbd/super.git
+git clone https://github.com/schiplat/super.git
 cd super
 make build
 

@@ -4,7 +4,7 @@ Thank you for your interest in contributing to **Project Super** (OSS, MIT).
 
 ## Getting started
 
-1. Fork [hzbd/super](https://github.com/hzbd/super) and clone your fork.
+1. Fork [schiplat/super](https://github.com/schiplat/super) and clone your fork.
 2. Install [Rust](https://rust.rust-lang.org/tools/install) **1.85 or newer** (stable; required for edition 2024).
 3. Build: `make build` (`superd` + `super` CLI).
 4. Run tests: `cargo test --workspace` and `cargo clippy --workspace --all-targets -- -D warnings`.
@@ -61,10 +61,10 @@ Before opening a PR that touches docs or license-related code, confirm the chang
 | GitHub **Release** (`v*` tag) | CI runs `fetch-verifying-keys.sh` before compile — upserts Manager’s live ring onto the checkout for **that build only** |
 | `make fetch-keys` | Local/debug against Manager; **do not** routinely commit the output |
 
-Committed keys are whatever maintainers **explicitly** place under `common/keys/`. Official release binaries additionally embed whatever Manager returns at tag time (without deleting the curated files in the job workspace). Required Release secrets: `MANAGER_BASE`, `MANAGER_PATH_PREFIX`, `MANAGER_TOKEN`, `PRODUCT_ID` (**no script defaults**).
+Committed keys are whatever maintainers **explicitly** place under `common/keys/`. Official release binaries additionally embed whatever Manager returns at tag time (without deleting the curated files in the job workspace). Required Release **variables**: `SUPER_MANAGER_BASE`, `SUPER_MANAGER_PATH_PREFIX`, `SUPER_PRODUCT_ID`; **secret**: `SUPER_MANAGER_TOKEN` (**no script defaults**).
 
 To add or retire a verifying key in git, copy/remove the 32-byte `*.public.key` file by hand and commit — do not treat `make fetch-keys` as the source of truth for the repo.
 
 ## Questions
 
-Open a [GitHub Discussion](https://github.com/hzbd/super/discussions) or an issue for design questions before large refactors.
+Open a [GitHub Discussion](https://github.com/schiplat/super/discussions) or an issue for design questions before large refactors.

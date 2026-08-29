@@ -42,7 +42,7 @@ FROM gcr.io/distroless/cc-debian13:nonroot
 
 LABEL org.opencontainers.image.title="Project Super"
 LABEL org.opencontainers.image.description="API-first process orchestrator (OSS)"
-LABEL org.opencontainers.image.source="https://github.com/hzbd/super"
+LABEL org.opencontainers.image.source="https://github.com/schiplat/super"
 LABEL org.opencontainers.image.vendor="623"
 
 COPY --from=tini /usr/bin/tini /usr/bin/tini

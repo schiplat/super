@@ -29,7 +29,7 @@ pub const LICENSE_UPGRADE_URL: &str =
 
 /// Free 1-year Pro trial during public beta (GitHub Issue template).
 pub const LICENSE_TRIAL_URL: &str =
-    "https://github.com/hzbd/super/issues/new?template=pro-trial.yml";
+    "https://github.com/schiplat/super/issues/new?template=pro-trial.yml";
 
 /// Short footer for CLI / log messages when license verification fails.
 pub fn license_help_footer() -> String {

@@ -93,7 +93,7 @@ fn main() {
                 }
                 allocated += chunk_size;
                 held.push(chunk);
-                if held.len() % 8 == 0 {
+                if held.len().is_multiple_of(8) {
                     println!("Allocated: {} MB", allocated / (1024 * 1024));
                 }
                 thread::sleep(Duration::from_millis(100));

@@ -11,7 +11,7 @@ One subscription unlocks the official plugin set on the same **`superd`** / **`s
 - **notify** — webhooks
 - **isolation** — Linux cgroup limits
 
-Compare editions in the [feature matrix](/docs/07-editions/feature-matrix/). During public beta you can also request a **[free 1-year Pro trial](https://github.com/hzbd/super/issues/new?template=pro-trial.yml)** (no payment). After purchase or trial fulfillment you receive the plugin archive for your platform, a license key, and a short config snippet (`[license].key` + `auth_secret`).
+Compare editions in the [feature matrix](/docs/07-editions/feature-matrix/). During public beta you can also request a **[free 1-year Pro trial](https://github.com/schiplat/super/issues/new?template=pro-trial.yml)** (no payment). After purchase or trial fulfillment you receive the plugin archive for your platform, a license key, and a short config snippet (`[license].key` + `auth_secret`).
 
 ## Checkout
 

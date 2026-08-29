@@ -8,8 +8,9 @@
 #   unless a maintainer deliberately curates a key into the repo by hand.
 # - make build / PR CI: never call this — embed only committed (hand-picked) keys.
 #
-# Env (all required — no script defaults; Release CI → hzbd/super Actions secrets):
-#   MANAGER_BASE, MANAGER_PATH_PREFIX, MANAGER_TOKEN, PRODUCT_ID
+# Env (all required — no script defaults):
+#   SUPER_MANAGER_BASE, SUPER_MANAGER_PATH_PREFIX, SUPER_MANAGER_TOKEN, SUPER_PRODUCT_ID
+#   Release CI: non-secrets → schiplat/super Actions variables; SUPER_MANAGER_TOKEN → secret.
 # Also: REQUIRE_MANAGER_KEYRING
 #
 # Also loads KEY=VALUE from repo-root `.env` when present (gitignored).
@@ -59,8 +60,8 @@ fail_or_skip() {
   local msg="$1"
   if require_on; then
     echo "ERROR: $msg (REQUIRE_MANAGER_KEYRING is set)" >&2
-    echo "Hint: set all of MANAGER_BASE, MANAGER_PATH_PREFIX, MANAGER_TOKEN, PRODUCT_ID" >&2
-    echo "      (env, super/.env, or hzbd/super Actions secrets). No script defaults." >&2
+    echo "Hint: set all of SUPER_MANAGER_BASE, SUPER_MANAGER_PATH_PREFIX, SUPER_MANAGER_TOKEN, SUPER_PRODUCT_ID" >&2
+    echo "      (env, super/.env, or schiplat/super Actions vars + SUPER_MANAGER_TOKEN secret). No script defaults." >&2
     echo "      OSS contributors: skip this script; make build uses committed keys." >&2
     exit 1
   fi
@@ -68,23 +69,23 @@ fail_or_skip() {
   exit 0
 }
 
-# Required — no defaults (empty Actions secrets must fail closed).
-token="${MANAGER_TOKEN:-}"
-base="${MANAGER_BASE:-}"
-prefix_raw="${MANAGER_PATH_PREFIX:-}"
-PRODUCT_ID="${PRODUCT_ID:-}"
+# Required — no defaults (empty Actions vars/secrets must fail closed).
+token="${SUPER_MANAGER_TOKEN:-}"
+base="${SUPER_MANAGER_BASE:-}"
+prefix_raw="${SUPER_MANAGER_PATH_PREFIX:-}"
+SUPER_PRODUCT_ID="${SUPER_PRODUCT_ID:-}"
 
 if [[ -z "${token// }" ]]; then
-  fail_or_skip "MANAGER_TOKEN is not set"
+  fail_or_skip "SUPER_MANAGER_TOKEN is not set"
 fi
 if [[ -z "${base// }" ]]; then
-  fail_or_skip "MANAGER_BASE is not set"
+  fail_or_skip "SUPER_MANAGER_BASE is not set"
 fi
 if [[ -z "${prefix_raw// }" ]]; then
-  fail_or_skip "MANAGER_PATH_PREFIX is not set"
+  fail_or_skip "SUPER_MANAGER_PATH_PREFIX is not set"
 fi
-if [[ -z "${PRODUCT_ID// }" ]]; then
-  fail_or_skip "PRODUCT_ID is not set"
+if [[ -z "${SUPER_PRODUCT_ID// }" ]]; then
+  fail_or_skip "SUPER_PRODUCT_ID is not set"
 fi
 
 base="${base%/}"
@@ -102,19 +103,19 @@ done
 prefix_raw="${prefix_raw#/}"
 prefix_raw="${prefix_raw%/}"
 if [[ -z "$prefix_raw" || "$prefix_raw" == *"/"* ]]; then
-  fail_or_skip "MANAGER_PATH_PREFIX must be a single path segment (got '${MANAGER_PATH_PREFIX}')"
+  fail_or_skip "SUPER_MANAGER_PATH_PREFIX must be a single path segment (got '${SUPER_MANAGER_PATH_PREFIX}')"
 fi
 prefix="/${prefix_raw}"
-# Footgun: MANAGER_BASE=https://host/pi + PREFIX=pi → /pi/pi/api/...
+# Footgun: SUPER_MANAGER_BASE=https://host/+ PREFIX=pi → /pi/api/...
 if [[ "$base" == *"$prefix" ]]; then
-  echo "NOTICE: MANAGER_BASE already ends with ${prefix} — stripping so path is not doubled" >&2
+  echo "NOTICE: SUPER_MANAGER_BASE already ends with ${prefix} — stripping so path is not doubled" >&2
   base="${base%"$prefix"}"
   base="${base%/}"
 fi
 api_root="${base}${prefix}/api/v1"
 mkdir -p "$OSS_KEYS"
 
-url="${api_root}/products/${PRODUCT_ID}/public-keyring"
+url="${api_root}/products/${SUPER_PRODUCT_ID}/public-keyring"
 echo "==> GET ${url}"
 tmp="$(mktemp)"
 trap 'rm -f "$tmp"' EXIT
@@ -132,20 +133,20 @@ preview="$(printf '%s' "$json" | tr '\n' ' ' | head -c 240)"
 if [[ "$http_code" != "200" ]]; then
   fail_or_skip "Manager keyring HTTP ${http_code} — body: ${preview:-<empty>}
 Hint: product must exist with a 32-byte private_key; token needs products.read.
-      MANAGER_BASE=scheme://host (no path prefix); set MANAGER_PATH_PREFIX separately"
+      SUPER_MANAGER_BASE=scheme://host (no path prefix); set SUPER_MANAGER_PATH_PREFIX separately"
 fi
 
 if [[ -z "$json" ]]; then
   fail_or_skip "Manager keyring returned empty body (HTTP 200)
-Hint: check MANAGER_BASE / MANAGER_PATH_PREFIX (avoid doubling the path prefix)"
+Hint: check SUPER_MANAGER_BASE / SUPER_MANAGER_PATH_PREFIX (avoid doubling the path prefix)"
 fi
 
 if ! printf '%s' "$json" | python3 -c 'import json,sys; json.load(sys.stdin)' 2>/dev/null; then
   fail_or_skip "Manager keyring response is not JSON (HTTP ${http_code}) — body: ${preview:-<empty>}
-Hint: wrong URL often returns Admin SPA HTML; do not put the path prefix in MANAGER_BASE"
+Hint: wrong URL often returns Admin SPA HTML; do not put the path prefix in SUPER_MANAGER_BASE"
 fi
 
-PRODUCT_ID="$PRODUCT_ID" OSS_KEYS="$OSS_KEYS" python3 - "$json" <<'PY'
+SUPER_PRODUCT_ID="$SUPER_PRODUCT_ID" OSS_KEYS="$OSS_KEYS" python3 - "$json" <<'PY'
 import base64, json, os, sys
 from pathlib import Path
 
@@ -154,7 +155,7 @@ def sanitize(raw: str) -> str:
     return s or "_"
 
 data = json.loads(sys.argv[1])
-product_id = os.environ["PRODUCT_ID"]
+product_id = os.environ["SUPER_PRODUCT_ID"]
 oss = Path(os.environ["OSS_KEYS"])
 entries = data.get("entries") or []
 if not entries:

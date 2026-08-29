@@ -56,7 +56,7 @@ Super defaults to **restrictive, fail-closed** behaviour in OSS. You can opt int
 | **API responses** | Env keys matching `SECRET`, `PASSWORD`, `TOKEN`, `KEY`, `CREDENTIAL` are masked | See [Environment & Secrets](/docs/02-essentials/environment-secrets) |
 | **Swagger UI** | Off by default (`enable_docs = false`); when on, served at `/api/docs` | Set `enable_docs = true` only on trusted localhost setups |
 
-See [Authentication](/docs/05-advanced-management/authentication#licensed-deployments-require-security) and [SECURITY.md](https://github.com/hzbd/super/blob/master/SECURITY.md) for the full OSS security model.
+See [Authentication](/docs/05-advanced-management/authentication#licensed-deployments-require-security) and [SECURITY.md](https://github.com/schiplat/super/blob/master/SECURITY.md) for the full OSS security model.
 
 ## Program Configuration
 

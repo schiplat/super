@@ -1,7 +1,7 @@
 blank_issues_enabled: true
 contact_links:
   - name: Security vulnerability
-    url: https://github.com/hzbd/super/security/policy
+    url: https://github.com/schiplat/super/security/policy
     about: Please do NOT report vulnerabilities via public issues — email support@ddl.sconts.com (see SECURITY.md).
   - name: Documentation
     url: https://super.docs.sconts.com/

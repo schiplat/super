@@ -1,12 +1,12 @@
 # Published documentation
 
-This folder holds the **published documentation** for [Project Super](https://github.com/hzbd/super) (Community Edition).
+This folder holds the **published documentation** for [Project Super](https://github.com/schiplat/super) (Community Edition).
 
 | | |
 | :--- | :--- |
 | **Live site** | https://super.docs.sconts.com/ |
-| **Source** | [`docs/`](https://github.com/hzbd/super/tree/master/docs) on the `master` branch |
-| **Deploy workflow** | [`.github/workflows/deploy-docs.yml`](https://github.com/hzbd/super/blob/master/.github/workflows/deploy-docs.yml) (GitHub Actions → Pages) |
+| **Source** | [`docs/`](https://github.com/schiplat/super/tree/master/docs) on the `master` branch |
+| **Deploy workflow** | [`.github/workflows/deploy-docs.yml`](https://github.com/schiplat/super/blob/master/.github/workflows/deploy-docs.yml) (GitHub Actions → Pages) |
 
 ## Do not edit published output directly
 

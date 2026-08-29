@@ -91,10 +91,10 @@ params:
     placeholder: "Search docs..."
   editURL:
     enable: true
-    base: "https://github.com/hzbd/super/edit/master/docs/content"
+    base: "https://github.com/schiplat/super/edit/master/docs/content"
   variables:
     repository:
-      home: github.com/hzbd/super
+      home: github.com/schiplat/super
 
 menu:
   sidebar:
@@ -105,7 +105,7 @@ menu:
       weight: 1
     - identifier: tryGithub
       name: "Try to ↗"
-      url: "https://github.com/hzbd/super"
+      url: "https://github.com/schiplat/super"
       weight: 2
   main:
     - identifier: docs
@@ -126,7 +126,7 @@ menu:
         type: language-switch
     - identifier: github
       name: GitHub
-      url: https://github.com/hzbd/super
+      url: https://github.com/schiplat/super
       weight: 5
       params:
         icon: github

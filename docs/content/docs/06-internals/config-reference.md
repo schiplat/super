@@ -11,7 +11,7 @@ description: "Complete schema for super.toml."
 | **💎 Subscription** | Requires valid `[license].key` in `conf/super.toml` and matching authorized plugin libraries. OSS ignores unknown subscription-only fields. |
 | *(no mark)* | Available in OSS (with or without plugins). |
 
-> **Public beta:** 💎 fields require a valid `[license].key` and matching plugin libraries. Pro plugins are available with a **free 1-year beta license** ([request via GitHub Issue](https://github.com/hzbd/super/issues/new?template=pro-trial.yml)). We recommend staging and non-critical workloads until GA; see the [feature matrix](/docs/07-editions/feature-matrix/).
+> **Public beta:** 💎 fields require a valid `[license].key` and matching plugin libraries. Pro plugins are available with a **free 1-year beta license** ([request via GitHub Issue](https://github.com/schiplat/super/issues/new?template=pro-trial.yml)). We recommend staging and non-critical workloads until GA; see the [feature matrix](/docs/07-editions/feature-matrix/).
 
 **Licensed-plugin fields in this reference** (quick index):
 

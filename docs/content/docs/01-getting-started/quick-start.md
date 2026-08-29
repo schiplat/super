@@ -25,7 +25,7 @@ allow_insecure_public_bind = false
 
 > **Note**: OSS has no API authentication. The default bind is `127.0.0.1` with `allow_insecure_public_bind = false`, so `superd` will **not** start on a public address (e.g. `0.0.0.0`) unless you deliberately set that flag to `true` or load the **`security` plugin** — see [Authentication](/docs/05-advanced-management/authentication). Use a firewall or reverse proxy if you expose the API another way.
 
-If you use the repo's [example config](https://github.com/hzbd/super/blob/master/example/conf/super.toml), it also binds to port **9002** — keep CLI/API URLs in sync with your `super.toml`.
+If you use the repo's [example config](https://github.com/schiplat/super/blob/master/example/conf/super.toml), it also binds to port **9002** — keep CLI/API URLs in sync with your `super.toml`.
 
 ## 2. Start the Daemon (OSS)
 

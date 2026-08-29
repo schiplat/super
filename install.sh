@@ -2,7 +2,7 @@
 # Install Project Super (superd + super CLI) from GitHub Releases.
 #
 # Usage:
-#   curl -fsSL https://raw.githubusercontent.com/hzbd/super/master/install.sh | sh
+#   curl -fsSL https://raw.githubusercontent.com/schiplat/super/master/install.sh | sh
 #   curl -fsSL ... | sh -s -- --version 1.3.1 --prefix /usr/local
 #
 # Options:
@@ -16,7 +16,7 @@
 
 set -eu
 
-REPO="hzbd/super"
+REPO="schiplat/super"
 VERSION=""
 PREFIX=""
 USE_SUDO="auto"

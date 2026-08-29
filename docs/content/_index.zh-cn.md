@@ -20,7 +20,7 @@ toc: false
 <p class="hero-desc" style="font-size: 0.875rem; color: #9c9890; margin-top: -0.5rem;">文档正文目前为英文；切换语言仅影响本站首页。</p>
 <div class="hero-actions">
 <a href="/docs/01-getting-started/quick-start/" class="hp-btn hp-btn--primary">快速开始 →</a>
-<a href="https://github.com/hzbd/super" class="hp-btn hp-btn--outline" target="_blank" rel="noopener">
+<a href="https://github.com/schiplat/super" class="hp-btn hp-btn--outline" target="_blank" rel="noopener">
 <svg width="16" height="16" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" viewBox="0 0 24 24"><path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 00-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0020 4.77 5.07 5.07 0 0019.91 1S18.73.65 16 2.48a13.38 13.38 0 00-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 005 4.77a5.44 5.44 0 00-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 009 18.13V22"></path></svg>
   GitHub
 </a>
@@ -144,7 +144,7 @@ ws://127.0.0.1:9002/ws</code></pre>
 <div class="hero-actions" style="justify-content: center;">
 <a href="/docs/01-getting-started/quick-start/" class="hp-btn hp-btn--primary">开始构建 →</a>
 <a href="/docs/01-getting-started/installation/" class="hp-btn hp-btn--outline">安装</a>
-<a href="https://github.com/hzbd/super" class="hp-btn hp-btn--outline" target="_blank" rel="noopener">GitHub</a>
+<a href="https://github.com/schiplat/super" class="hp-btn hp-btn--outline" target="_blank" rel="noopener">GitHub</a>
 </div>
 </div>
 </section>

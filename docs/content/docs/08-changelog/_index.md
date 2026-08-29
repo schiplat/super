@@ -34,7 +34,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - CI: `cargo fmt --check`, **macOS** test matrix, `benchmark/` workspace build.
 - Docker Hub publishes **`linux/amd64`** and **`linux/arm64`** again; docs use loopback port mapping.
 - Document minimum **Rust 1.85+**; workspace `rust-version = "1.85"`.
-- License help links point to the [feature matrix](https://super.docs.sconts.com/docs/07-editions/feature-matrix/) and [Pro trial](https://github.com/hzbd/super/issues/new?template=pro-trial.yml).
+- License help links point to the [feature matrix](https://super.docs.sconts.com/docs/07-editions/feature-matrix/) and [Pro trial](https://github.com/schiplat/super/issues/new?template=pro-trial.yml).
 - Remove unsupported `[webhook]` from `super.toml` (use `[[event_hooks]]` or `conf/notify.toml`).
 - Invalid license: prominent startup warnings; improved `super doctor` triage.
 - `/go/pro/` license examples updated for the **1.3.x** release line.
@@ -181,7 +181,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Documentation homepage with OSS capabilities, licensed plugin features, and API example.
 
 ### Changed
-- Docker image namespace from `hzbd/super` to `containerpi/super`.
+- Docker image namespace from `schiplat/super` to `containerpi/super`.
 - Installation docs, README, and `make docker` target for `dockerbuild/Dockerfile`.
 
 ### Fixed

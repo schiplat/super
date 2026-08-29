@@ -11,7 +11,7 @@ Super is a modern replacement for tools like [Supervisor](https://supervisord.or
 > - **OSS core** (`superd` + `super`) is free under MIT — install and try anytime.
 > - **Super Pro plugins** (Dashboard UI, API auth/RBAC/audit, notifications, Linux cgroup isolation) are available with a **free 1-year license** during the beta. No payment required.
 >
-> **Request a free Pro trial:** open a [GitHub Issue](https://github.com/hzbd/super/issues/new?template=pro-trial.yml) (use the **Pro trial request** template). Include a contact email — we will send the license key and plugin package to that address.
+> **Request a free Pro trial:** open a [GitHub Issue](https://github.com/schiplat/super/issues/new?template=pro-trial.yml) (use the **Pro trial request** template). Include a contact email — we will send the license key and plugin package to that address.
 
 > **Documentation:** [https://super.docs.sconts.com/docs/](https://super.docs.sconts.com/docs/)
 
@@ -30,7 +30,7 @@ Licensed under the **[MIT License](LICENSE)**. Optional **licensed plugins** (`.
 ### Install script (Linux / macOS / FreeBSD)
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/hzbd/super/master/install.sh | sh
+curl -fsSL https://raw.githubusercontent.com/schiplat/super/master/install.sh | sh
 ```
 
 Installs `superd` and `super` into `/usr/local/bin` (or `~/.local/bin` when not writable), verifying the SHA-256 checksum of the release archive. Options: `--version X.Y.Z`, `--prefix DIR`, `--no-sudo`.
@@ -55,7 +55,7 @@ docker run --rm -p 127.0.0.1:9002:9002 -v ./dockerbuild/conf:/app/super/conf con
 Requires **Rust 1.85+** (stable):
 
 ```bash
-git clone https://github.com/hzbd/super.git && cd super
+git clone https://github.com/schiplat/super.git && cd super
 make build
 ./target/release/superd              # foreground (default; use under systemd/Docker)
 # ./target/release/superd --daemon   # optional Unix self-daemonize without systemd

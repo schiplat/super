@@ -129,7 +129,7 @@ Add repository secrets (**Settings → Secrets → Actions**):
 
 | Secret | Value |
 | :--- | :--- |
-| `DOCKERHUB_USERNAME` | Docker Hub username (e.g. `containerpi`) |
+| `DOCKERHUB_USERNAME` | Docker Hub username (e.g. `containerpi`) — GitHub Actions **variable**, not a secret |
 | `DOCKERHUB_TOKEN` | [Access token](https://hub.docker.com/settings/security) with **Read & Write** |
 
 Release example:

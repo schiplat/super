@@ -14,7 +14,7 @@ PM2 is written in JavaScript and runs on Node.js. Managing a small native binary
 
 Super’s daemon is a Rust binary with no JavaScript runtime. **Idle RSS still depends on OS, version, how many children you manage, and whether licensed plugins are loaded** — it is not a single number. Do not treat any megabyte range on this page as a measurement.
 
-A dated, same-workload comparison (OSS Super, licensed Super, `supervisord`, and PM2) lives in the in-tree [benchmark plan](https://github.com/hzbd/super/tree/master/benchmark). Until that lab publishes a snapshot, compare the tools on your own host rather than quoting a marketing RSS figure.
+A dated, same-workload comparison (OSS Super, licensed Super, `supervisord`, and PM2) lives in the in-tree [benchmark plan](https://github.com/schiplat/super/tree/master/benchmark). Until that lab publishes a snapshot, compare the tools on your own host rather than quoting a marketing RSS figure.
 
 ## 2. Resource limits (cgroups)
 
