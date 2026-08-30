@@ -1,6 +1,6 @@
 ---
-title: "Process Control"
-weight: 3
+title: "Process Operations"
+weight: 4
 description: "Start, stop, restart, and signal processes using the CLI."
 ---
 
@@ -37,19 +37,16 @@ super restart api-srv
 
 ## Group Operations
 
-If you assign a `group` in your `super.toml`, you can control multiple processes at once using the `@` prefix.
+If you assign a `group` to your programs (JSON stack, API, or CLI), you can control multiple processes at once using the `@` prefix.
 
 **Config:**
-```toml
-[[programs]]
-name = "api-1"
-group = "backend"
-...
-
-[[programs]]
-name = "api-2"
-group = "backend"
-...
+```json
+{
+  "services": [
+    { "name": "api-1", "command": "/usr/bin/api", "group": "backend" },
+    { "name": "api-2", "command": "/usr/bin/api", "group": "backend" }
+  ]
+}
 ```
 
 **CLI:**

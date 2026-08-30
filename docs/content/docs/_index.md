@@ -16,7 +16,7 @@ If you are new to Project Super, start with the basics to get your daemon up and
 
 {{< cards >}}
   {{< card link="/docs/01-getting-started" title="Getting Started" subtitle="Installation, Quick Start, and first-time setup." >}}
-  {{< card link="/docs/02-essentials" title="Core Essentials" subtitle="Configuration (TOML), Logging, and Process Control." >}}
+  {{< card link="/docs/02-essentials" title="Core Essentials" subtitle="Configuration (TOML), Logging, and Process Operations." >}}
 {{< /cards >}}
 
 ---

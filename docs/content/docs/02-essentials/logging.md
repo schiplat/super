@@ -1,6 +1,6 @@
 ---
 title: "Logging"
-weight: 4
+weight: 5
 description: "How Super captures, rotates, and streams logs."
 ---
 

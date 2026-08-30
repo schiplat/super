@@ -6,7 +6,7 @@ description: "Running Super in Docker and Kubernetes — what it handles, what i
 
 Super is an **application-level process orchestrator**, not a full init system like `systemd` or `tini`. Understanding this boundary is essential for running it correctly in containers.
 
-See the [Process Management Contract](/docs/02-essentials/process-management-contract) for the full rules on foreground execution, PGID escape, and zombie handling.
+See the [Managed Program Requirements](/docs/02-essentials/process-management-contract) for the full rules on foreground execution, PGID escape, and zombie handling.
 
 ## The PID 1 Problem (Background)
 

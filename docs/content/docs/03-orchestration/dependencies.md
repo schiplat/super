@@ -6,26 +6,25 @@ description: "Define startup order using the depends_on directive."
 
 In a microservices architecture, services often have strict startup orders. For example, a backend API cannot accept requests until the database is ready.
 
-Super allows you to define these relationships using the `depends_on` configuration.
+Super allows you to define these relationships using the `depends_on` field on each program (JSON stack files, API, or CLI).
 
 ## Configuration
 
-```toml
-# 1. The Provider (Database)
-[[programs]]
-name = "postgres-db"
-command = "/usr/bin/postgres"
-# ... args ...
-
-[programs.health_check]
-type = "tcp"
-port = 5432
-
-# 2. The Consumer (API)
-[[programs]]
-name = "backend-api"
-command = "./api-server"
-depends_on = ["postgres-db"]
+```json
+{
+  "services": [
+    {
+      "name": "postgres-db",
+      "command": "/usr/bin/postgres",
+      "health_check": { "type": "tcp", "port": 5432 }
+    },
+    {
+      "name": "backend-api",
+      "command": "./api-server",
+      "depends_on": ["postgres-db"]
+    }
+  ]
+}
 ```
 
 ## How it works

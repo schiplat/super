@@ -1,6 +1,6 @@
 ---
 title: "Scheduled Tasks (Cron)"
-weight: 7
+weight: 6
 description: "Replace legacy crontab by scheduling periodic jobs directly in Super."
 aliases:
   - /docs/05-advanced-management/scheduled-tasks/
@@ -12,14 +12,18 @@ Super natively supports **cron-based scheduled tasks** in the open-source `super
 
 ## Configuration
 
-To turn a standard program into a scheduled task, add the `cron` field to its configuration. Super uses an extended cron expression format (Seconds, Minutes, Hours, Days, Months, Day of Week).
+To turn a standard program into a scheduled task, add the `cron` field to its stack entry. Super uses an extended cron expression format (Seconds, Minutes, Hours, Days, Months, Day of Week).
 
-```toml
-[[programs]]
-name = "db-backup"
-command = "/scripts/backup.sh"
-# Run at 02:00 AM every day
-cron = "0 0 2 * * *"
+```json
+{
+  "services": [
+    {
+      "name": "db-backup",
+      "command": "/scripts/backup.sh",
+      "cron": "0 0 2 * * *"
+    }
+  ]
+}
 ```
 
 ## State Machine Differences
@@ -52,5 +56,5 @@ super start daily-cleanup
 
 ## Related
 
-* [Config Reference — `cron`](/docs/06-internals/config-reference#programs)
+* [Config Reference — `cron`](/docs/06-internals/config-reference)
 * [System Events — cron failures](/docs/03-orchestration/system-events)

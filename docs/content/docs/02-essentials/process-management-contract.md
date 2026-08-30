@@ -1,5 +1,5 @@
 ---
-title: "Process Management Contract"
+title: "Managed Program Requirements"
 weight: 1
 description: "Hard requirements for applications managed by Super — foreground execution, no PGID escape, and zombie reaping boundaries."
 ---
@@ -10,7 +10,7 @@ Before you add programs to Super, read this page. It defines the **contract** be
 
 Every **application managed by Super** must run in **foreground / non-daemonized** mode.
 
-This rule applies to child programs (`[[programs]]`), **not** to how you start `superd` itself. `superd` may run in the foreground (default, required under systemd/Docker) or optionally self-daemonize with `superd --daemon` / `[server] daemon = true` when you are not using an init system — see [Installation — Systemd](/docs/01-getting-started/installation/#method-3-systemd-vm--bare-metal).
+This rule applies to managed programs, **not** to how you start `superd` itself. `superd` may run in the foreground (default, required under systemd/Docker) or optionally self-daemonize with `superd --daemon` / `[server] daemon = true` when you are not using an init system — see [Installation — Systemd](/docs/01-getting-started/installation/#method-3-systemd-vm--bare-metal).
 
 Managed programs must **not**:
 
@@ -27,7 +27,7 @@ Super tracks the process it spawns. If your app exits the parent immediately aft
 | Node.js | `node app.js` | Custom double-fork wrapper |
 | Custom services | Run the main process in the foreground | Shell script that forks and exits |
 
-Configure `command` / `args` in `super.toml` so the **main PID Super starts is the real service**, not a launcher that exits after forking.
+Set `command` / `args` on each program (JSON stack, `super add`, or the API) so the **main PID Super starts is the real service**, not a launcher that exits after forking.
 
 ## 2. No double-fork or PGID escape
 

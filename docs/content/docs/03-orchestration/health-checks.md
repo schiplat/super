@@ -17,32 +17,62 @@ Health checks are critical for:
 
 The simplest check. Succeeds if Super can establish a TCP connection to the port.
 
-```toml
-[programs.health_check]
-type = "tcp"
-port = 8080
-# host = "127.0.0.1" # Optional, defaults to localhost
+```json
+{
+  "services": [
+    {
+      "name": "my-app",
+      "command": "./app",
+      "health_check": {
+        "type": "tcp",
+        "port": 8080
+      }
+    }
+  ]
+}
 ```
+
+The check may also set `host` (defaults to `127.0.0.1`).
 
 ### 2. HTTP Check
 
 Performs an HTTP request. Succeeds if the response status code is `200-299`. Only `http://` and `https://` URLs are accepted for outbound probes.
 
-```toml
-[programs.health_check]
-type = "http"
-url = "http://127.0.0.1:8080/healthz"
-method = "GET" # Optional
+```json
+{
+  "services": [
+    {
+      "name": "my-app",
+      "command": "./app",
+      "health_check": {
+        "type": "http",
+        "url": "http://127.0.0.1:8080/healthz",
+        "method": "GET"
+      }
+    }
+  ]
+}
 ```
+
+`method` is optional (defaults to `GET`).
 
 ### 3. Exec Check
 
 Runs a shell command. Succeeds if the command exits with code `0`. Ideal for checking file existence, database queries, or custom scripts.
 
-```toml
-[programs.health_check]
-type = "exec"
-command = "grep 'ready' /tmp/app.state"
+```json
+{
+  "services": [
+    {
+      "name": "my-app",
+      "command": "./app",
+      "health_check": {
+        "type": "exec",
+        "command": "grep 'ready' /tmp/app.state"
+      }
+    }
+  ]
+}
 ```
 
 ## Behavior

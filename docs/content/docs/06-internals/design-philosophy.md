@@ -106,7 +106,7 @@ Why do we kill by Process Group (`-PID`) instead of just the main PID?
 If a user script (`start.sh`) spawns a Java process and Super only kills the shell script, the Java process becomes an "orphaned" zombie holding onto port 8080. 
 Before executing a payload, Super sets a new process group (`process_group(0)`). During shutdown, we send `SIGTERM` to the **negative PID** (`kill(-PID, SIGTERM)`), effectively broadcasting the signal to the entire process tree, leaving zero orphans.
 
-Applications must not break out of this group — see the [Process Management Contract](/docs/02-essentials/process-management-contract).
+Applications must not break out of this group — see the [Managed Program Requirements](/docs/02-essentials/process-management-contract).
 
 ### The 10-Second SIGKILL Timeout
 We support graceful shutdowns, but we never trust user code implicitly. If a process catches `SIGTERM` but enters a deadlock or refuses to exit, it could hang the manager indefinitely. Super isolates this by spawning a 10-second detached timer. If the process is still alive when the timer pops, Super ruthlessly issues a `SIGKILL` to the process group, ensuring system resources are always reclaimed.

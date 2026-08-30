@@ -20,7 +20,7 @@ description: "Common questions about system integration and internals."
 
 **Q: How does Super handle Zombies?**
 
-**A:** Super does **not** act as a global zombie reaper. Managed apps must follow the [Process Management Contract](/docs/02-essentials/process-management-contract): run in the foreground, do not escape the process group, and rely on the host init (systemd, Tini) for PID 1 duties.
+**A:** Super does **not** act as a global zombie reaper. Managed apps must follow the [Managed Program Requirements](/docs/02-essentials/process-management-contract): run in the foreground, do not escape the process group, and rely on the host init (systemd, Tini) for PID 1 duties.
 
 In short, Super tracks direct children with `child.wait()` and tears down process groups on stop; it does not reap zombies from misbehaving grandchild processes.
 

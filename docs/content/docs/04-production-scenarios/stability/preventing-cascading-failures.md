@@ -36,26 +36,35 @@ Super solves this deterministically by combining **Dependency Topology** with **
 
 First, tell Super how to know when the provider (`db`) is *actually* ready to serve traffic, not just when the process started.
 
-```toml
-[[programs]]
-name = "postgres"
-command = "/usr/bin/postgres"
-
-[programs.health_check]
-# It is only healthy when port 5432 accepts TCP connections
-type = "tcp"
-port = 5432
+```json
+{
+  "services": [
+    {
+      "name": "postgres",
+      "command": "/usr/bin/postgres",
+      "health_check": {
+        "type": "tcp",
+        "port": 5432
+      }
+    }
+  ]
+}
 ```
 
 ### 2. Define the Dependency
 
 Next, tell the consumer (`api`) to wait.
 
-```toml
-[[programs]]
-name = "api"
-command = "/usr/bin/api"
-depends_on = ["postgres"]
+```json
+{
+  "services": [
+    {
+      "name": "api",
+      "command": "/usr/bin/api",
+      "depends_on": ["postgres"]
+    }
+  ]
+}
 ```
 
 ### The Result

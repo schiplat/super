@@ -21,7 +21,7 @@ Supervisor is written in Python. To run it, you must install a Python interprete
 | :--- | :--- | :--- |
 | **Runtime Requirement** | Python 2.7 or 3.x | **None (Static Binary)** |
 | **Docker Base Image** | `python:slim` or manual install | `scratch` or `alpine` |
-| **Disk Footprint** | ~50MB+ (Interpreter + Libs) | **~5MB** |
+| **Disk Footprint** | ~50MB+ (Interpreter + Libs) | **~15MB** (`superd` + `super`, release build) |
 
 ## 2. Configuration: INI vs TOML
 
@@ -36,17 +36,22 @@ autorestart=true
 environment=KEY="val",KEY2="val2"
 ```
 
-**Super (`super.toml`):**
-```toml
-[[programs]]
-name = "my-app"
-command = "/bin/app"
-autostart = true
-retry_limit = 3
-
-[programs.env]
-KEY = "val"
-KEY2 = "val2"
+**Super (daemon config is TOML; programs are JSON stacks or API/CLI):**
+```json
+{
+  "services": [
+    {
+      "name": "my-app",
+      "command": "/bin/app",
+      "autostart": true,
+      "retry_limit": 3,
+      "env": {
+        "KEY": "val",
+        "KEY2": "val2"
+      }
+    }
+  ]
+}
 ```
 
 ## 3. The API Gap: XML-RPC vs REST
@@ -92,7 +97,7 @@ Mapping your muscle memory from `supervisorctl` to `super`:
 | **Reload daemon config** | `supervisorctl reload` | `super reload` *(no target)* |
 | **Stop the manager** | `supervisorctl shutdown` | `super shutdown` |
 
-`supervisord` often daemonizes by default; `superd` stays in the **foreground** unless you pass `--daemon` / set `[server] daemon = true` (Unix, not for systemd/Docker). Child programs must still run with `daemon off` — see [Process Management Contract](/docs/02-essentials/process-management-contract/).
+`supervisord` often daemonizes by default; `superd` stays in the **foreground** unless you pass `--daemon` / set `[server] daemon = true` (Unix, not for systemd/Docker). Child programs must still run with `daemon off` — see [Managed Program Requirements](/docs/02-essentials/process-management-contract/).
 
 ## Supervisor Migration: `reread` / `update` / `reload`
 

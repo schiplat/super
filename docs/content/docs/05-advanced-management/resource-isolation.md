@@ -12,23 +12,25 @@ Super integrates directly with the Linux Kernel's Control Groups (v2) to provide
 
 ## Configuration Reference
 
-Resource limits are defined per program in `super.toml`.
+Resource limits are defined per program — via JSON stack files, the API, or CLI (`super add --memory-limit ... --cpu-quota ...`).
 
-```toml
-[[programs]]
-name = "data-processor"
-command = "./worker"
-
-[programs.resource_limits]
-# Memory Limit (Bytes)
-# If the process (and its children) exceed this, the OOM Killer terminates it.
-memory_limit = 1073741824  # 1 GB
-
-# CPU Quota (Percentage)
-# 100.0 = 1 full core. 50.0 = half a core.
-# The scheduler throttles the process if it exceeds this usage.
-cpu_quota = 200.0  # 2 Cores
+```json
+{
+  "services": [
+    {
+      "name": "data-processor",
+      "command": "./worker",
+      "resource_limits": {
+        "memory_limit": 1073741824,
+        "cpu_quota": 200.0
+      }
+    }
+  ]
+}
 ```
+
+*   `memory_limit` — hard memory limit in bytes. If the process (and its children) exceed this, the OOM Killer terminates it.
+*   `cpu_quota` — CPU quota as a percentage. `100.0` = 1 full core, `50.0` = half a core. The scheduler throttles the process if it exceeds this usage.
 
 ## Requirements
 

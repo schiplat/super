@@ -6,7 +6,7 @@ description: "Start the server and manage processes dynamically via the API."
 
 In this guide, we will start the **Super** daemon with a minimal configuration and use its **REST API** to dynamically register and start a "Hello World" web server.
 
-> **Before adding programs:** Read the [Process Management Contract](/docs/02-essentials/process-management-contract) — managed apps must run in the foreground and must not daemonize or escape Super's process group.
+> **Before adding programs:** Read the [Managed Program Requirements](/docs/02-essentials/process-management-contract) — managed apps must run in the foreground and must not daemonize or escape Super's process group.
 
 ## 1. Minimal Configuration
 
@@ -110,7 +110,8 @@ $SUPER_ROOT/
   conf/super.toml           # [license].key + auth_secret (when subscribed)
   plugins/                  # Authorized libraries from subscription package
   run/                      # Optional: superd.pid when using --daemon
-  data/  logs/
+  data/  
+  logs/
 ```
 
 **Install licensed plugins** (from your subscription delivery package):

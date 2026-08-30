@@ -1,6 +1,6 @@
 ---
 title: "Environment & Secrets"
-weight: 6
+weight: 3
 description: "Securely manage and mount sensitive credentials without crypto-shredding risks."
 ---
 

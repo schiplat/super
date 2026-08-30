@@ -26,21 +26,26 @@ For reacting to **system-wide events** (crashes, recovery, daemon startup), see 
 
 ## Configuration
 
-Hooks are stored on each program — in `super.toml`, stack JSON, or via the API / Dashboard.
+Hooks are stored on each program — in JSON stack files, or via the API / CLI / Dashboard.
 
-```toml
-[[programs]]
-name = "my-app"
-command = "./app"
-
-[programs.hooks]
-pre_start = "mkdir -p /tmp/app-data && chmod 700 /tmp/app-data"
-post_start = "curl -X POST http://consul:8500/register -d '...'"
-pre_stop = "curl -X POST http://consul:8500/deregister -d '...'"
-post_stop = "if [ \"$SUPER_EXIT_CODE\" != \"0\" ]; then aws s3 cp logs/app.err s3://archive/; fi"
+```json
+{
+  "services": [
+    {
+      "name": "my-app",
+      "command": "./app",
+      "hooks": {
+        "pre_start": "mkdir -p /tmp/app-data && chmod 700 /tmp/app-data",
+        "post_start": "curl -X POST http://consul:8500/register -d '...'",
+        "pre_stop": "curl -X POST http://consul:8500/deregister -d '...'",
+        "post_stop": "if [ \"$SUPER_EXIT_CODE\" != \"0\" ]; then aws s3 cp logs/app.err s3://archive/; fi"
+      }
+    }
+  ]
+}
 ```
 
-Equivalent in stack JSON:
+The same shape works via the API:
 
 ```json
 {
@@ -57,12 +62,12 @@ Equivalent in stack JSON:
 
 | Source | Path / API | Persisted to |
 | :--- | :--- | :--- |
-| TOML file | `[[programs]]` → `[programs.hooks]` | Loaded into registry on daemon start |
+| Stack file | `conf/conf.d/*.json` → `services[].hooks` | `snapshot.json` |
 | Stack apply | `PUT /api/v1/stack` with `"hooks": { ... }` | `snapshot.json` |
 | CLI | `super add` / `super update --pre-start "..."` | `snapshot.json` |
 | Dashboard | Program create/edit form | `snapshot.json` |
 
-Hooks are **not** defined in `super.toml` at the global level — only under each `[[programs]]` block (or via API/stack).
+Hooks are **not** defined in `super.toml` at the global level — `super.toml` has no program tables at all. Put `hooks` on each program (stack entry / API / CLI) instead.
 
 ## Environment variables
 
@@ -85,12 +90,12 @@ The managed **child process** also receives `SUPER_ID`, `SUPER_NAME`, `SUPER_HOS
 | | Lifecycle hooks | System events |
 | :--- | :--- | :--- |
 | **Purpose** | Setup/teardown around one program's start/stop | Observe cluster-wide incidents |
-| **Config** | Per program `[programs.hooks]` | Global (`[[event_hooks]]` in OSS; `notify.toml` with `notify` plugin) |
+| **Config** | Per program `hooks` (stack JSON / API) | Global (`[[event_hooks]]` in OSS; `notify.toml` with `notify` plugin) |
 | **Data to script** | Environment variables | JSON on stdin (OSS event hooks) or HTTP payload (licensed notify) |
 | **Examples** | mkdir, Consul register, drain flag | Slack alert, archive logs on crash |
 
 ## Related
 
 * [System Events](/docs/03-orchestration/system-events) — full event catalog
-* [Config Reference — programs.hooks](/docs/06-internals/config-reference#programshooks)
+* [Config Reference — `hooks`](/docs/06-internals/config-reference#hooks)
 * [Custom Extensions](/docs/04-production-scenarios/extensibility/custom-extensions) — Rust `Extension` trait and licensed plugins (cgroups, notify, audit)

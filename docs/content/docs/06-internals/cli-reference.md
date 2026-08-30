@@ -71,7 +71,7 @@ Remove a program configuration. It must be stopped first.
 super rm <TARGET>
 ```
 
-## Process Control
+## Process Operations
 
 All control commands support targeting by `ID`, `Name`, `all`, or `@group`.
 

@@ -60,27 +60,54 @@ See [Authentication](/docs/05-advanced-management/authentication#licensed-deploy
 
 ## Program Configuration
 
-You define managed processes using `[[programs]]` blocks. You can have as many as you like.
+Programs are **not** declared in `super.toml`. Define them via JSON stack files, the API, or the CLI — Super persists them to `data/snapshot.json` and reloads them on start.
 
-### Basic Example
+> **`[[programs]]` / `[[program]]` tables in `super.toml` are ignored.** `super check` flags them as an error. Programs load only from `[include]` JSON stacks (`conf/conf.d/*.json`), the API, and `data/snapshot.json`.
 
-```toml
-[[programs]]
-name = "my-worker"
-command = "/usr/local/bin/worker"
-args = ["--config", "/etc/worker.conf"]
-cwd = "/tmp"
-autostart = true
+| Source | How | Persisted to |
+| :--- | :--- | :--- |
+| JSON stack files | `conf/conf.d/*.json`, matched by `[include].files` | `data/snapshot.json` |
+| CLI | `super add --name my-worker --autostart /usr/local/bin/worker` | `data/snapshot.json` |
+| HTTP API | `POST /api/v1/programs` | `data/snapshot.json` |
+
+### JSON stack files (declarative)
+
+Create a file under `conf/conf.d/` — each file is a **stack** applied on daemon start and on `super reload`:
+
+```json
+{
+  "prune": false,
+  "services": [
+    {
+      "name": "my-worker",
+      "command": "/usr/local/bin/worker",
+      "args": ["--config", "/etc/worker.conf"],
+      "cwd": "/tmp",
+      "autostart": true
+    }
+  ]
+}
 ```
+
+`prune: true` removes programs that are not listed in the stack.
 
 ### Environment Variables
 
 You can inject environment variables into the process.
 
-```toml
-[programs.env]
-NODE_ENV = "production"
-DB_HOST = "10.0.0.5"
+```json
+{
+  "services": [
+    {
+      "name": "my-worker",
+      "command": "./app",
+      "env": {
+        "NODE_ENV": "production",
+        "DB_HOST": "10.0.0.5"
+      }
+    }
+  ]
+}
 ```
 
 > **Note**: Super automatically injects metadata variables like `SUPER_ID`, `SUPER_NAME`, and `SUPER_HOSTNAME` into the child process.
@@ -89,48 +116,64 @@ DB_HOST = "10.0.0.5"
 
 If running as root, you can drop privileges to a specific user.
 
-```toml
-[[programs]]
-name = "safe-service"
-command = "./app"
-user = "www-data"
-# group = "www-data" # Optional, defaults to user's primary group
+```json
+{
+  "services": [
+    {
+      "name": "safe-service",
+      "command": "./app",
+      "user": "www-data"
+    }
+  ]
+}
 ```
 
 ### Advanced Settings (OSS)
 
-Dependency orchestration in `super.toml`:
+Dependency orchestration — the `depends_on` array names programs that must be **Healthy** first:
 
-```toml
-[[programs]]
-name = "heavy-job"
-command = "./processor"
-depends_on = ["database", "redis"]
+```json
+{
+  "services": [
+    { "name": "database", "command": "./db", "health_check": { "type": "tcp", "port": 5432 } },
+    { "name": "heavy-job", "command": "./processor", "depends_on": ["database", "redis"] }
+  ]
+}
 ```
 
 ### Plugin-only blocks 💎
 
 The following require **subscription plugins** (resource limits on Linux). OSS accepts `resource_limits` in the API schema but does not enforce them without the matching plugin.
 
-```toml
-[[programs]]
-name = "heavy-job"
-command = "./processor"
-
-[programs.resource_limits]
-memory_limit = 536870912  # 512 MB
-cpu_quota = 50.0          # 50% of one core
+```json
+{
+  "services": [
+    {
+      "name": "heavy-job",
+      "command": "./processor",
+      "resource_limits": {
+        "memory_limit": 536870912,
+        "cpu_quota": 50.0
+      }
+    }
+  ]
+}
 ```
 
 ### Scheduled tasks
 
 Cron scheduling is built into OSS `superd`. See [Scheduled Tasks](/docs/02-essentials/scheduled-tasks).
 
-```toml
-[[programs]]
-name = "nightly-backup"
-command = "/scripts/backup.sh"
-cron = "0 0 2 * * *"   # see Scheduled Tasks doc
+```json
+{
+  "services": [
+    {
+      "name": "nightly-backup",
+      "command": "/scripts/backup.sh",
+      "cron": "0 0 2 * * *"
+    }
+  ]
+}
 ```
 
 See [Resource Isolation](/docs/05-advanced-management/resource-isolation) and [Scheduled Tasks](/docs/02-essentials/scheduled-tasks).
@@ -139,17 +182,22 @@ See [Resource Isolation](/docs/05-advanced-management/resource-isolation) and [S
 
 Supervisor-compatible restart and stop settings:
 
-```toml
-[[programs]]
-name = "api-server"
-command = "/usr/local/bin/api"
-autostart = true
-autorestart = "unexpected"   # restart on unexpected exit only
-exitcodes = [0]
-retry_limit = 3
-startsecs = 10               # stable run resets retry counter
-stopsecs = 30                # SIGTERM grace before SIGKILL (optional)
-priority = 100               # lower = starts earlier on boot
+```json
+{
+  "services": [
+    {
+      "name": "api-server",
+      "command": "/usr/local/bin/api",
+      "autostart": true,
+      "autorestart": "unexpected",
+      "exitcodes": [0],
+      "retry_limit": 3,
+      "startsecs": 10,
+      "stopsecs": 30,
+      "priority": 100
+    }
+  ]
+}
 ```
 
 For a full list of options, see the [Config Reference](/docs/06-internals/config-reference). Cron scheduling: [Scheduled Tasks](/docs/02-essentials/scheduled-tasks).

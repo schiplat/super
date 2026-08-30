@@ -19,7 +19,7 @@ description: "Complete schema for super.toml."
 | :--- | :--- |
 | Root (`super.toml`) | `auth_secret` 💎 |
 | `[license]` | `key` 💎 — cryptographically signed subscription token from your vendor |
-| `[[programs]]` | `[programs.resource_limits]` (`cpu_quota`, `memory_limit`) 💎 |
+| `conf/conf.d/*.json` *(program stacks)* | `services[].resource_limits` (`cpu_quota`, `memory_limit`) 💎 |
 | `conf/notify.toml` *(separate file)* | `[[channels]]` 💎 — see [Event Notifications](/docs/05-advanced-management/event-notifications) |
 
 > **OSS security:** See [Configuration — OSS security defaults](/docs/02-essentials/configuration#oss-security-defaults-fail-closed) for fail-closed bind, log path confinement, and other defensive defaults.
@@ -93,11 +93,13 @@ key = "eyJjbGFpbXMiOnsiaXNzdWVkX3RvIjoi..."
 
 See [Configuration](/docs/02-essentials/configuration) for examples. Keys mirror `ServerConfig` in `common/src/config.rs`.
 
-## `[[programs]]`
+## Program stacks — `conf/conf.d/*.json`
 
-You can have multiple program blocks.
+Programs are **not** declared in `super.toml` — `[[programs]]` / `[[program]]` tables there are ignored (`super check` reports them as an error). Programs load from **JSON stack files** matched by `[include].files` (applied on daemon start and `super reload`), the API (`POST /api/v1/programs`), or the CLI (`super add`); all persist to `data/snapshot.json`.
 
-> **Field naming**: Keys such as `autostart`, `autorestart`, `exitcodes`, `startsecs`, and `stopsecs` align with [Supervisor](/docs/04-production-scenarios/migrations/vs-supervisor) for migration. Newer keys (`retry_limit`, `health_check`, `depends_on`, …) use snake_case. In TOML, `stopwaitsecs` is accepted as an alias for `stopsecs`.
+The keys below describe a **single program entry** — one item in a stack file's `services[]` array, or a create/update API payload. Multiple `services[]` entries are allowed per stack.
+
+> **Field naming**: Keys such as `autostart`, `autorestart`, `exitcodes`, `startsecs`, and `stopsecs` align with [Supervisor](/docs/04-production-scenarios/migrations/vs-supervisor) for migration. Newer keys (`retry_limit`, `health_check`, `depends_on`, …) use snake_case. In stack JSON / API payloads, `stopwaitsecs` is accepted as an alias for `stopsecs`.
 
 ### Identity & execution
 
@@ -145,7 +147,7 @@ Example: `autostart = false` with `autorestart = "true"` gives a manually starte
 | `depends_on` | list | `[]` | Program names that must be **Healthy** before this one starts. |
 | `cron` | string | — | Cron expression (e.g. `0 0 * * * *`). See [Scheduled Tasks](/docs/02-essentials/scheduled-tasks). |
 
-### `[programs.hooks]`
+### `hooks`
 
 Per-program lifecycle shell hooks. Full behavior table: [Lifecycle Hooks](/docs/03-orchestration/lifecycle-hooks).
 
@@ -156,7 +158,7 @@ Per-program lifecycle shell hooks. Full behavior table: [Lifecycle Hooks](/docs/
 | `pre_stop` | string | — | Run before stop signal (sync). |
 | `post_stop` | string | — | Run after process exits (async). |
 
-### `[programs.health_check]`
+### `health_check`
 
 | Key | Type | Default | Description |
 | :--- | :--- | :--- | :--- |
@@ -165,7 +167,7 @@ Per-program lifecycle shell hooks. Full behavior table: [Lifecycle Hooks](/docs/
 | `url` | string | — | For `http` checks. |
 | `command` | string | — | For `exec` checks. |
 
-### `[programs.resource_limits]` 💎
+### `resource_limits` 💎
 
 **Commercial only.** Linux cgroups CPU/memory limits; requires the `isolation` plugin on Linux. See [Resource Isolation](/docs/05-advanced-management/resource-isolation).
 
@@ -199,6 +201,6 @@ Super emits [System Events](/docs/03-orchestration/system-events) (`process_fata
 
 | Mechanism | Config file | Edition | Status |
 | :--- | :--- | :--- | :--- |
-| Lifecycle hooks | `[[programs]]` → `[programs.hooks]` | OSS | ✅ Active |
+| Lifecycle hooks | per-program `hooks` (stack JSON / API) | OSS | ✅ Active |
 | Event hooks | `super.toml` → `[[event_hooks]]` | OSS | ✅ [Event Hooks](/docs/03-orchestration/event-hooks) |
 | Webhook notifications | `conf/notify.toml` | 💎 Licensed (`notify`) | ✅ [Event Notifications](/docs/05-advanced-management/event-notifications) |
