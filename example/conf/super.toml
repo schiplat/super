@@ -28,6 +28,8 @@ max_size_mb = 10    # max 10MB per child log
 max_backups = 5     # keep 5 backups per child
 max_line_size_kb = 64   # max line length
 
+# Program stack files: JSON files declaring programs (services[]) — applied on
+# daemon start and `super reload`. See conf.d/ for an example stack.
 [include]
 files = ["conf/conf.d/*.json"]
 

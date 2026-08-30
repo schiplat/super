@@ -93,6 +93,21 @@ key = "eyJjbGFpbXMiOnsiaXNzdWVkX3RvIjoi..."
 
 See [Configuration](/docs/02-essentials/configuration) for examples. Keys mirror `ServerConfig` in `common/src/config.rs`.
 
+## `[include]` — program stack files
+
+Programs are declared in **JSON stack files**, not in `super.toml`. `[include].files` lists glob patterns for those files; `superd` parses every match as a stack and applies it on daemon start and on `super reload`.
+
+| Key | Type | Default | Description |
+| :--- | :--- | :--- | :--- |
+| `files` | list of string | `[]` | Glob patterns for program stack JSON files, e.g. `["conf/conf.d/*.json"]`. Relative patterns resolve under `SUPER_ROOT`; patterns that resolve outside `SUPER_ROOT` are skipped. |
+
+```toml
+[include]
+files = ["conf/conf.d/*.json"]
+```
+
+Stack file schema and per-program keys: the *Program stacks* section below.
+
 ## Program stacks — `conf/conf.d/*.json`
 
 Programs are **not** declared in `super.toml` — `[[programs]]` / `[[program]]` tables there are ignored (`super check` reports them as an error). Programs load from **JSON stack files** matched by `[include].files` (applied on daemon start and `super reload`), the API (`POST /api/v1/programs`), or the CLI (`super add`); all persist to `data/snapshot.json`.

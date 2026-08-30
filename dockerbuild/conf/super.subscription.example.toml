@@ -44,5 +44,7 @@ max_size_mb = 10
 max_backups = 5
 max_line_size_kb = 64
 
+# Program stack files: JSON files declaring programs (services[]) — applied on
+# daemon start and `super reload`.
 [include]
 files = ["conf/conf.d/*.json"]

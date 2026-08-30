@@ -72,7 +72,14 @@ Programs are **not** declared in `super.toml`. Define them via JSON stack files,
 
 ### JSON stack files (declarative)
 
-Create a file under `conf/conf.d/` — each file is a **stack** applied on daemon start and on `super reload`:
+Point `super.toml` at your stack directory once with `[include].files` (a glob list of JSON stack files):
+
+```toml
+[include]
+files = ["conf/conf.d/*.json"]
+```
+
+Then create files under `conf/conf.d/` — each file is a **stack** applied on daemon start and on `super reload`:
 
 ```json
 {
