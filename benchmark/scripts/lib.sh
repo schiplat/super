@@ -1,10 +1,11 @@
 # Shared helpers for Super bench orchestrator.
 # shellcheck shell=bash
 
-ARMS=(super-oss super-pro supervisord pm2)
+ALL_ARMS=(super-oss super-pro supervisord pm2)
 
-# Cyclic Latin square of order 4. Round is 1-based.
-latin_order() {
+# Cyclic Latin square of order 4 — ONLY for MODE=colocated smoke (never publication).
+# A=super-oss B=super-pro C=supervisord D=pm2
+latin_order_colocated() {
   local round="${1:?round}"
   local -a sq=(
     "super-oss super-pro supervisord pm2"

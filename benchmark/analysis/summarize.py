@@ -1,4 +1,8 @@
-"""Aggregate run_*/scenario CSVs: median, IQR, CV. Does not invent a composite score."""
+"""Aggregate run_*/scenario CSVs: median, IQR, CV. Does not invent a composite score.
+
+Supports the formal topology: four like-for-like hosts, one arm per host.
+  python3 analysis/summarize.py --merge oss/ pro/ sv/ pm2/ -o report/
+"""
 from __future__ import annotations
 
 import argparse
@@ -60,6 +64,23 @@ def collect(results: Path) -> dict:
     return out
 
 
+def collect_gradient(results: Path) -> dict:
+    """RES-1 scalability gradient: daemon-set RSS median vs managed-process count.
+
+    Reads results/gradient/RES-1/n*/data/{arm}.csv and returns
+    {arm: {n: steady_median(memory_mb)}}.
+    """
+    out: dict = {}
+    for csv in results.glob("gradient/RES-1/n*/data/*.csv"):
+        arm = csv.stem
+        n = int(csv.parent.parent.name.removeprefix("n"))
+        df = pd.read_csv(csv)
+        if "memory_mb" not in df.columns:
+            continue
+        out.setdefault(arm, {})[n] = steady_median(df["memory_mb"])
+    return out
+
+
 def cross_run_median(points: list[float]) -> dict:
     s = pd.Series(points)
     if s.empty:
@@ -72,7 +93,7 @@ def cross_run_median(points: list[float]) -> dict:
     }
 
 
-def plot_bars(summary: dict, results: Path) -> None:
+def plot_bars(summary: dict, out: Path) -> None:
     # One figure per scenario: grouped bars of RSS median-of-medians with IQR whiskers.
     scenarios = sorted(summary["scenarios"])
     if not scenarios:
@@ -105,25 +126,75 @@ def plot_bars(summary: dict, results: Path) -> None:
         ax.set_title(f"{sc} — daemon-set RSS (IQR whiskers; not a score)")
         ax.grid(True, axis="y", linestyle="--", alpha=0.4)
     fig.tight_layout()
-    fig.savefig(results / "summary_rss.png", dpi=120)
+    fig.savefig(out / "summary_rss.png", dpi=120)
+    plt.close()
+
+
+def plot_gradient(gradient: dict, out: Path) -> None:
+    """Daemon-set RSS median vs managed-process count (RES-1 scalability)."""
+    if not gradient:
+        return
+    fig, ax = plt.subplots(figsize=(8, 5))
+    for arm in ARMS:
+        data = gradient.get(arm)
+        if not data:
+            continue
+        ns = sorted(data)
+        meds = [data[n].get("median") for n in ns]
+        if any(m is None for m in meds):
+            continue
+        ax.plot(ns, meds, marker="o", color=COLORS[arm], linestyle="-" if arm != "super-pro" else "--",
+                label=arm)
+        # annotate one point with IQR to show spread
+        mid = ns[len(ns) // 2]
+        ax.annotate(f"{data[mid]['median']:.1f}±{data[mid]['iqr']:.1f}", (mid, data[mid]["median"]),
+                    textcoords="offset points", xytext=(4, 4), fontsize=8)
+    ax.set_xlabel("managed processes (N)")
+    ax.set_ylabel("daemon-set RSS median (MiB)")
+    ax.set_title("RES-1 scalability — daemon-set RSS vs N (not a score)")
+    ax.grid(True, linestyle="--", alpha=0.4)
+    ax.legend(loc="best")
+    fig.tight_layout()
+    fig.savefig(out / "res1_gradient.png", dpi=120)
     plt.close()
 
 
 def main() -> None:
     p = argparse.ArgumentParser()
-    p.add_argument("results")
+    p.add_argument("dirs", nargs="+", help="one or more result dirs (one per arm)")
+    p.add_argument("--out", default=".", help="output directory (default cwd)")
     args = p.parse_args()
-    results = Path(args.results)
-    summary = collect(results)
-    plot_bars(summary, results)
-    for sc, arms in summary["scenarios"].items():
+
+    out = Path(args.out)
+    out.mkdir(parents=True, exist_ok=True)
+
+    merged: dict = {"scenarios": {}}
+    gradient: dict = {}
+    manifests = {}
+    for d in args.dirs:
+        results = Path(d)
+        one = collect(results)
+        for sc, arms in one["scenarios"].items():
+            for arm, runs in arms.items():
+                merged["scenarios"].setdefault(sc, {}).setdefault(arm, []).extend(runs)
+        for arm, ns in collect_gradient(results).items():
+            gradient.setdefault(arm, {}).update(ns)
+        if (results / "manifest.json").exists():
+            manifests[d] = (results / "manifest.json").read_text()
+
+    for sc, arms in merged["scenarios"].items():
         for arm, runs in list(arms.items()):
             meds = [r["rss"]["median"] for r in runs if "rss" in r and "median" in r["rss"]]
             if meds:
                 arms[arm] = {"runs": runs, "aggregate": cross_run_median(meds)}
-    (results / "summary.json").write_text(json.dumps(summary, indent=2) + "\n")
-    plot_bars(summary, results)
-    print(f"wrote {results / 'summary.json'} and summary_rss.png")
+    merged["gradient"] = gradient
+
+    (out / "summary.json").write_text(json.dumps(merged, indent=2) + "\n")
+    if manifests:
+        (out / "manifests.json").write_text(json.dumps(manifests, indent=2) + "\n")
+    plot_bars(merged, out)
+    plot_gradient(gradient, out)
+    print(f"wrote {out / 'summary.json'}, summary_rss.png, res1_gradient.png")
 
 
 if __name__ == "__main__":

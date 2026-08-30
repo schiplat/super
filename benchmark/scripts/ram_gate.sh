@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 # Refuse STB-2 if N * cap_mb would consume more than half of MemAvailable.
+# Suite default is modest (e.g. 10×64 MiB); do not treat a failed gate as “buy a huge VM”.
 set -euo pipefail
 COUNT="${1:?count}"
 CAP_MB="${2:?cap_mb}"

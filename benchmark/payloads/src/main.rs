@@ -15,7 +15,8 @@ struct Args {
     mode: Mode,
 
     /// mem-eat: stop growing after this many MiB and hold (safety cap).
-    #[arg(long, default_value_t = 512)]
+    /// Default 64 — suite targets ordinary 4–8 GiB labs, not half-machine heaps.
+    #[arg(long, default_value_t = 64)]
     cap_mb: usize,
 
     /// crash-random: RNG seed so all arms share the same crash schedule when configs are shared.

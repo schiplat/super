@@ -22,8 +22,8 @@ struct Args {
     #[arg(long)]
     output_dir: PathBuf,
 
-    /// mem-eat safety cap (MiB per process).
-    #[arg(long, default_value_t = 512)]
+    /// mem-eat safety cap (MiB per process). Default 64 for ordinary Lab hosts.
+    #[arg(long, default_value_t = 64)]
     cap_mb: usize,
 
     /// PRO-only: cgroup memory_limit bytes (STB-2-PRO). 0 = omit.

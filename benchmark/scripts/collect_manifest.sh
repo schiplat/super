@@ -65,8 +65,9 @@ manifest = {
     "methodology": {
         "latest_stable_snapshot": True,
         "arms": ["super-oss", "super-pro", "supervisord", "pm2"],
-        "order": "latin_square_cyclic_4",
-        "repeats_phase_b": 4,
+        "topology": os.environ.get("MODE", "one-host-one-arm"),
+        "arm": os.environ.get("BENCH_ARM", ""),
+        "repeats_phase_b": 3,
         "loop": "scenario_outer",
         "switch_gate": {
             "quiet_sec": int(os.environ.get("SUPER_BENCH_QUIET_SEC", "30")),

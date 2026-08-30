@@ -1,70 +1,97 @@
 # Super 同行基准测试方案
 
-> **文档版本：** 4.3（2026-08-28）  
-> **状态：** 方法学已按审阅 P0 锁定；**Lab 尚未完成 Phase A**  
-> **执行入口：** `benchmark/benchmark_all.sh` + `scripts/`  
+> **文档版本：** 6.0（2026-08-29）  
+> **状态：** 正式拓扑 = **4 台同规格主机并行 · 一机一臂 · 每臂 3 轮**；方法学定案，Lab 待跑  
+> **执行入口：** `benchmark/benchmark_all.sh`（每台机设 `BENCH_ARM`）+ `scripts/`  
 > **公开 docs：** [vs PM2](../docs/content/docs/04-production-scenarios/migrations/vs-pm2.md) **不得再写死 RSS 数字**；cgroup 强制不是 OSS 内置
 
 ---
 
-## 0. 定案摘要
+## 0. 产品初衷（本方案尺子）
+
+Super 的定位：**轻量、API-first 的原生进程守护**，替代 Supervisor / PM2 一类工具——单二进制、管好生命周期，边端与普通规格机器也能跑，配置与 HTTP/CLI 灵活够用。
+
+本 Lab **要对照 / 要证**的只有：
+
+| # | 主张 | 怎么证 |
+|---|------|--------|
+| 1 | **Daemon 不肥、不泄漏** | idle / soak 下 daemon-set RSS 有界、不持续爬升（与 supervisord / pm2 同机种对照） |
+| 2 | **场景够用** | crash 自启、日志吞吐、多程序、冷启动 / status / reload 能跑通且可对比 |
+| 3 | **灵活便捷（事实，不打分）** | Day-0 ONB 矩阵；不合成「更好用」分 |
+
+**明确不是：** 半机人造泄漏比拼；为大内存门控上大机；综合总分；「谁更省内存」营销话术。
+
+**Lab 规格：** 四台**同规格**普通业务机（建议 **4～8 GiB**）。负载参数适配该规格，**禁止**倒逼 20GiB+。
+
+---
+
+## 0a. 定案摘要（已确认）
 
 | 决策项 | 定案 |
 |--------|------|
-| 版本 | 各自**最新稳定版** dated snapshot；super = 最新 **release tag**（非 master） |
-| Arms | `super-oss` / `super-pro` / `supervisord` / `pm2` |
-| 循环 | **场景外层** + 场景内 Latin square 换 arm |
-| 轮数 | Phase A = **1** 缩短轮；Phase B = **4** 轮（order-4 Latin square，**不用 5**） |
-| 门控失败 | **整轮作废**（写入 `invalid_rounds.txt`），不在脏机上开下一 arm |
+| 版本 | 各自**最新稳定版** dated snapshot；super = 最新 **release tag** |
+| **四组齐全** | `super-oss` / `super-pro` / `supervisord` / `pm2`，均为独立测量对象 |
+| **正式拓扑** | **4 台同规格主机并行 · 一机一臂 · 每臂 3 轮** |
+| **禁止（对外结论）** | 同一台设备交错跑多家后用作公开数字 |
+| 同机交错 | 仅 `MODE=colocated` 烟测，禁止进入发布物 |
+| 轮数 | Phase A = 每臂 1 缩短轮；Phase B = 每臂 **3** 轮 |
 | 主指标 | 跑数前锁死（`primary_metrics.json`）；其余 secondary |
-| RSS | 主表 = daemon 集合；辅表 = tree RSS（**RSS 非 PSS**） |
-| PRO | 同场景同 N；图内同图并排；结论单列；**不把 PRO 当 OSS 能力** |
-| 安全 | 定性矩阵 + 探针；**默认产品姿态**与 **bench 控制面配置**分表 |
-| SEC-3 | 本 lab 若全是 root，只记录事实，**不声称测了特权分离** |
-| ONB | Day-0 **定性事实矩阵**（依赖 / 文件数 / 控制面）；**不打分**；与 MGT 分开 |
-| vs-pm2.md | 无 MB 数字、无「OSS 原生 cgroup」；Phase B 后如需数字必须引用本 lab snapshot |
+| RSS | 主表 = daemon 集合（PM2 含 God+agent）；辅表 = tree RSS（RSS 非 PSS） |
+| 无泄漏主证 | STB-3；RES-1 为 idle 基线 |
+| STB-2 | 默认 **`N=10` × `cap=64MiB`**；daemon 存活 + tree RSS 有界 |
+| PRO | 正式测量但**单列**：报告与 OSS 并排，标注 licensed plugins；不把 PRO 数字说成 OSS 能力 |
+| 安全 | 定性矩阵 + 探针；产品默认 vs bench 配置分表 |
+| ONB | 事实矩阵，不打分 |
+| vs-pm2.md | 无写死 MB、无 OSS 原生 cgroup |
 
 ---
 
-## 1. 循环顺序（P0，已锁死）
+## 1. 正式拓扑：一机一臂 · 并行
 
 ```
-for round in 1..R:                     # R=1 (A) or R=4 (B)
-  latin = cyclic_square[round]         # 见 scripts/lib.sh
-  for scenario in RES/STB…:            # 场景外层
-    generate configs ONCE              # 四 arm 共用同一 payload 路径与 crash seed
-    for arm in latin:
-      switch_gate or ABORT ROUND
-      runner
-    plot (OSS/PRO 同轴)
-  MGT + SEC (仍走门控)
-  STB-2-PRO if cgroup gate (PRO only, not a score)
-  round cooldown 60s
+# 四台同规格云主机（同镜像、同 vCPU/RAM/磁盘、尽量同可用区）
+host-oss: BENCH_ARM=super-oss     PHASE=B ./benchmark_all.sh
+host-pro: BENCH_ARM=super-pro     PHASE=B ./benchmark_all.sh   # + SUPER_BENCH_*
+host-sv:  BENCH_ARM=supervisord   PHASE=B ./benchmark_all.sh
+host-pm2: BENCH_ARM=pm2           PHASE=B ./benchmark_all.sh
+
+# 汇总：四份 results/ 拷到分析机
+python3 analysis/summarize.py --merge oss pro sv pm2 --out report/
 ```
 
-**禁止 arm 外层**（一家跑完全部场景再换家）：mem-eat 会污染同一 arm 的 soak，跨工具也不是同一时刻的机器状态。
+**单机内循环（只跑本机 arm）：**
 
-Cyclic Latin square（A=super-oss, B=super-pro, C=supervisord, D=pm2）：
+```
+for round in 1..3:
+  for scenario in RES/STB…:
+    generate configs (本 arm only; 四机同 N / 同 seed / 同 cap)
+    runner
+    plot
+  MGT + SEC
+  if arm==super-pro and cgroup: STB-2-PRO
+  round cooldown
+```
 
-| Round | 顺序 |
-|-------|------|
-| 1 | A B C D |
-| 2 | B C D A |
-| 3 | C D A B |
-| 4 | D A B C |
+**跨机公平契约：**
+
+1. 同云厂商、同规格（vCPU / RAM / 磁盘）、同 OS 镜像、同内核  
+2. 同 `PHASE` / `N` / `CAP_MB` / duration；同 payload 二进制（同 sha）  
+3. crash seed 跨臂一致（generator 同一 `seed_base`）  
+4. 各机 manifest 记录版本；汇总时逐项 diff  
+5. 禁止在一台机上跑两个 arm（连「顺便对比」也不行）  
 
 ---
 
-## 2. 切换门控（硬门槛 + 失败即作废轮）
+## 1b. 烟测拓扑：同机交错（非发布）
 
-实现：`scripts/switch_gate.sh`。
+`MODE=colocated PHASE=A`：单机 order-4 Latin square 四臂切换 —— **只验证脚本能跑通**。结果目录写入 `colocated_smoke=true`，检查表禁止用于对外数字。
 
-1. teardown 后 `drop_caches`（root 且 `SUPER_BENCH_DROP_CACHES=1`，默认开，记入 manifest）
-2. 静默 `SUPER_BENCH_QUIET_SEC`（默认 30）
-3. `loadavg_1 ≤ baseline + 0.5` 且 `MemAvailable ≥ baseline × 0.85`
-4. 最多等 180s；失败 **exit 2 → abort round**，不 skip 到下一 arm
+---
 
-基线在**每轮开始**记录。间隙 loadavg/mem 追加 `switch_gate.jsonl`。
+## 2. 切换门控
+
+- **一机一臂正式模式：** 场景之间做轻量 quiet（可选）；**没有**「换竞品」四家切换。
+- **同机烟测：** 保留 `switch_gate.sh`（teardown → drop_caches → quiet → load/mem 恢复）；失败作废轮。
 
 ---
 
@@ -73,50 +100,55 @@ Cyclic Latin square（A=super-oss, B=super-pro, C=supervisord, D=pm2）：
 | 语义 | payloads `--mode` | 行为 |
 |------|-------------------|------|
 | idle | `idle` | 睡眠 |
-| crash | `crash-random --seed {base+i}` | 程序 i 跨 arm 同一崩溃时间线 |
-| log | `log-throughput` | **持续写到 SIGTERM**；stderr 周期 `BENCH_RESULT:<lps>` |
-| mem-leak | `mem-eat --cap-mb 512` | 触碰页面涨到 cap 后 **hold**，禁止无界增长 |
+| crash | `crash-random --seed {base+i}` | 跨臂同一崩溃时间线 |
+| log | `log-throughput` | 持续写到 SIGTERM |
+| mem-leak | `mem-eat --cap-mb 64` | 涨到 cap 后 hold |
 
-- Super 程序来自 `$SUPER_ROOT/conf/conf.d/*.json` include，**不是** `super.toml` 里的 `[[program]]`（会被忽略）。
-- `startsecs=0`，`retry_limit`/`startretries`/`max_restarts` = 3，`autorestart=true`。
-- 日志：四 arm 关闭 rotation（`max_backups=0` / `maxbytes=0`）。
-- PM2：`PM2_HOME` 隔离；superd：**只杀跟踪 PID**，禁止 `pkill superd`。
-- supervisor inet `:9001` 是 **bench 控制面**，不是产品默认。SEC 矩阵分「产品默认」与「bench 配置」两列。
+- Super：`$SUPER_ROOT/conf/conf.d/*.json` include，不是 `[[program]]`
+- `startsecs=0`，retry=3，`autorestart=true`；四臂关 rotation
+- PM2：`PM2_HOME` 隔离；superd：只杀跟踪 PID
+- supervisor inet `:9001` = bench 控制面，非产品默认
 
-**RAM 门控：** `N × cap_mb < MemAvailable/2`（`scripts/ram_gate.sh`）。20×512MiB 需要 ≥20GiB 可用内存的一半以上；VM 不够就降 N 或 cap，禁止硬跑。
+### 默认规模（4～8 GiB）
 
-**cgroup 门控：** `scripts/cgroup_gate.sh`。失败则 STB-2-PRO 标记 *not applicable*，不当产品失败。
+| 场景 | N | 备注 |
+|------|---|------|
+| RES-1 / STB-3 / MGT | 50 | idle |
+| STB-1 | 30 | crash |
+| RES-2 / STB-4 | 10 | log |
+| STB-2 / STB-2-PRO | 10 | mem；`CAP_MB=64` |
+
+**N 梯度（RES-1 可扩展性）：** 每臂先跑 `N ∈ {50, 200, 500}` idle 各 60s，采集 daemon-set RSS vs N 折线，回答「随管理进程数增加，daemon 开销怎么涨」。Phase A / B 都跑。
+
+**RAM 门控：** `N × cap_mb < MemAvailable/2`（`scripts/ram_gate.sh`）。默认 `10×64` 小规格即可；不够则降 cap/N 并记 manifest，禁止为过门控上大机。
 
 ---
 
 ## 4. 预注册主指标
 
-| ID | 主指标 |
-|----|--------|
-| RES-1 | daemon-set RSS 中位数 |
-| RES-2 | 子进程 lines/s vs 裸跑 `/dev/null`（`scripts/bare_log_baseline.sh`） |
-| STB-1 | daemon 存活 + restart_sum（super `/metrics`，supervisorctl status，pm2 jlist） |
-| STB-2 | daemon 存活 + tree RSS 有界 |
-| STB-3 | daemon RSS 漂移（medium soak；Phase B 600s，**不称 long-running**） |
-| STB-4 | daemon 存活 + 吞吐 |
-| MGT-1 | 冷启动 poll → N running 的 wall ms |
-| MGT-2 | status ×20 的 p95 ms |
-| MGT-3 | reload/reread+update/reloadLogs 的 ms + daemon PID 是否不变 |
-| STB-2-PRO | cgroup 遏制事实（**不参与跨工具对比**） |
+| ID | 主指标 | 对应主张 |
+|----|--------|----------|
+| RES-1 | daemon-set RSS 中位数 | 轻量控制面 |
+| RES-2 | child lines/s vs bare | 日志场景 |
+| STB-1 | daemon 存活 + restart_sum | crash 自愈 |
+| STB-2 | daemon 存活 + tree RSS 有界 | 轻量压力有界 |
+| STB-3 | daemon RSS 漂移 | **无泄漏主证** |
+| STB-4 | daemon 存活 + 吞吐 | 持续日志 |
+| MGT-1/2/3 | cold poll / status p95 / reload | 可管理 |
+| STB-2-PRO | cgroup 遏制（仅 pro 机） | PRO 事实 |
 
-CPU% = sysinfo 0.30，相对**单核**；两次 refresh；**丢弃首样本**。采样 500ms。时钟 = monotonic。
-
-ONB **不是**主指标、不进 `primary_metrics.json`。采集脚本：`scripts/onboard_facts.sh`（见 §6a）。
+CPU%：sysinfo 0.30，单核相对；两次 refresh；丢弃首样本；采样 500ms；单调钟。
+ONB 不进 `primary_metrics.json`。
 
 ---
 
 ## 5. OSS / PRO
 
-- OSS：无 `plugins/`、无 `[license]`。
-- PRO：同一 `superd` + `security` + `isolation` + `auth_secret` + 许可证（env：`SUPER_BENCH_*`，公开物不含密钥）。
-- 图：`analysis/plot.py` 同轴，`super-oss` 实线 / `super-pro` 虚线，同色系；柱状图 PRO 用 hatch。
-- 声称：禁止「PRO 数字 = OSS 能力」；禁止「更安全」总结论；禁止综合总分。
-- 第三方：**OSS 轨可复现；PRO 轨需 vendor 许可证，PRO 数字不是可独立复核的科学主张。**
+- **super-oss：** 无 plugins / 无 license
+- **super-pro：** 同 superd + security + isolation + auth_secret + 许可证（`SUPER_BENCH_*`）
+- 图：四组同轴；OSS 实线、PRO 虚线同色系；**图注写清 PRO = licensed plugins**
+- 禁止：PRO 数字 = OSS 能力；「更安全」总结论；综合总分
+- 复现：OSS / supervisor / pm2 可公开复现；PRO 需许可证
 
 ---
 
@@ -124,68 +156,40 @@ ONB **不是**主指标、不进 `primary_metrics.json`。采集脚本：`script
 
 **产品默认（定性）：** OSS loopback fail-closed；supervisor 默认无 inet；pm2 本地 socket。
 
-**Bench 配置（实证 SEC-1…4）：** 四 arm 均开 loopback 控制面（super `:9002`，supervisor inet `:9001`）。PRO 仍绑 loopback + 认证；**不要**把 PRO 改成 0.0.0.0 再和 OSS 比暴露面。
+**Bench 配置（实证 SEC-1…4）：** 四组均开 loopback 控制面（super `:9002`，supervisor inet `:9001`）。PRO 仍 loopback + 认证；不要把 PRO 改成 0.0.0.0 再比暴露面。
 
 SEC-2：OSS 无认证预期可达；PRO 无凭据预期 401/403。
-
-SEC-3：`lab_all_root=true` 时降级为记录 uid，不比较特权模型。
-
----
+SEC-3：`lab_all_root=true` 时记录 uid，不比较特权模型。
 
 ## 6a. ONB — Day-0 上手事实（定性，不打分）
 
-**要回答的问题：** 让 **1 个托管进程** 出现在配置里、并能用**官方控制接口**查到它，各 arm 需要哪些运行时、几个文件、控制面长什么样。
-
-**不回答：** 谁更好用、谁更简单、读文档要多久。禁止合成「易上手分」。秒表 TFP（ONB-1）本版 **不做**。
-
-**与 MGT 的边界：** ONB = 尚未（或刚）装好时的依赖与配置面；MGT = daemon 已在管 N 个进程时的操作延迟。
-
-实现：`scripts/onboard_facts.sh OUT.json [--generated DIR]`。编排在 Phase 开头对 **N=1 idle** 的 generator 输出跑一次，写入 `onboard_facts.json`。
-
-### 矩阵（报告用表；单元格填脚本事实 + 下表产品默认）
-
-| 维度 | super-oss | super-pro | supervisord | pm2 |
-|------|-----------|-----------|-------------|-----|
-| 运行时 | 静态 `superd`（无 Python/Node） | 同 OSS + 插件 `.so`/`.dylib` | Python + `supervisord` | Node + `pm2` |
-| 最小文件（generator N=1） | `conf/super.toml` + `conf/conf.d/*.json` | 同 OSS，另需 `plugins/` 与许可证字段 | `supervisord.conf` | `ecosystem.config.js` |
-| 控制面（**产品默认**） | HTTP `127.0.0.1:9002`，无 API 认证 | 认证（security 插件 + `auth_secret`） | **无 inet**，直到显式配置 | `PM2_HOME` 本地 socket |
-| 控制面（**bench 配置**） | 同上 loopback | 仍 loopback + 认证 | 打开 `127.0.0.1:9001` 供 supervisorctl | 隔离 `PM2_HOME` |
-| 日志 | OSS 内建 rotation（bench 关 backups） | 同 OSS | `logfile_maxbytes`（bench=0） | 文件；rotation 常需 `pm2-logrotate`（本套件不装） |
-| 额外步骤 | — | 插件目录、许可证、`auth_secret`；缺则硬失败 | 安装 Python 发行 | 安装 Node |
-| 已核实踩坑（文档，非秒表） | 程序不在 `[[program]]`；必须 `SUPER_ROOT/conf/super.toml` | 同 OSS + licensed 硬失败 | inet 无密码则可连 | `pm2 kill` 作用域=当前 `PM2_HOME`；cluster 仅 Node（不测） |
-
-**声称边界：** 只陈述上表与 `onboard_facts.json` 中的路径/版本/文件列表。PRO 额外步骤单列，不与 OSS 比「谁更简单」。禁止「配置更便利」总结论。
+事实矩阵：运行时 / 最小文件 / 控制面（默认 vs bench）/ 日志 / 额外步骤。只陈述路径、版本、文件列表；禁止易上手分、TFP 秒表。
 
 ---
 
-## 7. 时间预算（场景外层，4 arm，4 轮）
+## 7. 时间预算
 
-门控约 6 场景 × 4 arm + MGT/SEC ≈ 30 次/轮 × ~40s ≈ 20 min 门控。  
-有效负载 Phase B 单轮约 90–120 min。4 轮 + 轮间 60s ≈ **8–12h**。Phase A 缩短 duration，约 1–2h。
+- 单臂 Phase B：约 3 轮 ×（6 场景 + MGT/SEC）≈ **5–9h**
+- 4 台并行墙钟 ≈ 单臂时间（并行无叠加）
+- Phase A（1 轮/臂）：约 1–2h
 
 ---
 
-## 8. 检查表（相对 4.1 的增量）
+## 8. 检查表
 
-- [ ] 场景外层，而非 arm 外层
-- [ ] 4 轮而非 5；Latin square 平衡
-- [ ] 门控失败 → 作废轮，无 skip
-- [ ] log payload 持续写；mem-eat 有 cap 且触碰页面
-- [ ] RAM 门控、cgroup 门控
-- [ ] 主指标预注册
-- [ ] bench vs 产品默认 安全分表
-- [ ] SEC-3 root lab 不声称 uid 隔离
+- [ ] 四组各有隔离、干净的正式结果；对外数字 **非** colocated 产物
+- [ ] 四机 manifest 可对齐（规格 / 镜像 / 版本 / N / cap / payload sha）
+- [ ] 主张对齐初衷；STB-2 ≤ 10×64；无泄漏看 STB-3
+- [ ] 主指标预注册；安全分表；ONB 不打分
 - [ ] vs-pm2 无写死 MB、无 OSS 原生 cgroup
-- [ ] CSV：`time_ms,cpu_usage,memory_mb,total_tree_rss_mb,managed_process_count`
-- [ ] 图含 IQR / 双 Super 系列
-- [ ] ONB 事实已采集（`onboard_facts.json`）；报告无易上手分、无 TFP 秒表
-- [ ] `CpuBurn` 本套件不用；CPU quota 演示未做则保持 out of scope
+- [ ] PRO 单列，未写成 OSS 能力
+- [ ] 图含 IQR；报告含 Limitations + 版本 + 机器规格 + 原始数据包
 
 ---
 
 ## 9. Out of scope
 
-K8s / systemd 嵌套 / 多机；PM2 cluster；ui/notify；OSS cgroup 强制；综合总分；易上手/迁移分数；ONB-1 秒表；x86 外推；把 600s soak 写成「长期运行」。
+K8s / 多机编排产品对比；PM2 cluster；ui/notify；OSS cgroup 强制；综合总分；易上手分；把同机交错结果当公开发布；把 600s soak 写成「长期运行」。
 
 ---
 
@@ -193,10 +197,15 @@ K8s / systemd 嵌套 / 多机；PM2 cluster；ui/notify；OSS cgroup 强制；�
 
 ```bash
 cd benchmark && cargo build --release
-SKIP_PRO=1 PHASE=A ./benchmark_all.sh
-# PRO:
-# export SUPER_BENCH_AUTH_SECRET SUPER_BENCH_LICENSE_FILE SUPER_BENCH_PLUGINS_DIR
-PHASE=B ./benchmark_all.sh
+
+# 四台机分别：
+BENCH_ARM=super-oss   PHASE=B ./benchmark_all.sh
+BENCH_ARM=super-pro   PHASE=B ./benchmark_all.sh   # + SUPER_BENCH_*
+BENCH_ARM=supervisord PHASE=B ./benchmark_all.sh
+BENCH_ARM=pm2         PHASE=B ./benchmark_all.sh
+
+# 仅烟测（禁止用于对外比分）：
+MODE=colocated PHASE=A ./benchmark_all.sh
 ```
 
 脚本：`scripts/{switch_gate,collect_manifest,ram_gate,cgroup_gate,sec_probes,mgt_run,bare_log_baseline,onboard_facts}.sh`
