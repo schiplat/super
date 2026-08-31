@@ -196,6 +196,8 @@ Use these strings in the `triggers` field. Full payload reference: [System Event
 | `process_recovered` | A previously-crashing process has become healthy. |
 | `system_startup` | The daemon started. |
 | `system_shutdown` | The daemon is shutting down. |
+| `memory_pressure` | 💎 `isolation` — live memory of a limited cgroup crossed the warning threshold (pre-kill warning). |
+| `memory_oom_kill` | 💎 `isolation` — kernel OOM-killed a limited cgroup (post-kill confirmation). |
 | `*` | All of the above. |
 
 ---
@@ -318,9 +320,11 @@ url = "https://api.example.com/alerts"
 | `process_started` | `program_id`, `program_name`, `pid` |
 | `system_startup` | `hostname` |
 | `system_shutdown` | *(none)* |
+| `memory_pressure` | `program_id`, `program_name`, `pid`, `usage_bytes`, `limit_bytes`, `warn_bytes` |
+| `memory_oom_kill` | `program_id`, `program_name`, `pid`, `usage_bytes`, `limit_bytes`, `anon_bytes` |
 
 > [!WARNING]
-> `payload.signal` is the terminating signal — `9` (SIGKILL) with `exit_code: null` usually means a kernel/cgroup **OOM kill** when [resource limits](/docs/05-advanced-management/resource-isolation) are enforced.
+> `payload.signal` is the terminating signal — `9` (SIGKILL) with `exit_code: null` usually means a kernel/cgroup **OOM kill** when [resource limits](/docs/05-advanced-management/resource-isolation) are enforced. With the `isolation` plugin, a dedicated `memory_oom_kill` event fires alongside for exact confirmation.
 
 ### `json_quote` helper
 

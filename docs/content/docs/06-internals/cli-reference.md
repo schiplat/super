@@ -51,8 +51,11 @@ super add <COMMAND> [ARGS...] [FLAGS]
 *   `--startsecs <N>`: Seconds before exit counts as stable start (default: `10`).
 *   `--stopsecs <N>`: Seconds to wait after SIGTERM before SIGKILL (default: server `shutdown_timeout`).
 *   `--cron <EXPR>`: Cron expression for scheduled tasks (see [Scheduled Tasks](/docs/02-essentials/scheduled-tasks)).
-*   `--cpu <PCT>`: CPU quota percentage (e.g. `50.0`; `isolation` plugin, Linux only).
-*   `--memory <BYTES>`: Memory limit in bytes (`isolation` plugin, Linux only).
+*   `--cpu <CORES>`: CPU quota in cores (e.g. `1.5`; `isolation` plugin, Linux only).
+*   `--memory <MB>`: Memory hard limit in **MB** (`isolation` plugin, Linux only).
+*   `--memory-warn-percent <PCT>`: Pre-kill warning threshold as % of limit (default `80`; `0` off; `isolation` plugin, Linux only).
+*   `--memory-warn-headroom <MB>`: Warn within this many MB of the limit (`0` off).
+*   `--memory-high <MB>`: Kernel soft limit in MB — throttles before OOM-kill (`0` off, opt-in).
 
 ### `update`
 Update configuration for an existing program.
@@ -71,7 +74,7 @@ super update <name|id> [FLAGS]
 *   `--artifact-extract`: Extract archive before swap (default: `false`).
 *   Full flow: [Atomic OTA Updates](/docs/03-orchestration/ota-updates).
 *   Scheduled tasks: `--cron` (see [Scheduled Tasks](/docs/02-essentials/scheduled-tasks)).
-*   Licensed (`isolation` plugin): `--cpu`, `--memory` (Linux only; warns if plugin not loaded).
+*   Licensed (`isolation` plugin): `--cpu`, `--memory`, `--memory-warn-percent`, `--memory-warn-headroom`, `--memory-high` (Linux only; warns if plugin not loaded).
 
 ### `remove` (alias `rm`)
 Remove a program configuration. It must be stopped first (see [Process Operations](#process-operations)).

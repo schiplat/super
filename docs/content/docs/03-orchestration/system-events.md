@@ -18,10 +18,13 @@ This page is the canonical list of all event types. Configuration for reacting t
 | `process_recovered` | `ProcessRecovered` | Process was unstable (backoff/fatal path) and is now **Healthy** again | `program_id`, `program_name`, `pid`, `uptime_sec` |
 | `system_startup` | `SystemStartup` | `superd` manager loop started (after loading programs) | `hostname` |
 | `system_shutdown` | `SystemShutdown` | `superd` is shutting down gracefully | *(none)* |
+| `memory_pressure` | `MemoryPressure` | Live (anonymous) memory of a limited cgroup crossed the warning threshold — process still running | `program_id`, `program_name`, `pid`, `usage_bytes`, `limit_bytes`, `warn_bytes` |
+| `memory_oom_kill` | `MemoryOomKill` | Kernel OOM-killed a limited cgroup (`memory.events` → `oom_kill` incremented) | `program_id`, `program_name`, `pid`, `usage_bytes`, `limit_bytes`, `anon_bytes` |
 
 ### Notes
 
 * **`signal` field** (`process_fatal` / `process_backoff`): set when the process was terminated by a signal rather than an exit code (e.g. `9` = SIGKILL, including cgroup OOM kills). When present, `exit_code` is `null`. OSS `superd` captures SIGKILL/OOM termination this way; see the Web UI / `super events` for the recorded anomaly.
+* **`memory_pressure` / `memory_oom_kill`**: emitted by the licensed `isolation` plugin on Linux for programs with `resource_limits.memory_limit`. `memory_pressure` is a **pre-kill warning** (Tier 1 / opt-in Tier 2 throttle); `memory_oom_kill` is a **post-kill confirmation** that makes an OOM kill distinguishable from a manual `kill -9`. See [Resource Isolation — Warning & visibility](/docs/05-advanced-management/resource-isolation#warning--visibility-three-tier).
 * **`process_fatal` + `log_tail`**: Licensed webhooks (`notify` plugin) can attach the last lines of stderr when `include_log_tail = true` on a channel. The tail is read at event time from the program log file.
 * **`process_recovered`**: Only emitted after a prior crash/backoff (`alert_pending_recovery`). A clean first start does not emit recovery.
 * **Health check failures alone** do not emit a dedicated event today. A failing health check keeps status at `Running`; repeated process exits still emit `process_backoff` / `process_fatal`.

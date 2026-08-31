@@ -32,15 +32,15 @@ OSS Super **stores** optional `resource_limits` on a program but **does not enfo
   "name": "worker",
   "command": "/usr/local/bin/worker",
   "resource_limits": {
-    "memory_limit": 268435456,
-    "cpu_quota": 25.0
+    "memory_limit": 256,
+    "cpu_quota": 0.25
   }
 }
 ```
 
 Without that plugin, Super logs that limits are stored only. Do not describe cgroup enforcement as an OSS built-in.
 
-**Different from PM2's `--max-memory-restart`:** PM2's memory option is a **soft watchdog** — PM2 polls each process roughly every 30 seconds and gracefully restarts it once RSS exceeds the threshold. Super's `memory_limit` is a **hard** cgroup v2 cap: the kernel OOM-kills the cgroup when it is exceeded (no graceful restart in between). For PM2-style "restart on memory threshold" behaviour, poll `mem_usage` from the API and trigger a graceful restart yourself — see [Programmable Ops](/docs/04-production-scenarios/observability/programmatic-control).
+**Different from PM2's `--max-memory-restart`:** PM2's memory option is a **soft watchdog** — PM2 polls each process roughly every 30 seconds and gracefully restarts it once RSS exceeds the threshold. Super's `memory_limit` is a **hard** cgroup v2 cap: the kernel OOM-kills the cgroup when it is exceeded (no graceful restart in between). Super adds **warning + OOM-confirmation events** around the hard cap (see [Resource Isolation — Warning & visibility](/docs/05-advanced-management/resource-isolation#warning--visibility-three-tier)), but never soft-restarts on memory. For PM2-style "restart on memory threshold" behaviour, poll `mem_usage` from the API and trigger a graceful restart yourself — see [Programmable Ops](/docs/04-production-scenarios/observability/programmatic-control).
 
 ## 3. Language agnostic
 

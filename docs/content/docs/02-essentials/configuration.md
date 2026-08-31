@@ -163,8 +163,8 @@ The following require **subscription plugins** (resource limits on Linux). OSS a
       "name": "heavy-job",
       "command": "./processor",
       "resource_limits": {
-        "memory_limit": 536870912,
-        "cpu_quota": 50.0
+        "memory_limit": 512,
+        "cpu_quota": 0.5
       }
     }
   ]
