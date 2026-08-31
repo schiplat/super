@@ -4,7 +4,7 @@ use tokio::task::JoinHandle;
 use uuid::Uuid;
 
 /// Maximum number of persisted lifecycle events kept per program (oldest dropped).
-pub const MAX_EVENTS_PER_PROGRAM: usize = 50;
+pub const MAX_EVENTS_PER_PROGRAM: usize = 100;
 
 /// Runtime state (formerly private to Manager; now public).
 pub struct RuntimeState {

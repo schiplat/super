@@ -210,7 +210,7 @@ Read a program's persisted lifecycle/exception event history (`data/events.json`
 | `retry_count` | Backoff retry counter (fatal/backoff only) |
 | `msg` | Human-readable detail |
 
-Events are retained per program (max 50, oldest dropped) across `superd` restarts.
+Events are retained per program (**max 100**, oldest dropped) across `superd` restarts. Every record includes the `ts` Unix timestamp (seconds) shown in the field table above.
 
 ### Send Signal
 

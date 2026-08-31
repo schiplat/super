@@ -154,7 +154,7 @@ super events <name|id> --limit 10   # last 10 events
 | :--- | :--- |
 | `--limit N` | Show only the N most recent events |
 
-Events are recorded by `superd` to `data/events.json` (newest per program; capped at 50 per program, oldest dropped). The `signal` column shows the terminating signal — `9` (`SIGKILL`) typically indicates a cgroup/kernel OOM kill under `resource_limits`. Backed by `GET /api/v1/programs/{id}/events`.
+Events are recorded by `superd` to `data/events.json`. Every event carries a **Unix timestamp** (seconds, `ts` field in the API/JSON) — the table's `Time` column renders it as local time. Events are kept **newest per program, capped at 100 per program, oldest dropped** (across `superd` restarts). The `signal` column shows the terminating signal — `9` (`SIGKILL`) typically indicates a cgroup/kernel OOM kill under `resource_limits`. Backed by `GET /api/v1/programs/{id}/events`.
 
 ### `logs`
 Read historical lines from disk and/or stream live output via WebSocket.

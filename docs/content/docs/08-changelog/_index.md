@@ -26,6 +26,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - `super update` hot-updates `memory_warn_percent`, `memory_warn_headroom`, and `memory_high` on running programs alongside `memory_limit` / `cpu_quota`.
 - Dashboard create/edit forms expose the three new memory fields; process detail shows MB/cores units.
+- Program event history raised from 50 to **100 events per program** (oldest dropped); every record carries a Unix `ts` timestamp (docs now state it explicitly).
 
 ### Fixed
 
