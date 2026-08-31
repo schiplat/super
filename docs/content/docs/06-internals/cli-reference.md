@@ -73,11 +73,11 @@ super update <name|id> [FLAGS]
 *   Scheduled tasks: `--cron` (see [Scheduled Tasks](/docs/02-essentials/scheduled-tasks)).
 *   Licensed (`isolation` plugin): `--cpu`, `--memory` (Linux only; warns if plugin not loaded).
 
-### `rm` (or `remove`)
+### `remove` (alias `rm`)
 Remove a program configuration. It must be stopped first (see [Process Operations](#process-operations)).
 
 ```bash
-super rm <name|@group|id|all>
+super remove <name|@group|id|all>
 ```
 
 ## Process Operations
@@ -85,7 +85,7 @@ super rm <name|@group|id|all>
 Control commands take a single target, written PM2-style as a union:
 
 ```bash
-super <start|stop|restart|rm> <name|@group|id|all>
+super <start|stop|restart|remove> <name|@group|id|all>
 ```
 
 *   `<name>` — exact program name (like PM2's `app_name`).
