@@ -65,10 +65,13 @@ impl PluginExtensionAdapter {
         }
 
         if let Some(init) = vtable.init {
+            let host = crate::plugin::host_emit::host_vtable();
             // SAFETY: `init` is a valid function pointer from the plugin's
             // `SuperPluginV1` vtable, whose `api_version` was checked above.
-            // The ABI contract is a synchronous `extern "C" fn() -> i32`.
-            let code = unsafe { init() };
+            // The ABI contract is a synchronous `extern "C" fn(*const
+            // SuperPluginHostV1) -> i32`; the host table outlives the call and
+            // the plugin copies any callback pointers it needs.
+            let code = unsafe { init(&host) };
             if code != 0 {
                 return Err(plugin_hook_error(&plugin_id, "init", code));
             }

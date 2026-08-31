@@ -87,8 +87,11 @@ async fn test_store_resource_limits_roundtrip() {
             name: "limited".to_string(),
             command: "sleep".to_string(),
             resource_limits: Some(ResourceLimits {
-                cpu_quota: Some(50.0),
-                memory_limit: Some(104_857_600),
+                cpu_quota: Some(0.5),
+                memory_limit: Some(100),
+                memory_warn_percent: Some(80),
+                memory_warn_headroom: None,
+                memory_high: Some(88),
             }),
             ..Default::default()
         },
@@ -103,6 +106,8 @@ async fn test_store_resource_limits_roundtrip() {
         .expect("Load failed");
     let cfg = loaded.get(&id).unwrap();
     let limits = cfg.resource_limits.as_ref().expect("limits missing");
-    assert_eq!(limits.cpu_quota, Some(50.0));
-    assert_eq!(limits.memory_limit, Some(104_857_600));
+    assert_eq!(limits.cpu_quota, Some(0.5));
+    assert_eq!(limits.memory_limit, Some(100));
+    assert_eq!(limits.memory_warn_percent, Some(80));
+    assert_eq!(limits.memory_high, Some(88));
 }

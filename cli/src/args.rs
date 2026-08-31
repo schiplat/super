@@ -84,13 +84,25 @@ pub enum Commands {
         #[arg(long, help_heading = "Resource Isolation")]
         cron: Option<String>,
 
-        /// CPU quota percentage (e.g. 50.0 for 0.5 core; requires isolation plugin)
+        /// CPU quota in cores (e.g. 1.5 for 1.5 cores; requires isolation plugin)
         #[arg(long, help_heading = "Resource Isolation")]
         cpu: Option<f32>,
 
-        /// Memory limit in bytes (requires isolation plugin)
+        /// Memory hard limit in MB (e.g. 512; requires isolation plugin)
         #[arg(long, help_heading = "Resource Isolation")]
         memory: Option<u64>,
+
+        /// Memory pressure warning at this % of the hard limit (1–100; 0 disables, default 80)
+        #[arg(long, help_heading = "Resource Isolation")]
+        memory_warn_percent: Option<u32>,
+
+        /// Memory pressure warning within this many MB of the hard limit (0 disables)
+        #[arg(long, help_heading = "Resource Isolation")]
+        memory_warn_headroom: Option<u64>,
+
+        /// Kernel soft limit (memory.high) in MB — throttles before the hard limit (0 disables)
+        #[arg(long, help_heading = "Resource Isolation")]
+        memory_high: Option<u64>,
 
         /// Auto-restart policy: unexpected (default), true, or false
         #[arg(long, value_parser = ["unexpected", "true", "false"])]
@@ -152,13 +164,25 @@ pub enum Commands {
         #[arg(long, help_heading = "Resource Isolation")]
         cron: Option<String>,
 
-        /// CPU quota percentage (requires isolation plugin)
+        /// CPU quota in cores (requires isolation plugin)
         #[arg(long, help_heading = "Resource Isolation")]
         cpu: Option<f32>,
 
-        /// Memory limit in bytes (requires isolation plugin)
+        /// Memory hard limit in MB (requires isolation plugin)
         #[arg(long, help_heading = "Resource Isolation")]
         memory: Option<u64>,
+
+        /// Memory pressure warning at this % of the hard limit (1–100; 0 disables, default 80)
+        #[arg(long, help_heading = "Resource Isolation")]
+        memory_warn_percent: Option<u32>,
+
+        /// Memory pressure warning within this many MB of the hard limit (0 disables)
+        #[arg(long, help_heading = "Resource Isolation")]
+        memory_warn_headroom: Option<u64>,
+
+        /// Kernel soft limit (memory.high) in MB — throttles before the hard limit (0 disables)
+        #[arg(long, help_heading = "Resource Isolation")]
+        memory_high: Option<u64>,
 
         /// Auto-restart policy: unexpected, true, or false
         #[arg(long, value_parser = ["unexpected", "true", "false"])]

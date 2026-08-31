@@ -170,7 +170,7 @@ args = ["--mode", "cpu-burn"]
 autostart = true
 retry_limit = 0
 [program.resource_limits]
-cpu_quota = 20.0
+cpu_quota = 0.2
 EOF
 
 "$SUPER_CLI" apply --file "$CONFIG_DIR/cpu_limit.toml" > /dev/null
@@ -222,7 +222,7 @@ args = ["--mode", "mem-eat"]
 autostart = true
 retry_limit = 0
 [program.resource_limits]
-memory_limit = 52428800
+memory_limit = 50
 EOF
 
 "$SUPER_CLI" apply --file "$CONFIG_DIR/mem_limit.toml" > /dev/null

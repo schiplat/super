@@ -6,7 +6,18 @@
       "command": "stress",
       "args": ["-c", "1"],
       "resource_limits": {
-         "cpu_quota": 20.0
+         "cpu_quota": 0.2
+      }
+    },
+    {
+      "name": "mem-test",
+      "command": "stress",
+      "args": ["--vm", "1", "--vm-bytes", "300M"],
+      "resource_limits": {
+        "memory_limit": 512,
+        "memory_warn_percent": 80,
+        "memory_high": 448,
+        "cpu_quota": 1.0
       }
     }
   ]

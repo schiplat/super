@@ -484,6 +484,34 @@ pub enum SystemEvent {
     },
     /// Manager process shutting down
     SystemShutdown,
+    /// Anonymous memory of a limited cgroup crossed the warning threshold
+    /// (pre-kill warning; process still running).
+    MemoryPressure {
+        program_id: Uuid,
+        program_name: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        pid: Option<u32>,
+        /// Anonymous memory in bytes at the time of the warning.
+        usage_bytes: u64,
+        /// Hard limit (`memory.max`) in bytes.
+        limit_bytes: u64,
+        /// Effective warning threshold in bytes (percent or headroom derived).
+        warn_bytes: u64,
+    },
+    /// Kernel OOM-killed a limited cgroup (`memory.events` → `oom_kill`
+    /// incremented); definitive post-mortem confirmation.
+    MemoryOomKill {
+        program_id: Uuid,
+        program_name: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        pid: Option<u32>,
+        /// Anonymous memory in bytes at detection.
+        anon_bytes: u64,
+        /// Hard limit (`memory.max`) in bytes.
+        limit_bytes: u64,
+        /// Total memory usage (`memory.current`) in bytes.
+        usage_bytes: u64,
+    },
 }
 
 impl SystemEvent {
@@ -495,6 +523,8 @@ impl SystemEvent {
             SystemEvent::SystemStartup { .. } => "system_startup",
             SystemEvent::ProcessRecovered { .. } => "process_recovered",
             SystemEvent::SystemShutdown => "system_shutdown",
+            SystemEvent::MemoryPressure { .. } => "memory_pressure",
+            SystemEvent::MemoryOomKill { .. } => "memory_oom_kill",
         }
     }
 
@@ -503,7 +533,9 @@ impl SystemEvent {
             SystemEvent::ProcessFatal { program_name, .. }
             | SystemEvent::ProcessBackoff { program_name, .. }
             | SystemEvent::ProcessStarted { program_name, .. }
-            | SystemEvent::ProcessRecovered { program_name, .. } => Some(program_name),
+            | SystemEvent::ProcessRecovered { program_name, .. }
+            | SystemEvent::MemoryPressure { program_name, .. }
+            | SystemEvent::MemoryOomKill { program_name, .. } => Some(program_name),
             SystemEvent::SystemStartup { .. } | SystemEvent::SystemShutdown => None,
         }
     }

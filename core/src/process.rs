@@ -74,6 +74,32 @@ pub fn spawn_process(
     #[cfg(unix)]
     cmd.process_group(0);
 
+    // Reset OOM score for managed children on Linux. superd lowers its own
+    // `oom_score_adj` to -1000 at bootstrap (daemon self-protection); that value
+    // is inherited across fork/exec, which would make every managed program
+    // OOM-immune — the kernel then can never kill it when it exceeds
+    // `resource_limits.memory_limit`, turning the hard cap into a livelock.
+    // Writing 0 raises the score (-1000 → 0), which needs no capability.
+    #[cfg(target_os = "linux")]
+    unsafe {
+        // SAFETY: `pre_exec` runs in the child after fork, before exec.
+        // `open`/`write`/`close` are async-signal-safe per POSIX.
+        cmd.pre_exec(|| {
+            let path = c"/proc/self/oom_score_adj";
+            let fd = libc::open(path.as_ptr(), libc::O_WRONLY);
+            if fd < 0 {
+                return Err(std::io::Error::last_os_error());
+            }
+            let buf = b"0\n";
+            let written = libc::write(fd, buf.as_ptr().cast(), buf.len());
+            libc::close(fd);
+            if written != buf.len() as isize {
+                return Err(std::io::Error::last_os_error());
+            }
+            Ok(())
+        });
+    }
+
     // 5. Pipes
     cmd.stdout(Stdio::piped());
     cmd.stderr(Stdio::piped());

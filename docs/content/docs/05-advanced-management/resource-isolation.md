@@ -13,7 +13,7 @@ Super integrates directly with the Linux Kernel's Control Groups (v2) to provide
 
 ## Configuration Reference
 
-Resource limits are defined per program — via JSON stack files, the API, or CLI (`super add --memory-limit ... --cpu-quota ...`).
+Resource limits are defined per program — via JSON stack files, the API, or CLI (`super add --memory 512 --cpu 1.5`).
 
 ```json
 {

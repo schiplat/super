@@ -205,11 +205,19 @@ pub fn print_info(info: ProgramInfo) {
     if let Some(limits) = &info.config.resource_limits {
         println!("Resources:");
         if let Some(cpu) = limits.cpu_quota {
-            println!("  CPU Quota: {:.1}%", cpu);
+            println!("  CPU Quota: {:.2} cores", cpu);
         }
         if let Some(mem) = limits.memory_limit {
-            const MB: u64 = 1024 * 1024;
-            println!("  Mem Limit: {:.1} MB ({})", mem as f64 / MB as f64, mem);
+            println!("  Mem Limit: {} MB", mem);
+        }
+        if let Some(w) = limits.memory_warn_percent {
+            println!("  Mem Warn:  {}% of limit", w);
+        }
+        if let Some(h) = limits.memory_warn_headroom {
+            println!("  Mem Warn Headroom: {} MB", h);
+        }
+        if let Some(high) = limits.memory_high {
+            println!("  Mem High (soft): {} MB", high);
         }
     }
 

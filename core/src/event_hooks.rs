@@ -141,7 +141,10 @@ fn matches_hook(hook: &EventHookConfig, event: &SystemEvent) -> bool {
     }
 }
 
-fn build_payload(event: &SystemEvent) -> anyhow::Result<String> {
+/// Build the JSON webhook/hook payload for a system event.
+///
+/// Exposed for integration tests; the canonical entry point is [`emit`].
+pub fn build_payload(event: &SystemEvent) -> anyhow::Result<String> {
     let hostname = hostname::get()
         .map(|h| h.to_string_lossy().to_string())
         .unwrap_or_else(|_| "unknown".to_string());
@@ -187,6 +190,22 @@ fn build_payload(event: &SystemEvent) -> anyhow::Result<String> {
             "pid": pid,
             "uptime_secs": uptime_sec,
         })),
+        SystemEvent::MemoryPressure {
+            program_id,
+            program_name,
+            pid,
+            ..
+        }
+        | SystemEvent::MemoryOomKill {
+            program_id,
+            program_name,
+            pid,
+            ..
+        } => Some(json!({
+            "id": program_id,
+            "name": program_name,
+            "pid": pid,
+        })),
         SystemEvent::SystemStartup { .. } | SystemEvent::SystemShutdown => None,
     };
 
@@ -217,6 +236,26 @@ fn build_payload(event: &SystemEvent) -> anyhow::Result<String> {
         SystemEvent::ProcessRecovered { uptime_sec, .. } => json!({ "uptime_sec": uptime_sec }),
         SystemEvent::SystemStartup { hostname } => json!({ "hostname": hostname }),
         SystemEvent::SystemShutdown => json!({}),
+        SystemEvent::MemoryPressure {
+            usage_bytes,
+            limit_bytes,
+            warn_bytes,
+            ..
+        } => json!({
+            "usage_bytes": usage_bytes,
+            "limit_bytes": limit_bytes,
+            "warn_bytes": warn_bytes,
+        }),
+        SystemEvent::MemoryOomKill {
+            anon_bytes,
+            limit_bytes,
+            usage_bytes,
+            ..
+        } => json!({
+            "usage_bytes": usage_bytes,
+            "limit_bytes": limit_bytes,
+            "anon_bytes": anon_bytes,
+        }),
     };
 
     let body = json!({
@@ -288,6 +327,33 @@ fn build_env(event: &SystemEvent) -> HashMap<String, String> {
                 env.insert("SUPER_PID".to_string(), p.to_string());
             }
             env.insert("SUPER_UPTIME_SECS".to_string(), uptime_sec.to_string());
+        }
+        SystemEvent::MemoryPressure {
+            program_id,
+            program_name,
+            pid,
+            usage_bytes,
+            limit_bytes,
+            ..
+        }
+        | SystemEvent::MemoryOomKill {
+            program_id,
+            program_name,
+            pid,
+            usage_bytes,
+            limit_bytes,
+            ..
+        } => {
+            env.insert("SUPER_ID".to_string(), program_id.to_string());
+            env.insert("SUPER_NAME".to_string(), program_name.clone());
+            if let Some(p) = pid {
+                env.insert("SUPER_PID".to_string(), p.to_string());
+            }
+            env.insert("SUPER_USAGE_BYTES".to_string(), usage_bytes.to_string());
+            env.insert("SUPER_LIMIT_BYTES".to_string(), limit_bytes.to_string());
+            if let SystemEvent::MemoryPressure { warn_bytes, .. } = event {
+                env.insert("SUPER_WARN_BYTES".to_string(), warn_bytes.to_string());
+            }
         }
         SystemEvent::SystemStartup { .. } | SystemEvent::SystemShutdown => {}
     }

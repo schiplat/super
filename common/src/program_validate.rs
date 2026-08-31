@@ -130,12 +130,28 @@ fn validate_resource_limits_create(limits: &ResourceLimits) -> anyhow::Result<()
     if let Some(c) = limits.cpu_quota
         && c <= 0.0
     {
-        bail!("resource_limits.cpu_quota: must be > 0 (got {c})");
+        bail!("resource_limits.cpu_quota: must be > 0 cores (got {c})");
     }
     if let Some(m) = limits.memory_limit
         && m == 0
     {
-        bail!("resource_limits.memory_limit: must be > 0");
+        bail!("resource_limits.memory_limit: must be > 0 MB");
+    }
+    if let Some(w) = limits.memory_warn_percent
+        && w > 100
+    {
+        bail!("resource_limits.memory_warn_percent: must be 0–100 (got {w})");
+    }
+    if let Some(h) = limits.memory_warn_headroom
+        && h > 0
+        && limits.memory_limit.is_none()
+    {
+        bail!("resource_limits.memory_warn_headroom: requires memory_limit");
+    }
+    if let Some(h) = limits.memory_high
+        && h == 0
+    {
+        bail!("resource_limits.memory_high: must be > 0 MB");
     }
     Ok(())
 }

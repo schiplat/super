@@ -30,7 +30,7 @@ use tokio::sync::{broadcast, mpsc};
 use uuid::Uuid;
 
 /// Merge `resource_limits` from an update request into stored config.
-/// `-1.0` cpu / `0` memory are sentinels that clear the corresponding field.
+/// `-1.0` cpu / `0` memory / `0` warn+high are sentinels that clear a field.
 fn apply_resource_limits_patch(existing: &mut Option<ResourceLimits>, patch: ResourceLimits) {
     if let Some(old) = existing {
         if let Some(c) = patch.cpu_quota {
@@ -39,16 +39,36 @@ fn apply_resource_limits_patch(existing: &mut Option<ResourceLimits>, patch: Res
         if let Some(m) = patch.memory_limit {
             old.memory_limit = if m == 0 { None } else { Some(m) };
         }
+        if let Some(w) = patch.memory_warn_percent {
+            old.memory_warn_percent = if w == 0 { None } else { Some(w) };
+        }
+        if let Some(h) = patch.memory_warn_headroom {
+            old.memory_warn_headroom = if h == 0 { None } else { Some(h) };
+        }
+        if let Some(h) = patch.memory_high {
+            old.memory_high = if h == 0 { None } else { Some(h) };
+        }
         if old.cpu_quota.is_none() && old.memory_limit.is_none() {
             *existing = None;
         }
     } else {
         let cpu = patch.cpu_quota.filter(|&c| c > 0.0);
         let mem = patch.memory_limit.filter(|&m| m > 0);
-        if cpu.is_some() || mem.is_some() {
+        let warn_percent = patch.memory_warn_percent.filter(|&w| w > 0 && w <= 100);
+        let warn_headroom = patch.memory_warn_headroom.filter(|&h| h > 0);
+        let high = patch.memory_high.filter(|&h| h > 0);
+        if cpu.is_some()
+            || mem.is_some()
+            || warn_percent.is_some()
+            || warn_headroom.is_some()
+            || high.is_some()
+        {
             *existing = Some(ResourceLimits {
                 cpu_quota: cpu,
                 memory_limit: mem,
+                memory_warn_percent: warn_percent,
+                memory_warn_headroom: warn_headroom,
+                memory_high: high,
             });
         }
     }
@@ -61,6 +81,13 @@ fn validate_resource_limits_patch(limits: &ResourceLimits) -> anyhow::Result<()>
     {
         return Err(anyhow::anyhow!("CPU quota must be positive"));
     }
+    if let Some(w) = limits.memory_warn_percent
+        && w > 100
+    {
+        return Err(anyhow::anyhow!(
+            "memory_warn_percent must be 0–100 (got {w})"
+        ));
+    }
     Ok(())
 }
 
@@ -72,7 +99,12 @@ fn warn_if_resource_limits_unenforced(
     let Some(limits) = limits else {
         return;
     };
-    if limits.cpu_quota.is_none() && limits.memory_limit.is_none() {
+    if limits.cpu_quota.is_none()
+        && limits.memory_limit.is_none()
+        && limits.memory_warn_percent.is_none()
+        && limits.memory_warn_headroom.is_none()
+        && limits.memory_high.is_none()
+    {
         return;
     }
     if extension.supports_resource_limits() {
@@ -148,6 +180,9 @@ impl Manager {
         let scheduler = CronScheduler::new();
         let monitor = Arc::new(ResourceMonitor::new(tx_self.clone()));
         let extension: Arc<dyn Extension> = Arc::from(extension);
+
+        // Expose the daemon event pipeline to plugins (plugin→host `emit_event`).
+        crate::plugin::host_emit::install(extension.clone(), config.event_hooks.clone());
 
         let registry = ProcessRegistry::new(initial_programs, initial_events);
         let controller = LifecycleController::new(
@@ -592,14 +627,15 @@ impl Manager {
             let effective = ResourceLimits {
                 cpu_quota: limits.cpu_quota.filter(|&c| c > 0.0),
                 memory_limit: limits.memory_limit.filter(|&m| m > 0),
+                memory_warn_percent: limits.memory_warn_percent.filter(|&w| w > 0 && w <= 100),
+                memory_warn_headroom: limits.memory_warn_headroom.filter(|&h| h > 0),
+                memory_high: limits.memory_high.filter(|&h| h > 0),
             };
-            if effective.cpu_quota.is_some() || effective.memory_limit.is_some() {
-                warn_if_resource_limits_unenforced(
-                    self.extension.as_ref(),
-                    &Some(effective),
-                    "update program",
-                );
-            }
+            warn_if_resource_limits_unenforced(
+                self.extension.as_ref(),
+                &Some(effective),
+                "update program",
+            );
         }
 
         let pid = self.registry.get_running(&id).map(|s| s.pid);
@@ -2247,26 +2283,37 @@ mod resource_limits_tests {
         apply_resource_limits_patch(
             &mut existing,
             ResourceLimits {
-                cpu_quota: Some(50.0),
-                memory_limit: Some(1024),
+                cpu_quota: Some(0.5),
+                memory_limit: Some(512),
+                memory_warn_percent: Some(80),
+                memory_warn_headroom: None,
+                memory_high: Some(448),
             },
         );
         let limits = existing.unwrap();
-        assert_eq!(limits.cpu_quota, Some(50.0));
-        assert_eq!(limits.memory_limit, Some(1024));
+        assert_eq!(limits.cpu_quota, Some(0.5));
+        assert_eq!(limits.memory_limit, Some(512));
+        assert_eq!(limits.memory_warn_percent, Some(80));
+        assert_eq!(limits.memory_high, Some(448));
     }
 
     #[test]
     fn patch_sentinels_clear_fields() {
         let mut existing = Some(ResourceLimits {
-            cpu_quota: Some(50.0),
-            memory_limit: Some(1024),
+            cpu_quota: Some(0.5),
+            memory_limit: Some(512),
+            memory_warn_percent: Some(80),
+            memory_warn_headroom: None,
+            memory_high: Some(448),
         });
         apply_resource_limits_patch(
             &mut existing,
             ResourceLimits {
                 cpu_quota: Some(-1.0),
                 memory_limit: Some(0),
+                memory_warn_percent: Some(0),
+                memory_warn_headroom: None,
+                memory_high: Some(0),
             },
         );
         assert!(existing.is_none());
@@ -2277,6 +2324,9 @@ mod resource_limits_tests {
         validate_resource_limits_patch(&ResourceLimits {
             cpu_quota: Some(-1.0),
             memory_limit: Some(0),
+            memory_warn_percent: Some(0),
+            memory_warn_headroom: None,
+            memory_high: None,
         })
         .unwrap();
     }

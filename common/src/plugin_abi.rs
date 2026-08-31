@@ -2,7 +2,7 @@
 
 use std::ffi::CStr;
 
-pub const PLUGIN_API_VERSION: u32 = 1;
+pub const PLUGIN_API_VERSION: u32 = 2;
 pub const PLUGIN_SYMBOL: &[u8] = b"super_plugin_v1";
 
 /// Returns a NUL-terminated semver string (typically `CARGO_PKG_VERSION`).
@@ -24,14 +24,27 @@ pub fn read_plugin_version(vtable: &SuperPluginV1) -> Option<String> {
     }
 }
 
+/// Host callbacks injected into plugins at `init` time (plugin → host channel).
+///
+/// The host passes a pointer to a `SuperPluginHostV1` as the sole argument of
+/// the `init` callback. Plugins must copy any function pointers they need
+/// during `init`; the table itself is only valid for the duration of the call.
+#[repr(C)]
+pub struct SuperPluginHostV1 {
+    pub api_version: u32,
+    /// Emit a JSON-encoded `SystemEvent` back into superd's event pipeline
+    /// (same path as lifecycle events → hooks + notify). Returns 0 on success.
+    pub emit_event: Option<unsafe extern "C" fn(*const std::ffi::c_char) -> i32>,
+}
+
 /// Plugin descriptor exported as `super_plugin_v1`.
 #[repr(C)]
 pub struct SuperPluginV1 {
     pub api_version: u32,
     /// Must match the library filename stem (e.g. `isolation`).
     pub plugin_id: *const std::ffi::c_char,
-    /// One-time init. Return 0 on success.
-    pub init: Option<unsafe extern "C" fn() -> i32>,
+    /// One-time init. Receives the host callback table; return 0 on success.
+    pub init: Option<unsafe extern "C" fn(*const SuperPluginHostV1) -> i32>,
     pub after_start:
         Option<unsafe extern "C" fn(*const std::ffi::c_char, u32, *const std::ffi::c_char) -> i32>,
     pub after_stop:

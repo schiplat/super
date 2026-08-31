@@ -335,6 +335,9 @@ pub async fn handle_add(ctx: &Context, cmd: &args::Commands) -> anyhow::Result<(
         cron,
         cpu,
         memory,
+        memory_warn_percent,
+        memory_warn_headroom,
+        memory_high,
         autorestart,
         exitcodes,
         startsecs,
@@ -374,10 +377,18 @@ pub async fn handle_add(ctx: &Context, cmd: &args::Commands) -> anyhow::Result<(
             }
         }
 
-        let limits = if cpu.is_some() || memory.is_some() {
+        let limits = if cpu.is_some()
+            || memory.is_some()
+            || memory_warn_percent.is_some()
+            || memory_warn_headroom.is_some()
+            || memory_high.is_some()
+        {
             Some(ResourceLimits {
                 cpu_quota: *cpu,
                 memory_limit: *memory,
+                memory_warn_percent: *memory_warn_percent,
+                memory_warn_headroom: *memory_warn_headroom,
+                memory_high: *memory_high,
             })
         } else {
             None
@@ -386,7 +397,7 @@ pub async fn handle_add(ctx: &Context, cmd: &args::Commands) -> anyhow::Result<(
         #[cfg(not(target_os = "linux"))]
         if limits.is_some() {
             eprintln!(
-                "Warning: --cpu/--memory are only enforced on Linux with the isolation plugin loaded."
+                "Warning: --cpu/--memory/--memory-* are only enforced on Linux with the isolation plugin loaded."
             );
         }
 
@@ -463,6 +474,9 @@ pub async fn handle_update(ctx: &Context, cmd: &args::Commands) -> anyhow::Resul
         cron,
         cpu,
         memory,
+        memory_warn_percent,
+        memory_warn_headroom,
+        memory_high,
         no_health_check,
         autorestart,
         exitcodes,
@@ -495,10 +509,18 @@ pub async fn handle_update(ctx: &Context, cmd: &args::Commands) -> anyhow::Resul
             None
         };
 
-        let limits = if cpu.is_some() || memory.is_some() {
+        let limits = if cpu.is_some()
+            || memory.is_some()
+            || memory_warn_percent.is_some()
+            || memory_warn_headroom.is_some()
+            || memory_high.is_some()
+        {
             Some(ResourceLimits {
                 cpu_quota: *cpu,
                 memory_limit: *memory,
+                memory_warn_percent: *memory_warn_percent,
+                memory_warn_headroom: *memory_warn_headroom,
+                memory_high: *memory_high,
             })
         } else {
             None
@@ -507,7 +529,7 @@ pub async fn handle_update(ctx: &Context, cmd: &args::Commands) -> anyhow::Resul
         #[cfg(not(target_os = "linux"))]
         if limits.is_some() {
             eprintln!(
-                "Warning: --cpu/--memory are only enforced on Linux with the isolation plugin loaded."
+                "Warning: --cpu/--memory/--memory-* are only enforced on Linux with the isolation plugin loaded."
             );
         }
 

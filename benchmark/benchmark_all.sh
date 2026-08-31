@@ -36,7 +36,7 @@ SUPERD_BIN="${SUPERD_BIN:-$(command -v superd || true)}"
 RESULTS="${RESULTS_DIR:-$BENCH_ROOT/results/${MODE}/${BENCH_ARM}/${PHASE}_$(date -u +%Y%m%dT%H%M%S)}"
 CAP_MB="${CAP_MB:-64}"
 # STB-2-PRO memory_limit: same order as CAP_MB (default 64 MiB), not a large heap.
-CGROUP_MEM="${CGROUP_MEM_BYTES:-$((CAP_MB * 1024 * 1024))}"
+CGROUP_MEM="${CGROUP_MEM_MB:-$CAP_MB}"
 N_CRASH="${BENCH_N_CRASH:-30}"
 N_LOG="${BENCH_N_LOG:-10}"
 N_MEM="${BENCH_N_MEM:-10}"
@@ -172,12 +172,12 @@ run_arm_scenario() {
 }
 
 generate_once() {
-  local round="$1" scenario="$2" count="$3" mode="$4" cgroup_bytes="$5"
+  local round="$1" scenario="$2" count="$3" mode="$4" cgroup_mb="$5"
   local gen_dir="$RESULTS/run_${round}/${scenario}/generated"
   mkdir -p "$gen_dir"
   local cg_args=()
-  if [[ "$cgroup_bytes" != "0" ]]; then
-    cg_args+=(--cgroup-memory-bytes "$cgroup_bytes")
+  if [[ "$cgroup_mb" != "0" ]]; then
+    cg_args+=(--cgroup-memory-mb "$cgroup_mb")
   fi
   "$GENERATOR" \
     --count "$count" \

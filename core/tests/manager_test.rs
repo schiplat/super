@@ -366,8 +366,11 @@ async fn test_update_resource_limits_persisted_immediately() {
             id,
             UpdateProgramRequest {
                 resource_limits: Some(ResourceLimits {
-                    cpu_quota: Some(25.0),
-                    memory_limit: Some(64 * 1024 * 1024),
+                    cpu_quota: Some(0.25),
+                    memory_limit: Some(64),
+                    memory_warn_percent: Some(80),
+                    memory_warn_headroom: None,
+                    memory_high: Some(56),
                 }),
                 ..Default::default()
             },
@@ -382,7 +385,15 @@ async fn test_update_resource_limits_persisted_immediately() {
         "snapshot should contain resource_limits immediately after update"
     );
     assert!(
-        content.contains("67108864"),
-        "memory_limit bytes should be persisted"
+        content.contains("\"memory_limit\": 64"),
+        "memory_limit (MB) should be persisted"
+    );
+    assert!(
+        content.contains("\"memory_high\": 56"),
+        "memory_high (MB) should be persisted"
+    );
+    assert!(
+        content.contains("\"cpu_quota\": 0.25"),
+        "cpu_quota (cores) should be persisted"
     );
 }

@@ -153,3 +153,57 @@ async fn test_webhook_hook_posts_json() {
     );
     assert!(request.contains("\"name\":\"demo\""), "request={request}");
 }
+
+#[test]
+fn test_memory_events_json_roundtrip_and_payload() {
+    // Plugin→host channel serializes SystemEvent to JSON; the host must
+    // deserialize it back exactly. Verify both memory event variants.
+    let id = Uuid::new_v4();
+    let pressure = SystemEvent::MemoryPressure {
+        program_id: id,
+        program_name: "api".to_string(),
+        pid: Some(77),
+        usage_bytes: 600 * 1024 * 1024,
+        limit_bytes: 512 * 1024 * 1024,
+        warn_bytes: 400 * 1024 * 1024,
+    };
+    let json = serde_json::to_string(&pressure).unwrap();
+    let back: SystemEvent = serde_json::from_str(&json).unwrap();
+    assert!(matches!(back, SystemEvent::MemoryPressure { .. }));
+    assert_eq!(back.event_type(), "memory_pressure");
+    assert_eq!(back.program_name(), Some("api"));
+
+    let oom = SystemEvent::MemoryOomKill {
+        program_id: id,
+        program_name: "api".to_string(),
+        pid: None,
+        anon_bytes: 700 * 1024 * 1024,
+        limit_bytes: 512 * 1024 * 1024,
+        usage_bytes: 900 * 1024 * 1024,
+    };
+    let json = serde_json::to_string(&oom).unwrap();
+    let back: SystemEvent = serde_json::from_str(&json).unwrap();
+    assert!(matches!(back, SystemEvent::MemoryOomKill { .. }));
+    assert_eq!(back.event_type(), "memory_oom_kill");
+    assert_eq!(back.program_name(), Some("api"));
+}
+
+#[test]
+fn test_memory_event_hook_payload_uses_bytes() {
+    // Webhook payload keeps kernel-native byte units even though config is MB.
+    let payload = super_core::event_hooks::build_payload(&SystemEvent::MemoryPressure {
+        program_id: Uuid::new_v4(),
+        program_name: "db".to_string(),
+        pid: Some(3),
+        usage_bytes: 100 * 1024 * 1024,
+        limit_bytes: 128 * 1024 * 1024,
+        warn_bytes: 102 * 1024 * 1024,
+    })
+    .unwrap();
+    let body: serde_json::Value = serde_json::from_str(&payload).unwrap();
+    assert_eq!(body["event"], "memory_pressure");
+    assert_eq!(body["program"]["name"], "db");
+    assert_eq!(body["payload"]["usage_bytes"], 100 * 1024 * 1024);
+    assert_eq!(body["payload"]["limit_bytes"], 128 * 1024 * 1024);
+    assert_eq!(body["payload"]["warn_bytes"], 102 * 1024 * 1024);
+}

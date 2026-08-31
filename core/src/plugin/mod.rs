@@ -7,6 +7,7 @@
 mod abi;
 mod adapter;
 mod host;
+pub(crate) mod host_emit;
 mod http_host;
 mod loader;
 mod ui_host;
@@ -16,6 +17,7 @@ pub use host::{
     LicenseOutcome, PluginHost, RunMode, enforce_license_degradation_policy,
     log_license_degradation, validate_licensed_auth_secret, validate_licensed_security,
 };
+pub use host_emit::host_vtable;
 pub use http_host::attach_http_plugins;
 pub use loader::{PluginRuntime, load_authorized_plugins, resolve_plugin_path};
 pub use ui_host::{UiPluginHandle, load_ui_plugin, normalize_ui_path};

@@ -26,9 +26,9 @@ struct Args {
     #[arg(long, default_value_t = 64)]
     cap_mb: usize,
 
-    /// PRO-only: cgroup memory_limit bytes (STB-2-PRO). 0 = omit.
+    /// PRO-only: cgroup memory_limit in MB (STB-2-PRO). 0 = omit.
     #[arg(long, default_value_t = 0)]
-    cgroup_memory_bytes: u64,
+    cgroup_memory_mb: u64,
 
     /// Shared crash RNG: program i uses seed = crash_seed_base + i
     #[arg(long, default_value_t = 1)]
@@ -108,7 +108,7 @@ fn services_json(
     payload: &str,
     cap_mb: usize,
     seed_base: u64,
-    cgroup_memory_bytes: u64,
+    cgroup_memory_mb: u64,
 ) -> Value {
     let services: Vec<Value> = (0..count)
         .map(|i| {
@@ -121,8 +121,8 @@ fn services_json(
                 "autorestart": "true",
                 "startsecs": 0,
             });
-            if cgroup_memory_bytes > 0 {
-                svc["resource_limits"] = json!({ "memory_limit": cgroup_memory_bytes });
+            if cgroup_memory_mb > 0 {
+                svc["resource_limits"] = json!({ "memory_limit": cgroup_memory_mb });
             }
             svc
         })
@@ -258,7 +258,7 @@ fn main() -> anyhow::Result<()> {
             &payload,
             args.cap_mb,
             args.crash_seed_base,
-            args.cgroup_memory_bytes,
+            args.cgroup_memory_mb,
         ))?,
     )?;
 
