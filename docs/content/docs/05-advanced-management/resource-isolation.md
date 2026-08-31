@@ -53,7 +53,7 @@ curl http://localhost:9002/metrics | grep cgroup
 # super_cgroup_enforced_total 5
 ```
 
-Superd logs include `Applying limits` on start and `Hot-updating resources` when limits change on a running process.
+Superd logs include `[isolation] Applying limits for '…' (PID: …)` on start. When limits change on a **running** process, the cgroup files (`cpu.max`, `memory.max`) are updated in place (see [Hot-update limits](#hot-update-limits-no-restart-for-cpu-quota)).
 
 ## Verify & adjust
 

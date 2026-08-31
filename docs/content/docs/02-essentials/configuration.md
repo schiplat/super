@@ -4,7 +4,7 @@ weight: 2
 description: "Understanding the super.toml configuration file format."
 ---
 
-Super uses TOML (Tom's Obvious, Minimal Language) for configuration. By default, it looks for `super.toml` in the current directory, `/etc/super/`, or `~/.super/`.
+Super uses TOML (Tom's Obvious, Minimal Language) for configuration. The daemon reads `$SUPER_ROOT/conf/super.toml`; `SUPER_ROOT` defaults to the directory containing the `bin/` next to the `superd` executable, or the current working directory (see [Config Reference — Instance layout](/docs/06-internals/config-reference#instance-layout-super_root)). The CLI's offline tools (`super check`) additionally probe `super.toml`, `conf/super.toml`, and `/etc/super/super.toml`.
 
 ## Server Configuration
 

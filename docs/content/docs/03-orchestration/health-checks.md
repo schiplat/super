@@ -77,6 +77,6 @@ Runs a shell command. Succeeds if the command exits with code `0`. Ideal for che
 
 ## Behavior
 
-*   **Interval**: Checks are performed every 5 seconds (default).
+*   **Interval**: Checks are performed every 5 seconds.
 *   **Startup**: Super waits for the first successful check before marking a process as `Healthy`.
 *   **Failure**: If a check fails while running, status stays `Running` (unhealthy) until the next check passes. Dependents that use `depends_on` wait for `Healthy`.

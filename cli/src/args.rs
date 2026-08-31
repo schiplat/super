@@ -283,7 +283,7 @@ pub enum Commands {
     /// Send a specific signal to program(s)
     Signal {
         target: String,
-        /// Signal type: hup, int, term, kill, usr1, usr2
+        /// Signal type: hup, int, term, kill, quit, usr1, usr2
         #[arg(long, default_value = "hup")]
         sig: String,
     },

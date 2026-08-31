@@ -296,7 +296,7 @@ The `action` is a tagged union (`type` + `payload`). Payload shape varies by act
 | :--- | :--- |
 | `Start` / `Restart` / `Remove` | `null` |
 | `Stop` | `{ "force": false }` |
-| `Signal` | `{ "signal": "term" }` (one of `hup`, `int`, `term`, `kill`, `usr1`, `usr2`) |
+| `Signal` | `{ "signal": "term" }` (one of `hup`, `int`, `term`, `kill`, `quit`, `usr1`, `usr2`) |
 
 Example — stop several programs:
 
