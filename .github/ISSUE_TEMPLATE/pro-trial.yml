@@ -1,5 +1,5 @@
 name: Pro trial request
-description: Request a free 1-year Super Pro license (plugins + key sent by email)
+description: Request a free 1-month Super Pro trial (plugins + key sent by email)
 title: "[Pro trial] "
 labels: ["pro-trial"]
 body:
@@ -7,7 +7,7 @@ body:
     attributes:
       value: |
         Super is in **public beta**. OSS core is MIT; Pro plugins are available with a
-        **free 1-year license** during the beta (no payment required).
+        **free 1-month license** during the beta (no payment required).
         We recommend staging and non-critical workloads until GA.
         Fill this out and we will email the license key and plugin package.
   - type: input

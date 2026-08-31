@@ -27,7 +27,7 @@ pub fn kid_for_public_bytes(bytes: &[u8; 32]) -> String {
 pub const LICENSE_UPGRADE_URL: &str =
     "https://super.docs.sconts.com/docs/07-editions/feature-matrix/";
 
-/// Free 1-year Pro trial during public beta (GitHub Issue template).
+/// Free 1-month Pro trial during public beta (GitHub Issue template).
 pub const LICENSE_TRIAL_URL: &str =
     "https://github.com/schiplat/super/issues/new?template=pro-trial.yml";
 

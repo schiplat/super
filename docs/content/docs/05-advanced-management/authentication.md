@@ -6,8 +6,8 @@ description: "Securing the Daemon with Access Tokens."
 
 The **default OSS deployment has no API authentication**. By default, `superd` binds to loopback and **refuses to start** on a non-loopback address unless you explicitly set `allow_insecure_public_bind = true` in `[server]` or load the optional **`security` plugin** for token-based auth.
 
-> [!TIP] Free 1-year beta license
-> Super Pro plugins are available during the beta with a **free 1-year license** ([request via GitHub Issue](https://github.com/schiplat/super/issues/new?template=pro-trial.yml)). We recommend licensed deployments for staging and non-critical workloads today; see the [feature matrix](/docs/07-editions/feature-matrix/) and the [Toward GA checklist](https://github.com/schiplat/super#toward-ga) on GitHub.
+> [!TIP] Free 1-month beta trial
+> Super Pro plugins are available during the beta with a **free 1-month trial license** ([request via GitHub Issue](https://github.com/schiplat/super/issues/new?template=pro-trial.yml)). We recommend licensed deployments for staging and non-critical workloads today; see the [feature matrix](/docs/07-editions/feature-matrix/) and the [Toward GA checklist](https://github.com/schiplat/super#toward-ga) on GitHub.
 
 OSS deployments without a valid `[license].key` have no API auth; public bind requires explicit opt-in via `allow_insecure_public_bind` as described above.
 
