@@ -10,7 +10,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-## [Unreleased]
+## [1.4.0] - 2026-08-31
+
+### Breaking
+
+- `resource_limits.memory_limit` is now in **MB** (binary, `1 MB = 1024² bytes`) instead of bytes, and `resource_limits.cpu_quota` is now in **cores** (`1.0` = one full core) instead of percent. Old configs written in bytes/percent are **not** auto-converted — update them for the new semantics. Event payloads (`usage_bytes`, `limit_bytes`, `anon_bytes`) keep byte precision. CLI flags `--memory <MB>` / `--cpu <cores>` match.
+- Plugin ABI `PLUGIN_API_VERSION` bumped to `2`: `super_plugin_v1.init` now receives a `SuperPluginHostV1` callback table (plugins can emit `SystemEvent`s into superd's pipeline). Third-party plugins built for API v1 must be rebuilt.
+
+### Added
+
+- **Three-tier memory warning & visibility** (licensed `isolation` plugin, Linux): `memory_pressure` pre-kill warning (Tier 1) when anonymous memory crosses `memory_warn_percent` / `memory_warn_headroom`; optional `memory_high` kernel soft limit (Tier 2, `memory.high` throttling); `memory_oom_kill` post-kill confirmation (Tier 3) that distinguishes a cgroup OOM kill from a manual `kill -9`.
+- Plugin → host event bridge: the `isolation` plugin emits `memory_pressure` / `memory_oom_kill` through the same event pipeline as lifecycle events (event history, OSS event hooks, licensed notifications).
+
+### Changed
+
+- `super update` hot-updates `memory_warn_percent`, `memory_warn_headroom`, and `memory_high` on running programs alongside `memory_limit` / `cpu_quota`.
+- Dashboard create/edit forms expose the three new memory fields; process detail shows MB/cores units.
+
+### Fixed
+
+- Managed children no longer inherit superd's `oom_score_adj=-1000`: the kernel can now actually OOM-kill a program that exceeds `memory_limit` (previously the hard cap turned into a livelock). The daemon's own OOM protection is unchanged.
+- `memory_pressure` now fires immediately on the first threshold crossing (cooldown no longer swallows the first warning).
+- `memory_oom_kill` is no longer lost when the cgroup is torn down right after the process exits (`after_stop` does a final synchronous `oom_kill` counter check).
+- `super-pro` build no longer warns about a missing legacy `super/common/keys/public.key` when named `*.public.key` verifying keys are present.
+
+### Notes
+
+- Workspace **1.4.0**; pair with commercial plugin packages `super-plugins-1.4.0-…`.
 
 ---
 

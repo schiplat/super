@@ -44,7 +44,7 @@ Full user-facing detail: [Configuration — OSS security defaults](https://super
 
 We hold the codebase to the following public standards, checked on every release branch:
 
-- **Dependency vulnerabilities** — `cargo audit` runs against the RustSec advisory database; release branches must be clean of known-vulnerable dependencies before tagging. As of `1.3.3` the workspace scan reports **no vulnerabilities and no warnings**.
+- **Dependency vulnerabilities** — `cargo audit` runs against the RustSec advisory database; release branches must be clean of known-vulnerable dependencies before tagging. As of `1.4.0` the workspace scan reports **no vulnerabilities and no warnings**.
 - **`unsafe` code** — `unsafe` is confined to the plugin C-ABI boundary (`core/src/plugin/`), one `pre_exec` setgroups call (`core/src/process.rs`), and test-only environment manipulation. Every `unsafe` block carries a `// SAFETY:` comment stating its invariant; these are reviewed on change.
 - **Fuzz/edge inputs** — the daemon must not panic on malformed config, API payloads, or plugin responses; OTA and plugin-load paths degrade to logged errors instead.
 - **CI gates** — `cargo clippy --all-targets -- -D warnings`, `cargo fmt --check`, and the full integration-test suite must pass before merge.
