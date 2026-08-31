@@ -40,6 +40,8 @@ OSS Super **stores** optional `resource_limits` on a program but **does not enfo
 
 Without that plugin, Super logs that limits are stored only. Do not describe cgroup enforcement as an OSS built-in.
 
+**Different from PM2's `--max-memory-restart`:** PM2's memory option is a **soft watchdog** — PM2 polls each process roughly every 30 seconds and gracefully restarts it once RSS exceeds the threshold. Super's `memory_limit` is a **hard** cgroup v2 cap: the kernel OOM-kills the cgroup when it is exceeded (no graceful restart in between). For PM2-style "restart on memory threshold" behaviour, poll `mem_usage` from the API and trigger a graceful restart yourself — see [Programmable Ops](/docs/04-production-scenarios/observability/programmatic-control).
+
 ## 3. Language agnostic
 
 PM2 treats non-Node applications as fork-mode processes. Cluster mode (in-process load balancing) applies to Node.js scripts.

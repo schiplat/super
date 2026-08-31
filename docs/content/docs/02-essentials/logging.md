@@ -44,4 +44,5 @@ super logs my-app
 
 This stream aggregates both stdout and stderr in real-time.
 
-> **Safety Feature**: To prevent a runaway process from crashing the daemon or flooding the network, Super truncates extremely long single lines (16KB limit) before processing.
+> [!NOTE]
+> To prevent a runaway process from crashing the daemon or flooding the network, Super truncates extremely long single lines (16KB limit) before processing.

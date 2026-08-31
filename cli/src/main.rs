@@ -140,6 +140,7 @@ async fn main() -> anyhow::Result<()> {
         Commands::Export => handlers::handle_export(&ctx).await?,
         Commands::Shutdown => handlers::handle_shutdown(&ctx).await?,
         Commands::Info { target } => handlers::handle_info(&ctx, target).await?,
+        Commands::Events { target, limit } => handlers::handle_events(&ctx, target, *limit).await?,
         Commands::Logs {
             target,
             tail,

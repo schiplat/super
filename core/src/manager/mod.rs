@@ -102,7 +102,6 @@ pub struct Manager {
 
     extension: Arc<dyn Extension>,
 }
-
 impl Manager {
     #[allow(clippy::too_many_arguments)]
     pub fn new(
@@ -112,6 +111,7 @@ impl Manager {
         rx: mpsc::Receiver<Command>,
         tx_self: mpsc::Sender<Command>,
         initial_programs: HashMap<Uuid, ProgramConfig>,
+        initial_events: HashMap<Uuid, Vec<common::ProgramEventRecord>>,
         log_tx: broadcast::Sender<WsMessage>,
         extension: Box<dyn Extension>,
     ) -> Self {
@@ -149,7 +149,7 @@ impl Manager {
         let monitor = Arc::new(ResourceMonitor::new(tx_self.clone()));
         let extension: Arc<dyn Extension> = Arc::from(extension);
 
-        let registry = ProcessRegistry::new(initial_programs);
+        let registry = ProcessRegistry::new(initial_programs, initial_events);
         let controller = LifecycleController::new(
             config.clone(),
             tx_self.clone(),
@@ -177,6 +177,28 @@ impl Manager {
         crate::event_hooks::emit(&self.extension, &self.config.event_hooks, event);
     }
 
+    /// Append an anomaly/lifecycle event to a program's persisted history.
+    fn record_event(
+        &mut self,
+        id: Uuid,
+        event: &str,
+        code: Option<i32>,
+        signal: Option<i32>,
+        retry_count: Option<u32>,
+        msg: String,
+    ) {
+        self.registry.push_event(
+            id,
+            common::ProgramEventRecord {
+                ts: chrono::Utc::now().timestamp() as u64,
+                event: event.to_string(),
+                exit_code: code,
+                signal,
+                retry_count,
+                msg,
+            },
+        );
+    }
     pub async fn run(mut self) {
         tracing::info!(
             "Manager Loop started. Loaded {} programs.",
@@ -301,6 +323,9 @@ impl Manager {
                     let res = self.handle_get(id);
                     let _ = reply.send(res);
                 }
+                Command::GetProgramEvents { id, reply } => {
+                    let _ = reply.send(self.registry.get_events(&id));
+                }
 
                 Command::StartGroup { group, reply } => {
                     // 1. Select target IDs
@@ -391,8 +416,8 @@ impl Manager {
                     }
                 }
 
-                Command::ProcessExited { id, code } => {
-                    self.handle_exited(id, code).await;
+                Command::ProcessExited { id, code, signal } => {
+                    self.handle_exited(id, code, signal).await;
                 }
                 Command::CheckTimeoutKill { id, target_pid } => {
                     // 1. Check whether forced cleanup is needed
@@ -433,7 +458,7 @@ impl Manager {
 
                     // 3. Force cleanup (avoids borrow conflict above)
                     if force_cleanup {
-                        self.handle_exited(id, None).await;
+                        self.handle_exited(id, None, None).await;
                     }
                 }
                 Command::ScheduledRestart { id, retry_count } => {
@@ -828,7 +853,7 @@ impl Manager {
     }
 
     // Process exit handler (OTA commit/rollback & borrow fixes)
-    async fn handle_exited(&mut self, id: Uuid, code: Option<i32>) {
+    async fn handle_exited(&mut self, id: Uuid, code: Option<i32>, signal: Option<i32>) {
         // 1. Clear runtime state
         let state = match self.registry.running.remove(&id) {
             Some(s) => s,
@@ -951,12 +976,22 @@ impl Manager {
                         let _ = self.flush_to_disk().await;
 
                         // B3. Notify
+                        self.record_event(
+                            id,
+                            "process_fatal",
+                            code,
+                            signal,
+                            None,
+                            "OTA upgrade failed. Automatically rolled back to previous version."
+                                .to_string(),
+                        );
                         self.emit_event(common::SystemEvent::ProcessFatal {
                             program_id: id,
                             program_name: program_name.clone(),
                             pid: Some(exited_pid),
                             uptime_secs: exited_uptime,
                             exit_code: code,
+                            signal,
                             msg:
                                 "OTA upgrade failed. Automatically rolled back to previous version."
                                     .to_string(),
@@ -991,12 +1026,21 @@ impl Manager {
                     status: ProcessStatus::Fatal,
                     name: program_name.clone(),
                 });
+                self.record_event(
+                    id,
+                    "process_fatal",
+                    code,
+                    signal,
+                    None,
+                    "Cron job execution failed".to_string(),
+                );
                 let event = common::SystemEvent::ProcessFatal {
                     program_id: id,
                     program_name: program_name.clone(),
                     pid: Some(exited_pid),
                     uptime_secs: exited_uptime,
                     exit_code: code,
+                    signal,
                     msg: "Cron job execution failed".to_string(),
                     log_tail: None,
                 };
@@ -1039,6 +1083,16 @@ impl Manager {
                 status: ProcessStatus::Stopped,
                 name: program_name.clone(),
             });
+
+            // Persist unexpected exits (non-expected exit code, or killed by a
+            // signal such as cgroup OOM) so the stop reason stays visible.
+            if !common::ProgramConfig::is_expected_exit(code, &config.exitcodes) {
+                let msg = match signal {
+                    Some(sig) => format!("Process killed by signal {} (exit code {:?})", sig, code),
+                    None => format!("Process exited with code {:?}", code),
+                };
+                self.record_event(id, "process_exit", code, signal, None, msg);
+            }
             return;
         }
 
@@ -1071,6 +1125,14 @@ impl Manager {
                 retry_count_to_use, code
             );
             self.registry.startup_errors.insert(id, err_msg.clone());
+            self.record_event(
+                id,
+                "process_fatal",
+                code,
+                signal,
+                Some(retry_count_to_use),
+                err_msg.clone(),
+            );
 
             self.registry.mark_dirty();
 
@@ -1108,6 +1170,7 @@ impl Manager {
                     pid: Some(fatal_pid),
                     uptime_secs: fatal_uptime,
                     exit_code: code,
+                    signal,
                     msg: format!("Stopped after {} retries.", retry_count_to_use),
                     log_tail,
                 };
@@ -1137,12 +1200,22 @@ impl Manager {
                 name: program_name.clone(),
             });
 
+            self.record_event(
+                id,
+                "process_backoff",
+                code,
+                signal,
+                Some(retry_count_to_use),
+                format!("Crash detected, retrying in {}s", delay_sec),
+            );
+
             let event = common::SystemEvent::ProcessBackoff {
                 program_id: id,
                 program_name,
                 pid: Some(exited_pid),
                 uptime_secs: exited_uptime,
                 exit_code: code,
+                signal,
                 retry_count: retry_count_to_use,
             };
             self.emit_event(event);
@@ -1221,6 +1294,14 @@ impl Manager {
                     state.alert_pending_recovery = false;
                     let recovered_pid = state.pid;
                     let uptime = chrono::Utc::now().timestamp() as u64 - state.start_time;
+                    self.record_event(
+                        id,
+                        "process_recovered",
+                        None,
+                        None,
+                        None,
+                        format!("Process recovered and healthy (up {}s)", uptime),
+                    );
                     self.emit_event(common::SystemEvent::ProcessRecovered {
                         program_id: id,
                         program_name: name.clone(),
@@ -1443,8 +1524,8 @@ impl Manager {
 
             match self.rx.try_recv() {
                 Ok(cmd) => {
-                    if let Command::ProcessExited { id, code } = cmd {
-                        self.handle_exited(id, code).await;
+                    if let Command::ProcessExited { id, code, signal } = cmd {
+                        self.handle_exited(id, code, signal).await;
                     }
                 }
                 Err(mpsc::error::TryRecvError::Empty) => {
@@ -1611,8 +1692,19 @@ impl Manager {
         if self.registry.dirty {
             store::save(&self.config.storage.data_file, &self.registry.programs).await?;
             self.registry.dirty = false;
-            tracing::debug!("State persisted to disk (Debounced).");
         }
+        // Event history is auxiliary: write only when changed, and never let a
+        // failed events write fail the snapshot flush.
+        if self.registry.events_dirty {
+            if let Err(e) =
+                store::save_events(&self.config.storage.events_file, &self.registry.events).await
+            {
+                tracing::error!("Failed to persist event history: {}", e);
+            } else {
+                self.registry.events_dirty = false;
+            }
+        }
+        tracing::debug!("State persisted to disk (Debounced).");
         Ok(())
     }
 
@@ -1755,6 +1847,7 @@ impl Manager {
         self.registry.waiting.remove(&id);
         self.registry.crashed.remove(&id);
         self.registry.startup_errors.remove(&id);
+        self.registry.remove_events(&id);
         self.scheduler.remove(&id);
         self.registry.mark_dirty();
 

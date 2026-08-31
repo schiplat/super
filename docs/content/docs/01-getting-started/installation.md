@@ -88,7 +88,8 @@ Pre-built archives are published on [GitHub Releases](https://github.com/schipla
 
 Each archive contains `bin/superd`, `bin/super`, and a `README` with quick-start steps and source links. A `SHA256SUMS` file is attached to every release.
 
-> **Windows:** Pre-built Windows binaries are **not published** at this time. Super targets Unix-like servers and edge devices. On Windows, use [Docker](#method-1-docker-recommended) (e.g. with WSL2), or build from source on Linux, macOS, or FreeBSD.
+> [!WARNING]
+> Pre-built Windows binaries are **not published** at this time. Super targets Unix-like servers and edge devices. On Windows, use [Docker](#method-1-docker-recommended) (e.g. with WSL2), or build from source on Linux, macOS, or FreeBSD.
 
 To build locally (requires **Rust 1.85+**):
 
@@ -132,6 +133,7 @@ sudo systemctl enable --now superd
 sudo systemctl status superd
 ```
 
-> **Note**: Default layout is `$SUPER_ROOT/conf/super.toml`. Set `SUPER_ROOT` if your layout differs.
+> [!NOTE]
+> Default layout is `$SUPER_ROOT/conf/super.toml`. Set `SUPER_ROOT` if your layout differs.
 >
 > **Daemonize without systemd:** `superd --daemon` (or `[server] daemon = true`) writes `$SUPER_ROOT/run/superd.pid` by default. Do **not** combine that with this unit — `superd` refuses to start if both are detected. Stop with `super shutdown` as usual.

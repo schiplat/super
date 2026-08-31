@@ -245,6 +245,14 @@ pub enum Commands {
     /// Show detailed information for a specific program
     Info { target: String },
 
+    /// Show persisted lifecycle/exception event history for a program
+    Events {
+        target: String,
+        /// Number of most recent events to show (default: all)
+        #[arg(long)]
+        limit: Option<usize>,
+    },
+
     /// Stream or read logs for a specific program
     Logs {
         target: String,

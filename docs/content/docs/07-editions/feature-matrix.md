@@ -15,17 +15,18 @@ description: "OSS core vs optional licensed plugins."
 | **Prometheus Metrics** | ✅ <br>(basic) | ✅ <br>(+ plugin metrics) |
 | **Historical Logs API** | ✅ | ✅ |
 | **System Stats API** | ✅ | ✅ |
-| **Event Hooks** (`[[event_hooks]]`) | ✅ | ✅ |
+| **Event Hooks** (`[[event_hooks]]`) | ✅ <br>(local scripts + native webhook) | ✅ |
 | **Cron Scheduled Tasks** | ✅ | ✅ |
 | **Linux Cgroups Isolation** | ❌ | ✅ (`isolation` plugin, **Linux only**) |
 | **RBAC (User Roles)** | ❌ | ✅ (`security` plugin — **required** for licensed startup) |
 | **Audit Logging** | ❌ | ✅ (`security` plugin — **required** for licensed startup) |
-| **Webhook Notifications** | ❌ | ✅ (`notify` plugin) |
+| **Webhook Notifications** | ✅ <br>(generic HTTP POST via `[[event_hooks]]`) | ✅ <br>(`notify` plugin: IM templates + channels) |
 | **License** | MIT | Commercial plugin license |
 
 Same **`superd`** and **`super`** binaries for both columns — drop `plugins/*.so` + `[license].key` in `conf/super.toml` to enable the right-hand column.
 
-> **`security` is included with every subscription** and is **required for startup** when `[license].key` is valid. RBAC, audit logs, and API token auth come from the `security` plugin. See [Authentication](/docs/05-advanced-management/authentication#licensed-deployments-require-security).
+> [!IMPORTANT]
+> `security` is included with every subscription and is **required for startup** when `[license].key` is valid. RBAC, audit logs, and API token auth come from the `security` plugin. See [Authentication](/docs/05-advanced-management/authentication#licensed-deployments-require-security).
 
 ## Which setup do I need?
 

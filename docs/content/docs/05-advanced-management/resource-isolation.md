@@ -8,7 +8,8 @@ description: "Enforcing limits with Linux Cgroups v2."
 
 Super integrates directly with the Linux Kernel's Control Groups (v2) to provide hardware-level isolation for managed processes.
 
-> **Context:** For the “noisy neighbor” production scenario, see [Resource Isolation (scenario)](/docs/04-production-scenarios/stability/resource-isolation).
+> [!NOTE]
+> For the “noisy neighbor” production scenario, see [Resource Isolation (scenario)](/docs/04-production-scenarios/stability/resource-isolation).
 
 ## Configuration Reference
 
@@ -31,6 +32,11 @@ Resource limits are defined per program — via JSON stack files, the API, or CL
 
 *   `memory_limit` — hard memory limit in bytes. If the process (and its children) exceed this, the OOM Killer terminates it.
 *   `cpu_quota` — CPU quota as a percentage. `100.0` = 1 full core, `50.0` = half a core. The scheduler throttles the process if it exceeds this usage.
+
+> [!WARNING]
+> `memory_limit` is a **hard cap** enforced by the kernel — exceeding it kills the process (OOM). It is not a soft "restart when memory exceeds N" policy like PM2's `--max-memory-restart`. For graceful threshold-based restarts, poll `mem_usage` via the API and restart yourself — see [Programmable Ops](/docs/04-production-scenarios/observability/programmatic-control).
+>
+> **OOM visibility:** an OOM kill shows up as the program exiting with `signal 9` (`SIGKILL`) and no exit code. This is recorded in the program's [event history](/docs/06-internals/api-reference#event-history) (`super events <name>`), logged by the OSS [event hooks](/docs/03-orchestration/event-hooks), and surfaced by licensed [event notifications](/docs/05-advanced-management/event-notifications).
 
 ## Requirements
 

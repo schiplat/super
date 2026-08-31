@@ -34,7 +34,18 @@ max_line_size_kb = 64   # max line length
 files = ["conf/conf.d/*.json"]
 
 # Global event hook (OSS) — see docs/03-orchestration/event-hooks.md
+# Each hook runs a local command OR POSTs to a webhook url:
 [[event_hooks]]
 id = "my-debugger"
 command = "python3 ./demo_listener.py"
 events = ["*"]
+
+# Native webhook mode (no local script needed):
+# [[event_hooks]]
+# id = "ops-alert"
+# url = "https://ops.example.com/hooks/super"
+# headers = { Authorization = "Bearer s3cret-token" }
+# events = ["process_fatal", "process_backoff"]
+#
+# Need ready-made Slack/DingTalk/Feishu templates, channel routing, dedup and
+# batching? See the licensed notify plugin: docs/05-advanced-management/event-notifications.md

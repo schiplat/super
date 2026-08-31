@@ -446,6 +446,9 @@ pub enum SystemEvent {
         #[serde(default)]
         uptime_secs: u64,
         exit_code: Option<i32>,
+        /// Terminating signal (e.g. `9` = SIGKILL, includes cgroup OOM kills).
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        signal: Option<i32>,
         msg: String,
         log_tail: Option<String>,
     },
@@ -458,6 +461,9 @@ pub enum SystemEvent {
         #[serde(default)]
         uptime_secs: u64,
         exit_code: Option<i32>,
+        /// Terminating signal (e.g. `9` = SIGKILL, includes cgroup OOM kills).
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        signal: Option<i32>,
         retry_count: u32,
     },
     /// Process started successfully
@@ -501,6 +507,23 @@ impl SystemEvent {
             SystemEvent::SystemStartup { .. } | SystemEvent::SystemShutdown => None,
         }
     }
+}
+
+/// One persisted runtime/exception event in a program's lifecycle history.
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+pub struct ProgramEventRecord {
+    /// Unix timestamp (seconds).
+    pub ts: u64,
+    /// Event type: `process_fatal`, `process_backoff`, `process_recovered`, or `process_exit`.
+    pub event: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub exit_code: Option<i32>,
+    /// Terminating signal when killed by a signal (e.g. `9` = SIGKILL, includes OOM kills).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub signal: Option<i32>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub retry_count: Option<u32>,
+    pub msg: String,
 }
 
 #[derive(Debug, Deserialize, Serialize, ToSchema)]

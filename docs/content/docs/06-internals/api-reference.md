@@ -65,7 +65,8 @@ Register a new process dynamically.
 | `exitcodes` | `[0]` | Exit codes treated as success when `autorestart=unexpected` |
 | `startsecs` | `10` | Seconds of stable run before exit resets retry counter |
 
-> **Migration note**: `autostart` controls boot-time start only. To disable crash auto-restart, set `"autorestart": "false"`.
+> [!NOTE]
+> `autostart` controls boot-time start only. To disable crash auto-restart, set `"autorestart": "false"`.
 
 **Response:** `201 Created` with the new UUID(s). Validation failures return `400` with `{ "status": "error", "message": "..." }`. The message names the field (`command: …`, `health_check.url: …`) and, when a name is set, `program '…':`. JSON syntax / unknown fields include `JSON line N column M`. Duplicate names return `409`.
 
@@ -105,7 +106,8 @@ Partially update an existing program. Only fields present in the body are change
 | `cron` | Cron expression — see [Scheduled Tasks](/docs/02-essentials/scheduled-tasks). |
 | `resource_limits` | 💎 Requires `isolation` plugin on Linux — stored in config always; enforced only when plugin is loaded |
 
-> **Restart semantics**: Updating `command`, `env`, etc. **persists config only** — it does **not** restart a running process. Call `POST /api/v1/programs/{id}/restart` explicitly, or change `artifact.checksum` to trigger an automatic OTA restart.
+> [!IMPORTANT] Update persists config only
+> Updating `command`, `env`, etc. **persists config only** — it does **not** restart a running process. Call `POST /api/v1/programs/{id}/restart` explicitly, or change `artifact.checksum` to trigger an automatic OTA restart.
 
 #### OTA update via API
 
@@ -177,6 +179,38 @@ Read the last N lines from on-disk log files (`{uuid}.out` / `{uuid}.err`).
   ]
 }
 ```
+
+### Event History
+
+Read a program's persisted lifecycle/exception event history (`data/events.json`), newest first order is not guaranteed — sort by `ts` on the client.
+
+*   **GET** `/api/v1/programs/{id}/events`
+
+**Response:** array of event records:
+
+```json
+[
+  {
+    "ts": 1760000000,
+    "event": "process_fatal",
+    "exit_code": null,
+    "signal": 9,
+    "retry_count": 3,
+    "msg": "Stopped after 3 retries. Last exit code: None"
+  }
+]
+```
+
+| Field | Description |
+| :--- | :--- |
+| `ts` | Unix timestamp (seconds) |
+| `event` | `process_fatal` · `process_backoff` · `process_recovered` · `process_exit` |
+| `exit_code` | Process exit code, when captured |
+| `signal` | Terminating signal (e.g. `9` = SIGKILL, includes cgroup OOM kills) |
+| `retry_count` | Backoff retry counter (fatal/backoff only) |
+| `msg` | Human-readable detail |
+
+Events are retained per program (max 50, oldest dropped) across `superd` restarts.
 
 ### Send Signal
 
@@ -250,14 +284,34 @@ Perform actions on multiple programs simultaneously.
   "target_ids": ["uuid-1", "uuid-2"], // Or omit and use "group_name": "backend"
   "select_all": false,
   "action": {
-    "type": "Restart" // Or "Start", "Stop", "Remove", "Signal"
+    "type": "Restart",
+    "payload": null
   }
+}
+```
+
+The `action` is a tagged union (`type` + `payload`). Payload shape varies by action:
+
+| Action | Payload |
+| :--- | :--- |
+| `Start` / `Restart` / `Remove` | `null` |
+| `Stop` | `{ "force": false }` |
+| `Signal` | `{ "signal": "term" }` (one of `hup`, `int`, `term`, `kill`, `usr1`, `usr2`) |
+
+Example — stop several programs:
+
+```json
+{
+  "target_ids": ["uuid-1", "uuid-2"],
+  "select_all": false,
+  "action": { "type": "Stop", "payload": { "force": false } }
 }
 ```
 
 ## Security & Authentication (`security` plugin 💎)
 
-> **Without the plugin**: These routes are not registered. Requests return **404 Not Found**.
+> [!WARNING]
+> Without the plugin, these routes are not registered. Requests return **404 Not Found**.
 
 Manage access tokens for API authorization. Bootstrap with config `auth_secret`; Admins may optionally disable it after creating an Admin token. See [Authentication](/docs/05-advanced-management/authentication#optional-disable-auth_secret).
 
@@ -296,9 +350,10 @@ Manage access tokens for API authorization. Bootstrap with config `auth_secret`;
 
 ## System Configuration (licensed plugins 💎)
 
+> [!NOTE]
 > **License route** is served by **OSS core** when a valid `[license].key` is configured at startup.  
 > **Notify routes** require the `notify` plugin; without it they return **404 Not Found**.
-
+>
 > **Authentication:** When the `security` plugin is loaded, protected routes (including license) require a valid Bearer token — same as other authenticated API calls.
 
 ### Get License Info

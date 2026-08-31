@@ -65,7 +65,8 @@ pub trait Extension: Send + Sync {
 
 ## Building Your Own
 
-> **Note:** Built-in licensed plugins (cgroups, webhooks, audit, etc.) ship as separate `.so` libraries, not in this repository. OSS `superd` loads them at runtime when `[license].key` in `conf/super.toml` authorizes them. The pattern below shows how you would link `super-core` for a custom binary.
+> [!NOTE]
+> Built-in licensed plugins (cgroups, webhooks, audit, etc.) ship as separate `.so` libraries, not in this repository. OSS `superd` loads them at runtime when `[license].key` in `conf/super.toml` authorizes them. The pattern below shows how you would link `super-core` for a custom binary.
 
 To build a custom extension, compile your own binary linking against `super-core`.
 

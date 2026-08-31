@@ -220,7 +220,56 @@ pub fn print_info(info: ProgramInfo) {
     }
 }
 
-pub fn print_token_table(tokens: Vec<common::AuthRecord>) {
+pub fn print_events(events: &[common::ProgramEventRecord], limit: Option<usize>) {
+    if events.is_empty() {
+        println!("No lifecycle events recorded for this program.");
+        return;
+    }
+
+    let iter: Box<dyn Iterator<Item = &common::ProgramEventRecord>> = match limit {
+        Some(n) => Box::new(events.iter().rev().take(n)),
+        None => Box::new(events.iter().rev()),
+    };
+
+    let mut table = Table::new();
+    table.load_preset(UTF8_FULL);
+    table.set_header(vec!["Time", "Event", "Exit", "Signal", "Retry", "Message"]);
+
+    for e in iter {
+        let ts = chrono::DateTime::from_timestamp(e.ts as i64, 0)
+            .map(|dt| dt.format("%Y-%m-%d %H:%M:%S").to_string())
+            .unwrap_or_else(|| e.ts.to_string());
+        let event_color = match e.event.as_str() {
+            "process_fatal" => Color::Red,
+            "process_backoff" => Color::Yellow,
+            "process_recovered" => Color::Green,
+            _ => Color::White,
+        };
+        table.add_row(vec![
+            Cell::new(ts),
+            Cell::new(e.event.clone()).fg(event_color),
+            Cell::new(
+                e.exit_code
+                    .map(|c| c.to_string())
+                    .unwrap_or_else(|| "-".to_string()),
+            ),
+            Cell::new(
+                e.signal
+                    .map(|s| s.to_string())
+                    .unwrap_or_else(|| "-".to_string()),
+            ),
+            Cell::new(
+                e.retry_count
+                    .map(|r| r.to_string())
+                    .unwrap_or_else(|| "-".to_string()),
+            ),
+            Cell::new(e.msg.clone()),
+        ]);
+    }
+    println!("{table}");
+}
+
+pub fn print_token_table(tokens: Vec<common::AuthTokenInfo>) {
     let mut table = Table::new();
     table.load_preset(UTF8_FULL);
     table.set_header(vec!["ID", "Name", "Prefix", "Role", "Created"]);

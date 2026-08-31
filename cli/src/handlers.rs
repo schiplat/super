@@ -118,24 +118,27 @@ pub async fn handle_batch_action(
     };
 
     // 2. Resolve target
-    if target == "all" {
+    let count_hint = if target == "all" {
         req.select_all = true;
+        // Best-effort: resolve the real program count for the confirmation prompt.
+        match client::resolve_targets(&ctx.client, &ctx.base_url, &target).await {
+            Ok(ids) => ids.len(),
+            Err(_) => 0,
+        }
     } else if let Some(group) = target.strip_prefix('@') {
         req.group_name = Some(group.to_string());
+        match client::resolve_targets(&ctx.client, &ctx.base_url, &target).await {
+            Ok(ids) => ids.len(),
+            Err(_) => 0,
+        }
     } else {
         // For a specific name or wildcard, resolve IDs first (single request, no loop)
         let ids = client::resolve_targets(&ctx.client, &ctx.base_url, &target).await?;
         req.target_ids = Some(ids);
-    }
+        req.target_ids.as_ref().map_or(0, Vec::len)
+    };
 
     // Safety confirmation
-    let count_hint = if req.select_all {
-        999
-    } else if let Some(ids) = &req.target_ids {
-        ids.len()
-    } else {
-        999
-    };
     if !display::confirm_batch(count_hint, action_verb) {
         println!("Aborted.");
         return Ok(());
@@ -234,6 +237,29 @@ pub async fn handle_info(ctx: &Context, target: &str) -> anyhow::Result<()> {
         display::print_info(info);
     } else {
         eprintln!("Error: Failed to fetch info: {}", resp.status());
+    }
+    Ok(())
+}
+
+pub async fn handle_events(
+    ctx: &Context,
+    target: &str,
+    limit: Option<usize>,
+) -> anyhow::Result<()> {
+    let ids = client::resolve_targets(&ctx.client, &ctx.base_url, target).await?;
+    if ids.len() != 1 {
+        eprintln!("Error: Events command only supports a single target.");
+        return Ok(());
+    }
+
+    let url = format!("{}/api/v1/programs/{}/events", ctx.base_url, ids[0]);
+    let resp = ctx.client.get(&url).send().await?;
+
+    if resp.status().is_success() {
+        let events: Vec<common::ProgramEventRecord> = resp.json().await?;
+        display::print_events(&events, limit);
+    } else {
+        eprintln!("Error: Failed to fetch events: {}", resp.status());
     }
     Ok(())
 }

@@ -1,15 +1,18 @@
 ---
 title: "Event Hooks"
 weight: 5
-description: "Run local scripts on system events with structured JSON on stdin."
+description: "Run local scripts or POST to webhooks on system events."
 ---
 
-Event hooks let you react to [System Events](/docs/03-orchestration/system-events) by running shell commands on the **same machine** as `superd`. This is the OSS equivalent of Supervisor's `[eventlistener]` — distinct from licensed [Event Notifications](/docs/05-advanced-management/event-notifications) (`notify` plugin), which POST to external IM/webhook URLs.
+Event hooks let you react to [System Events](/docs/03-orchestration/system-events) by running shell commands on the **same machine** as `superd`, or by POSTing the event JSON to an HTTP(S) **webhook** — no plugin or license required. This is the OSS equivalent of Supervisor's `[eventlistener]`; licensed [Event Notifications](/docs/05-advanced-management/event-notifications) (the `notify` plugin) additionally provide IM-specific templates and channel routing.
 
 ## Configuration
 
-Define global hooks in `super.toml`:
+Define global hooks in `super.toml`. Each hook is either a **local command** (`command`) or a **webhook** (`url`) — if `url` is set, `command` is ignored.
 
+{{< tabs items="Local command,Webhook" >}}
+
+{{< tab >}}
 ```toml
 [[event_hooks]]
 id = "archive-on-fatal"
@@ -25,6 +28,24 @@ events = ["process_backoff", "process_fatal"]
 programs = ["api-server", "worker"]
 async = false             # run sequentially (still non-blocking for the manager)
 ```
+{{< /tab >}}
+
+{{< tab >}}
+```toml
+[[event_hooks]]
+id = "ops-alert"
+url = "https://ops.example.com/hooks/super"
+headers = { Authorization = "Bearer s3cret-token" }
+events = ["process_fatal", "process_backoff"]
+programs = ["*"]
+async = true              # default: true (fire-and-forget)
+timeout_secs = 10         # request timeout in seconds
+```
+{{< /tab >}}
+
+{{< /tabs >}}
+
+Webhook requests are `POST` with `Content-Type: application/json` and the same JSON body used for local hooks. Non-2xx responses and timeouts are logged as warnings only — webhooks never block process management.
 
 Reload hooks without restarting programs:
 
@@ -32,9 +53,9 @@ Reload hooks without restarting programs:
 super reload    # re-reads super.toml, including [[event_hooks]]
 ```
 
-## JSON payload (stdin)
+## JSON payload (stdin / webhook body)
 
-Each matching hook receives one JSON object on **stdin**:
+Each matching hook receives one JSON object — on **stdin** for command hooks, as the request **body** for webhooks:
 
 ```json
 {
@@ -50,6 +71,7 @@ Each matching hook receives one JSON object on **stdin**:
   },
   "payload": {
     "exit_code": 137,
+    "signal": 9,
     "msg": "Stopped after 3 retries.",
     "log_tail": null
   }
@@ -57,6 +79,9 @@ Each matching hook receives one JSON object on **stdin**:
 ```
 
 `system_startup` / `system_shutdown` events omit the `program` field.
+
+> [!WARNING]
+> The `signal` field (when present) is the terminating signal number. A `signal: 9` (`SIGKILL`) with `exit_code: null` is typical of a **cgroup/kernel OOM kill** when [resource limits](/docs/05-advanced-management/resource-isolation) are enforced — don't mistake it for a code-based crash.
 
 ## Environment variables
 
@@ -85,10 +110,21 @@ In addition to stdin JSON, hooks receive:
 | | Event hooks (OSS) | Notifications (Licensed 💎) |
 | :--- | :--- | :--- |
 | Config | `super.toml` → `[[event_hooks]]` | `conf/notify.toml` (`notify` plugin) |
-| Execution | Local script | HTTP to Slack / 钉钉 / etc. |
-| Data | JSON stdin + env | Rich envelope + IM templates |
+| Execution | Local script **or** native webhook POST | HTTP to Slack / 钉钉 / etc. |
+| Data | JSON stdin / body + env | Rich envelope + IM templates |
 
-You can use both: licensed notify for on-call alerts, event hooks for local automation (archiving, systemd triggers, etc.).
+> [!TIP] You can use both
+> Licensed notify for on-call alerts with IM templates, event hooks for simple webhooks or local automation (archiving, systemd triggers, …). Start with OSS — `command` for local automation, `url` for a quick webhook; once alerting becomes a daily operational need, that's when `notify` pays off.
+
+> [!TIP] Going production? Upgrade your alerts.
+> OSS webhooks deliver raw event JSON — perfect for small deployments and self-hosted alert receivers. For **production-grade alerting**, the licensed `notify` plugin builds on the *same events* and adds:
+>
+> - Ready-made **Slack / 钉钉 / Feishu** message templates
+> - Multiple **channels** with per-channel routing
+> - **Deduplication & batching** so a crash storm doesn't flood your phone
+> - Delivery retries and delivery metrics
+>
+> **→ [Event Notifications — the licensed alerting plugin](/docs/05-advanced-management/event-notifications/)**
 
 ## Related
 

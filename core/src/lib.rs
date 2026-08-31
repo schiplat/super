@@ -48,6 +48,7 @@ pub struct SystemPaths {
     pub config_file: PathBuf,
     pub notify_file: PathBuf,
     pub state_file: PathBuf,
+    pub events_file: PathBuf,
     pub auth_file: PathBuf,
     pub log_dir: PathBuf,
     pub plugins_dir: PathBuf,
@@ -80,6 +81,7 @@ pub async fn bootstrap(extension: Box<dyn Extension>) -> anyhow::Result<SystemCo
         config_file: conf_dir.join("super.toml"),
         notify_file: conf_dir.join("notify.toml"),
         state_file: data_dir.join("snapshot.json"),
+        events_file: data_dir.join("events.json"),
         auth_file: data_dir.join("auth.json"),
         log_dir: log_dir.clone(),
         plugins_dir: root.join("plugins"),
@@ -155,6 +157,9 @@ pub async fn bootstrap(extension: Box<dyn Extension>) -> anyhow::Result<SystemCo
         }
     };
 
+    // 5b. Load persisted lifecycle event history (auxiliary; never fatal)
+    let initial_events = store::load_events_with_recovery(&paths.events_file).await?;
+
     let (log_tx, _) = broadcast::channel(100);
     let (shutdown_tx, shutdown_rx) = broadcast::channel(1);
     let (tx, rx) = mpsc::channel(2048);
@@ -168,6 +173,7 @@ pub async fn bootstrap(extension: Box<dyn Extension>) -> anyhow::Result<SystemCo
 
     let mut runtime_config = server_config.clone();
     runtime_config.storage.data_file = paths.state_file.clone();
+    runtime_config.storage.events_file = paths.events_file.clone();
     runtime_config.storage.log_dir = paths.log_dir.clone();
 
     // 6. Init Manager (core actor)
@@ -178,6 +184,7 @@ pub async fn bootstrap(extension: Box<dyn Extension>) -> anyhow::Result<SystemCo
         rx,
         tx.clone(),
         initial_programs,
+        initial_events,
         log_tx.clone(),
         extension,
     );

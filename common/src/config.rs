@@ -1,4 +1,5 @@
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
 fn default_star() -> Vec<String> {
@@ -10,10 +11,20 @@ fn default_hook_timeout() -> u64 {
 }
 
 /// OSS: global event hook (Supervisor `[eventlistener]` equivalent).
-/// Runs a local command with JSON on stdin when a system event fires.
+/// Either runs a local command with JSON on stdin, or POSTs the event JSON to
+/// a webhook `url`, when a system event fires.
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct EventHookConfig {
+    /// Shell command to run. Ignored when `url` is set.
+    #[serde(default)]
     pub command: String,
+    /// HTTP(S) webhook URL. When set, the event JSON is POSTed here instead of
+    /// running `command` (native webhook mode).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub url: Option<String>,
+    /// Extra headers for webhook mode (e.g. `Authorization`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub headers: Option<HashMap<String, String>>,
     #[serde(default = "default_star")]
     pub events: Vec<String>,
     #[serde(default = "default_star")]
@@ -147,6 +158,8 @@ pub struct StorageSection {
     pub data_file: PathBuf,
     #[serde(default = "default_log_dir")]
     pub log_dir: PathBuf,
+    #[serde(default = "default_events_file")]
+    pub events_file: PathBuf,
 }
 
 impl Default for StorageSection {
@@ -154,6 +167,7 @@ impl Default for StorageSection {
         Self {
             data_file: default_data_file(),
             log_dir: default_log_dir(),
+            events_file: default_events_file(),
         }
     }
 }
@@ -232,6 +246,9 @@ fn default_download_timeout() -> u64 {
 } // default download timeout: 24 hours
 fn default_data_file() -> PathBuf {
     "./data/snapshot.json".into()
+}
+fn default_events_file() -> PathBuf {
+    "./data/events.json".into()
 }
 fn default_log_dir() -> PathBuf {
     "./logs".into()

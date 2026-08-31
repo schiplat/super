@@ -6,7 +6,8 @@ description: "Start the server and manage processes dynamically via the API."
 
 In this guide, we will start the **Super** daemon with a minimal configuration and use its **REST API** to dynamically register and start a "Hello World" web server.
 
-> **Before adding programs:** Read the [Managed Program Requirements](/docs/02-essentials/process-management-contract) — managed apps must run in the foreground and must not daemonize or escape Super's process group.
+> [!NOTE]
+> Before adding programs: read the [Managed Program Requirements](/docs/02-essentials/process-management-contract) — managed apps must run in the foreground and must not daemonize or escape Super's process group.
 
 ## 1. Minimal Configuration
 
@@ -23,7 +24,8 @@ port = 9002
 allow_insecure_public_bind = false
 ```
 
-> **Note**: OSS has no API authentication. The default bind is `127.0.0.1` with `allow_insecure_public_bind = false`, so `superd` will **not** start on a public address (e.g. `0.0.0.0`) unless you deliberately set that flag to `true` or load the **`security` plugin** — see [Authentication](/docs/05-advanced-management/authentication). Use a firewall or reverse proxy if you expose the API another way.
+> [!CAUTION]
+> OSS has no API authentication. The default bind is `127.0.0.1` with `allow_insecure_public_bind = false`, so `superd` will **not** start on a public address (e.g. `0.0.0.0`) unless you deliberately set that flag to `true` or load the **`security` plugin** — see [Authentication](/docs/05-advanced-management/authentication). Use a firewall or reverse proxy if you expose the API another way.
 
 If you use the repo's [example config](https://github.com/schiplat/super/blob/master/example/conf/super.toml), it also binds to port **9002** — keep CLI/API URLs in sync with your `super.toml`.
 

@@ -286,3 +286,65 @@ a.hextra-nav-cta:hover {
   }
 }
 
+/* ==========================================================================
+   GitHub-style alerts (blockquote > [!NOTE] / [!TIP] / [!WARNING] / …)
+   Vivid Tailwind 500 border + 100 background, tinted title.
+   Hextra renders them as: hx:overflow-x-auto hx:flex hx:flex-col hx:rounded-lg
+   hx:border hx:py-4 hx:px-4 + per-grade border/bg/text utilities.
+   ========================================================================== */
+
+[class*="hx:rounded-lg"][class*="hx:flex-col"][class*="hx:border-blue-200"] {
+  border-color: #3b82f6 !important; /* note */
+}
+[class*="hx:rounded-lg"][class*="hx:flex-col"][class*="hx:border-green-200"] {
+  border-color: #22c55e !important; /* tip / default */
+}
+[class*="hx:rounded-lg"][class*="hx:flex-col"][class*="hx:border-purple-200"] {
+  border-color: #8b5cf6 !important; /* important */
+}
+[class*="hx:rounded-lg"][class*="hx:flex-col"][class*="hx:border-amber-200"] {
+  border-color: #f59e0b !important; /* warning */
+}
+[class*="hx:rounded-lg"][class*="hx:flex-col"][class*="hx:border-red-200"] {
+  border-color: #ef4444 !important; /* caution */
+}
+
+/* Soft background (100 vs 500 border). */
+[class*="hx:flex-col"][class*="hx:border-blue-200"]   { background-color: #dbeafe !important; }
+[class*="hx:flex-col"][class*="hx:border-green-200"]  { background-color: #dcfce7 !important; }
+[class*="hx:flex-col"][class*="hx:border-purple-200"] { background-color: #ede9fe !important; }
+[class*="hx:flex-col"][class*="hx:border-amber-200"]  { background-color: #fef3c7 !important; }
+[class*="hx:flex-col"][class*="hx:border-red-200"]    { background-color: #fee2e2 !important; }
+
+.dark [class*="hx:flex-col"][class*="hx:border-blue-200"]   { background-color: rgb(30 58 138 / 0.35) !important; }
+.dark [class*="hx:flex-col"][class*="hx:border-green-200"]  { background-color: rgb(6 78 59 / 0.35) !important; }
+.dark [class*="hx:flex-col"][class*="hx:border-purple-200"] { background-color: rgb(88 28 135 / 0.35) !important; }
+.dark [class*="hx:flex-col"][class*="hx:border-amber-200"]  { background-color: rgb(120 53 15 / 0.35) !important; }
+.dark [class*="hx:flex-col"][class*="hx:border-red-200"]    { background-color: rgb(127 29 29 / 0.35) !important; }
+
+/* Typography: one step below body (16px) for a clear hierarchy.
+   Content 14px / title 13px semibold, tinted with the alert grade. */
+
+[class*="hx:rounded-lg"][class*="hx:flex-col"][class*="hx:border"] [class*="hx:leading-7"] {
+  font-size: 0.875rem;        /* 14px */
+  line-height: 1.625rem;      /* 26px */
+}
+
+[class*="hx:rounded-lg"][class*="hx:flex-col"][class*="hx:border"] > p {
+  font-size: 0.8125rem;       /* 13px */
+  line-height: 1.25rem;       /* 20px */
+  font-weight: 600;
+}
+
+[class*="hx:flex-col"][class*="hx:border-blue-200"] > p   { color: #2563eb !important; }
+[class*="hx:flex-col"][class*="hx:border-green-200"] > p  { color: #16a34a !important; }
+[class*="hx:flex-col"][class*="hx:border-purple-200"] > p { color: #7c3aed !important; }
+[class*="hx:flex-col"][class*="hx:border-amber-200"] > p  { color: #d97706 !important; }
+[class*="hx:flex-col"][class*="hx:border-red-200"] > p    { color: #dc2626 !important; }
+
+.dark [class*="hx:flex-col"][class*="hx:border-blue-200"] > p   { color: #60a5fa !important; }
+.dark [class*="hx:flex-col"][class*="hx:border-green-200"] > p  { color: #34d399 !important; }
+.dark [class*="hx:flex-col"][class*="hx:border-purple-200"] > p { color: #a78bfa !important; }
+.dark [class*="hx:flex-col"][class*="hx:border-amber-200"] > p  { color: #fbbf24 !important; }
+.dark [class*="hx:flex-col"][class*="hx:border-red-200"] > p    { color: #f87171 !important; }
+

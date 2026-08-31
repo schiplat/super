@@ -37,9 +37,11 @@ flapping_threshold = 5
 log_level = "info"
 ```
 
-> **OSS security:** OSS builds ship with `host = "127.0.0.1"` and `allow_insecure_public_bind = false`. To bind on `0.0.0.0` or another non-loopback address you must either set `allow_insecure_public_bind = true` (acknowledging that the API is open to the network) or load the **`security` plugin** for token-based auth. Protect the port with a firewall or reverse proxy in either case.
+> [!CAUTION]
+> OSS builds ship with `host = "127.0.0.1"` and `allow_insecure_public_bind = false`. To bind on `0.0.0.0` or another non-loopback address you must either set `allow_insecure_public_bind = true` (acknowledging that the API is open to the network) or load the **`security` plugin** for token-based auth. Protect the port with a firewall or reverse proxy in either case.
 
-> **Process model:** Default is **foreground** (correct for systemd `Type=simple` and containers). Optional `[server] daemon = true` / `superd --daemon` detaches without systemd; do not combine with a systemd unit. Full keys: [Config reference — `[server]`](/docs/06-internals/config-reference/#server).
+> [!NOTE]
+> Default is **foreground** (correct for systemd `Type=simple` and containers). Optional `[server] daemon = true` / `superd --daemon` detaches without systemd; do not combine with a systemd unit. Full keys: [Config reference — `[server]`](/docs/06-internals/config-reference/#server).
 
 ### OSS security defaults (fail-closed)
 
@@ -62,7 +64,8 @@ See [Authentication](/docs/05-advanced-management/authentication#licensed-deploy
 
 Programs are **not** declared in `super.toml`. Define them via JSON stack files, the API, or the CLI — Super persists them to `data/snapshot.json` and reloads them on start.
 
-> **`[[programs]]` / `[[program]]` tables in `super.toml` are ignored.** `super check` flags them as an error. Programs load only from `[include]` JSON stacks (`conf/conf.d/*.json`), the API, and `data/snapshot.json`.
+> [!WARNING]
+> `[[programs]]` / `[[program]]` tables in `super.toml` are **ignored**. `super check` flags them as an error. Programs load only from `[include]` JSON stacks (`conf/conf.d/*.json`), the API, and `data/snapshot.json`.
 
 | Source | How | Persisted to |
 | :--- | :--- | :--- |
@@ -117,7 +120,8 @@ You can inject environment variables into the process.
 }
 ```
 
-> **Note**: Super automatically injects metadata variables like `SUPER_ID`, `SUPER_NAME`, and `SUPER_HOSTNAME` into the child process.
+> [!NOTE]
+> Super automatically injects metadata variables like `SUPER_ID`, `SUPER_NAME`, and `SUPER_HOSTNAME` into the child process.
 
 ### User & Group
 

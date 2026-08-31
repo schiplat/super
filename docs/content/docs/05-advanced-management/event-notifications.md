@@ -8,13 +8,15 @@ description: "Real-time alerts via Webhooks, Slack, DingTalk, Lark, and Teams."
 
 Super acts as an intelligent observer. Instead of just logging errors, it can actively push events to external systems like Slack, Microsoft Teams, or your company's internal IM tools.
 
-> **Licensed feature:** Event notifications require the `notify` plugin and a valid subscription license. OSS builds without the plugin will ignore `conf/notify.toml`.
+> [!NOTE]
+> Event notifications require the `notify` plugin and a valid subscription license. OSS builds without the plugin will ignore `conf/notify.toml`.
 
 ## Configuration
 
 Notifications are configured in a separate file **`conf/notify.toml`** (sibling to `super.toml`). This separation allows you to hot-reload alerting rules without restarting your processes.
 
-> **Alerts live in `conf/notify.toml`**, not in `super.toml`. There is no `[webhook]` section in the daemon config schema. Licensed alerting uses `notify.toml` with the `notify` plugin — see [Config Reference — `[[event_hooks]]`](/docs/06-internals/config-reference#event_hooks-oss) for OSS script hooks.
+> [!NOTE]
+> Alerts live in `conf/notify.toml`, not in `super.toml`. There is no `[webhook]` section in the daemon config schema. Licensed alerting uses `notify.toml` with the `notify` plugin — see [Config Reference — `[[event_hooks]]`](/docs/06-internals/config-reference#event_hooks-oss) for OSS script hooks.
 
 ### File location
 
@@ -66,7 +68,7 @@ headers = { Authorization = "Bearer token" }  # Optional: custom HTTP headers
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | `url` | string | Yes | Webhook endpoint URL. |
-| `secret` | string | No | Signing secret for payload verification. Signing method depends on platform — see [Payload Signing](#payload-signing). |
+| `secret` | string | No | Signing secret for payload verification. Adds an `X-Super-Signature: sha256=<hex>` header to every request — see [Payload Signing](#payload-signing). |
 | `headers` | table | No | Custom HTTP headers sent with every notification. Example: `{ Authorization = "Bearer token", X-Custom = "value" }` |
 
 ---
@@ -115,7 +117,7 @@ url = "https://oapi.dingtalk.com/robot/send?access_token=YOUR_TOKEN"
 secret = "SEC..."
 ```
 
-Renders a markdown message with title `Superd Alert: {program_name}`. When `secret` is set, Super computes the DingTalk HMAC signature automatically.
+Renders a markdown message with title `Superd Alert: {program_name}`. When `secret` is set, requests carry the standard `X-Super-Signature` header (see [Payload Signing](#payload-signing)).
 
 ### Lark / Feishu
 
@@ -211,18 +213,26 @@ When `type = "webhook"`, Super sends this structured JSON payload:
     "hostname": "prod-server-1",
     "version": "1.3.2"
   },
-  "summary": "[Fatal] worker on prod-server-1: Stopped after 3 retries.",
-  "markdown": "### Process Fatal Alert\n- Service: worker\n- Host: prod-server-1\n...",
+  "summary": "[Fatal] worker on prod-server-1: killed by SIGKILL (9)",
+  "markdown": "### Process Fatal Alert\n- Service: worker\n- Host: prod-server-1\n- Signal: SIGKILL (9)\n- Cause: Killed by SIGKILL (may be a kernel/cgroup OOM kill; check resource_limits and system logs)\n- Exit Code: None\n- Reason: Stopped after 3 retries.",
   "data": {
-    "program_name": "worker",
-    "pid": 12345,
-    "exit_code": 1,
-    "msg": "Stopped after 3 retries.",
-    "log_tail": "Error: Connection refused..."
+    "type": "ProcessFatal",
+    "payload": {
+      "program_id": "550e8400-e29b-41d4-a716-446655440000",
+      "program_name": "worker",
+      "pid": 12345,
+      "uptime_secs": 502,
+      "exit_code": null,
+      "signal": 9,
+      "msg": "Stopped after 3 retries.",
+      "log_tail": "Error: Connection refused..."
+    }
   },
   "log_tail": "Error: Connection refused..."
 }
 ```
+
+The `data` field is the **tagged** [System Event](/docs/03-orchestration/system-events) envelope — event fields live under `data.payload.*`.
 
 | Field | Description |
 |-------|-------------|
@@ -233,18 +243,21 @@ When `type = "webhook"`, Super sends this structured JSON payload:
 | `system.version` | Plugin version |
 | `summary` | One-line plain-text summary |
 | `markdown` | Pre-rendered markdown with event details |
-| `data` | Raw event payload |
+| `data` | Tagged event payload (`{ "type", "payload" }`) — event-specific fields under `data.payload` |
+| `data.payload.exit_code` | Process exit code (present when the process exited normally; `null` when killed by a signal) |
+| `data.payload.signal` | Terminating signal number — e.g. `9` = SIGKILL. `signal: 9` with `exit_code: null` is typical of a **cgroup/kernel OOM kill** when [resource limits](/docs/05-advanced-management/resource-isolation) are enforced |
 | `log_tail` | Recent stderr (only present for `process_fatal` when `include_log_tail = true`) |
 
 ---
 
 ## Payload Signing
 
-When `secret` is configured, Super signs outgoing requests using platform-specific methods:
+When `secret` is configured, Super signs the outgoing request body with a single, uniform scheme for **all** channel types (webhook, Slack, DingTalk, Lark, WeCom, Teams):
 
-### Generic Webhook (`type = "webhook"`)
+- Algorithm: `HMAC-SHA256(secret, request_body)`
+- Delivered as a request header: `X-Super-Signature: sha256=<hex-digest>`
 
-Adds `X-Super-Signature: sha256=<hex-digest>` header. Signature is `HMAC-SHA256(secret, request_body)`.
+Platform-native signing conventions (DingTalk `timestamp`+`sign`, Lark `sign` field, …) are **not** generated automatically — `secret` produces the `X-Super-Signature` header only, and platform-specific verification is up to your receiver.
 
 ```python
 import hmac, hashlib
@@ -255,62 +268,9 @@ def verify(secret: str, body: bytes, header: str) -> bool:
     return hmac.compare_digest(expected, received)
 ```
 
-### DingTalk (`type = "dingtalk"`)
+### Platforms without verification
 
-Appends `timestamp` and `sign` query parameters to the URL:
-
-```
-https://oapi.dingtalk.com/robot/send?access_token=XXX&timestamp=1680000000000&sign=<base64-encoded-signature>
-```
-
-Signature is `HMAC-SHA256(secret, timestamp + "\n" + secret)`, Base64-encoded.
-
-```python
-import hmac, hashlib, base64, time
-
-def verify_dingtalk(secret: str, timestamp: str, sign: str) -> bool:
-    string_to_sign = f"{timestamp}\n{secret}"
-    expected = hmac.new(
-        secret.encode(),
-        string_to_sign.encode(),
-        hashlib.sha256
-    ).digest()
-    expected_b64 = base64.b64encode(expected).decode()
-    return hmac.compare_digest(expected_b64, sign)
-```
-
-### Lark / Feishu (`type = "lark"`, `"feishu"`)
-
-Injects `timestamp` and `sign` fields into the JSON body:
-
-```json
-{
-  "msg_type": "interactive",
-  "card": { ... },
-  "timestamp": "1680000000",
-  "sign": "<base64-encoded-signature>"
-}
-```
-
-Signature is `HMAC-SHA256(timestamp + "\n" + secret, secret)`, then Base64-encode the hex digest.
-
-```python
-import hmac, hashlib, base64
-
-def verify_lark(secret: str, timestamp: str, sign: str) -> bool:
-    string_to_sign = f"{timestamp}\n{secret}"
-    hex_digest = hmac.new(
-        string_to_sign.encode(),
-        secret.encode(),
-        hashlib.sha256
-    ).hexdigest()
-    expected = base64.b64encode(hex_digest.encode()).decode()
-    return hmac.compare_digest(expected, sign)
-```
-
-### Platforms without signing
-
-**Slack**, **Teams**, and **WeCom** do not support webhook signing — the URL itself is the credential. Do not set `secret` for these platforms.
+**Slack**, **Teams**, and **WeCom** native incoming webhooks cannot be configured to validate a custom header — for those, the URL itself is the credential. Setting `secret` still adds the `X-Super-Signature` header, but the platform will ignore it; use a custom `type = "webhook"` receiver when you need signature verification.
 
 ---
 
@@ -327,7 +287,7 @@ triggers = ["process_fatal"]
 
 template = """
 {
-  "service": "{{ data.program_name }}",
+  "service": "{{ payload.program_name }}",
   "severity": "critical",
   "message": {{ json_quote rendered_summary }},
   "host": "{{ system_hostname }}"
@@ -346,18 +306,21 @@ url = "https://api.example.com/alerts"
 | `system_version` | string | Plugin version |
 | `rendered_summary` | string | One-line plain-text summary |
 | `rendered_markdown` | string | Pre-rendered markdown with event details and log tail |
-| `data` | object | Raw event data (fields vary by event type) |
+| `payload` | object | Raw event payload (fields vary by event type) |
 
-**Event-specific `data` fields:**
+**Event-specific `payload` fields:**
 
 | Event | Fields |
 |-------|--------|
-| `process_fatal` | `program_id`, `program_name`, `pid`, `exit_code`, `msg`, `log_tail` |
-| `process_backoff` | `program_id`, `program_name`, `pid`, `exit_code`, `retry_count` |
+| `process_fatal` | `program_id`, `program_name`, `pid`, `uptime_secs`, `exit_code`, `signal`, `msg`, `log_tail` |
+| `process_backoff` | `program_id`, `program_name`, `pid`, `uptime_secs`, `exit_code`, `signal`, `retry_count` |
 | `process_recovered` | `program_id`, `program_name`, `pid`, `uptime_sec` |
 | `process_started` | `program_id`, `program_name`, `pid` |
 | `system_startup` | `hostname` |
 | `system_shutdown` | *(none)* |
+
+> [!WARNING]
+> `payload.signal` is the terminating signal — `9` (SIGKILL) with `exit_code: null` usually means a kernel/cgroup **OOM kill** when [resource limits](/docs/05-advanced-management/resource-isolation) are enforced.
 
 ### `json_quote` helper
 
@@ -535,7 +498,7 @@ flowchart TB
 
   MODE -->|"immediate"| IMM["Send every event"]
   MODE -->|"cooldown"| CD["Send first of each event type<br/>Skip same-type repeats for cooldown_secs"]
-  MODE -->|"batch"| BAT["Buffer for window_secs<br/>Flush one summary (cap max_events)"]
+  MODE -->|"batch"| BAT["Buffer for window_secs<br/>Flush one summary (early at max_events)"]
 
   IMM --> WH["Webhook destination"]
   CD --> WH
@@ -562,7 +525,7 @@ max_events = 10         # only for mode = "batch"
 |------|----------|----------|----------------------|
 | `immediate` | Every event is sent individually, without delay. | Low-noise destinations, or when every event matters. | — |
 | `cooldown` | After sending a notification, skip subsequent events of the **same type** for `cooldown_secs`. | Preventing bursty repeat alerts from a flapping service. | `cooldown_secs = 60` |
-| `batch` | Collect events into a window (`window_secs`), then send one aggregated summary. Capped at `max_events` per batch. | High-volume environments where per-event noise is unwanted. | `window_secs = 30`, `max_events = 10` |
+| `batch` | Collect events into a window (`window_secs`), then send one aggregated summary. Flushes early when `max_events` are queued. | High-volume environments where per-event noise is unwanted. | `window_secs = 30`, `max_events = 10` |
 
 The dashboard pre-fills these recommended values when you switch modes so fields are never left empty.
 
@@ -580,7 +543,8 @@ mode = "cooldown"
 cooldown_secs = 60      # At most 1 notification per event type per minute
 ```
 
-> **Backward compatibility:** If no `[channels.strategy]` block is present, the channel defaults to `immediate`. The legacy `cooldown_secs` field (top-level on `[[channels]]`) remains accepted as a shorthand for `strategy = { mode = "cooldown", cooldown_secs = ... }`.
+> [!NOTE]
+> If no `[channels.strategy]` block is present, the channel defaults to `immediate`. The legacy `cooldown_secs` field (top-level on `[[channels]]`) remains accepted as a shorthand for `strategy = { mode = "cooldown", cooldown_secs = ... }`.
 
 #### Batch in Detail
 
@@ -588,13 +552,14 @@ When `mode = "batch"`:
 
 - Events are accumulated in an in-memory buffer during the `window_secs` window.
 - A global ticker (1-second resolution) checks all batching channels and flushes windows that have elapsed.
-- The aggregated notification includes a count of each event type and individual summaries up to `max_events`.
+- If the queue reaches `max_events` first, the batch flushes immediately instead of waiting for the window.
+- The flush sends a **single summary webhook**: total event/host counts in `summary`, plus a markdown table with one row per event.
 
 ```toml
 [channels.strategy]
 mode = "batch"
 window_secs = 30        # Collect events for 30 seconds
-max_events = 10          # Cap individual event summaries at 10
+max_events = 10          # Flush early when 10 events are queued
 ```
 
 **Batch payload example:**
@@ -608,22 +573,13 @@ max_events = 10          # Cap individual event summaries at 10
     "hostname": "prod-server-1",
     "version": "1.3.2"
   },
-  "summary": "[Batch] 5 events in 30s: 3 process_fatal, 2 process_backoff",
-  "data": {
-    "window_secs": 30,
-    "total_events": 5,
-    "breakdown": {
-      "process_fatal": 3,
-      "process_backoff": 2
-    },
-    "events": [
-      { "event": "process_fatal", "program_name": "worker-1", "msg": "Exit code 1" },
-      { "event": "process_fatal", "program_name": "worker-2", "msg": "Exit code 137" },
-      "... (truncated to max_events)"
-    ]
-  }
+  "summary": "[Super] 5 events on 1 host(s)",
+  "markdown": "### [Super] 5 events in the last window\n\n| Program | Host | Event | Detail |\n|---------|------|-------|--------|\n| worker-1 | prod-server-1 | 💥 Fatal | exit code 137 – Stopped after 3 retries. |\n| worker-2 | prod-server-1 | ⚠️ Backoff | retry #2 exit_code=Some(1) |\n\n2 program(s) affected on 1 host(s)",
+  "batch": true
 }
 ```
+
+`summary` aggregates total events and affected host count; `markdown` is a rendered table with one row per queued event.
 
 ### Inhibition
 
@@ -686,7 +642,8 @@ ttl_secs = 300                    # For: how long inhibition lasts (seconds)
 
 **Overlap is allowed:** an event type may appear in both `sources` and `targets` (for example When = Fatal or Restarting, Mute targets = Restarting). Evaluation order is: check suppression → send if allowed → then record the event as a source. So the first matching event still notifies; further repeats of the mute target are silenced for the duration.
 
-> **Tip:** Prefer process events that share `program_name`. `system_startup` / `system_shutdown` do not carry a program name, so inhibiting them with `match_on = ["program_name"]` usually has no effect.
+> [!TIP]
+> Prefer process events that share `program_name`. `system_startup` / `system_shutdown` do not carry a program name, so inhibiting them with `match_on = ["program_name"]` usually has no effect.
 
 #### Example: Fatal → Restarting
 

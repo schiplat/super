@@ -71,6 +71,7 @@ async fn setup_system_full() -> (
         rx,
         tx.clone(),
         HashMap::new(),
+        HashMap::new(),
         log_tx,
         Box::new(NoOpExtension),
     );

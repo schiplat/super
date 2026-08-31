@@ -40,6 +40,10 @@ What happens if a job takes longer to run than the interval between its schedule
 
 Super prevents overlaps by design. If a cron job is triggered but its previous instance is still `Running`, Super will **skip the new tick** and log a warning. Your system will never be flooded with overlapping jobs.
 
+## Flapping Detection Exemption
+
+Cron jobs are **exempt from flapping detection**. A regular (non-cron) program that exits and is restarted too frequently within `flapping_window` is flagged as `Fatal` and its `autostart` is disabled — that is the intended guard for long-running services. Short-interval cron jobs (e.g. every few seconds) intentionally start and exit on every tick, so treating them like a restart loop would permanently disable the schedule. Super skips the flapping check for any program with a `cron` expression, allowing arbitrary schedule intervals.
+
 ## CLI Usage
 
 You can create cron jobs directly from the CLI:

@@ -18,7 +18,10 @@ Unlike Supervisor (which uses XML-RPC) or Systemd (which relies on D-Bus/C bindi
 
 ## Scenario 1: Auto-Remediation Script
 
-Imagine you have a legacy application that leaks memory over time. You want to restart it automatically if it consumes more than 1GB of RAM, but you don't want to hard-kill it immediately via Cgroups. You want a graceful restart.
+Imagine you have a legacy application that leaks memory over time. You want to restart it gracefully when it consumes more than 1GB of RAM — the PM2 `--max-memory-restart` pattern (a soft threshold watchdog), rather than a hard cgroup cap.
+
+> [!NOTE]
+> Why not `resource_limits.memory_limit`? That is a hard cgroup v2 cap: the kernel OOM-kills the process when it is exceeded, with no graceful restart. If you want PM2-style "restart when RSS exceeds N", poll `mem_usage` from the API and trigger a graceful restart, as below.
 
 Here is how you can write a simple Python "Watchdog" using the Super API.
 

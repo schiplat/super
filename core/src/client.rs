@@ -38,6 +38,17 @@ impl ManagerHandle {
         rx.await?
     }
 
+    pub async fn get_program_events(
+        &self,
+        id: Uuid,
+    ) -> anyhow::Result<Vec<common::ProgramEventRecord>> {
+        let (tx, rx) = oneshot::channel();
+        self.tx
+            .send(Command::GetProgramEvents { id, reply: tx })
+            .await?;
+        Ok(rx.await?)
+    }
+
     pub async fn shutdown(&self) -> anyhow::Result<()> {
         let (tx, rx) = oneshot::channel();
         self.tx.send(Command::Shutdown { reply: tx }).await?;

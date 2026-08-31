@@ -32,9 +32,11 @@ Super allows you to define these relationships using the `depends_on` field on e
 When you start `backend-api` (or when Super autostarts it):
 
 1.  Super checks if `postgres-db` is running.
-2.  If `postgres-db` is not running, it starts it.
+2.  If `postgres-db` is not running, Super starts it automatically (through the normal start path).
 3.  **Crucially**, Super waits for `postgres-db` to become **Healthy** (pass its health check).
 4.  Only then does `backend-api` start.
+
+A dependency that is already busy in its own lifecycle (waiting for *its* dependencies, restarting, or crashed) is left alone — Super does not force-start it. This also breaks dependency cycles: if `A` depends on `B` and `B` depends on `A`, both simply stay in `Waiting` until you break the cycle manually.
 
 ## State: "Waiting"
 

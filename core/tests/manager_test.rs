@@ -61,6 +61,7 @@ async fn setup_manager() -> (ManagerHandle, TempDir, MockExtension) {
         rx,
         tx.clone(),
         HashMap::new(),
+        HashMap::new(),
         log_tx,
         Box::new(extension.clone()),
     );
@@ -172,33 +173,50 @@ async fn test_dependency_orchestration() {
         .unwrap();
     let consumer_id = consumer_ids[0];
 
-    // 1. Start consumer first → should enter Waiting (provider not running)
+    // 1. Start consumer first. It may briefly enter Waiting, but it must pull
+    //    the provider up automatically instead of staying Waiting forever.
     handle.start_program(consumer_id).await.unwrap();
 
-    tokio::time::sleep(Duration::from_millis(100)).await;
-    let info = handle.get_program(consumer_id).await.unwrap();
-    assert_eq!(
-        info.state,
-        ProcessStatus::Waiting,
-        "Consumer should wait for provider"
-    );
+    // 2. Provider must have been auto-started.
+    let deadline = tokio::time::Instant::now() + Duration::from_secs(5);
+    let provider_id = loop {
+        let list = handle.list_programs().await.unwrap();
+        let provider = list.iter().find(|p| p.name == "provider").unwrap();
+        if matches!(
+            provider.status,
+            ProcessStatus::Running | ProcessStatus::Healthy
+        ) {
+            break provider.id;
+        }
+        assert!(
+            tokio::time::Instant::now() < deadline,
+            "provider was not auto-started (status: {:?})",
+            provider.status
+        );
+        tokio::time::sleep(Duration::from_millis(50)).await;
+    };
+    let _ = provider_id;
 
-    // 2. Start provider
-    let list = handle.list_programs().await.unwrap();
-    let provider_id = list.iter().find(|p| p.name == "provider").unwrap().id;
-    handle.start_program(provider_id).await.unwrap();
-
-    // 3. Wait for provider to become Healthy and trigger scheduling
-    tokio::time::sleep(Duration::from_millis(500)).await;
-
-    // 4. Verify consumer state
-    let info = handle.get_program(consumer_id).await.unwrap();
-    println!("Consumer State after provider start: {:?}", info.state);
-    assert_ne!(
-        info.state,
-        ProcessStatus::Waiting,
-        "Consumer should have been triggered"
-    );
+    // 3. Once the provider is up, the consumer must leave Waiting (echo exits
+    //    quickly, so Stopped is expected).
+    let deadline = tokio::time::Instant::now() + Duration::from_secs(5);
+    loop {
+        let info = handle.get_program(consumer_id).await.unwrap();
+        if info.state != ProcessStatus::Waiting {
+            assert_ne!(
+                info.state,
+                ProcessStatus::Waiting,
+                "Consumer should have been triggered"
+            );
+            break;
+        }
+        assert!(
+            tokio::time::Instant::now() < deadline,
+            "consumer never left Waiting (state: {:?})",
+            info.state
+        );
+        tokio::time::sleep(Duration::from_millis(50)).await;
+    }
 }
 
 #[tokio::test]

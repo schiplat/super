@@ -14,6 +14,8 @@ async fn test_event_hook_receives_json_on_stdin() {
 
     let hook = EventHookConfig {
         command: script,
+        url: None,
+        headers: None,
         events: vec!["*".to_string()],
         programs: vec!["*".to_string()],
         r#async: false,
@@ -63,6 +65,8 @@ async fn test_emit_notifies_extension_and_runs_hook() {
 
     let hooks = vec![EventHookConfig {
         command: format!(r#"touch "{}""#, marker_str),
+        url: None,
+        headers: None,
         events: vec!["system_shutdown".to_string()],
         programs: vec!["*".to_string()],
         r#async: false,
@@ -76,4 +80,76 @@ async fn test_emit_notifies_extension_and_runs_hook() {
 
     assert!(marker.exists());
     assert_eq!(ext.events.lock().unwrap().len(), 1);
+}
+
+#[tokio::test]
+async fn test_webhook_hook_posts_json() {
+    // Minimal HTTP server capturing one POST request
+    let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+    let addr = listener.local_addr().unwrap();
+    let handle = std::thread::spawn(move || {
+        use std::io::{Read, Write};
+        let (mut stream, _) = listener.accept().unwrap();
+        stream
+            .set_read_timeout(Some(std::time::Duration::from_secs(5)))
+            .unwrap();
+        let mut buf = Vec::new();
+        let mut chunk = [0u8; 4096];
+        let header_end;
+        loop {
+            let n = stream.read(&mut chunk).unwrap();
+            if n == 0 {
+                return String::from_utf8_lossy(&buf).to_string();
+            }
+            buf.extend_from_slice(&chunk[..n]);
+            if let Some(pos) = buf.windows(4).position(|w| w == b"\r\n\r\n") {
+                header_end = pos + 4;
+                break;
+            }
+        }
+        let head = String::from_utf8_lossy(&buf[..header_end]).to_lowercase();
+        let content_len: usize = head
+            .lines()
+            .find_map(|l| l.strip_prefix("content-length:"))
+            .and_then(|v| v.trim().parse().ok())
+            .unwrap_or(0);
+        while buf.len() < header_end + content_len {
+            let n = stream.read(&mut chunk).unwrap();
+            if n == 0 {
+                break;
+            }
+            buf.extend_from_slice(&chunk[..n]);
+        }
+        let _ = stream.write_all(b"HTTP/1.1 200 OK\r\nContent-Length: 2\r\n\r\nok");
+        String::from_utf8_lossy(&buf).to_string()
+    });
+
+    let url = format!("http://{addr}/hook");
+    let hook = EventHookConfig {
+        command: "".to_string(),
+        url: Some(url),
+        headers: None,
+        events: vec!["*".to_string()],
+        programs: vec!["*".to_string()],
+        r#async: false,
+        timeout_secs: 5,
+        id: Some("test-webhook".to_string()),
+    };
+
+    let event = SystemEvent::ProcessStarted {
+        program_id: Uuid::new_v4(),
+        program_name: "demo".to_string(),
+        pid: 4242,
+    };
+
+    event_hooks::dispatch(&[hook], &event);
+    tokio::time::sleep(std::time::Duration::from_millis(300)).await;
+
+    let request = handle.join().unwrap();
+    assert!(request.contains("POST /hook"), "request={request}");
+    assert!(
+        request.contains("\"event\":\"process_started\""),
+        "request={request}"
+    );
+    assert!(request.contains("\"name\":\"demo\""), "request={request}");
 }

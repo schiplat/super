@@ -37,19 +37,28 @@ super add <COMMAND> [ARGS...] [FLAGS]
 ```
 
 **Flags:**
-*   `--name <NAME>`: Custom name (defaults to binary name).
+*   `--name <NAME>` / `-n`: Custom name (defaults to binary name).
 *   `--autostart`: Enable autostart (default: true).
 *   `--cwd <DIR>`: Working directory.
-*   `--env <KEY=VAL>`: Set environment variables (can be used multiple times).
+*   `--env <KEY=VAL>` / `-e`: Set environment variables (can be used multiple times).
 *   `--env-file <PATH>`: Load environment variables from a file at spawn time.
 *   `--user <USER>`: Run as specific user.
+*   `--group <GROUP>`: Group name for organization (addressable as `@<group>`).
 *   `--numprocs <N>`: Spawn N instances.
+*   `--process-name <TPL>`: Process name template for multiple instances (e.g. `worker-{num}`; default `{name}-{num}`).
+*   `--autorestart <POLICY>`: `unexpected` (default), `true`, or `false`.
+*   `--exitcodes <N,N>`: Comma-separated exit codes considered successful (default: `0`).
+*   `--startsecs <N>`: Seconds before exit counts as stable start (default: `10`).
+*   `--stopsecs <N>`: Seconds to wait after SIGTERM before SIGKILL (default: server `shutdown_timeout`).
+*   `--cron <EXPR>`: Cron expression for scheduled tasks (see [Scheduled Tasks](/docs/02-essentials/scheduled-tasks)).
+*   `--cpu <PCT>`: CPU quota percentage (e.g. `50.0`; `isolation` plugin, Linux only).
+*   `--memory <BYTES>`: Memory limit in bytes (`isolation` plugin, Linux only).
 
 ### `update`
 Update configuration for an existing program.
 
 ```bash
-super update <TARGET> [FLAGS]
+super update <name|id> [FLAGS]
 ```
 
 **Flags:**
@@ -117,7 +126,7 @@ super restart <name|@group|id|all> [--wait] [--timeout N]
 Send a specific POSIX signal.
 
 ```bash
-super signal <TARGET> --sig <SIGNAL>
+super signal <name|@group|id|all> --sig <SIGNAL>
 ```
 *   **Signals**: `hup`, `int`, `term`, `kill`, `quit`, `usr1`, `usr2`.
 
@@ -127,16 +136,30 @@ super signal <TARGET> --sig <SIGNAL>
 Show detailed JSON/Table information about a specific program.
 
 ```bash
-super info <TARGET>
+super info <name|id>
 ```
+
+### `events`
+Show the persisted lifecycle/exception event history for a program (crashes, OOM kills, backoff retries, recoveries, unexpected exits). Newest first.
+
+```bash
+super events <name|id>          # all recorded events
+super events <name|id> --limit 10   # last 10 events
+```
+
+| Flag | Description |
+| :--- | :--- |
+| `--limit N` | Show only the N most recent events |
+
+Events are recorded by `superd` to `data/events.json` (newest per program; capped at 50 per program, oldest dropped). The `signal` column shows the terminating signal — `9` (`SIGKILL`) typically indicates a cgroup/kernel OOM kill under `resource_limits`. Backed by `GET /api/v1/programs/{id}/events`.
 
 ### `logs`
 Read historical lines from disk and/or stream live output via WebSocket.
 
 ```bash
-super logs <TARGET>              # live stream (WebSocket)
-super logs <TARGET> --tail 200   # last 200 lines from disk
-super logs <TARGET> --tail 50 --follow   # tail then follow live
+super logs <name|id>              # live stream (WebSocket)
+super logs <name|id> --tail 200   # last 200 lines from disk
+super logs <name|id> --tail 50 --follow   # tail then follow live
 ```
 
 | Flag | Description |
@@ -145,14 +168,21 @@ super logs <TARGET> --tail 50 --follow   # tail then follow live
 | `--source` | `stdout` or `stderr` only |
 | `--follow` | After `--tail`, keep streaming via WebSocket |
 
+### `top`
+Real-time monitoring interface (like `htop`). Polls `/api/v1/programs` every second and renders a full-screen table; navigate with arrow keys, quit with `q`.
+
+```bash
+super top
+```
+
 ## System
 
 ### `reload`
 Reload system configuration from `super.toml` (logging, includes, event hooks), or send **SIGHUP** to a running program when a target is given.
 
 ```bash
-super reload              # reload super.toml (no program restart)
-super reload <TARGET>     # SIGHUP to program(s) — e.g. nginx config reload
+super reload                              # reload super.toml (no program restart)
+super reload <name|@group|id|all>         # SIGHUP to program(s) — e.g. nginx config reload
 ```
 
 ### `apply`
@@ -193,7 +223,8 @@ super check
 ### `keyring`
 List Ed25519 verifying key ids (`kid`) compiled into this `super` binary — one row per key, so multiple rotation keys are all visible. Each `kid` uses the `k_<8hex>` convention (first four bytes of the public key as hex). Suggested when a license fails with an unknown signing key or to compare a local build with an official release. See [Troubleshooting license verification](/docs/05-advanced-management/authentication#troubleshooting-license-verification).
 
-> **Super Pro / subscription only:** this command exists to help diagnose **license verification for licensed deployments**. Pure OSS builds have no license, so the keyring output is irrelevant unless you run a Super Pro instance.
+> [!NOTE]
+> This command exists to help diagnose **license verification for licensed deployments**. Pure OSS builds have no license, so the keyring output is irrelevant unless you run a Super Pro instance.
 
 ```bash
 super keyring
@@ -210,6 +241,7 @@ super login <auth_secret>          # save credentials to ~/.super/cli.json
 
 # Day-to-day: use a generated token
 super login sk-...
+super logout                        # clear saved credentials (~/.super/cli.json)
 super token list
 super token create ci-bot --role operator
 super token revoke <id>

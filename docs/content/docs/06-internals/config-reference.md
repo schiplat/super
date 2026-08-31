@@ -11,7 +11,8 @@ description: "Complete schema for super.toml."
 | **💎 Subscription** | Requires valid `[license].key` in `conf/super.toml` and matching authorized plugin libraries. OSS ignores unknown subscription-only fields. |
 | *(no mark)* | Available in OSS (with or without plugins). |
 
-> **Public beta:** 💎 fields require a valid `[license].key` and matching plugin libraries. Pro plugins are available with a **free 1-year beta license** ([request via GitHub Issue](https://github.com/schiplat/super/issues/new?template=pro-trial.yml)). We recommend staging and non-critical workloads until GA; see the [feature matrix](/docs/07-editions/feature-matrix/).
+> [!TIP] Free 1-year beta license
+> 💎 fields require a valid `[license].key` and matching plugin libraries. Pro plugins are available with a **free 1-year beta license** ([request via GitHub Issue](https://github.com/schiplat/super/issues/new?template=pro-trial.yml)). We recommend staging and non-critical workloads until GA; see the [feature matrix](/docs/07-editions/feature-matrix/).
 
 **Licensed-plugin fields in this reference** (quick index):
 
@@ -22,7 +23,8 @@ description: "Complete schema for super.toml."
 | `conf/conf.d/*.json` *(program stacks)* | `services[].resource_limits` (`cpu_quota`, `memory_limit`) 💎 |
 | `conf/notify.toml` *(separate file)* | `[[channels]]` 💎 — see [Event Notifications](/docs/05-advanced-management/event-notifications) |
 
-> **OSS security:** See [Configuration — OSS security defaults](/docs/02-essentials/configuration#oss-security-defaults-fail-closed) for fail-closed bind, log path confinement, and other defensive defaults.
+> [!NOTE]
+> See [Configuration — OSS security defaults](/docs/02-essentials/configuration#oss-security-defaults-fail-closed) for fail-closed bind, log path confinement, and other defensive defaults.
 
 ## Instance layout (`SUPER_ROOT`)
 
@@ -114,7 +116,8 @@ Programs are **not** declared in `super.toml` — `[[programs]]` / `[[program]]`
 
 The keys below describe a **single program entry** — one item in a stack file's `services[]` array, or a create/update API payload. Multiple `services[]` entries are allowed per stack.
 
-> **Field naming**: Keys such as `autostart`, `autorestart`, `exitcodes`, `startsecs`, and `stopsecs` align with [Supervisor](/docs/04-production-scenarios/migrations/vs-supervisor) for migration. Newer keys (`retry_limit`, `health_check`, `depends_on`, …) use snake_case. In stack JSON / API payloads, `stopwaitsecs` is accepted as an alias for `stopsecs`.
+> [!NOTE]
+> Keys such as `autostart`, `autorestart`, `exitcodes`, `startsecs`, and `stopsecs` align with [Supervisor](/docs/04-production-scenarios/migrations/vs-supervisor) for migration. Newer keys (`retry_limit`, `health_check`, `depends_on`, …) use snake_case. In stack JSON / API payloads, `stopwaitsecs` is accepted as an alias for `stopsecs`.
 
 ### Identity & execution
 
@@ -193,17 +196,20 @@ Per-program lifecycle shell hooks. Full behavior table: [Lifecycle Hooks](/docs/
 
 ## `[[event_hooks]]` *(OSS)*
 
-Global event listeners (local scripts, JSON on stdin). Distinct from licensed `conf/notify.toml` webhooks (`notify` plugin). Full reference: [Event Hooks](/docs/03-orchestration/event-hooks).
+Global event listeners: **local scripts** (JSON on stdin) or **native webhooks** (`url`). Distinct from licensed `conf/notify.toml` webhooks (`notify` plugin). Full reference: [Event Hooks](/docs/03-orchestration/event-hooks).
 
-> **`[webhook]` is not supported** in `super.toml`. `superd` and `super check` reject configs that still contain a `[webhook]` table. For HTTP/IM alerts, use `conf/notify.toml` with the `notify` plugin.
+> [!WARNING]
+> `[webhook]` is not supported in `super.toml`. `superd` and `super check` reject configs that still contain a `[webhook]` table. For IM-specific templates, use `conf/notify.toml` with the `notify` plugin.
 
 | Key | Type | Default | Description |
 | :--- | :--- | :--- | :--- |
-| `command` | string | *(required)* | Shell command (`sh -c`). Receives JSON on stdin. |
+| `command` | string | — | Shell command (`sh -c`). Receives JSON on stdin. Ignored when `url` is set. |
+| `url` | string | — | HTTP(S) webhook URL. When set, the event JSON is `POST`ed here instead of running `command`. |
+| `headers` | map | — | Extra headers for webhook mode (e.g. `Authorization`). |
 | `events` | list | `["*"]` | Event names (`process_fatal`, …) or `"*"`. |
 | `programs` | list | `["*"]` | Program names to match, or `"*"`. |
-| `async` | bool | `true` | Run hook in background task. |
-| `timeout_secs` | int | `30` | Kill hook script after N seconds. |
+| `async` | bool | `true` | Run hook in background task (webhooks are fire-and-forget). |
+| `timeout_secs` | int | `30` | Kill hook script / abort webhook request after N seconds. |
 | `id` | string | — | Optional label for logs. |
 
 ## `conf/notify.toml` 💎

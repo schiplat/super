@@ -13,14 +13,15 @@ This page is the canonical list of all event types. Configuration for reacting t
 | Event name | Rust variant | When it fires | Payload fields |
 | :--- | :--- | :--- | :--- |
 | `process_started` | `ProcessStarted` | Process spawned successfully and received a PID | `program_id`, `program_name`, `pid` |
-| `process_fatal` | `ProcessFatal` | Process stopped and will **not** auto-restart (retries exhausted, manual fatal, spawn/pre-start failure, cron failure, OTA rollback trigger, etc.) | `program_id`, `program_name`, `pid`, `uptime_secs`, `exit_code`, `msg`, `log_tail` |
-| `process_backoff` | `ProcessBackoff` | Process crashed but **will** retry (autorestart still active) | `program_id`, `program_name`, `pid`, `uptime_secs`, `exit_code`, `retry_count` |
+| `process_fatal` | `ProcessFatal` | Process stopped and will **not** auto-restart (retries exhausted, manual fatal, spawn/pre-start failure, cron failure, OTA rollback trigger, etc.) | `program_id`, `program_name`, `pid`, `uptime_secs`, `exit_code`, `signal`, `msg`, `log_tail` |
+| `process_backoff` | `ProcessBackoff` | Process crashed but **will** retry (autorestart still active) | `program_id`, `program_name`, `pid`, `uptime_secs`, `exit_code`, `signal`, `retry_count` |
 | `process_recovered` | `ProcessRecovered` | Process was unstable (backoff/fatal path) and is now **Healthy** again | `program_id`, `program_name`, `pid`, `uptime_sec` |
 | `system_startup` | `SystemStartup` | `superd` manager loop started (after loading programs) | `hostname` |
 | `system_shutdown` | `SystemShutdown` | `superd` is shutting down gracefully | *(none)* |
 
 ### Notes
 
+* **`signal` field** (`process_fatal` / `process_backoff`): set when the process was terminated by a signal rather than an exit code (e.g. `9` = SIGKILL, including cgroup OOM kills). When present, `exit_code` is `null`. OSS `superd` captures SIGKILL/OOM termination this way; see the Web UI / `super events` for the recorded anomaly.
 * **`process_fatal` + `log_tail`**: Licensed webhooks (`notify` plugin) can attach the last lines of stderr when `include_log_tail = true` on a channel. The tail is read at event time from the program log file.
 * **`process_recovered`**: Only emitted after a prior crash/backoff (`alert_pending_recovery`). A clean first start does not emit recovery.
 * **Health check failures alone** do not emit a dedicated event today. A failing health check keeps status at `Running`; repeated process exits still emit `process_backoff` / `process_fatal`.

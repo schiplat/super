@@ -8,7 +8,8 @@ aliases:
   - /docs/02-essentials/web-ui
 ---
 
-> **Licensed plugin 💎:** The dashboard requires the **`ui`** plugin in `[license].key`. OSS `superd` serves a short notice at `/` instead of a dashboard.
+> [!NOTE]
+> The dashboard requires the **`ui`** plugin in `[license].key`. OSS `superd` serves a short notice at `/` instead of a dashboard.
 
 ## OSS vs subscription
 
@@ -25,9 +26,8 @@ With the `ui` plugin loaded and authorized in `[license].key`:
 
 **http://localhost:9002**
 
-{{< callout icon="sparkles" >}}
-  Assuming `port = 9002` in your config
-{{< /callout >}}
+> [!NOTE]
+> Assuming `port = 9002` in your config
 
 Log in with an **Access Token** (`sk-…`) when the **`security`** plugin is enabled. Prefer generated tokens for day-to-day use; config `auth_secret` remains usable until an Admin explicitly disables it. See [Authentication](/docs/05-advanced-management/authentication).
 
@@ -89,4 +89,5 @@ The dashboard also includes create/edit program forms, a [stack editor](/docs/04
 
 **With `security` plugin loaded:** Token authentication and RBAC apply to the API and dashboard. Prefer generated Access Tokens for day-to-day login. `auth_secret` remains usable until an Admin explicitly disables it (after creating an Admin token). See [Access control](/docs/05-advanced-management/access-control) and [Authentication](/docs/05-advanced-management/authentication).
 
-> **Security tip:** OSS exposure beyond localhost requires explicit `allow_insecure_public_bind = true` or the **`security` plugin**. Licensed deployments always load `security`.
+> [!WARNING]
+> OSS exposure beyond localhost requires explicit `allow_insecure_public_bind = true` or the **`security` plugin**. Licensed deployments always load `security`.

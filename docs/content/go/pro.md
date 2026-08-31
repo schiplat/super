@@ -34,7 +34,8 @@ On the checkout page:
 
 Open-source supporter tips do **not** include plugins or a license key.
 
-> **After the 365-day term ends, you can still use Super Pro plugins** on the Super versions your key already authorizes (see below). Expiry does **not** turn plugins off. Renew when you want to follow **newer** Super releases beyond that version scope.
+> [!TIP] Expiry does not disable your plugins
+> After the 365-day term ends, you can still use Super Pro plugins on the Super versions your key already authorizes (see below). Expiry does **not** turn plugins off. Renew when you want to follow **newer** Super releases beyond that version scope.
 
 ## License version coverage
 

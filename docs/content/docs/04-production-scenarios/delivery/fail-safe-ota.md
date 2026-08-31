@@ -43,7 +43,8 @@ The `restart_policy` field controls *when* the new binary becomes active.
 | **`manual`** | Swaps the binary on disk but **does not** restart. The new version runs on the next natural restart (e.g., reboot). | Non-critical background agents. |
 | **`signal`** | Swaps the binary and sends a custom signal (e.g., `SIGHUP`) instead of restarting. | Applications that support internal **Hot Reloading** (like Nginx or some Go apps). |
 
-> **Note**: As of v1.1.7, `immediate` is the primary supported policy. `manual` and `signal` are reserved for future implementation.
+> [!WARNING]
+> As of v1.1.7, `immediate` is the primary supported policy. `manual` and `signal` are reserved for future implementation.
 
 ## Triggering an Update
 

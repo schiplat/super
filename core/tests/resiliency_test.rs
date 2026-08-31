@@ -51,6 +51,7 @@ async fn test_strict_policy_kills_process() {
         cmd_rx,
         cmd_tx.clone(),
         HashMap::new(),
+        HashMap::new(),
         log_tx,
         extension,
     );

@@ -63,6 +63,10 @@ pub enum Command {
         id: Uuid,
         reply: oneshot::Sender<anyhow::Result<ProgramInfo>>,
     },
+    GetProgramEvents {
+        id: Uuid,
+        reply: oneshot::Sender<Vec<common::ProgramEventRecord>>,
+    },
 
     // Group operation commands
     StartGroup {
@@ -82,6 +86,7 @@ pub enum Command {
     ProcessExited {
         id: Uuid,
         code: Option<i32>,
+        signal: Option<i32>,
     },
     CheckTimeoutKill {
         id: Uuid,

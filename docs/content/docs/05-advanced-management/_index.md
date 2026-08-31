@@ -4,7 +4,8 @@ weight: 5
 description: "Security, governance, and observability with optional licensed plugins."
 ---
 
-> **Licensed plugins 💎:** Pages in this section describe capabilities provided by optional plugins (`security`, `isolation`, `notify`). OSS `superd` without those plugins does not register the related API routes.
+> [!NOTE]
+> Pages in this section describe capabilities provided by optional plugins (`security`, `isolation`, `notify`). OSS `superd` without those plugins does not register the related API routes.
 
 As your infrastructure grows from a single server to a fleet of edge devices or a microservices cluster, **governance** becomes critical.
 

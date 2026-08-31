@@ -16,6 +16,9 @@ use crate::monitor::ResourceMonitor;
 use crate::process;
 use common::{ProcessStatus, ProgramConfig, SystemEvent, WsMessage};
 
+#[cfg(unix)]
+use std::os::unix::process::ExitStatusExt;
+
 /// Lifecycle controller: spawn, stop, and signal logic.
 pub struct LifecycleController {
     // Core dependencies
@@ -70,63 +73,69 @@ impl LifecycleController {
 
         let program_name = config.name.clone();
 
-        // 2. Flapping detection
-        // Record start time
-        self.tracker
-            .record_start(id, self.config.server.flapping_threshold);
+        // 2. Flapping detection — only for long-running services. Cron jobs are
+        // one-shot scheduled tasks: they exit and re-trigger on the next tick by
+        // design, so restart-loop detection does not apply (and would otherwise
+        // permanently disable short-interval schedules via `autostart = false`).
+        if config.cron.is_none() {
+            // Record start time
+            self.tracker
+                .record_start(id, self.config.server.flapping_threshold);
 
-        // Check for rapid restarts within the window
-        if self.tracker.is_flapping(
-            id,
-            self.config.server.flapping_window,
-            self.config.server.flapping_threshold,
-        ) {
-            tracing::error!(
-                "FLAPPING DETECTED for {}! Restarted too frequently.",
-                program_name
-            );
-
-            // Mark state as Fatal
-            registry.restarting.remove(&id);
-            registry.waiting.remove(&id);
-            registry.crashed.insert(id);
-
-            if let Some(cfg) = registry.programs.get_mut(&id) {
-                cfg.autostart = false;
-                cfg.updated_at = chrono::Utc::now().timestamp() as u64;
-            }
-
-            // Record flapping error so the UI shows a reason, not just Fatal
-            let err_msg = format!(
-                "FLAPPING DETECTED: Restarted too frequently in {}s.",
-                self.config.server.flapping_window
-            );
-            registry.startup_errors.insert(id, err_msg.clone());
-
-            registry.mark_dirty();
-
-            let _ = self.log_tx.send(WsMessage::StatusChange {
+            // Check for rapid restarts within the window
+            if self.tracker.is_flapping(
                 id,
-                status: ProcessStatus::Fatal,
-                name: program_name.clone(),
-            });
+                self.config.server.flapping_window,
+                self.config.server.flapping_threshold,
+            ) {
+                tracing::error!(
+                    "FLAPPING DETECTED for {}! Restarted too frequently.",
+                    program_name
+                );
 
-            // Extension Event
-            let event = SystemEvent::ProcessFatal {
-                program_id: id,
-                program_name: program_name.clone(),
-                pid: None,
-                uptime_secs: 0,
-                exit_code: None,
-                msg: format!(
+                // Mark state as Fatal
+                registry.restarting.remove(&id);
+                registry.waiting.remove(&id);
+                registry.crashed.insert(id);
+
+                if let Some(cfg) = registry.programs.get_mut(&id) {
+                    cfg.autostart = false;
+                    cfg.updated_at = chrono::Utc::now().timestamp() as u64;
+                }
+
+                // Record flapping error so the UI shows a reason, not just Fatal
+                let err_msg = format!(
                     "FLAPPING DETECTED: Restarted too frequently in {}s.",
                     self.config.server.flapping_window
-                ),
-                log_tail: None,
-            };
-            crate::event_hooks::emit(&self.extension, &self.config.event_hooks, event);
+                );
+                registry.startup_errors.insert(id, err_msg.clone());
 
-            return Err(anyhow::anyhow!("Program flapping detected"));
+                registry.mark_dirty();
+
+                let _ = self.log_tx.send(WsMessage::StatusChange {
+                    id,
+                    status: ProcessStatus::Fatal,
+                    name: program_name.clone(),
+                });
+
+                // Extension Event
+                let event = SystemEvent::ProcessFatal {
+                    program_id: id,
+                    program_name: program_name.clone(),
+                    pid: None,
+                    uptime_secs: 0,
+                    exit_code: None,
+                    signal: None,
+                    msg: format!(
+                        "FLAPPING DETECTED: Restarted too frequently in {}s.",
+                        self.config.server.flapping_window
+                    ),
+                    log_tail: None,
+                };
+                crate::event_hooks::emit(&self.extension, &self.config.event_hooks, event);
+
+                return Err(anyhow::anyhow!("Program flapping detected"));
+            }
         }
 
         // 3. Prepare for start
@@ -139,6 +148,8 @@ impl LifecycleController {
         if !config.depends_on.is_empty() {
             let mut all_ready = true;
             let mut missing_deps = Vec::new();
+            // Dependencies that exist, are idle, and opted into auto-start.
+            let mut auto_start_deps = Vec::new();
 
             for dep_name in &config.depends_on {
                 // Look up dependency service ID in registry
@@ -158,6 +169,17 @@ impl LifecycleController {
                         } else {
                             all_ready = false;
                             missing_deps.push(format!("{} (Not Running)", dep_name));
+                            // A missing dependency is auto-started through the
+                            // normal start path, unless it is already busy in its
+                            // own lifecycle (waiting/restarting/crashed) — that
+                            // also breaks dependency cycles (A -> B, B -> A)
+                            // from re-triggering this program.
+                            let idle = !registry.waiting.contains(&did)
+                                && !registry.restarting.contains(&did)
+                                && !registry.crashed.contains(&did);
+                            if idle {
+                                auto_start_deps.push(did);
+                            }
                         }
                     }
                     None => {
@@ -173,12 +195,28 @@ impl LifecycleController {
                     config.name,
                     missing_deps
                 );
+                // Mark ourselves waiting *before* requesting dependency starts so
+                // a dependency cycle cannot immediately re-trigger our own start.
                 registry.waiting.insert(id);
                 let _ = self.log_tx.send(WsMessage::StatusChange {
                     id,
                     status: ProcessStatus::Waiting,
                     name: config.name.clone(),
                 });
+
+                // Kick off eligible dependencies. They go through the normal start
+                // path; once healthy, the waiting queue re-tries this program.
+                for did in auto_start_deps {
+                    if registry.running.contains_key(&did) {
+                        continue;
+                    }
+                    tracing::info!("Program {} auto-starting dependency {}", config.name, did);
+                    let (reply, _rx) = tokio::sync::oneshot::channel();
+                    let _ = self
+                        .tx_self
+                        .send(Command::StartProgram { id: did, reply })
+                        .await;
+                }
                 return Ok(());
             }
         }
@@ -204,6 +242,7 @@ impl LifecycleController {
                     pid: None,
                     uptime_secs: 0,
                     exit_code: None,
+                    signal: None,
                     msg: err_msg,
                     log_tail: None,
                 };
@@ -249,6 +288,7 @@ impl LifecycleController {
                         pid: None,
                         uptime_secs: 0,
                         exit_code: None,
+                        signal: None,
                         msg: "Pre-start hook failed".to_string(),
                         log_tail: None,
                     };
@@ -291,6 +331,7 @@ impl LifecycleController {
                     pid: None,
                     uptime_secs: 0,
                     exit_code: None,
+                    signal: None,
                     msg: err_msg,
                     log_tail: None,
                 };
@@ -336,6 +377,7 @@ impl LifecycleController {
                     pid: None,
                     uptime_secs: 0,
                     exit_code: None,
+                    signal: None,
                     msg: err_msg,
                     log_tail: None,
                 };
@@ -488,14 +530,24 @@ impl LifecycleController {
 
         tokio::spawn(async move {
             let wait_result = child.wait().await;
-            let code = match wait_result {
-                Ok(status) => status.code(),
+            let (code, signal) = match wait_result {
+                Ok(status) => {
+                    // `status.code()` is None when the process was terminated by a
+                    // signal (e.g. SIGKILL from cgroup OOM or manual kill); expose
+                    // the raw signal so the manager can distinguish "killed" exits.
+                    let code = status.code();
+                    #[cfg(unix)]
+                    let signal = status.signal();
+                    #[cfg(not(unix))]
+                    let signal = None;
+                    (code, signal)
+                }
                 Err(e) => {
                     tracing::error!("Failed to wait on child process: {}", e);
-                    None
+                    (None, None)
                 }
             };
-            if let Err(e) = tx.send(Command::ProcessExited { id, code }).await {
+            if let Err(e) = tx.send(Command::ProcessExited { id, code, signal }).await {
                 tracing::error!("Failed to send ProcessExited for {}: {}", id, e);
             }
         });
@@ -623,7 +675,11 @@ impl LifecycleController {
                         );
                         let _ = self
                             .tx_self
-                            .send(Command::ProcessExited { id, code: None })
+                            .send(Command::ProcessExited {
+                                id,
+                                code: None,
+                                signal: None,
+                            })
                             .await;
                         return Ok(());
                     }
@@ -641,7 +697,11 @@ impl LifecycleController {
                         // Send ProcessExited to Manager for cleanup
                         let _ = self
                             .tx_self
-                            .send(Command::ProcessExited { id, code: None })
+                            .send(Command::ProcessExited {
+                                id,
+                                code: None,
+                                signal: None,
+                            })
                             .await;
                         return Ok(());
                     }

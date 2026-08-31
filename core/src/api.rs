@@ -209,6 +209,7 @@ pub fn make_api_router(
                 .put(update_program),
         )
         .route("/programs/{id}/logs", get(get_program_logs))
+        .route("/programs/{id}/events", get(get_program_events))
         .route("/programs/{id}/start", post(start_program))
         .route("/programs/{id}/stop", post(stop_program))
         .route("/programs/{id}/restart", post(restart_program))
@@ -438,6 +439,37 @@ async fn get_program_logs(
     }
 
     Ok(Json(ProgramLogsResponse { id, logs }))
+}
+
+/// Read persisted lifecycle/exception event history for a program
+#[utoipa::path(
+    get,
+    path = "/api/v1/programs/{id}/events",
+    tag = "programs",
+    params(
+        ("id" = Uuid, Path, description = "Program ID")
+    ),
+    responses(
+        (status = 200, description = "Event history", body = Vec<common::ProgramEventRecord>),
+        (status = 404, description = "Program not found")
+    )
+)]
+async fn get_program_events(
+    State(state): State<AppState>,
+    Path(id): Path<Uuid>,
+) -> Result<Json<Vec<common::ProgramEventRecord>>, AppError> {
+    // 404 if the program does not exist
+    state
+        .manager
+        .get_program(id)
+        .await
+        .map_err(|e| AppError(StatusCode::NOT_FOUND, e))?;
+    let events = state
+        .manager
+        .get_program_events(id)
+        .await
+        .map_err(|e| AppError(StatusCode::INTERNAL_SERVER_ERROR, e))?;
+    Ok(Json(events))
 }
 
 /// Start a program
