@@ -65,35 +65,52 @@ super update <TARGET> [FLAGS]
 *   Licensed (`isolation` plugin): `--cpu`, `--memory` (Linux only; warns if plugin not loaded).
 
 ### `rm` (or `remove`)
-Remove a program configuration. It must be stopped first.
+Remove a program configuration. It must be stopped first (see [Process Operations](#process-operations)).
 
 ```bash
-super rm <TARGET>
+super rm <name|@group|id|all>
 ```
 
 ## Process Operations
 
-All control commands support targeting by `ID`, `Name`, `all`, or `@group`.
+Control commands take a single target, written PM2-style as a union:
+
+```bash
+super <start|stop|restart|rm> <name|@group|id|all>
+```
+
+*   `<name>` — exact program name (like PM2's `app_name`).
+*   `@<group>` — every program in that group (like PM2's `namespace`).
+*   `<id>` — program UUID; unambiguous prefixes are accepted.
+*   `all` — every managed program (PM2's `'all'`).
+
+Super has no `json_conf` target — declarative batches go through a stack file instead (`super apply <file>`). A target that matches several programs is rejected as ambiguous, with the candidates listed.
 
 ### `start`
 Start a stopped process.
 
 ```bash
-super start <TARGET> [--wait]
+super start <name|@group|id|all> [--wait] [--timeout N]
 ```
 
 ### `stop`
 Stop a running process.
 
 ```bash
-super stop <TARGET> [--wait] [--timeout N]
+super stop <name|@group|id|all> [--wait] [--timeout N] [--force]
 ```
+
+| Flag | Description |
+| :--- | :--- |
+| `--wait` | Poll until the program(s) reach `Stopped` |
+| `--timeout N` | Wait timeout in seconds (default: `5`) |
+| `--force` | Skip graceful shutdown and SIGKILL immediately |
 
 ### `restart`
 Restart a process.
 
 ```bash
-super restart <TARGET> [--wait]
+super restart <name|@group|id|all> [--wait] [--timeout N]
 ```
 
 ### `signal`
@@ -175,6 +192,8 @@ super check
 
 ### `keyring`
 List Ed25519 verifying key ids (`kid`) compiled into this `super` binary — one row per key, so multiple rotation keys are all visible. Each `kid` uses the `k_<8hex>` convention (first four bytes of the public key as hex). Suggested when a license fails with an unknown signing key or to compare a local build with an official release. See [Troubleshooting license verification](/docs/05-advanced-management/authentication#troubleshooting-license-verification).
+
+> **Super Pro / subscription only:** this command exists to help diagnose **license verification for licensed deployments**. Pure OSS builds have no license, so the keyring output is irrelevant unless you run a Super Pro instance.
 
 ```bash
 super keyring

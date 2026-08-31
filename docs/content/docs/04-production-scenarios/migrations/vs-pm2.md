@@ -57,6 +57,22 @@ PM2 needs an extra module (`pm2-logrotate`) for rotation.
 
 Super rotates child logs in the OSS daemon. You do not install a plugin to keep disks from filling up. See [Logging](/docs/02-essentials/logging).
 
+## 5. Command parity
+
+`super` uses the same single-target style as PM2 — name, group, id, or `all` (see [CLI Reference — Process Operations](/docs/06-internals/cli-reference#process-operations)):
+
+```bash
+super <start|stop|restart|rm> <name|@group|id|all>
+```
+
+| PM2 | Super |
+| :--- | :--- |
+| `pm2 stop <app_name\|namespace\|id\|'all'>` | `super stop <name\|@group\|id\|all>` |
+| `pm2 restart <app_name\|namespace\|id\|'all'>` | `super restart <name\|@group\|id\|all>` |
+| `pm2 delete <app_name\|namespace\|id\|'all'>` | `super stop <...> && super rm <...>` |
+
+One deliberate difference: `pm2 delete` stops and removes in one step, while Super requires a program to be stopped before it can be removed — `super rm` on a running program fails with `Cannot remove running program`. Use `super stop <...> && super rm <...>` to mirror `pm2 delete`. PM2's `json_conf` target has no equivalent in Super; declarative batches go through `super apply <stack.json>`.
+
 ## Summary
 
 * **Stick with PM2** if you run a Node.js stack and want cluster mode for zero-downtime Node reloads.
