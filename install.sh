@@ -3,7 +3,7 @@
 #
 # Usage:
 #   curl -fsSL https://raw.githubusercontent.com/schiplat/super/master/install.sh | sh
-#   curl -fsSL ... | sh -s -- --version 1.3.2 --prefix /usr/local
+#   curl -fsSL ... | sh -s -- --version 1.3.3 --prefix /usr/local
 #
 # Options:
 #   --version X.Y.Z   Install a specific release (default: latest)

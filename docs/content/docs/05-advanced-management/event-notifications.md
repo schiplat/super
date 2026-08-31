@@ -211,7 +211,7 @@ When `type = "webhook"`, Super sends this structured JSON payload:
   "event": "process_fatal",
   "system": {
     "hostname": "prod-server-1",
-    "version": "1.3.2"
+    "version": "1.3.3"
   },
   "summary": "[Fatal] worker on prod-server-1: killed by SIGKILL (9)",
   "markdown": "### Process Fatal Alert\n- Service: worker\n- Host: prod-server-1\n- Signal: SIGKILL (9)\n- Cause: Killed by SIGKILL (may be a kernel/cgroup OOM kill; check resource_limits and system logs)\n- Exit Code: None\n- Reason: Stopped after 3 retries.",
@@ -571,7 +571,7 @@ max_events = 10          # Flush early when 10 events are queued
   "event": "batch_summary",
   "system": {
     "hostname": "prod-server-1",
-    "version": "1.3.2"
+    "version": "1.3.3"
   },
   "summary": "[Super] 5 events on 1 host(s)",
   "markdown": "### [Super] 5 events in the last window\n\n| Program | Host | Event | Detail |\n|---------|------|-------|--------|\n| worker-1 | prod-server-1 | 💥 Fatal | exit code 137 – Stopped after 3 retries. |\n| worker-2 | prod-server-1 | ⚠️ Backoff | retry #2 exit_code=Some(1) |\n\n2 program(s) affected on 1 host(s)",

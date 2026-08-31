@@ -14,6 +14,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.3.3] - 2026-08-31
+
+### Added
+- **OSS webhook event hooks**: `[[event_hooks]]` with `type = "webhook"` posts `SystemEvent` JSON (HMAC-SHA256 signed) to external URLs without any Pro plugin. `type = "command"` hooks also capture the program `signal`.
+- **Event history**: program lifecycle events are persisted to `data/events.json`; the new `super events` CLI shows recent events (`--tail`, `--program`, `--json`).
+- Cron jobs are exempt from flapping detection — short-interval schedules no longer flip to `Fatal` / disable `autostart`.
+
+### Changed
+- `depends_on` now **starts** non-running dependencies automatically (cycle-safe; waiting/restarting/crashed deps are not forced).
+- `super remove` is the primary command name; `rm` remains a clap alias. CLI help and docs updated throughout.
+- `super signal --sig` help now lists `quit` (server already supported it); API reference batch `Signal` payload aligned.
+- Config docs aligned with code: `super.toml` lookup paths, health-check interval (fixed 5s), and isolation plugin log wording.
+- Pro beta trial shortened from 1 year to **1 month** (GitHub Issue template + docs); purchased annual keys keep the 365-day term.
+
+### Fixed
+- `super token list` no longer fails on deserialization — the CLI now expects the API's `AuthTokenInfo` shape (no `token_hash`).
+- Batch-action confirmation prompt (`super stop/start/restart/remove/signal all` and `@group`) now shows the real target count.
+
+### Notes
+- Workspace **1.3.3**; pair with commercial plugin packages `super-plugins-1.3.3-…`.
+
+---
+
 ## [1.3.2] - 2026-08-29
 
 ### Added
