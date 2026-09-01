@@ -100,6 +100,10 @@ Track progress in the [changelog](https://super.docs.sconts.com/docs/08-changelo
 | Changelog | [v1.4.0](https://super.docs.sconts.com/docs/08-changelog/) |
 | Editions / Pro plugins | [Feature matrix](https://super.docs.sconts.com/docs/07-editions/feature-matrix/) |
 
+### AI skills
+
+Want your AI assistant (Cursor, Claude, Copilot, …) to configure and troubleshoot Super correctly? Point it at [`docs/SKILL.md`](docs/SKILL.md) (e.g. from `CLAUDE.md`, `.cursor/rules`, or pasted into the prompt). It covers everyday commands, the `super.toml` / stack JSON schema, cron & health semantics, and common failure modes — and helps avoid the usual supervisor/PM2 semantic mix-ups.
+
 ## Contributing
 
 See [CONTRIBUTING.md](CONTRIBUTING.md). Security issues: [SECURITY.md](SECURITY.md). Community standards: [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md).

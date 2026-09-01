@@ -47,6 +47,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Notes
 
 - Workspace **1.4.0**; pair with commercial plugin packages `super-plugins-1.4.0-…`.
+- **Evaluated, not implemented**: secrets passed via `-e KEY=VAL` (and `env_file` values at spawn time) reach the child through `execve` env and so are visible in `/proc/<pid>/environ` to same-UID processes; existing masking only covers API/CLI display. This matches the posture of other process managers (PM2 keeps env plaintext in `dump.pm2`; supervisor in its config). A privileged-channel injection (memfd / fd or a credentials directory, opt-in per program) is deferred as a future hardening direction — see `SECURITY.md` "Known limitation".
 
 ---
 

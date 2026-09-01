@@ -40,6 +40,12 @@ Super applies defensive defaults even when no plugins are loaded:
 
 Full user-facing detail: [Configuration — OSS security defaults](https://super.docs.sconts.com/docs/02-essentials/configuration/#oss-security-defaults-fail-closed).
 
+## Known limitation: secrets in child `/proc/<pid>/environ`
+
+Managed processes receive `env` / `env_file` values through `execve` environment, so **sensitive values appear in `/proc/<pid>/environ`** (readable by any process running as the same UID — no ptrace permission needed). Display masking in the API/CLI is a UI layer only and does not change this. This is the same posture as other process managers (PM2 keeps them plaintext in `dump.pm2`; supervisor in its config; only systemd avoids it via privileged credential mounts), and it is mitigated by the same measures as those tools: keep secrets out of `env` where possible (`--env-file` with `chmod 600` keeps values out of `snapshot.json`), and note that dropping privileges via `user:` does not hide a service's own secrets from itself or same-UID processes.
+
+**Status: evaluated, not implementing now.** A privileged-channel injection (memfd / fd or a credentials directory, opt-in per program) would require child cooperation and is logged as a future hardening direction rather than a GA blocker. Tracked in the changelog.
+
 ## Security self-audit
 
 We hold the codebase to the following public standards, checked on every release branch:
