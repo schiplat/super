@@ -6,9 +6,11 @@ description: "Define startup order using the depends_on directive."
 
 In a microservices architecture, services often have strict startup orders. For example, a backend API cannot accept requests until the database is ready.
 
-Super allows you to define these relationships using the `depends_on` field on each program (JSON stack files, API, or CLI).
+Super allows you to define these relationships using the `depends_on` field on each program (stack files, API, or CLI).
 
 ## Configuration
+
+Example: `conf/conf.d/deps.json`:
 
 ```json
 {

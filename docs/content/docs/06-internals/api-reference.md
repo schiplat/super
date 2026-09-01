@@ -70,7 +70,7 @@ Register a new process dynamically.
 
 **Response:** `201 Created` with the new UUID(s). Validation failures return `400` with `{ "status": "error", "message": "..." }`. The message names the field (`command: …`, `health_check.url: …`) and, when a name is set, `program '…':`. JSON syntax / unknown fields include `JSON line N column M`. Duplicate names return `409`.
 
-CLI `super add` / `super update` and the dashboard use the same Manager checks. `super check` applies the create-body rules to `[include]` JSON stacks (offline, no daemon).
+CLI `super add` / `super update` and the dashboard use the same Manager checks. `super check` applies the create-body rules to `[include]` stacks (offline, no daemon) in TOML or legacy JSON.
 
 ### Get Details
 Get full configuration and state for a specific program.
@@ -231,11 +231,16 @@ Events are retained per program (**max 100**, oldest dropped) across `superd` re
 ## System & Stack
 
 ### Apply Stack (Declarative)
-Update the entire system state to match a JSON definition.
+Update the entire system state to match a stack definition. The request body is **JSON or TOML** — both use the same schema as stack files (see [Declarative Stacks](/docs/04-production-scenarios/delivery/declarative-stack)), selected by `Content-Type`.
 
 *   **PUT** `/api/v1/stack`
 
-**Body:**
+**Response:** `200 OK` with apply log lines. Invalid body or program bodies return `400`; `message` names `services[i] (name=…)` and the field, or `path:line:col:` / `JSON line N column M` for parse errors.
+
+#### JSON body (default)
+
+JSON is the default body type: omit `Content-Type` or send `application/json`. Plain `curl -d` works — a single-line JSON document is valid. Example file `stack.json`:
+
 ```json
 {
   "prune": true,
@@ -243,7 +248,31 @@ Update the entire system state to match a JSON definition.
 }
 ```
 
-**Response:** `200 OK` with apply log lines. Invalid JSON or program bodies return `400`; `message` names `services[i] (name=…)` and the field, or `JSON line N column M` for parse errors.
+```bash
+curl -X PUT http://prod-server:9002/api/v1/stack \
+  -H "Authorization: Bearer $TOKEN" \
+  -d @stack.json
+```
+
+#### TOML body
+
+TOML requires `Content-Type: application/toml` (or `text/toml`). Use `--data-binary` — plain `-d` strips newlines and breaks multi-line TOML. Example file `stack.toml`:
+
+```toml
+# stack.toml
+prune = true
+
+[[services]]
+name = "web"
+command = "/bin/true"
+```
+
+```bash
+curl -X PUT http://prod-server:9002/api/v1/stack \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/toml" \
+  --data-binary @stack.toml
+```
 
 ### Shutdown
 Gracefully stop the daemon (same for foreground and `superd --daemon` instances).

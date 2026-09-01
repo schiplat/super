@@ -32,3 +32,18 @@ For deployment patterns (including `tini` in Docker), see [Container Deployment]
 
 **A:** To protect the daemon's memory stability and WebSocket bandwidth, Super truncates any single log line longer than **16KB**.
 If an application goes into a loop printing 100MB lines, it would otherwise crash the supervisor (OOM). We prioritize the stability of the management plane over the completeness of a runaway log line.
+
+## Lost Admin Token
+
+**Q: What do I do if I lose my Admin Access Token?**
+
+**A:** Access tokens are shown **only once** when created — the plaintext `sk-...` secret is returned by `super token create` / the API and then discarded; only its SHA-256 hash is persisted in `$SUPER_ROOT/data/auth.json`, so a lost secret **cannot be recovered from storage**. How to regain access depends on the situation:
+
+| Situation | How to regain access |
+| :--- | :--- |
+| `auth_secret` still enabled | Just sign in with `auth_secret` (`super login <auth_secret>` or the Dashboard) — it coexists with tokens. Then revoke the lost token (`super token revoke <id>`) and create a replacement. |
+| `auth_secret` disabled, another Admin token exists | Sign in with the remaining Admin token, revoke the lost one, create a new Admin token. |
+| `auth_secret` disabled, **all** Admin tokens were **deleted** | **Automatic self-heal.** `superd` re-enables `auth_secret` as soon as no Admin token records remain — `ensure_auth_secret_policy` runs on every login/status call, before the disabled check. Sign in with `auth_secret` and create a new token. |
+| `auth_secret` disabled, Admin tokens still stored but secrets forgotten | **Filesystem rescue** (needs write access to `$SUPER_ROOT/data/`, i.e. the user running `superd`): stop `superd`, then either set `auth_secret_disabled` to `false` in `data/auth_settings.json` (or delete that file — the default is `false`), or delete `data/auth.json` to clear all token records, then start `superd` and sign in with `auth_secret`. |
+
+See [Authentication — Optional: disable `auth_secret`](/docs/05-advanced-management/authentication#optional-disable-auth_secret) for the disable/recovery model.

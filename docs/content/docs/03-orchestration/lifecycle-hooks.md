@@ -26,7 +26,7 @@ For reacting to **system-wide events** (crashes, recovery, daemon startup), see 
 
 ## Configuration
 
-Hooks are stored on each program — in JSON stack files, or via the API / CLI / Dashboard.
+Hooks are stored on each program — in stack files (TOML/JSON), or via the API / CLI / Dashboard. Example: `conf/conf.d/my-app.json`:
 
 ```json
 {
@@ -62,7 +62,7 @@ The same shape works via the API:
 
 | Source | Path / API | Persisted to |
 | :--- | :--- | :--- |
-| Stack file | `conf/conf.d/*.json` → `services[].hooks` | `snapshot.json` |
+| Stack file | `conf/conf.d/*` → `services[].hooks` | `snapshot.json` |
 | Stack apply | `PUT /api/v1/stack` with `"hooks": { ... }` | `snapshot.json` |
 | CLI | `super add` / `super update --pre-start "..."` | `snapshot.json` |
 | Dashboard | Program create/edit form | `snapshot.json` |

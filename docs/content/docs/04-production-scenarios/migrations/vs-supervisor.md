@@ -36,7 +36,8 @@ autorestart=true
 environment=KEY="val",KEY2="val2"
 ```
 
-**Super (daemon config is TOML; programs are JSON stacks or API/CLI):**
+**Super (daemon config is TOML; programs are stack files (TOML default, JSON compatible) or API/CLI):** — example `conf/conf.d/my-app.json`:
+
 ```json
 {
   "services": [

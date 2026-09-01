@@ -30,6 +30,7 @@ To prevent logs from consuming all disk space, Super implements automatic rotati
 You can configure this in `super.toml`:
 
 ```toml
+# super.toml — [child_logging]
 [child_logging]
 # Max size per file in MB (default: 10)
 max_size_mb = 10

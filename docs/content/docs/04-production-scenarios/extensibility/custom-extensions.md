@@ -71,6 +71,7 @@ pub trait Extension: Send + Sync {
 To build a custom extension, compile your own binary linking against `super-core`.
 
 ```toml
+# Cargo.toml
 [dependencies]
 super-core = { git = "https://github.com/schiplat/super" }
 ```

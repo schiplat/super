@@ -15,7 +15,7 @@ Health checks are critical for:
 
 ### 1. TCP Check
 
-The simplest check. Succeeds if Super can establish a TCP connection to the port.
+The simplest check. Succeeds if Super can establish a TCP connection to the port. Example: `conf/conf.d/my-app.json`:
 
 ```json
 {
@@ -36,7 +36,7 @@ The check may also set `host` (defaults to `127.0.0.1`).
 
 ### 2. HTTP Check
 
-Performs an HTTP request. Succeeds if the response status code is `200-299`. Only `http://` and `https://` URLs are accepted for outbound probes.
+Performs an HTTP request. Succeeds if the response status code is `200-299`. Only `http://` and `https://` URLs are accepted for outbound probes. Example: `conf/conf.d/my-app.json`:
 
 ```json
 {
@@ -58,7 +58,7 @@ Performs an HTTP request. Succeeds if the response status code is `200-299`. Onl
 
 ### 3. Exec Check
 
-Runs a shell command. Succeeds if the command exits with code `0`. Ideal for checking file existence, database queries, or custom scripts.
+Runs a shell command. Succeeds if the command exits with code `0`. Ideal for checking file existence, database queries, or custom scripts. Example: `conf/conf.d/my-app.json`:
 
 ```json
 {
@@ -90,6 +90,8 @@ A health-triggered restart works like a manual `super restart` — it is not gat
 1. After `max_failures` consecutive failed probes → `health_restart` event, process restarted.
 2. If the process recovers (any successful probe), the counter resets to `0`.
 3. If the process stays unhealthy across `retry_limit` health restarts → `process_fatal`, the process is stopped and marked `Fatal` (`autostart` is disabled).
+
+Example: `conf/conf.d/api.json`:
 
 ```json
 {

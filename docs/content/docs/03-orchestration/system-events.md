@@ -67,7 +67,7 @@ super.toml                    # daemon config only (no program tables)
 ├── [storage] / [logging]
 └── [[event_hooks]]           # OSS — local scripts on system events
 
-conf/conf.d/*.json            # program stacks — services[] + per-program hooks
+conf/conf.d/*                   # program stacks (TOML default, JSON compatible) — services[] + per-program hooks
 conf/notify.toml              # notify plugin — [[channels]] + triggers
 snapshot.json                 # persisted program state (includes hooks from API/stack)
 ```

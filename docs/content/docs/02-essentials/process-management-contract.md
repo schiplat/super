@@ -27,7 +27,7 @@ Super tracks the process it spawns. If your app exits the parent immediately aft
 | Node.js | `node app.js` | Custom double-fork wrapper |
 | Custom services | Run the main process in the foreground | Shell script that forks and exits |
 
-Set `command` / `args` on each program (JSON stack, `super add`, or the API) so the **main PID Super starts is the real service**, not a launcher that exits after forking.
+Set `command` / `args` on each program (stack file, `super add`, or the API) so the **main PID Super starts is the real service**, not a launcher that exits after forking.
 
 ## 2. No double-fork or PGID escape
 

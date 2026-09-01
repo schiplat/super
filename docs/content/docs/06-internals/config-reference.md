@@ -12,7 +12,7 @@ description: "Complete schema for super.toml."
 | *(no mark)* | Available in OSS (with or without plugins). |
 
 > [!TIP] Free 1-month beta trial
-> Pro plugins are available with a **free 1-month trial license** ([request via GitHub Issue](https://github.com/schiplat/super/issues/new?template=pro-trial.yml)). We recommend staging and non-critical workloads until GA; see the [feature matrix](/docs/07-editions/feature-matrix/). Plugins, licensing, and trial details are covered in [Advanced Management](/docs/05-advanced-management/).
+> Licensed plugins (Super Pro) are available with a **free 1-month trial license** ([request via GitHub Issue](https://github.com/schiplat/super/issues/new?template=pro-trial.yml)). We recommend staging and non-critical workloads until GA; see the [feature matrix](/docs/07-editions/feature-matrix/). Plugins, licensing, and trial details are covered in [Advanced Management](/docs/05-advanced-management/).
 
 **Licensed-plugin fields in this reference** (quick index):
 
@@ -20,7 +20,7 @@ description: "Complete schema for super.toml."
 | :--- | :--- |
 | Root (`super.toml`) | `auth_secret` 💎 |
 | `[license]` | `key` 💎 — cryptographically signed subscription token from your vendor |
-| `conf/conf.d/*.json` *(program stacks)* | `services[].resource_limits` (`cpu_quota`, `memory_limit`, `memory_warn_percent`, `memory_warn_headroom`, `memory_high`) 💎 |
+| `conf/conf.d/*` *(program stacks)* | `services[].resource_limits` (`cpu_quota`, `memory_limit`, `memory_warn_percent`, `memory_warn_headroom`, `memory_high`) 💎 |
 | `conf/notify.toml` *(separate file)* | `[[channels]]` 💎 — see [Event Notifications](/docs/05-advanced-management/event-notifications) |
 
 > [!NOTE]
@@ -60,6 +60,7 @@ Global settings for the daemon.
 | `socket_only` | bool | `false` | When `true`, bind **only** the Unix socket and skip the TCP listener entirely (zero network exposure). Requires `socket` to be set. The non-loopback bind check no longer applies because no TCP port is opened. |
 
 ```toml
+# super.toml — [server]
 [server]
 # Optional self-daemonize when not using systemd/Docker:
 # daemon = true
@@ -101,6 +102,7 @@ The `SUPER_LICENSE` and `SUPER_LICENSE_STRICT` overrides are documented in [Envi
 | `strict` 💎 | bool | `false` | When `true`, invalid or incompatible keys refuse startup instead of degrading to OSS. Recommended for production licensed deployments. Override: `SUPER_LICENSE_STRICT=1`. |
 
 ```toml
+# super.toml — [license]
 [license]
 strict = true
 key = "eyJjbGFpbXMiOnsiaXNzdWVkX3RvIjoi..."
@@ -121,6 +123,7 @@ See [Configuration](/docs/02-essentials/configuration) and [Logging](/docs/02-es
 | `timestamp` | `local` \| `utc` \| `none` | `local` | Prefix each captured line with a timestamp. `local` → `[YYYY-MM-DD HH:MM:SS]`, `utc` → `[YYYY-MM-DDTHH:MM:SSZ]`, `none` → raw line. Applied when the daemon consumes the line; the WebSocket stream always carries the raw line. |
 
 ```toml
+# super.toml — [child_logging]
 [child_logging]
 driver = "file"
 max_size_mb = 10
@@ -131,22 +134,28 @@ timestamp = "local"
 
 ## `[include]` — program stack files
 
-Programs are declared in **JSON stack files**, not in `super.toml`. `[include].files` lists glob patterns for those files; `superd` parses every match as a stack and applies it on daemon start and on `super reload`.
+Programs are declared in **stack files**, not in `super.toml`. `[include].files` lists glob patterns for those files; `superd` parses every match as a stack and applies it on daemon start and on `super reload`.
 
 | Key | Type | Default | Description |
 | :--- | :--- | :--- | :--- |
-| `files` | list of string | `[]` | Glob patterns for program stack JSON files, e.g. `["conf/conf.d/*.json"]`. Relative patterns resolve under `SUPER_ROOT`; patterns that resolve outside `SUPER_ROOT` are skipped. |
+| `files` | list of string | `[]` | Glob patterns for program stack files, e.g. `["conf/conf.d/*.toml"]`. **TOML is the default format** (`.toml` or no extension); legacy `.json` stacks are still parsed and can be mixed in the same glob. Relative patterns resolve under `SUPER_ROOT`; patterns that resolve outside `SUPER_ROOT` are skipped. |
 
 ```toml
+# super.toml — [include]
 [include]
-files = ["conf/conf.d/*.json"]
+files = ["conf/conf.d/*"]
 ```
 
 Stack file schema and per-program keys: the *Program stacks* section below.
 
-## Program stacks — `conf/conf.d/*.json`
+## Program stacks — `conf/conf.d/*`
 
-Programs are **not** declared in `super.toml` — `[[programs]]` / `[[program]]` tables there are ignored (`super check` reports them as an error). Programs load from **JSON stack files** matched by `[include].files` (applied on daemon start and `super reload`), the API (`POST /api/v1/programs`), or the CLI (`super add`); all persist to `data/snapshot.json`.
+Programs are **not** declared in `super.toml` — `[[programs]]` / `[[program]]` tables there are ignored (`super check` reports them as an error). Programs load from **stack files** matched by `[include].files` (applied on daemon start and `super reload`), the API (`POST /api/v1/programs`), or the CLI (`super add`); all persist to `data/snapshot.json`.
+
+A stack file is a TOML (default) or JSON document with `services = [...]` and an optional `prune` flag. TOML uses one `[[services]]` table per program; JSON uses the legacy `{"services":[...]}` shape. See [Declarative Stacks](/docs/04-production-scenarios/delivery/declarative-stack) for a full example.
+
+> [!NOTE]
+> In TOML stacks, tagged values like `health_check` are written as an inline table — `health_check = { type = "tcp", port = 8080 }` — or a nested table (`[services.health_check]`); `[[array.of.tables]]` is rejected.
 
 The keys below describe a **single program entry** — one item in a stack file's `services[]` array, or a create/update API payload. Multiple `services[]` entries are allowed per stack.
 

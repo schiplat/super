@@ -10,6 +10,21 @@ Welcome to the **Project Super** documentation. Whether you are setting up your 
 
 ---
 
+## OSS vs Licensed — how to read this documentation
+
+Project Super ships as **one open-source binary** (`superd` + `super`) — there are no separate installers or editions. Two **run modes** differ only by whether licensed plugins are loaded:
+
+| | **OSS** | **Licensed** |
+| :--- | :--- | :--- |
+| Binary | `superd` + `super` (MIT, free) | Same binaries — nothing to reinstall |
+| Plugins | none | `[license].key` + `plugins/*` from your subscription (Super Pro) |
+| Adds | Core process management, OTA, health checks, cron, event hooks | API auth/RBAC/audit (`security`), cgroups limits (`isolation`, Linux), notifications (`notify`), Web UI (`ui`) |
+| How to enable | install & run | add a license key and plugin libraries |
+
+Pages mark licensed capabilities with **💎** / "Licensed"; "Super Pro" is the brand name of the commercial plugin set ([Get Super Pro](/go/pro/)). The authoritative edition model, terminology, and switching guide live in [Editions](/docs/07-editions/).
+
+---
+
 ## Start Here
 
 If you are new to Project Super, start with the basics to get your daemon up and running.

@@ -14,6 +14,7 @@ Define global hooks in `super.toml`. Each hook is either a **local command** (`c
 
 {{< tab >}}
 ```toml
+# super.toml — [event_hooks]
 [[event_hooks]]
 id = "archive-on-fatal"
 command = "/opt/super/archive.sh"
@@ -32,6 +33,7 @@ async = false             # run sequentially (still non-blocking for the manager
 
 {{< tab >}}
 ```toml
+# super.toml — [event_hooks]
 [[event_hooks]]
 id = "ops-alert"
 url = "https://ops.example.com/hooks/super"

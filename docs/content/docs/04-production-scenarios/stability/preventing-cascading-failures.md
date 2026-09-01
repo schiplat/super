@@ -34,7 +34,7 @@ Super solves this deterministically by combining **Dependency Topology** with **
 
 ### 1. Define the Health Check
 
-First, tell Super how to know when the provider (`db`) is *actually* ready to serve traffic, not just when the process started.
+First, tell Super how to know when the provider (`db`) is *actually* ready to serve traffic, not just when the process started. Example: `conf/conf.d/postgres.json`:
 
 ```json
 {
@@ -53,7 +53,7 @@ First, tell Super how to know when the provider (`db`) is *actually* ready to se
 
 ### 2. Define the Dependency
 
-Next, tell the consumer (`api`) to wait.
+Next, tell the consumer (`api`) to wait. Example: `conf/conf.d/api.json`:
 
 ```json
 {

@@ -42,9 +42,10 @@ If `notify.toml` does not exist, the plugin starts with zero channels and no not
 
 ### Channel schema
 
-Each channel is defined as a `[[channels]]` block in TOML:
+Each channel is defined as a `[[channels]]` block in TOML (`conf/notify.toml`):
 
 ```toml
+# notify.toml
 [[channels]]
 id = "unique-channel-id"          # Required: unique identifier
 name = "Human-readable name"      # Required: display name
@@ -93,6 +94,7 @@ You do not need to write complex JSON templates for popular platforms. Super inc
 ### Slack
 
 ```toml
+# notify.toml
 [[channels]]
 id = "slack-ops"
 name = "Ops Team Slack"
@@ -109,6 +111,7 @@ Renders a Slack Block Kit message with a header, markdown body, and hostname con
 ### DingTalk
 
 ```toml
+# notify.toml
 [[channels]]
 id = "dingtalk-alert"
 name = "DingTalk Ops Group"
@@ -126,6 +129,7 @@ Renders a markdown message with title `Superd Alert: {program_name}`. When `secr
 ### Lark / Feishu
 
 ```toml
+# notify.toml
 [[channels]]
 id = "lark-alert"
 name = "Backend On-Call"
@@ -141,6 +145,7 @@ Renders an interactive card with red header, markdown body, and hostname/version
 ### WeCom / WeChat
 
 ```toml
+# notify.toml
 [[channels]]
 id = "wecom-ops"
 name = "WeCom Ops Channel"
@@ -156,6 +161,7 @@ Renders a markdown message via the WeCom `msgtype: markdown` format.
 ### Microsoft Teams
 
 ```toml
+# notify.toml
 [[channels]]
 id = "teams-alerts"
 name = "Teams Ops Channel"
@@ -172,6 +178,7 @@ Renders a MessageCard with summary, hostname subtitle, and markdown body.
 ### Generic Webhook with HMAC
 
 ```toml
+# notify.toml
 [[channels]]
 id = "internal-monitoring"
 name = "Internal Monitoring Hub"
@@ -283,9 +290,10 @@ def verify(secret: str, body: bytes, header: str) -> bool:
 
 ## Custom Templates
 
-For advanced use cases, override the default payload with a Handlebars template:
+For advanced use cases, override the default payload with a Handlebars template (`conf/notify.toml`):
 
 ```toml
+# notify.toml
 [[channels]]
 id = "custom-integration"
 name = "Custom Integration"
@@ -441,6 +449,7 @@ super_notify_sent_total{status="failed"} 3
 A production-ready `conf/notify.toml` with multiple channels:
 
 ```toml
+# conf/notify.toml
 # Alert on crashes to Slack
 [[channels]]
 id = "slack-critical"
@@ -516,6 +525,7 @@ flowchart TB
 ```
 
 ```toml
+# notify.toml
 [[channels]]
 id = "slack-ops"
 name = "Ops Slack"
@@ -548,6 +558,7 @@ When `mode = "cooldown"`:
 - Different event types do **not** share a cooldown — a `process_fatal` does not block a `system_startup`.
 
 ```toml
+# notify.toml — [channels.strategy]
 [channels.strategy]
 mode = "cooldown"
 cooldown_secs = 60      # At most 1 notification per event type per minute
@@ -566,6 +577,7 @@ When `mode = "batch"`:
 - The flush sends a **single summary webhook**: total event/host counts in `summary`, plus a markdown table with one row per event.
 
 ```toml
+# notify.toml — [channels.strategy]
 [channels.strategy]
 mode = "batch"
 window_secs = 30        # Collect events for 30 seconds
@@ -627,6 +639,7 @@ flowchart LR
 #### Schema
 
 ```toml
+# notify.toml
 [[inhibition_rules]]
 id = "fatal-suppresses-backoff"   # Unique identifier
 sources = ["process_fatal"]       # When: events that trigger inhibition
@@ -658,6 +671,7 @@ ttl_secs = 300                    # For: how long inhibition lasts (seconds)
 #### Example: Fatal → Restarting
 
 ```toml
+# notify.toml
 [[inhibition_rules]]
 id = "fatal-scenarios"
 sources = ["process_fatal"]              # When
@@ -695,6 +709,7 @@ Suppressed events are recorded in the notify audit log (`notify.log`) with a `su
 All storm suppression settings live in the same `conf/notify.toml`:
 
 ```toml
+# conf/notify.toml
 # --- Webhooks with delivery strategies ---
 
 [[channels]]

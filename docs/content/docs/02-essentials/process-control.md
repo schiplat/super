@@ -37,9 +37,10 @@ super restart api-srv
 
 ## Group Operations
 
-If you assign a `group` to your programs (JSON stack, API, or CLI), you can control multiple processes at once using the `@` prefix.
+If you assign a `group` to your programs (stack file, API, or CLI), you can control multiple processes at once using the `@` prefix.
 
-**Config:**
+**Config:** (example: `conf/conf.d/api-group.json`)
+
 ```json
 {
   "services": [

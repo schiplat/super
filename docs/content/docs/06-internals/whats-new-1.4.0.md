@@ -25,6 +25,7 @@ For OTA updates, the daemon can enforce a verification window on its own: `[serv
 The API can now be exposed on a Unix domain socket instead of (or alongside) TCP — ideal for local-only management with zero network exposure.
 
 ```toml
+# super.toml — [server]
 [server]
 socket = "run/superd.sock"   # relative paths resolve under SUPER_ROOT
 socket_mode = "0600"         # owner-only by default; group access via 0640/0660
@@ -62,6 +63,7 @@ Captured child `stdout`/`stderr` lines are now prefixed with a timestamp by defa
 ```
 
 ```toml
+# super.toml — [child_logging]
 [child_logging]
 timestamp = "local"   # local (default) | utc | none
 ```
@@ -107,7 +109,7 @@ Full behavior: [Scheduled Tasks (Cron)](/docs/02-essentials/scheduled-tasks).
 
 ## Health check tuning & auto-restart
 
-Health probes now carry four tuning knobs, and — new in 1.4.0 — can restart a process that stays unhealthy.
+Health probes now carry four tuning knobs, and — new in 1.4.0 — can restart a process that stays unhealthy. Example: `services[]` entry in a stack file (`stack.json` / `stack.toml`):
 
 ```json
 {

@@ -24,6 +24,7 @@ Why switch? See how Super compares to the old guard.
 *   [**Container Deployment**](./stability/zombie-reaping-in-containers): Running Super in Docker — scope, limits, and `tini` integration.
 *   [**Resource Isolation**](./stability/resource-isolation): Stopping "noisy neighbors" with Cgroups.
 
-#### 4. Delivery
+#### 4. Delivery & State
 *   [**Fail-Safe OTA**](./delivery/fail-safe-ota): Updating edge devices without fear.
 *   [**Declarative Stack**](./delivery/declarative-stack): GitOps-style infrastructure management.
+*   [**Snapshot Persistence & Restore**](./delivery/snapshot-and-restore): Backing up and restoring Super's authoritative program state.

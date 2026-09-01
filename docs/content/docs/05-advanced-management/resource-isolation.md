@@ -16,7 +16,7 @@ Super integrates directly with the Linux Kernel's Control Groups (v2) to provide
 
 ## Configuration Reference
 
-Resource limits are defined per program — via JSON stack files, the API, or CLI (`super add --memory 512 --cpu 1.5`).
+Resource limits are defined per program — via stack files (TOML/JSON), the API, or CLI (`super add --memory 512 --cpu 1.5`). Example: `services[]` entry in a stack file (`conf/conf.d/*.json` / `*.toml`):
 
 ```json
 {
@@ -68,6 +68,8 @@ Setting `memory_high` writes the cgroup v2 **soft limit** (`memory.high`). When 
 Super watches each limited cgroup's `memory.events` → `oom_kill` counter. When it increments, Super emits **`memory_oom_kill`** with a usage snapshot (`memory.current`, `memory.max`, `anon`). This makes an OOM kill **distinguishable** from a manual `kill -9`: instead of a generic `signal 9` exit, you get an explicit "memory cap exceeded" event with the exact usage at kill time.
 
 ### Recommended setup
+
+One program entry in a stack file (`stack.json` services[] or `stack.toml [[services]]`):
 
 ```json
 {

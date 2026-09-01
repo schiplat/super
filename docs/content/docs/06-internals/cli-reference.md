@@ -70,8 +70,8 @@ CLI overrides: `--daemon` / `--foreground` / `--pidfile <PATH>`. See [Config ref
 | Command | Alias | Description |
 | :--- | :--- | :--- |
 | [`super reload [--wait]`](#reload) | — | Reload `super.toml`, or SIGHUP a program |
-| [`super apply <file>`](#apply) | — | Apply a declarative stack (JSON) |
-| [`super export`](#export) | — | Export current state as a stack JSON |
+| [`super apply <file>`](#apply) | — | Apply a declarative stack (TOML default, JSON compatible) |
+| [`super export`](#export) | — | Export current state as a stack (TOML default, `--format json` available) |
 | [`super check`](#check) | — | Validate `super.toml` without a running daemon |
 
 ### System & Daemon
@@ -157,7 +157,7 @@ super <start|stop|restart|remove> <name|@group|id|all>
 *   `<id>` — program UUID; unambiguous prefixes are accepted.
 *   `all` — every managed program (PM2's `'all'`).
 
-Super has no `json_conf` target — declarative batches go through a stack file instead (`super apply <file>`). A target that matches several programs is rejected as ambiguous, with the candidates listed.
+Super has no `json_conf` target — declarative batches go through a stack file instead (`super apply <file>`, TOML default / JSON compatible). A target that matches several programs is rejected as ambiguous, with the candidates listed.
 
 Batch targets are protected by three safety knobs (global flags, accepted on any control command):
 
@@ -331,21 +331,25 @@ super reload <name|@group|id|all>         # SIGHUP to program(s) — e.g. nginx 
 | `--dry-run` | bool | `false` | Batch safety on the SIGHUP target: preview only (see above) |
 
 ### `apply`
-Apply a declarative stack configuration (JSON).
+Apply a declarative stack configuration. Stack files are **TOML by default** (`.toml` or no extension); legacy JSON (`.json`) stacks keep working.
 
 ```bash
 super apply <FILE>
 ```
 
 ### `export`
-Export current state as a stack JSON.
+Export current state as a stack file. **Defaults to TOML** (the default stack format, round-trips cleanly with `super apply` / `[include]`); `--format json` keeps the legacy JSON shape for tooling that expects it.
 
 ```bash
-super export
+super export [--format toml|json]
 ```
 
+| Flag | Type | Default | Description |
+| :--- | :--- | :--- | :--- |
+| `--format` | `toml` \| `json` | `toml` | Output format. `toml` produces the default stack format (inline/nested tables); `json` keeps the legacy shape for tooling that expects it. |
+
 ### `check`
-Validate `super.toml` **without a running daemon**: TOML syntax, bind/port, log/data paths, licensed-mode requirements, `[include]` JSON stacks (`StackApplyRequest`, including the same program-body checks as create), and rejected leftovers (`[webhook]`, `[[program]]` tables that Super does not load). Include errors name the file and location: `path:line:col:` for JSON syntax, `path: services[i] (name=…): field:` for invalid services. Non-zero exit if any error is found. Use with [`super keyring`](#keyring) when diagnosing license verification failures.
+Validate `super.toml` **without a running daemon**: TOML syntax, bind/port, log/data paths, licensed-mode requirements, `[include]` stacks (TOML default, JSON compatible — same program-body checks as create), and rejected leftovers (`[webhook]`, `[[program]]` tables that Super does not load). Include errors name the file and location: `path:line:col:` for TOML/JSON syntax, `path: services[i] (name=…): field:` for invalid services. Non-zero exit if any error is found. Use with [`super keyring`](#keyring) when diagnosing license verification failures.
 
 ```bash
 super check
@@ -375,7 +379,7 @@ super doctor
 List Ed25519 verifying key ids (`kid`) compiled into this `super` binary — one row per key, so multiple rotation keys are all visible. Each `kid` uses the `k_<8hex>` convention (first four bytes of the public key as hex). Suggested when a license fails with an unknown signing key or to compare a local build with an official release. See [Troubleshooting license verification](/docs/05-advanced-management/authentication#troubleshooting-license-verification).
 
 > [!NOTE]
-> This command exists to help diagnose **license verification for licensed deployments**. Pure OSS builds have no license, so the keyring output is irrelevant unless you run a Super Pro instance.
+> This command exists to help diagnose **license verification for licensed deployments**. Pure OSS builds have no license, so the keyring output is irrelevant unless you run a licensed instance.
 
 ```bash
 super keyring

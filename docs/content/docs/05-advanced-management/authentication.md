@@ -29,7 +29,7 @@ If `[license].key` is set but verification fails (bad signature, expired with `r
 | Signal | Behavior |
 | :--- | :--- |
 | Dev-style OSS (loopback, no plugins, no `auth_secret`) | **Degrade** — run OSS without plugins; stderr banner + `super check` / `super doctor` warnings |
-| Licensed intent (plugins under `plugins/`, `auth_secret` set, or non-loopback bind) | **Refuse startup** — avoids silent loss of API auth or Pro features |
+| Licensed intent (plugins under `plugins/`, `auth_secret` set, or non-loopback bind) | **Refuse startup** — avoids silent loss of API auth or licensed features |
 | `[license].strict = true` or `SUPER_LICENSE_STRICT=1` | **Refuse startup** always |
 
 The `SUPER_LICENSE` / `SUPER_LICENSE_STRICT` env overrides are documented in [Environment Variables](/docs/06-internals/environment-variables#license-licensed-deployments).

@@ -8,6 +8,8 @@ All notable changes to **Project Super** will be documented in this page.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+> Looking for what's planned next? See the public [Roadmap / Backlog](https://github.com/schiplat/super/blob/master/ROADMAP.md) (P0/P1/P2 priorities).
+
 ---
 
 ## [1.4.0] - 2026-08-31
@@ -28,6 +30,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Health check tuning & auto-restart** (OSS): health probes gain `interval_secs`, `timeout_secs`, `start_period_secs`, and `max_failures`. After `max_failures` consecutive failures (default `3`, `0` disables) the daemon restarts the program automatically and emits a `health_restart` event; the restart counter resets as soon as the process reports healthy again, and after `retry_limit` health restarts the program goes Fatal instead of restarting forever. `start_period_secs` gives slow-starting services a grace period before the first probe.
 - **OTA verification window**: new `[server] ota_verify_timeout` (default `60`, `0` disables). After an OTA update restarts a program, the new version must pass its health checks within the window; on timeout the daemon automatically rolls back to the previous version (file rollback → WAL recovery → old version restarted), so a bad artifact cannot leave the service down.
 - **Unix socket transport**: `[server] socket = "run/superd.sock"` exposes the API on a Unix domain socket with owner-only permissions by default (`socket_mode = "0600"`; `"0660"` / `"0640"` grant group access, world-writable modes are refused). `socket_only = true` disables the TCP listener entirely — zero network exposure for local-only management. The CLI connects via `super --server unix:///path/to/superd.sock` (REST and `super logs --follow` WebSocket both ride the socket); when neither `--server` nor a persisted `~/.super/cli.json` endpoint is given, the CLI auto-discovers `$SUPER_ROOT/run/superd.sock` (a real socket file) and prefers it over TCP, falling back to the default `http://127.0.0.1:9002`. superd refuses to start on a path that is a symlink, a non-socket file, or a socket held by another live process; stale sockets are cleaned up on restart.
+- **TOML stack files**: declarative stacks (`super apply`, `[include]` globs) are now **TOML by default** — `.toml` or no extension is parsed with the TOML parser, with comments and inline tables; legacy `.json` stacks keep working and can be mixed in the same glob. Format is picked by file extension. Parse errors report `path:line:col:` like JSON. See [Declarative Stacks](/docs/04-production-scenarios/delivery/declarative-stack).
 
 ### Changed
 
@@ -36,6 +39,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Program event history raised from 50 to **100 events per program** (oldest dropped); every record carries a Unix `ts` timestamp (docs now state it explicitly).
 - Captured child `stdout`/`stderr` lines are now prefixed with a timestamp by default: `[YYYY-MM-DD HH:MM:SS]` (daemon's local time). New `[child_logging] timestamp = "local" | "utc" | "none"` controls the prefix (`none` restores the previous raw format). The WebSocket log stream still carries the raw, un-prefixed line.
 - CLI subcommand aliases: `super list` → `ls`, `super logs` → `log`, `super restart` → `rs` (alongside the existing `super remove` → `rm`).
+- `[include]` and examples now use TOML stack files by default (`conf/conf.d/*.toml`); the example instance ships `conf.d/extra-services.toml` plus a full `resource/stack_all.toml`. JSON stacks remain supported everywhere stack files are read.
+- `super export` gains `--format toml|json` and now **defaults to TOML** (the default stack format); TOML output round-trips cleanly back into `super apply` / `[include]`, emitting nested tables for tagged values such as `health_check`. Pass `--format json` for the legacy JSON shape.
+- `PUT /api/v1/stack` now accepts a **TOML body** (`Content-Type: application/toml`, `text/toml`), so curl / GitOps pipelines can upload `stack.toml` directly; JSON bodies remain the default.
 
 ### Fixed
 
@@ -54,7 +60,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [1.3.3] - 2026-08-31
 
 ### Added
-- **OSS webhook event hooks**: `[[event_hooks]]` with `type = "webhook"` posts `SystemEvent` JSON (HMAC-SHA256 signed) to external URLs without any Pro plugin. `type = "command"` hooks also capture the program `signal`.
+- **OSS webhook event hooks**: `[[event_hooks]]` with `type = "webhook"` posts `SystemEvent` JSON (HMAC-SHA256 signed) to external URLs without any licensed plugin. `type = "command"` hooks also capture the program `signal`.
 - **Event history**: program lifecycle events are persisted to `data/events.json`; the new `super events` CLI shows recent events (`--tail`, `--program`, `--json`).
 - Cron jobs are exempt from flapping detection — short-interval schedules no longer flip to `Fatal` / disable `autostart`.
 
@@ -81,7 +87,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `[license].strict` and deployment-intent detection: invalid keys refuse startup when `strict = true`, plugin libraries are present, `auth_secret` is set, or bind is non-loopback; otherwise OSS degrade with warnings (`SUPER_LICENSE_STRICT` env override).
 
 ### Changed
-- Create / update program (HTTP, CLI `add`/`update`, dashboard, stack apply) run a shared structural check. Failures return **400** with a `message` that names the field (`command:`, `health_check.url:`), the program or `services[i] (name=…)`, and for JSON syntax / unknown keys `JSON line N column M`. `super check` reports include problems as `path:line:col:` or `path: services[i] (name=…): field:`.
+- Create / update program (HTTP, CLI `add`/`update`, dashboard, stack apply) run a shared structural check. Failures return **400** with a `message` that names the field (`command:`, `health_check.url:`), the program or `services[i] (name=…)`, and for TOML/JSON syntax / unknown keys `path:line:col:` (TOML) or `JSON line N column M`. `super check` reports include problems as `path:line:col:` or `path: services[i] (name=…): field:`.
 - `super check` reports invalid license as an error when strict or licensed deployment signals apply.
 - License verification requires a `kid` claim on every license; the legacy `v1` kid and compile-time fallback are removed. Signing key ids use `k_<8hex>` (derived from the Ed25519 public key). Re-issue licenses from your vendor if verification fails with “missing signing key id”.
 - Docs: [Troubleshooting license verification](/docs/05-advanced-management/authentication#troubleshooting-license-verification) — suggested `super check`, `super doctor`, and `super keyring` for self-service diagnosis.

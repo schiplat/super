@@ -8,9 +8,10 @@ Super uses TOML (Tom's Obvious, Minimal Language) for configuration. The daemon 
 
 ## Server Configuration
 
-The `[server]` section controls the `superd` daemon itself.
+The `[server]` section controls the `superd` daemon itself. Example from `conf/super.toml`:
 
 ```toml
+# conf/super.toml — [server]
 [server]
 # The IP and port for the API and Web UI
 host = "127.0.0.1"
@@ -62,48 +63,46 @@ See [Authentication](/docs/05-advanced-management/authentication#licensed-deploy
 
 ## Program Configuration
 
-Programs are **not** declared in `super.toml`. Define them via JSON stack files, the API, or the CLI — Super persists them to `data/snapshot.json` and reloads them on start.
+Programs are **not** declared in `super.toml`. Define them via stack files, the API, or the CLI — Super persists them to `data/snapshot.json` and reloads them on start.
 
 > [!WARNING]
-> `[[programs]]` / `[[program]]` tables in `super.toml` are **ignored**. `super check` flags them as an error. Programs load only from `[include]` JSON stacks (`conf/conf.d/*.json`), the API, and `data/snapshot.json`.
+> `[[programs]]` / `[[program]]` tables in `super.toml` are **ignored**. `super check` flags them as an error. Programs load only from `[include]` stacks (`conf/conf.d/*`), the API, and `data/snapshot.json`.
 
 | Source | How | Persisted to |
 | :--- | :--- | :--- |
-| JSON stack files | `conf/conf.d/*.json`, matched by `[include].files` | `data/snapshot.json` |
+| Stack files | `conf/conf.d/*` (TOML default, JSON compatible), matched by `[include].files` | `data/snapshot.json` |
 | CLI | `super add --name my-worker --autostart /usr/local/bin/worker` | `data/snapshot.json` |
 | HTTP API | `POST /api/v1/programs` | `data/snapshot.json` |
 
-### JSON stack files (declarative)
+### Stack files (declarative, TOML default)
 
-Point `super.toml` at your stack directory once with `[include].files` (a glob list of JSON stack files):
+Point `super.toml` at your stack directory once with `[include].files` (a glob list of stack files):
 
 ```toml
+# super.toml
 [include]
-files = ["conf/conf.d/*.json"]
+files = ["conf/conf.d/*"]
 ```
 
-Then create files under `conf/conf.d/` — each file is a **stack** applied on daemon start and on `super reload`:
+Stack files are **TOML by default** (`.toml` or no extension); legacy `.json` stacks keep working. Then create files under `conf/conf.d/` — each file is a **stack** applied on daemon start and on `super reload`:
 
-```json
-{
-  "prune": false,
-  "services": [
-    {
-      "name": "my-worker",
-      "command": "/usr/local/bin/worker",
-      "args": ["--config", "/etc/worker.conf"],
-      "cwd": "/tmp",
-      "autostart": true
-    }
-  ]
-}
+```toml
+# conf/conf.d/my-worker.toml
+prune = false
+
+[[services]]
+name = "my-worker"
+command = "/usr/local/bin/worker"
+args = ["--config", "/etc/worker.conf"]
+cwd = "/tmp"
+autostart = true
 ```
 
 `prune: true` removes programs that are not listed in the stack.
 
 ### Environment Variables
 
-You can inject environment variables into the process.
+You can inject environment variables into the process. Example file `conf/conf.d/my-worker.json`:
 
 ```json
 {
@@ -125,7 +124,7 @@ You can inject environment variables into the process.
 
 ### User & Group
 
-If running as root, you can drop privileges to a specific user.
+If running as root, you can drop privileges to a specific user. Example: `services[]` entry in a stack file (`conf/conf.d/*.json` or `*.toml`):
 
 ```json
 {
@@ -141,7 +140,7 @@ If running as root, you can drop privileges to a specific user.
 
 ### Advanced Settings (OSS)
 
-Dependency orchestration — the `depends_on` array names programs that must be **Healthy** first:
+Dependency orchestration — the `depends_on` array names programs that must be **Healthy** first. Example: `services[]` entry in a stack file:
 
 ```json
 {
@@ -154,7 +153,7 @@ Dependency orchestration — the `depends_on` array names programs that must be 
 
 ### Plugin-only blocks 💎
 
-The following require **subscription plugins** (resource limits on Linux). OSS accepts `resource_limits` in the API schema but does not enforce them without the matching plugin.
+The following require **licensed plugins** (resource limits on Linux). OSS accepts `resource_limits` in the API schema but does not enforce them without the matching plugin. Example: `services[]` entry in a stack file:
 
 ```json
 {
@@ -173,7 +172,7 @@ The following require **subscription plugins** (resource limits on Linux). OSS a
 
 ### Scheduled tasks
 
-Cron scheduling is built into OSS `superd`. See [Scheduled Tasks](/docs/02-essentials/scheduled-tasks).
+Cron scheduling is built into OSS `superd`. See [Scheduled Tasks](/docs/02-essentials/scheduled-tasks). Example: `services[]` entry in a stack file:
 
 ```json
 {
@@ -191,7 +190,7 @@ See [Resource Isolation](/docs/05-advanced-management/resource-isolation) and [S
 
 ### Restart & stop behaviour
 
-Supervisor-compatible restart and stop settings:
+Supervisor-compatible restart and stop settings. Example: `services[]` entry in a stack file:
 
 ```json
 {

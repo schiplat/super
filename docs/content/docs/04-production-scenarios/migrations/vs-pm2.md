@@ -27,6 +27,8 @@ OSS Super **stores** optional `resource_limits` on a program but **does not enfo
 # Example shape — check the config reference for the current schema.
 ```
 
+Example: one program entry in a stack file (`stack.json` services[] or `stack.toml [[services]]`):
+
 ```json
 {
   "name": "worker",
@@ -73,7 +75,7 @@ super <start|stop|restart|remove> <name|@group|id|all>
 | `pm2 restart <app_name\|namespace\|id\|'all'>` | `super restart <name\|@group\|id\|all>` |
 | `pm2 delete <app_name\|namespace\|id\|'all'>` | `super stop <...> && super remove <...>` |
 
-One deliberate difference: `pm2 delete` stops and removes in one step, while Super requires a program to be stopped before it can be removed — `super remove` on a running program fails with `Cannot remove running program`. Use `super stop <...> && super remove <...>` to mirror `pm2 delete`. PM2's `json_conf` target has no equivalent in Super; declarative batches go through `super apply <stack.json>`.
+One deliberate difference: `pm2 delete` stops and removes in one step, while Super requires a program to be stopped before it can be removed — `super remove` on a running program fails with `Cannot remove running program`. Use `super stop <...> && super remove <...>` to mirror `pm2 delete`. PM2's `json_conf` target has no equivalent in Super; declarative batches go through `super apply <stack.toml>`.
 
 ## Summary
 

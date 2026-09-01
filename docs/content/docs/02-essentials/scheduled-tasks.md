@@ -12,7 +12,7 @@ Super natively supports **cron-based scheduled tasks** in the open-source `super
 
 ## Configuration
 
-To turn a standard program into a scheduled task, add the `cron` field to its stack entry. Super uses an extended cron expression format (Seconds, Minutes, Hours, Days, Months, Day of Week).
+To turn a standard program into a scheduled task, add the `cron` field to its stack entry. Super uses an extended cron expression format (Seconds, Minutes, Hours, Days, Months, Day of Week). Example: `conf/conf.d/db-backup.json`:
 
 ```json
 {
@@ -46,6 +46,8 @@ The `on_overlap` field controls this. It can be set per-program via the stack en
 | `queue` | Keep the tick queued and start the next run as soon as the current instance exits. Runs never overlap, but every tick is eventually executed. |
 | `kill` | Terminate the running instance (SIGTERM), then start the new run. Useful when a late tick means the data it produces is now stale. |
 
+Example: `conf/conf.d/db-backup.json`:
+
 ```json
 {
   "services": [
@@ -71,6 +73,8 @@ If the daemon was down at a scheduled time (maintenance, upgrade, crash), those 
 | `latest` | Run once, immediately, for the most recent missed slot, then continue the normal schedule. |
 | `all` | Backfill every missed slot, up to a cap of 10 runs, starting as soon as possible after recovery. |
 
+Example: `conf/conf.d/db-backup.json`:
+
 ```json
 {
   "services": [
@@ -88,7 +92,7 @@ The `all` cap exists so a long outage cannot flood the machine with catch-up run
 
 ## Jitter
 
-Jobs that share a schedule boundary (e.g. many tasks at `0 2 * * * *`) can create a burst of simultaneous work. The `jitter` field adds a random delay in `[0, jitter]` **seconds** to each trigger, spreading the load:
+Jobs that share a schedule boundary (e.g. many tasks at `0 2 * * * *`) can create a burst of simultaneous work. The `jitter` field adds a random delay in `[0, jitter]` **seconds** to each trigger, spreading the load. Example: `conf/conf.d/db-backup.json`:
 
 ```json
 {
@@ -113,7 +117,7 @@ The delay is drawn uniformly at random for every trigger, so the effective run t
 
 Some jobs are allowed to overlap **up to a limit**: think of a render or thumbnail task whose schedule fires every minute, where most ticks finish in a few seconds but a backlog occasionally needs several runs in flight at once.
 
-By default `max_concurrent` is `1` — a scheduled task runs at most one instance at a time, and `on_overlap` decides what happens to extra firings. Raising it lets up to N runs of the same task run simultaneously:
+By default `max_concurrent` is `1` — a scheduled task runs at most one instance at a time, and `on_overlap` decides what happens to extra firings. Raising it lets up to N runs of the same task run simultaneously. Example: `conf/conf.d/thumbnails.json`:
 
 ```json
 {
@@ -140,7 +144,7 @@ When a firing arrives and fewer than `max_concurrent` instances are running, it 
 
 ### Bounded queue
 
-Queued firings are capped by `max_queued` (default `100`, `0` means the default). When the queue is full, new firings are **dropped** and a `queue_full` event is recorded on the program's event history — visible via `super events`. This keeps a straggling long-running task from accumulating an unbounded backlog:
+Queued firings are capped by `max_queued` (default `100`, `0` means the default). When the queue is full, new firings are **dropped** and a `queue_full` event is recorded on the program's event history — visible via `super events`. This keeps a straggling long-running task from accumulating an unbounded backlog. Example: `conf/conf.d/db-backup.json`:
 
 ```json
 {

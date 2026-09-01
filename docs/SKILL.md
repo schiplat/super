@@ -16,7 +16,7 @@ Rust). Drop this file into your project (e.g. reference it from `CLAUDE.md`,
 Super (`superd` daemon + `super` CLI) runs and supervises long-running services —
 any language: Node, Python, Go, Rust, shell. Key traits:
 
-- **Declarative programs** declared in **JSON stack files** (`conf/conf.d/*.json`),
+- **Declarative programs** declared in **stack files** (`conf/conf.d/*`, TOML default, JSON compatible),
   applied at daemon start and on `super reload`. NOT in `super.toml`.
 - **API-first**: everything the CLI does is a REST call to `superd`
   (default `http://127.0.0.1:9002`, optional Unix socket).
@@ -90,6 +90,7 @@ exits without executing.
 ### `super.toml` — daemon settings only
 
 ```toml
+# super.toml
 [server]
 host = "127.0.0.1"        # fail-closed: non-loopback needs explicit opt-in
 port = 9002
@@ -97,37 +98,36 @@ port = 9002
 # socket_only = true           # disable TCP entirely
 
 [include]
-files = ["conf/conf.d/*.json"]   # program stacks load from here
+files = ["conf/conf.d/*"]       # program stacks (TOML default, JSON compatible) load from here
 
 [child_logging]
 driver = "file"        # file | stdout
 timestamp = "local"    # local | utc | none
 ```
 
-### Program stacks — `conf/conf.d/*.json`
+### Program stacks — `conf/conf.d/*`
 
-```json
-{
-  "services": [
-    {
-      "name": "api",
-      "command": "./api-server",
-      "args": ["--port", "8080"],
-      "cwd": "/srv/api",
-      "env": { "NODE_ENV": "production" },
-      "env_file": "/etc/secrets/prod.env",
-      "numprocs": 1,
-      "process_name": "{name}-{num}",
-      "autostart": true,
-      "autorestart": "unexpected",
-      "exitcodes": [0],
-      "startsecs": 10,
-      "retry_limit": 3,
-      "stopsecs": 10,
-      "depends_on": ["db"]
-    }
-  ]
-}
+TOML is the default stack format (`.toml` or no extension); legacy `.json` stacks are still parsed. Example file `conf/conf.d/api.toml`:
+
+```toml
+# conf/conf.d/api.toml
+[[services]]
+name = "api"
+command = "./api-server"
+args = ["--port", "8080"]
+cwd = "/srv/api"
+env = { NODE_ENV = "production" }
+env_file = "/etc/secrets/prod.env"
+numprocs = 1
+process_name = "{name}-{num}"
+autostart = true
+autorestart = "unexpected"
+exitcodes = [0]
+startsecs = 10
+retry_limit = 3
+stopsecs = 10
+depends_on = ["db"]
+health_check = { type = "tcp", port = 8080 }
 ```
 
 Key fields:
@@ -148,6 +148,8 @@ Key fields:
 
 ### Cron scheduling
 
+One program entry in a stack file (`stack.json` services[] or `stack.toml [[services]]`):
+
 ```json
 {
   "name": "backup",
@@ -162,6 +164,8 @@ Key fields:
 ```
 
 ### Health checks
+
+The `health_check` object inside one program entry (`stack.json` services[] or `stack.toml [[services]]`):
 
 ```json
 "health_check": {
@@ -181,18 +185,20 @@ bounds total health restarts before `Fatal`.
 
 ---
 
-## Super Pro (licensed plugins) 💎
+## Licensed plugins (Super Pro) 💎
 
-**Super Pro** is not a separate binary or fork — the OSS `superd` / `super`
+**Licensed plugins** are not a separate binary or fork — the OSS `superd` / `super`
 binaries stay identical. Optional **signed plugin libraries** are loaded at
-runtime after license verification to enable commercial features. See the
+runtime after license verification to enable commercial features ("Super Pro"
+is the brand name of that plugin set). See the
 [Feature Matrix](https://super.docs.sconts.com/docs/07-editions/feature-matrix/).
 
-### Enabling Pro
+### Enabling licensed plugins
 
 Same binaries, just add three things:
 
 ```toml
+# super.toml — [license]
 # 1. A valid signed subscription key
 [license]
 key = "eyJjbGFpbXMiOnsiaXNzdWVkX3RvIjoi..."
@@ -201,6 +207,7 @@ strict = true
 ```
 
 ```toml
+# super.toml — root
 # 2. Root-level auth_secret (required for licensed startup)
 auth_secret = "change-me-before-bootstrap"
 ```
@@ -227,7 +234,7 @@ injection: `SUPER_LICENSE` env var + `SUPER_LICENSE_STRICT=1` instead of
 | `notify` | IM/Webhook notifications, `conf/notify.toml` | Hot-reloadable channels; distinct from OSS `[[event_hooks]]` |
 | `isolation` | cgroups v2 CPU/memory limits (`resource_limits`) | **Linux only**, privileged |
 
-### Pro-only CLI & API surface
+### Licensed-only CLI & API surface
 
 - `super login <secret>` / `super logout` / `super token list|create|revoke`
   (bootstrap with `auth_secret`, day-to-day with `sk-...` tokens).
@@ -388,7 +395,7 @@ the daemon rolls back automatically.
   requires `Healthy`. Mutually exclusive.
 - **Health types**: `tcp` needs `host`+`port`; `http` needs `url` (+`method`);
   `exec` needs `command`. Wrong shape = probe never runs.
-- **Pro plugins are runtime-loaded, not compiled in.** Missing features usually
+- **Licensed plugins are runtime-loaded, not compiled in.** Missing features usually
   mean the plugin didn't load (wrong filename / missing license grant / missing
   `auth_secret`) — not a missing binary. `super doctor` is the first stop.
 - **`security` is mandatory in licensed mode.** You cannot run licensed startup
@@ -405,4 +412,4 @@ the daemon rolls back automatically.
 - [System events](https://super.docs.sconts.com/docs/03-orchestration/system-events/) · [Lifecycle hooks](https://super.docs.sconts.com/docs/03-orchestration/lifecycle-hooks/)
 - [CLI reference](https://super.docs.sconts.com/docs/06-internals/cli-reference/) · [Config reference](https://super.docs.sconts.com/docs/06-internals/config-reference/) · [Environment variables](https://super.docs.sconts.com/docs/06-internals/environment-variables/)
 - [Feature matrix](https://super.docs.sconts.com/docs/07-editions/feature-matrix/) · [Changelog](https://super.docs.sconts.com/docs/08-changelog/)
-- **Super Pro**: [Authentication](https://super.docs.sconts.com/docs/05-advanced-management/authentication/) · [Access Control (RBAC)](https://super.docs.sconts.com/docs/05-advanced-management/access-control/) · [Operation Audit](https://super.docs.sconts.com/docs/05-advanced-management/operation-audit/) · [Resource Isolation](https://super.docs.sconts.com/docs/05-advanced-management/resource-isolation/) · [Web UI](https://super.docs.sconts.com/docs/05-advanced-management/web-ui/) · [Event Notifications](https://super.docs.sconts.com/docs/05-advanced-management/event-notifications/)
+- **Licensed (Super Pro plugins)**: [Authentication](https://super.docs.sconts.com/docs/05-advanced-management/authentication/) · [Access Control (RBAC)](https://super.docs.sconts.com/docs/05-advanced-management/access-control/) · [Operation Audit](https://super.docs.sconts.com/docs/05-advanced-management/operation-audit/) · [Resource Isolation](https://super.docs.sconts.com/docs/05-advanced-management/resource-isolation/) · [Web UI](https://super.docs.sconts.com/docs/05-advanced-management/web-ui/) · [Event Notifications](https://super.docs.sconts.com/docs/05-advanced-management/event-notifications/)
