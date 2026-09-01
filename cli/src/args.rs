@@ -1,4 +1,4 @@
-use clap::{Parser, Subcommand};
+use clap::{Parser, Subcommand, ValueEnum};
 use std::path::PathBuf;
 
 #[derive(Parser)]
@@ -352,8 +352,12 @@ pub enum Commands {
     /// Shutdown the Superd server
     Shutdown,
 
-    /// Export current configuration as a stack JSON
-    Export,
+    /// Export current configuration as a stack file
+    Export {
+        /// Output format: `toml` (default) or `json`
+        #[arg(long, value_enum, default_value_t = ExportFormat::Toml)]
+        format: ExportFormat,
+    },
 
     /// Reload configuration or send signals to programs
     Reload {
@@ -394,6 +398,16 @@ pub enum Commands {
         #[arg(long)]
         json: bool,
     },
+}
+
+/// Output format for `super export`
+#[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum, Default)]
+pub enum ExportFormat {
+    /// TOML — the default stack format
+    #[default]
+    Toml,
+    /// Legacy JSON shape (tooling compatibility)
+    Json,
 }
 
 #[derive(Subcommand)]

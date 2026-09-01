@@ -47,6 +47,7 @@ pub struct AppState {
     pub license: Option<LicenseInfo>,
 }
 
+#[derive(Debug)]
 pub struct AppError(pub StatusCode, pub anyhow::Error);
 
 impl IntoResponse for AppError {
@@ -98,6 +99,64 @@ where
                     format!("{path} (JSON {loc}): {inner}")
                 };
                 Err(AppError(StatusCode::BAD_REQUEST, anyhow::anyhow!("{msg}")))
+            }
+        }
+    }
+}
+
+/// Stack body: JSON by default, TOML when `Content-Type` is `application/toml`
+/// (or any `…toml` subtype). Parse errors report `path:line:col:` like `super check`.
+#[derive(Debug)]
+struct StackBody(pub StackApplyRequest);
+
+impl<S> FromRequest<S> for StackBody
+where
+    S: Send + Sync,
+{
+    type Rejection = AppError;
+
+    async fn from_request(req: Request, state: &S) -> Result<Self, Self::Rejection> {
+        let is_toml = req
+            .headers()
+            .get(axum::http::header::CONTENT_TYPE)
+            .and_then(|v| v.to_str().ok())
+            .is_some_and(|ct| ct.to_ascii_lowercase().contains("toml"));
+        let bytes = Bytes::from_request(req, state).await.map_err(|e| {
+            AppError(
+                StatusCode::BAD_REQUEST,
+                anyhow::anyhow!("request body: {e}"),
+            )
+        })?;
+
+        if is_toml {
+            let content = std::str::from_utf8(&bytes).map_err(|e| {
+                AppError(
+                    StatusCode::BAD_REQUEST,
+                    anyhow::anyhow!("request body: not valid UTF-8: {e}"),
+                )
+            })?;
+            let stack = toml::from_str::<StackApplyRequest>(content).map_err(|e| {
+                AppError(
+                    StatusCode::BAD_REQUEST,
+                    anyhow::anyhow!(common::format_toml_error("request body", content, &e)),
+                )
+            })?;
+            Ok(StackBody(stack))
+        } else {
+            let mut de = serde_json::Deserializer::from_slice(&bytes);
+            match serde_path_to_error::deserialize(&mut de) {
+                Ok(value) => Ok(StackBody(value)),
+                Err(err) => {
+                    let path = err.path().to_string();
+                    let inner = err.inner();
+                    let loc = format!("line {} column {}", inner.line(), inner.column());
+                    let msg = if path.is_empty() || path == "." {
+                        format!("JSON {loc}: {inner}")
+                    } else {
+                        format!("{path} (JSON {loc}): {inner}")
+                    };
+                    Err(AppError(StatusCode::BAD_REQUEST, anyhow::anyhow!("{msg}")))
+                }
             }
         }
     }
@@ -809,7 +868,11 @@ async fn health_check(State(state): State<AppState>) -> Result<impl IntoResponse
     put,
     path = "/api/v1/stack",
     tag = "stack",
-    request_body = StackApplyRequest,
+    request_body(
+        content = StackApplyRequest,
+        content_type = "application/json,application/toml",
+        description = "Stack body as JSON (default) or TOML (`Content-Type: application/toml`)"
+    ),
     responses(
         (status = 200, description = "Stack applied", body = Vec<String>),
         (status = 400, description = "Invalid stack / program body (message names services[i] and the field)"),
@@ -818,7 +881,7 @@ async fn health_check(State(state): State<AppState>) -> Result<impl IntoResponse
 )]
 async fn apply_stack(
     State(state): State<AppState>,
-    LocatedJson(payload): LocatedJson<StackApplyRequest>,
+    StackBody(payload): StackBody,
 ) -> Result<Json<Vec<String>>, AppError> {
     let logs = state
         .manager
@@ -961,4 +1024,80 @@ async fn metrics_handler(State(state): State<AppState>) -> Result<impl IntoRespo
         )],
         metrics,
     ))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use axum::body::Body;
+
+    fn req_with(content_type: &str, body: &str) -> Request {
+        Request::builder()
+            .method("PUT")
+            .header(axum::http::header::CONTENT_TYPE, content_type)
+            .body(Body::from(body.to_string()))
+            .unwrap()
+    }
+
+    #[tokio::test]
+    async fn stack_body_json_default() {
+        let body = r#"{"services":[{"name":"web","command":"/bin/true"}]}"#;
+        let StackBody(stack) = StackBody::from_request(req_with("application/json", body), &())
+            .await
+            .unwrap();
+        assert_eq!(stack.services.len(), 1);
+        assert_eq!(stack.services[0].name.as_deref(), Some("web"));
+    }
+
+    #[tokio::test]
+    async fn stack_body_toml_content_type() {
+        let body = r#"
+[[services]]
+name = "web"
+command = "/bin/true"
+health_check = { type = "tcp", port = 8080 }
+"#;
+        let StackBody(stack) = StackBody::from_request(req_with("application/toml", body), &())
+            .await
+            .unwrap();
+        let web = &stack.services[0];
+        assert_eq!(web.name.as_deref(), Some("web"));
+        assert!(matches!(
+            web.health_check,
+            Some(common::HealthCheck::Tcp { .. })
+        ));
+    }
+
+    #[tokio::test]
+    async fn stack_body_toml_error_carries_location() {
+        let body = "[[services]]\nname = \"web\"\ncommand = [1, 2]\n";
+        let err = StackBody::from_request(req_with("application/toml", body), &())
+            .await
+            .unwrap_err();
+        let msg = err.1.to_string();
+        assert!(msg.starts_with("request body:"), "{msg}");
+        assert!(msg.contains("line 3") || msg.contains('3'), "{msg}");
+    }
+
+    #[tokio::test]
+    async fn stack_body_toml_rejects_unknown_field() {
+        let body = "[[services]]\nname = \"web\"\ncommand = \"/bin/true\"\nbogus_field = 1\n";
+        let err = StackBody::from_request(req_with("application/toml", body), &())
+            .await
+            .unwrap_err();
+        assert!(err.1.to_string().contains("bogus_field"));
+    }
+
+    #[tokio::test]
+    async fn stack_body_json_error_keeps_field_path() {
+        let body = r#"{"services":[{"name":"web","command":"/bin/true","bogus":1}]}"#;
+        let err = StackBody::from_request(req_with("application/json", body), &())
+            .await
+            .unwrap_err();
+        let msg = err.1.to_string();
+        assert!(
+            msg.contains("services[0]") && msg.contains("bogus"),
+            "{msg}"
+        );
+    }
 }

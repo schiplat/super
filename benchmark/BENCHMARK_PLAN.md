@@ -104,7 +104,7 @@ for round in 1..3:
 | log | `log-throughput` | 持续写到 SIGTERM |
 | mem-leak | `mem-eat --cap-mb 64` | 涨到 cap 后 hold |
 
-- Super：`$SUPER_ROOT/conf/conf.d/*.json` include，不是 `[[program]]`
+- Super：`$SUPER_ROOT/conf/conf.d/*` include（TOML/JSON），不是 `[[program]]`
 - `startsecs=0`，retry=3，`autorestart=true`；四臂关 rotation
 - PM2：`PM2_HOME` 隔离；superd：只杀跟踪 PID
 - supervisor inet `:9001` = bench 控制面，非产品默认

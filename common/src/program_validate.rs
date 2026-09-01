@@ -6,7 +6,8 @@
 
 use crate::security::resolve_confined_log_path;
 use crate::{
-    ArtifactConfig, CreateProgramRequest, HealthCheck, ResourceLimits, UpdateProgramRequest,
+    ArtifactConfig, CreateProgramRequest, HealthCheck, ResourceLimits, StackApplyRequest,
+    UpdateProgramRequest,
 };
 use anyhow::{Context, bail};
 use std::path::Path;
@@ -26,6 +27,39 @@ pub fn with_program_location(
 /// `file:line:col: {serde error}` for include JSON / request-body parse failures.
 pub fn format_serde_json_error(source: &str, err: &serde_json::Error) -> String {
     format!("{source}:{}:{}: {err}", err.line(), err.column())
+}
+
+/// Parse a declarative stack file into `StackApplyRequest`.
+///
+/// Dispatch on extension: `.json` → JSON (legacy); anything else — including no
+/// extension — → TOML (default). Both formats feed the same validation pipeline.
+pub fn parse_stack_from_str(content: &str, path: &Path) -> anyhow::Result<StackApplyRequest> {
+    let source = path.display().to_string();
+    if path.extension().is_some_and(|ext| ext == "json") {
+        serde_json::from_str::<StackApplyRequest>(content)
+            .map_err(|e| anyhow::anyhow!(format_serde_json_error(&source, &e)))
+    } else {
+        toml::from_str::<StackApplyRequest>(content)
+            .map_err(|e| anyhow::anyhow!(format_toml_error(&source, content, &e)))
+    }
+}
+
+/// `file:line:col: {toml error}` mirroring `format_serde_json_error`.
+pub fn format_toml_error(source: &str, input: &str, err: &toml::de::Error) -> String {
+    match err.span().and_then(|span| line_col_at(input, span.start)) {
+        Some((line, col)) => format!("{source}:{line}:{col}: {}", err.message()),
+        None => format!("{source}: {}", err.message()),
+    }
+}
+
+fn line_col_at(input: &str, byte: usize) -> Option<(usize, usize)> {
+    let prefix = input.get(..byte)?;
+    let line = prefix.bytes().filter(|b| *b == b'\n').count() + 1;
+    let col = prefix[prefix.rfind('\n').map_or(0, |i| i + 1)..]
+        .chars()
+        .count()
+        + 1;
+    Some((line, col))
 }
 
 fn program_location(name: Option<&str>, service_index: Option<usize>) -> Option<String> {
@@ -251,6 +285,7 @@ fn validate_health_tuning(hc: &HealthCheck) -> anyhow::Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::collections::HashMap;
 
     fn tmp_logs() -> tempfile::TempDir {
         tempfile::tempdir().unwrap()
@@ -486,5 +521,197 @@ mod tests {
         };
         assert_eq!(capped.max_concurrent_eff(), crate::MAX_CONCURRENT_CAP);
         assert_eq!(capped.max_queued_eff(), crate::MAX_QUEUED_CAP);
+    }
+
+    #[test]
+    fn parse_toml_stack_with_health_check() {
+        let toml = r#"
+[[services]]
+name = "web"
+command = "/usr/bin/python3"
+args = ["-m", "http.server", "8080"]
+env = { PORT = "8080", DEBUG = "1" }
+autorestart = "true"
+exitcodes = [0, 2]
+health_check = { type = "http", url = "http://127.0.0.1:8080/health", interval_secs = 5 }
+
+[[services]]
+name = "worker"
+command = "/bin/worker"
+autorestart = "false"
+"#;
+        let stack = parse_stack_from_str(toml, Path::new("conf/conf.d/stack.toml")).unwrap();
+        assert_eq!(stack.services.len(), 2);
+        assert!(!stack.prune);
+
+        let web = &stack.services[0];
+        assert_eq!(web.name.as_deref(), Some("web"));
+        assert_eq!(web.args, vec!["-m", "http.server", "8080"]);
+        assert_eq!(web.env.get("PORT").map(String::as_str), Some("8080"));
+        assert_eq!(web.autorestart, crate::AutorestartPolicy::True);
+        assert_eq!(web.exitcodes, vec![0, 2]);
+        match &web.health_check {
+            Some(HealthCheck::Http {
+                url, interval_secs, ..
+            }) => {
+                assert_eq!(url, "http://127.0.0.1:8080/health");
+                assert_eq!(*interval_secs, 5);
+            }
+            other => panic!("unexpected health check: {other:?}"),
+        }
+        assert_eq!(
+            stack.services[1].autorestart,
+            crate::AutorestartPolicy::False
+        );
+    }
+
+    #[test]
+    fn parse_toml_stack_via_inline_table() {
+        let toml = r#"
+[[services]]
+name = "db"
+command = "/usr/bin/postgres"
+health_check = { type = "tcp", host = "127.0.0.1", port = 5432 }
+"#;
+        let stack = parse_stack_from_str(toml, Path::new("db.toml")).unwrap();
+        match &stack.services[0].health_check {
+            Some(HealthCheck::Tcp { host, port, .. }) => {
+                assert_eq!(host, "127.0.0.1");
+                assert_eq!(*port, 5432);
+            }
+            other => panic!("unexpected health check: {other:?}"),
+        }
+    }
+
+    #[test]
+    fn parse_json_stack_still_supported() {
+        let json = r#"{
+            "prune": true,
+            "services": [
+                {"name": "web", "command": "/bin/true", "autorestart": "unexpected"}
+            ]
+        }"#;
+        let stack = parse_stack_from_str(json, Path::new("conf/conf.d/legacy.json")).unwrap();
+        assert!(stack.prune);
+        assert_eq!(stack.services.len(), 1);
+        assert_eq!(
+            stack.services[0].autorestart,
+            crate::AutorestartPolicy::Unexpected
+        );
+    }
+
+    #[test]
+    fn parse_no_extension_defaults_to_toml() {
+        let toml = r#"
+[[services]]
+name = "cron"
+command = "/bin/echo"
+"#;
+        let stack = parse_stack_from_str(toml, Path::new("conf/conf.d/stack")).unwrap();
+        assert_eq!(stack.services.len(), 1);
+        assert_eq!(stack.services[0].name.as_deref(), Some("cron"));
+    }
+
+    #[test]
+    fn example_stack_all_toml_parses() {
+        let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("../example/resource/stack_all.toml");
+        let content = std::fs::read_to_string(&path).unwrap();
+        let stack = parse_stack_from_str(&content, &path).unwrap();
+        assert_eq!(stack.services.len(), 4, "{stack:?}");
+
+        let api = stack
+            .services
+            .iter()
+            .find(|s| s.name.as_deref() == Some("web-api"))
+            .expect("web-api present");
+        assert!(matches!(api.health_check, Some(HealthCheck::Http { .. })));
+        assert!(api.hooks.pre_start.is_some(), "hooks pre_start present");
+        assert_eq!(api.depends_on, vec!["sys-db"]);
+    }
+
+    #[test]
+    fn stack_toml_roundtrip_through_export() {
+        // Mirrors `super export --format toml`: serialize to TOML, then confirm
+        // the output re-parses identically (toml emits nested tables for
+        // internally-tagged enums, which the parser accepts).
+        let stack = StackApplyRequest {
+            services: vec![CreateProgramRequest {
+                name: Some("web".into()),
+                command: "/bin/true".into(),
+                env: HashMap::from([("PORT".into(), "8080".into())]),
+                health_check: Some(HealthCheck::Http {
+                    url: "http://127.0.0.1:8080/health".into(),
+                    method: Some("GET".into()),
+                    interval_secs: 5,
+                    timeout_secs: 0,
+                    start_period_secs: 0,
+                    max_failures: 0,
+                }),
+                ..Default::default()
+            }],
+            prune: true,
+        };
+        let s = toml::to_string_pretty(&stack).unwrap();
+        let parsed = parse_stack_from_str(&s, Path::new("exported.toml")).unwrap();
+        assert_eq!(parsed.prune, stack.prune);
+        let a = &parsed.services[0];
+        let b = &stack.services[0];
+        assert_eq!(a.name, b.name);
+        assert_eq!(a.command, b.command);
+        assert_eq!(a.env, b.env);
+        match (&a.health_check, &b.health_check) {
+            (
+                Some(HealthCheck::Http {
+                    url: au,
+                    method: am,
+                    interval_secs: ai,
+                    ..
+                }),
+                Some(HealthCheck::Http {
+                    url: bu,
+                    method: bm,
+                    interval_secs: bi,
+                    ..
+                }),
+            ) => {
+                assert_eq!(au, bu);
+                assert_eq!(am, bm);
+                assert_eq!(ai, bi);
+            }
+            other => panic!("health check mismatch after round-trip: {other:?}"),
+        }
+    }
+
+    #[test]
+    fn parse_toml_stack_via_nested_table() {
+        // Single nested tables are accepted for internally-tagged enums
+        // (only [[array.of.tables]] is rejected).
+        let toml = r#"
+[[services]]
+name = "db"
+command = "/usr/bin/postgres"
+
+[services.health_check]
+type = "tcp"
+host = "127.0.0.1"
+port = 5432
+"#;
+        let stack = parse_stack_from_str(toml, Path::new("db.toml")).unwrap();
+        match &stack.services[0].health_check {
+            Some(HealthCheck::Tcp { host, port, .. }) => {
+                assert_eq!(host, "127.0.0.1");
+                assert_eq!(*port, 5432);
+            }
+            other => panic!("unexpected health check: {other:?}"),
+        }
+    }
+
+    #[test]
+    fn toml_parse_error_carries_location() {
+        let bad = "[[services]]\nname = \"web\"\ncommand = [1, 2]\n";
+        let err = parse_stack_from_str(bad, Path::new("conf/conf.d/stack.toml")).unwrap_err();
+        let msg = err.to_string();
+        assert!(msg.starts_with("conf/conf.d/stack.toml:"), "{msg}");
+        assert!(msg.contains("expected"), "{msg}");
     }
 }

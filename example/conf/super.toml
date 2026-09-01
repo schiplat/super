@@ -28,10 +28,10 @@ max_size_mb = 10    # max 10MB per child log
 max_backups = 5     # keep 5 backups per child
 max_line_size_kb = 64   # max line length
 
-# Program stack files: JSON files declaring programs (services[]) — applied on
-# daemon start and `super reload`. See conf.d/ for an example stack.
+# Program stack files: TOML by default (see conf.d/extra-services.toml).
+# Legacy .json stacks are still parsed. Applied on daemon start and `super reload`.
 [include]
-files = ["conf/conf.d/*.json"]
+files = ["conf/conf.d/*.toml"]
 
 # Global event hook (OSS) — see docs/03-orchestration/event-hooks.md
 # Each hook runs a local command OR POSTs to a webhook url:

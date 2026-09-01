@@ -2449,7 +2449,7 @@ impl Manager {
             if let Ok(paths) = glob(&full_pattern) {
                 for entry in paths.flatten() {
                     if let Ok(content) = tokio::fs::read_to_string(&entry).await
-                        && let Ok(stack) = serde_json::from_str::<StackApplyRequest>(&content)
+                        && let Ok(stack) = common::parse_stack_from_str(&content, &entry)
                     {
                         match self.handle_apply_stack(stack).await {
                             Ok((_logs, ids)) => affected.extend(ids),

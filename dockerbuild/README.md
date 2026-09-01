@@ -78,7 +78,7 @@ Two reference profiles ship under `dockerbuild/conf/`:
 | Path in container | Purpose |
 | :--- | :--- |
 | `/app/super/conf/super.toml` | Daemon settings (OSS default in image) |
-| `/app/super/conf/conf.d/*.json` | Optional program stacks on startup |
+| `/app/super/conf/conf.d/*` | Optional program stacks on startup (TOML default, JSON compatible) |
 | `/app/super/data/` | Persisted program registry (`snapshot.json`) |
 | `/app/super/logs/` | superd and child process logs |
 | `/app/super/run/` | Runtime (optional pidfile); keep `[server].daemon = false` in containers |
@@ -111,7 +111,7 @@ docker run --rm -p 127.0.0.1:9002:9002 \
   containerpi/super:latest
 ```
 
-To enable the sample stack, rename `conf.d/example-stack.json.example` to `conf.d/example-stack.json`.
+To enable the sample stack, rename `conf.d/example-stack.toml.example` to `conf.d/example-stack.toml`.
 
 ## Publish to Docker Hub
 

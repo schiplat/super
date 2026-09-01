@@ -1,0 +1,44 @@
+# Full-featured stack example in TOML (default stack format).
+# Apply with:  super apply example/resource/stack_all.toml
+# The same programs in legacy JSON: see stack_all.json
+
+prune = false
+
+[[services]]
+name = "sys-db"
+group = "core-infra"
+command = "/usr/bin/postgres"
+autostart = true
+health_check = { type = "tcp", port = 5432 }
+
+[[services]]
+name = "web-api"
+group = "backend"
+command = "/bin/main-server"
+cwd = "/app/api"
+user = "www-data"
+env = { DB_HOST = "localhost", LOG_LEVEL = "debug" }
+autostart = true
+depends_on = ["sys-db"]
+health_check = { type = "http", url = "http://127.0.0.1:8080/health", method = "GET" }
+
+[services.hooks]
+pre_start = "echo 'Validating config file...'; /bin/main-server --check-config"
+post_start = "echo 'API started with PID $SUPER_PID'"
+
+[[services]]
+name = "order-worker"
+group = "backend"
+numprocs = 3
+process_name = "order-worker-{num}"
+command = "/bin/python3 worker.py"
+autostart = true
+depends_on = ["web-api"]
+env = { QUEUE_NAME = "orders" }
+
+[[services]]
+name = "log-cleaner"
+group = "maintenance"
+cron = "0 30 2 * * *"
+command = "find /logs -name '*.log' -mtime +7 -delete"
+user = "root"

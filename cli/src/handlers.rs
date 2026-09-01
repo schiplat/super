@@ -888,7 +888,7 @@ pub async fn handle_reload(
 
 pub async fn handle_apply(ctx: &Context, file: &std::path::PathBuf) -> anyhow::Result<()> {
     let content = tokio::fs::read_to_string(file).await?;
-    let request: StackApplyRequest = serde_json::from_str(&content)?;
+    let request = common::parse_stack_from_str(&content, file)?;
 
     println!("Applying stack from {:?}...", file);
     let url = format!("{}/api/v1/stack", ctx.base_url);
@@ -908,13 +908,21 @@ pub async fn handle_apply(ctx: &Context, file: &std::path::PathBuf) -> anyhow::R
     Ok(())
 }
 
-pub async fn handle_export(ctx: &Context) -> anyhow::Result<()> {
+pub async fn handle_export(ctx: &Context, format: args::ExportFormat) -> anyhow::Result<()> {
     let url = format!("{}/api/v1/stack", ctx.base_url);
     let resp = ctx.client.get(&url).send().await?;
 
     if resp.status().is_success() {
         let json: serde_json::Value = resp.json().await?;
-        println!("{}", serde_json::to_string_pretty(&json)?);
+        match format {
+            args::ExportFormat::Json => {
+                println!("{}", serde_json::to_string_pretty(&json)?);
+            }
+            args::ExportFormat::Toml => {
+                let stack: StackApplyRequest = serde_json::from_value(json)?;
+                println!("{}", toml::to_string_pretty(&stack)?);
+            }
+        }
     } else {
         eprintln!("Error: Failed to export stack: {}", resp.status());
     }

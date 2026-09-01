@@ -1,0 +1,16 @@
+# Example stack — copy to conf/conf.d/ (drop the .example suffix) to seed a program.
+# TOML is the default stack format; legacy .json stacks are also accepted.
+prune = false
+
+[[services]]
+name = "demo-worker"
+group = "demo"
+command = "/bin/sleep"
+args = ["infinity"]
+autostart = true
+autorestart = "unexpected"
+exitcodes = [0]
+startsecs = 5
+retry_limit = 3
+env = { DEMO = "true" }
+health_check = { type = "exec", command = "true" }

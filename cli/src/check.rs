@@ -6,9 +6,8 @@ use common::is_loopback_bind_host;
 use common::parse_socket_mode;
 use common::resolve_super_root_for_config;
 use common::{
-    StackApplyRequest, format_serde_json_error, licensed_deployment_intent, resolve_license_strict,
-    scan_plugin_stems, validate_create_program_request, verify_license_for_superd,
-    with_program_location,
+    licensed_deployment_intent, resolve_license_strict, scan_plugin_stems,
+    validate_create_program_request, verify_license_for_superd, with_program_location,
 };
 use std::fs;
 use std::net::TcpListener;
@@ -368,7 +367,7 @@ fn check_include_stacks(
                         Err(e) => {
                             errors.push(format!("Cannot read include {}: {e}", entry.display()))
                         }
-                        Ok(body) => match serde_json::from_str::<StackApplyRequest>(&body) {
+                        Ok(body) => match common::parse_stack_from_str(&body, &entry) {
                             Ok(stack) => {
                                 if stack.services.is_empty() {
                                     warnings.push(format!(
@@ -402,8 +401,7 @@ fn check_include_stacks(
                                     }
                                 }
                             }
-                            Err(e) => errors
-                                .push(format_serde_json_error(&entry.display().to_string(), &e)),
+                            Err(e) => errors.push(e.to_string()),
                         },
                     }
                 }

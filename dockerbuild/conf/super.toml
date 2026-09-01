@@ -8,7 +8,7 @@
 # =============================================================================
 # Layout (SUPER_ROOT=/app/super):
 #   conf/super.toml       — this file (daemon settings)
-#   conf/conf.d/*.json    — optional program stacks (loaded on start & reload)
+#   conf/conf.d/*         — optional program stacks (TOML default, JSON compatible; loaded on start & reload)
 #   data/snapshot.json    — persisted program registry (auto-created)
 #   logs/                 — superd + child process logs (auto-created)
 #   run/                  — runtime (pidfile only if you enable daemonize; keep off in Docker)
@@ -59,15 +59,16 @@ max_backups = 5
 max_line_size_kb = 64
 
 [include]
-# JSON stack files in conf/conf.d/ are applied on daemon start and `super reload`.
-# See conf/conf.d/example-stack.json.example for the schema.
-files = ["conf/conf.d/*.json"]
+# Stack files in conf/conf.d/ are applied on daemon start and `super reload`.
+# TOML is the default (`.toml` or no extension); legacy `.json` stacks still work.
+# See conf/conf.d/example-stack.toml.example for the schema.
+files = ["conf/conf.d/*"]
 
 # -----------------------------------------------------------------------------
 # Programs
 # -----------------------------------------------------------------------------
 # Managed processes are stored in data/snapshot.json (API/CLI/dashboard).
-# You can also seed programs by adding JSON stack files under conf/conf.d/.
+# You can also seed programs by adding stack files (TOML default) under conf/conf.d/.
 #
 # Example (API after container starts):
 #   super add --name my-app --autostart /path/to/binary

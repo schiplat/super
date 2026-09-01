@@ -1,0 +1,16 @@
+# Example stack file (TOML). Loaded by [include] in conf/super.toml.
+# Legacy .json stacks are still supported — see example/resource/stack_*.json.
+
+[[services]]
+name = "included-redis"
+group = "infra"
+command = "/bin/sleep"
+args = ["1000"]
+autostart = true
+
+[[services]]
+name = "included-worker"
+group = "backend"
+command = "/bin/echo"
+args = ["I am loaded from include!"]
+autostart = true

@@ -397,3 +397,87 @@ async fn test_update_resource_limits_persisted_immediately() {
         "cpu_quota (cores) should be persisted"
     );
 }
+
+#[tokio::test]
+async fn test_includes_accept_toml_and_json_mixed() {
+    // Point SUPER_ROOT at a temp instance so relative include globs resolve,
+    // then restore it afterwards (other tests never read SUPER_ROOT).
+    let root = TempDir::new().unwrap();
+    let conf_d = root.path().join("conf/conf.d");
+    std::fs::create_dir_all(&conf_d).unwrap();
+    std::fs::write(
+        conf_d.join("web.toml"),
+        r#"
+[[services]]
+name = "web-toml"
+command = "/bin/sleep"
+args = ["60"]
+autostart = false
+"#,
+    )
+    .unwrap();
+    std::fs::write(
+        conf_d.join("db.json"),
+        r#"{"services":[{"name":"db-json","command":"/bin/sleep","args":["60"],"autostart":false}]}"#,
+    )
+    .unwrap();
+
+    let previous = std::env::var("SUPER_ROOT").ok();
+    unsafe { std::env::set_var("SUPER_ROOT", root.path()) };
+    let temp_dir = TempDir::new().unwrap();
+    let config_file = temp_dir.path().join("super.toml");
+    let mut config = ServerConfig::default();
+    config.storage.data_file = temp_dir.path().join("snapshot.json");
+    config.storage.log_dir = temp_dir.path().join("logs");
+    config.child_logging.max_size_mb = 1;
+    config.child_logging.max_backups = 1;
+    config.include.files = vec!["conf/conf.d/*".to_string()];
+
+    let extension = MockExtension::new();
+    let (log_tx, _) = broadcast::channel(100);
+    let (tx, rx) = mpsc::channel(32);
+    let log_reloader = Box::new(|_| Ok(()));
+    let manager = Manager::new(
+        config,
+        config_file,
+        log_reloader,
+        rx,
+        tx.clone(),
+        HashMap::new(),
+        HashMap::new(),
+        log_tx,
+        Box::new(extension.clone()),
+    );
+    tokio::spawn(async move {
+        manager.run().await;
+    });
+    let handle = ManagerHandle::new(tx);
+
+    let mut names: Vec<String> = Vec::new();
+    for _ in 0..20 {
+        names = handle
+            .list_programs()
+            .await
+            .unwrap()
+            .into_iter()
+            .map(|s| s.name)
+            .collect();
+        if names.len() == 2 {
+            break;
+        }
+        tokio::time::sleep(Duration::from_millis(50)).await;
+    }
+    assert!(
+        names.iter().any(|n| n == "web-toml"),
+        "expected web-toml from TOML include, got: {names:?}"
+    );
+    assert!(
+        names.iter().any(|n| n == "db-json"),
+        "expected db-json from JSON include, got: {names:?}"
+    );
+
+    match &previous {
+        Some(v) => unsafe { std::env::set_var("SUPER_ROOT", v) },
+        None => unsafe { std::env::remove_var("SUPER_ROOT") },
+    }
+}

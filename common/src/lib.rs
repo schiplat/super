@@ -48,8 +48,9 @@ pub use plugin_error::{set_last_plugin_error, take_last_plugin_error};
 pub use plugin_http_abi::{HTTP_PLUGIN_API_VERSION, HTTP_PLUGIN_SYMBOL, SuperPluginHttpV1};
 pub use plugin_ui_abi::{SuperPluginUiV1, UI_PLUGIN_API_VERSION, UI_PLUGIN_SYMBOL};
 pub use program_validate::{
-    format_serde_json_error, validate_artifact_config, validate_create_program_request,
-    validate_program_log_paths, validate_update_program_request, with_program_location,
+    format_serde_json_error, format_toml_error, parse_stack_from_str, validate_artifact_config,
+    validate_create_program_request, validate_program_log_paths, validate_update_program_request,
+    with_program_location,
 };
 pub use resources::ResourceLimits;
 
