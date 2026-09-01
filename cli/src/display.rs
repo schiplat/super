@@ -347,6 +347,34 @@ pub fn print_events(events: &[common::ProgramEventRecord], limit: Option<usize>)
     println!("{table}");
 }
 
+pub fn print_event_stats(stats: &common::EventStats) {
+    println!("Total events: {}", stats.total);
+    if let Some(first) = stats.first_ts {
+        let d = chrono::DateTime::from_timestamp(first as i64, 0)
+            .map(|dt| dt.format("%Y-%m-%d %H:%M:%S").to_string())
+            .unwrap_or_else(|| first.to_string());
+        println!("First event: {d}");
+    }
+    if let Some(last) = stats.last_ts {
+        let d = chrono::DateTime::from_timestamp(last as i64, 0)
+            .map(|dt| dt.format("%Y-%m-%d %H:%M:%S").to_string())
+            .unwrap_or_else(|| last.to_string());
+        println!("Last event:  {d}");
+    }
+
+    if stats.by_type.is_empty() {
+        println!("No events by type.");
+        return;
+    }
+    let mut table = Table::new();
+    table.load_preset(UTF8_FULL);
+    table.set_header(vec!["Event", "Count"]);
+    for t in &stats.by_type {
+        table.add_row(vec![t.event.clone(), t.count.to_string()]);
+    }
+    println!("{table}");
+}
+
 pub fn print_token_table(tokens: Vec<common::AuthTokenInfo>) {
     let mut table = Table::new();
     table.load_preset(UTF8_FULL);

@@ -43,6 +43,9 @@ async fn test_strict_policy_kills_process() {
     });
 
     let (cmd_tx, cmd_rx) = mpsc::channel(100);
+    let event_db = super_core::event_db::EventDb::open(&temp_dir.path().join("events.db"))
+        .await
+        .unwrap();
 
     let manager = Manager::new(
         config,
@@ -51,9 +54,9 @@ async fn test_strict_policy_kills_process() {
         cmd_rx,
         cmd_tx.clone(),
         HashMap::new(),
-        HashMap::new(),
         log_tx,
         extension,
+        event_db,
     );
 
     tokio::spawn(async move {

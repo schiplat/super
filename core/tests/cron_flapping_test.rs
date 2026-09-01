@@ -24,6 +24,9 @@ async fn cron_job_exempt_from_flapping_detection() {
     config.server.flapping_threshold = 2;
 
     let (cmd_tx, cmd_rx) = mpsc::channel(100);
+    let event_db = super_core::event_db::EventDb::open(&temp_dir.path().join("events.db"))
+        .await
+        .unwrap();
     let manager = Manager::new(
         config,
         temp_dir.path().join("super.toml"),
@@ -31,9 +34,9 @@ async fn cron_job_exempt_from_flapping_detection() {
         cmd_rx,
         cmd_tx.clone(),
         HashMap::new(),
-        HashMap::new(),
         log_tx,
         Box::new(NoopExtension),
+        event_db,
     );
     tokio::spawn(async move {
         manager.run().await;

@@ -149,6 +149,14 @@ pub struct Manager {
     pending_cron: HashMap<Uuid, u32>,
 
     extension: Arc<dyn Extension>,
+
+    /// Persisted event history (SQLite). Writes go through `event_tx` to a
+    /// background batch writer so the actor loop never blocks on disk I/O.
+    event_db: crate::event_db::EventDb,
+    event_tx: mpsc::Sender<common::ProgramEventRecord>,
+
+    /// UTC day (epoch / 86400) of the last `events_keep_days` prune.
+    last_event_prune: u64,
 }
 impl Manager {
     #[allow(clippy::too_many_arguments)]
@@ -159,9 +167,9 @@ impl Manager {
         rx: mpsc::Receiver<Command>,
         tx_self: mpsc::Sender<Command>,
         initial_programs: HashMap<Uuid, ProgramConfig>,
-        initial_events: HashMap<Uuid, Vec<common::ProgramEventRecord>>,
         log_tx: broadcast::Sender<WsMessage>,
         extension: Box<dyn Extension>,
+        event_db: crate::event_db::EventDb,
     ) -> Self {
         // Persistence heartbeat (debounced flush)
         let tx_persist = tx_self.clone();
@@ -175,6 +183,42 @@ impl Manager {
                 }
             }
         });
+
+        // Event history batch writer: drain the queue into transaction batches.
+        // Runs on its own task so event persistence never blocks the actor.
+        let (event_tx, mut event_rx) = mpsc::channel::<common::ProgramEventRecord>(2048);
+        {
+            let db = event_db.clone();
+            tokio::spawn(async move {
+                let mut batch: Vec<common::ProgramEventRecord> = Vec::new();
+                loop {
+                    if batch.is_empty() {
+                        match event_rx.recv().await {
+                            Some(e) => batch.push(e),
+                            None => break,
+                        }
+                    } else {
+                        // Drain what's available without blocking, up to a cap.
+                        while batch.len() < 512 {
+                            match event_rx.try_recv() {
+                                Ok(e) => batch.push(e),
+                                Err(mpsc::error::TryRecvError::Empty) => break,
+                                Err(mpsc::error::TryRecvError::Disconnected) => {
+                                    if let Err(e) = db.insert_batch(&batch).await {
+                                        tracing::error!("Failed to flush event batch: {}", e);
+                                    }
+                                    return;
+                                }
+                            }
+                        }
+                        if let Err(e) = db.insert_batch(&batch).await {
+                            tracing::error!("Failed to flush event batch: {}", e);
+                        }
+                        batch.clear();
+                    }
+                }
+            });
+        }
 
         // Cron tick (once per second)
         let tx_cron = tx_self.clone();
@@ -200,7 +244,7 @@ impl Manager {
         // Expose the daemon event pipeline to plugins (plugin→host `emit_event`).
         crate::plugin::host_emit::install(extension.clone(), config.event_hooks.clone());
 
-        let registry = ProcessRegistry::new(initial_programs, initial_events);
+        let registry = ProcessRegistry::new(initial_programs);
         let controller = LifecycleController::new(
             config.clone(),
             tx_self.clone(),
@@ -222,6 +266,29 @@ impl Manager {
             monitor,
             pending_cron: HashMap::new(),
             extension,
+            event_db,
+            event_tx,
+            last_event_prune: 0,
+        }
+    }
+
+    /// Prune retained events once per UTC day when `events_keep_days` is set.
+    async fn maybe_prune_events(&mut self) {
+        let keep_days = self.config.storage.events_keep_days;
+        if keep_days == 0 {
+            return;
+        }
+        let today = chrono::Utc::now().timestamp() as u64 / 86_400;
+        if today == self.last_event_prune {
+            return;
+        }
+        self.last_event_prune = today;
+        match self.event_db.prune_older_than(keep_days).await {
+            Ok(n) if n > 0 => {
+                tracing::info!("Pruned {} event(s) older than {} day(s)", n, keep_days);
+            }
+            Ok(_) => {}
+            Err(e) => tracing::warn!("Event retention prune failed: {}", e),
         }
     }
 
@@ -229,27 +296,52 @@ impl Manager {
         crate::event_hooks::emit(&self.extension, &self.config.event_hooks, event);
     }
 
-    /// Append an anomaly/lifecycle event to a program's persisted history.
+    /// Append a lifecycle event to the persisted history. The record is queued
+    /// to the background SQLite batch writer — this never blocks the actor.
+    #[allow(clippy::too_many_arguments)]
     fn record_event(
-        &mut self,
+        &self,
         id: Uuid,
+        name: &str,
         event: &str,
         code: Option<i32>,
         signal: Option<i32>,
         retry_count: Option<u32>,
+        duration_secs: Option<u64>,
         msg: String,
     ) {
-        self.registry.push_event(
-            id,
-            common::ProgramEventRecord {
-                ts: chrono::Utc::now().timestamp() as u64,
-                event: event.to_string(),
-                exit_code: code,
-                signal,
-                retry_count,
-                msg,
-            },
-        );
+        let now_ms = chrono::Utc::now().timestamp_millis() as u64;
+        let record = common::ProgramEventRecord {
+            ts: now_ms / 1000,
+            ts_ms: now_ms,
+            program_id: Some(id),
+            program_name: Some(name.to_string()),
+            event: event.to_string(),
+            exit_code: code,
+            signal,
+            retry_count,
+            duration_secs,
+            msg,
+        };
+        let _ = self.event_tx.try_send(record);
+    }
+
+    /// Record a system-wide event (no owning program).
+    fn record_system_event(&self, event: &str, msg: String) {
+        let now_ms = chrono::Utc::now().timestamp_millis() as u64;
+        let record = common::ProgramEventRecord {
+            ts: now_ms / 1000,
+            ts_ms: now_ms,
+            program_id: None,
+            program_name: None,
+            event: event.to_string(),
+            exit_code: None,
+            signal: None,
+            retry_count: None,
+            duration_secs: None,
+            msg,
+        };
+        let _ = self.event_tx.try_send(record);
     }
     pub async fn run(mut self) {
         tracing::info!(
@@ -261,6 +353,13 @@ impl Manager {
             .map(|h| h.to_string_lossy().to_string())
             .unwrap_or_else(|_| "unknown".to_string());
         self.emit_event(common::SystemEvent::SystemStartup { hostname });
+        self.record_system_event(
+            "system_startup",
+            format!(
+                "Daemon started with {} program(s)",
+                self.registry.programs.len()
+            ),
+        );
 
         if let Err(e) = self.process_includes().await {
             tracing::error!("Failed to process includes on startup: {}", e);
@@ -378,7 +477,18 @@ impl Manager {
                     let _ = reply.send(res);
                 }
                 Command::GetProgramEvents { id, reply } => {
-                    let _ = reply.send(self.registry.get_events(&id));
+                    let q = crate::event_db::EventQuery {
+                        program_id: Some(id),
+                        ..Default::default()
+                    };
+                    let _ = reply.send(self.event_db.query(&q).await.unwrap_or_default());
+                }
+                Command::QueryEvents { query, reply } => {
+                    let _ = reply.send(self.event_db.query(&query).await.unwrap_or_default());
+                }
+                Command::EventStats { program_id, reply } => {
+                    let stats = self.event_db.stats(program_id).await.unwrap_or_default();
+                    let _ = reply.send(stats);
                 }
 
                 Command::StartGroup { group, reply } => {
@@ -648,7 +758,9 @@ impl Manager {
                                     if dropped {
                                         self.record_event(
                                             t.id,
+                                            &name,
                                             "queue_full",
+                                            None,
                                             None,
                                             None,
                                             None,
@@ -680,7 +792,9 @@ impl Manager {
                                     if dropped {
                                         self.record_event(
                                             t.id,
+                                            &name,
                                             "queue_full",
+                                            None,
                                             None,
                                             None,
                                             None,
@@ -710,7 +824,9 @@ impl Manager {
                         if dropped {
                             self.record_event(
                                 t.id,
+                                &name,
                                 "queue_full",
+                                None,
                                 None,
                                 None,
                                 None,
@@ -739,15 +855,40 @@ impl Manager {
                                 break; // no free slot right now; wait for a later tick
                             }
                             tracing::info!("Cron job triggered: {}", cfg.name);
+                            let cron_start_ms = chrono::Utc::now().timestamp_millis() as u64;
                             if let Err(e) = self
                                 .controller
                                 .spawn_program(&mut self.registry, id, 0)
                                 .await
                             {
                                 tracing::error!("Failed to spawn cron job {}: {}", cfg.name, e);
+                                self.record_event(
+                                    id,
+                                    &cfg.name,
+                                    "cron_spawn_failed",
+                                    None,
+                                    None,
+                                    None,
+                                    None,
+                                    format!("Failed to spawn cron job: {}", e),
+                                );
                                 break;
-                            } else if let Some(cfg) = self.registry.get_config_mut(&id) {
-                                cfg.cron_last_run = Some(chrono::Utc::now().timestamp() as u64);
+                            } else {
+                                // Record the trigger (run start). The matching
+                                // `cron_exit` is recorded when the instance exits.
+                                self.record_event(
+                                    id,
+                                    &cfg.name,
+                                    "cron_started",
+                                    None,
+                                    None,
+                                    None,
+                                    None,
+                                    format!("Cron triggered (started at ms {cron_start_ms})"),
+                                );
+                                if let Some(cfg) = self.registry.get_config_mut(&id) {
+                                    cfg.cron_last_run = Some(chrono::Utc::now().timestamp() as u64);
+                                }
                             }
                             remaining -= 1;
                         }
@@ -762,6 +903,7 @@ impl Manager {
                     if let Err(e) = self.flush_to_disk().await {
                         tracing::error!("Failed to auto-save state: {}", e);
                     }
+                    self.maybe_prune_events().await;
                 }
                 Command::GenerateMetrics { reply } => {
                     let metrics = self.handle_generate_metrics();
@@ -1315,9 +1457,11 @@ impl Manager {
                         // B3. Notify
                         self.record_event(
                             id,
+                            &program_name,
                             "process_fatal",
                             code,
                             signal,
+                            None,
                             None,
                             "OTA upgrade failed. Automatically rolled back to previous version."
                                 .to_string(),
@@ -1352,50 +1496,69 @@ impl Manager {
             // With `max_concurrent > 1`, sibling instances may still be running;
             // only flip the status when the last instance exits.
             let siblings = self.registry.running_count(&id);
-            if let Some(0) = code {
-                tracing::info!(
-                    "Cron job '{}' finished successfully{}.",
-                    program_name,
-                    if siblings > 0 {
-                        " (sibling still running)"
-                    } else {
-                        ""
+            let cron_duration = Some(exited_uptime.max(1));
+            match code {
+                Some(0) => {
+                    tracing::info!(
+                        "Cron job '{}' finished successfully{}.",
+                        program_name,
+                        if siblings > 0 {
+                            " (sibling still running)"
+                        } else {
+                            ""
+                        }
+                    );
+                    self.record_event(
+                        id,
+                        &program_name,
+                        "cron_exit",
+                        code,
+                        signal,
+                        None,
+                        cron_duration,
+                        format!("Cron job finished successfully (ran {}s)", exited_uptime),
+                    );
+                    if siblings == 0 {
+                        let _ = self.log_tx.send(WsMessage::StatusChange {
+                            id,
+                            status: ProcessStatus::Stopped,
+                            name: program_name.clone(),
+                        });
                     }
-                );
-                if siblings == 0 {
-                    let _ = self.log_tx.send(WsMessage::StatusChange {
-                        id,
-                        status: ProcessStatus::Stopped,
-                        name: program_name.clone(),
-                    });
                 }
-            } else {
-                tracing::error!("Cron job '{}' failed with code {:?}.", program_name, code);
-                self.record_event(
-                    id,
-                    "process_fatal",
-                    code,
-                    signal,
-                    None,
-                    "Cron job execution failed".to_string(),
-                );
-                let event = common::SystemEvent::ProcessFatal {
-                    program_id: id,
-                    program_name: program_name.clone(),
-                    pid: Some(exited_pid),
-                    uptime_secs: exited_uptime,
-                    exit_code: code,
-                    signal,
-                    msg: "Cron job execution failed".to_string(),
-                    log_tail: None,
-                };
-                self.emit_event(event);
-                if siblings == 0 {
-                    let _ = self.log_tx.send(WsMessage::StatusChange {
+                _ => {
+                    tracing::error!("Cron job '{}' failed with code {:?}.", program_name, code);
+                    self.record_event(
                         id,
-                        status: ProcessStatus::Fatal,
-                        name: program_name.clone(),
-                    });
+                        &program_name,
+                        "cron_exit",
+                        code,
+                        signal,
+                        None,
+                        cron_duration,
+                        format!(
+                            "Cron job failed with code {:?} after {}s",
+                            code, exited_uptime
+                        ),
+                    );
+                    let event = common::SystemEvent::ProcessFatal {
+                        program_id: id,
+                        program_name: program_name.clone(),
+                        pid: Some(exited_pid),
+                        uptime_secs: exited_uptime,
+                        exit_code: code,
+                        signal,
+                        msg: "Cron job execution failed".to_string(),
+                        log_tail: None,
+                    };
+                    self.emit_event(event);
+                    if siblings == 0 {
+                        let _ = self.log_tx.send(WsMessage::StatusChange {
+                            id,
+                            status: ProcessStatus::Fatal,
+                            name: program_name.clone(),
+                        });
+                    }
                 }
             }
             return; // cron jobs do not auto-restart
@@ -1436,15 +1599,21 @@ impl Manager {
                 name: program_name.clone(),
             });
 
-            // Persist unexpected exits (non-expected exit code, or killed by a
-            // signal such as cgroup OOM) so the stop reason stays visible.
-            if !common::ProgramConfig::is_expected_exit(code, &config.exitcodes) {
-                let msg = match signal {
-                    Some(sig) => format!("Process killed by signal {} (exit code {:?})", sig, code),
-                    None => format!("Process exited with code {:?}", code),
-                };
-                self.record_event(id, "process_exit", code, signal, None, msg);
-            }
+            // Persist the exit so every run leaves a trace in history.
+            let msg = match signal {
+                Some(sig) => format!("Process killed by signal {} (exit code {:?})", sig, code),
+                None => format!("Process exited with code {:?}", code),
+            };
+            self.record_event(
+                id,
+                &program_name,
+                "process_exit",
+                code,
+                signal,
+                None,
+                None,
+                msg,
+            );
             return;
         }
 
@@ -1479,10 +1648,12 @@ impl Manager {
             self.registry.startup_errors.insert(id, err_msg.clone());
             self.record_event(
                 id,
+                &program_name,
                 "process_fatal",
                 code,
                 signal,
                 Some(retry_count_to_use),
+                None,
                 err_msg.clone(),
             );
 
@@ -1554,10 +1725,12 @@ impl Manager {
 
             self.record_event(
                 id,
+                &program_name,
                 "process_backoff",
                 code,
                 signal,
                 Some(retry_count_to_use),
+                None,
                 format!("Crash detected, retrying in {}s", delay_sec),
             );
 
@@ -1673,7 +1846,9 @@ impl Manager {
         if let Some((recovered_pid, uptime)) = recovery {
             self.record_event(
                 id,
+                &program_name,
                 "process_recovered",
+                None,
                 None,
                 None,
                 None,
@@ -1774,10 +1949,12 @@ impl Manager {
             self.registry.startup_errors.insert(id, err_msg.clone());
             self.record_event(
                 id,
+                &program_name,
                 "process_fatal",
                 None,
                 None,
                 Some(retry_count),
+                None,
                 err_msg.clone(),
             );
             self.emit_event(common::SystemEvent::ProcessFatal {
@@ -1810,10 +1987,12 @@ impl Manager {
         // via the `restart_requested` path.
         self.record_event(
             id,
+            &program_name,
             "health_restart",
             None,
             None,
             Some(retry_count),
+            None,
             format!("Health check failed {retry_count} time(s): {failure_detail}"),
         );
         self.emit_event(common::SystemEvent::HealthRestart {
@@ -2064,6 +2243,7 @@ impl Manager {
                 }
             }
         }
+        self.record_system_event("system_shutdown", "Daemon stopped".to_string());
         tracing::info!("Bye!");
     }
 
@@ -2240,17 +2420,6 @@ impl Manager {
             store::save(&self.config.storage.data_file, &self.registry.programs).await?;
             self.registry.dirty = false;
         }
-        // Event history is auxiliary: write only when changed, and never let a
-        // failed events write fail the snapshot flush.
-        if self.registry.events_dirty {
-            if let Err(e) =
-                store::save_events(&self.config.storage.events_file, &self.registry.events).await
-            {
-                tracing::error!("Failed to persist event history: {}", e);
-            } else {
-                self.registry.events_dirty = false;
-            }
-        }
         tracing::debug!("State persisted to disk (Debounced).");
         Ok(())
     }
@@ -2411,10 +2580,14 @@ impl Manager {
         self.registry.crashed.remove(&id);
         self.registry.startup_errors.remove(&id);
         self.registry.health_restart_count.remove(&id);
-        self.registry.remove_events(&id);
         self.scheduler.remove(&id);
         self.pending_cron.remove(&id);
         self.registry.mark_dirty();
+
+        // Drop the program's persisted event history.
+        if let Err(e) = self.event_db.delete_program(id).await {
+            tracing::warn!("Failed to delete event history for {}: {}", id, e);
+        }
 
         if let Some(cfg) = config_opt {
             let extension = self.extension.clone();

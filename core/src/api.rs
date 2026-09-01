@@ -201,7 +201,9 @@ struct LogQueryParams {
         system_shutdown,
         system_stats,
         system_license,
-        metrics_handler
+        metrics_handler,
+        query_events,
+        event_stats
     ),
     components(
         schemas(
@@ -225,13 +227,15 @@ struct LogQueryParams {
             SystemStats,
             LicenseInfo,
             common::AutorestartPolicy,
+            common::EventStats,
         )
     ),
     tags(
         (name = "programs", description = "Process lifecycle management"),
         (name = "groups", description = "Group lifecycle management"),
         (name = "system", description = "System operations"),
-        (name = "stack", description = "Declarative stack operations")
+        (name = "stack", description = "Declarative stack operations"),
+        (name = "events", description = "Persisted event history")
     ),
     info(
         title = "Project Super API",
@@ -269,6 +273,8 @@ pub fn make_api_router(
         )
         .route("/programs/{id}/logs", get(get_program_logs))
         .route("/programs/{id}/events", get(get_program_events))
+        .route("/events", get(query_events))
+        .route("/events/stats", get(event_stats))
         .route("/programs/{id}/start", post(start_program))
         .route("/programs/{id}/stop", post(stop_program))
         .route("/programs/{id}/restart", post(restart_program))
@@ -500,13 +506,27 @@ async fn get_program_logs(
     Ok(Json(ProgramLogsResponse { id, logs }))
 }
 
-/// Read persisted lifecycle/exception event history for a program
+/// Read persisted lifecycle/exception event history for a program.
+///
+/// Optional query filters (all combinable):
+/// - `from` / `to`: Unix-seconds inclusive time window
+/// - `event_type`: exact event type (e.g. `process_fatal`, `cron_exit`)
+/// - `exit_code`: exact exit code
+/// - `q`: free-text match on the message
+/// - `limit` / `offset`: pagination
 #[utoipa::path(
     get,
     path = "/api/v1/programs/{id}/events",
     tag = "programs",
     params(
-        ("id" = Uuid, Path, description = "Program ID")
+        ("id" = Uuid, Path, description = "Program ID"),
+        ("from" = Option<u64>, Query, description = "Inclusive lower bound (Unix seconds)"),
+        ("to" = Option<u64>, Query, description = "Inclusive upper bound (Unix seconds)"),
+        ("event_type" = Option<String>, Query, description = "Exact event type"),
+        ("exit_code" = Option<i32>, Query, description = "Exact exit code"),
+        ("q" = Option<String>, Query, description = "Free-text match on message"),
+        ("limit" = Option<u32>, Query, description = "Max rows (oldest-first)"),
+        ("offset" = Option<u32>, Query, description = "Pagination offset"),
     ),
     responses(
         (status = 200, description = "Event history", body = Vec<common::ProgramEventRecord>),
@@ -516,6 +536,7 @@ async fn get_program_logs(
 async fn get_program_events(
     State(state): State<AppState>,
     Path(id): Path<Uuid>,
+    Query(params): Query<EventQueryParams>,
 ) -> Result<Json<Vec<common::ProgramEventRecord>>, AppError> {
     // 404 if the program does not exist
     state
@@ -523,12 +544,105 @@ async fn get_program_events(
         .get_program(id)
         .await
         .map_err(|e| AppError(StatusCode::NOT_FOUND, e))?;
+    let query = params.into_event_query(Some(id));
     let events = state
         .manager
-        .get_program_events(id)
+        .query_events(query)
         .await
         .map_err(|e| AppError(StatusCode::INTERNAL_SERVER_ERROR, e))?;
     Ok(Json(events))
+}
+
+/// Query persisted events across the whole daemon (optionally scoped to a
+/// program via `program_id`).
+#[utoipa::path(
+    get,
+    path = "/api/v1/events",
+    tag = "events",
+    params(
+        ("program_id" = Option<Uuid>, Query, description = "Scope to one program"),
+        ("from" = Option<u64>, Query, description = "Inclusive lower bound (Unix seconds)"),
+        ("to" = Option<u64>, Query, description = "Inclusive upper bound (Unix seconds)"),
+        ("event_type" = Option<String>, Query, description = "Exact event type"),
+        ("exit_code" = Option<i32>, Query, description = "Exact exit code"),
+        ("q" = Option<String>, Query, description = "Free-text match on message"),
+        ("limit" = Option<u32>, Query, description = "Max rows (oldest-first)"),
+        ("offset" = Option<u32>, Query, description = "Pagination offset"),
+    ),
+    responses(
+        (status = 200, description = "Event history", body = Vec<common::ProgramEventRecord>)
+    )
+)]
+async fn query_events(
+    State(state): State<AppState>,
+    Query(params): Query<EventQueryParams>,
+) -> Result<Json<Vec<common::ProgramEventRecord>>, AppError> {
+    let program_id = params.program_id;
+    let query = params.into_event_query(program_id);
+    let events = state
+        .manager
+        .query_events(query)
+        .await
+        .map_err(|e| AppError(StatusCode::INTERNAL_SERVER_ERROR, e))?;
+    Ok(Json(events))
+}
+
+/// Event retention statistics (optional `program_id` scope).
+#[utoipa::path(
+    get,
+    path = "/api/v1/events/stats",
+    tag = "events",
+    params(
+        ("program_id" = Option<Uuid>, Query, description = "Scope to one program")
+    ),
+    responses(
+        (status = 200, description = "Event statistics", body = common::EventStats)
+    )
+)]
+async fn event_stats(
+    State(state): State<AppState>,
+    Query(params): Query<EventStatsParams>,
+) -> Result<Json<common::EventStats>, AppError> {
+    let stats = state
+        .manager
+        .event_stats(params.program_id)
+        .await
+        .map_err(|e| AppError(StatusCode::INTERNAL_SERVER_ERROR, e))?;
+    Ok(Json(stats))
+}
+
+/// Query-string parameters shared by the event listing endpoints.
+#[derive(Debug, Deserialize)]
+struct EventQueryParams {
+    program_id: Option<Uuid>,
+    from: Option<u64>,
+    to: Option<u64>,
+    event_type: Option<String>,
+    exit_code: Option<i32>,
+    q: Option<String>,
+    limit: Option<u32>,
+    offset: Option<u32>,
+}
+
+impl EventQueryParams {
+    fn into_event_query(self, program_id: Option<Uuid>) -> crate::event_db::EventQuery {
+        crate::event_db::EventQuery {
+            program_id,
+            from: self.from,
+            to: self.to,
+            event_type: self.event_type,
+            exit_code: self.exit_code,
+            q: self.q,
+            limit: self.limit,
+            offset: self.offset,
+        }
+    }
+}
+
+/// Query-string parameters for the statistics endpoint.
+#[derive(Debug, Deserialize)]
+struct EventStatsParams {
+    program_id: Option<Uuid>,
 }
 
 /// Start a program

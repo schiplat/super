@@ -184,7 +184,29 @@ async fn main() -> anyhow::Result<()> {
         Commands::Export { format } => handlers::handle_export(&ctx, *format).await?,
         Commands::Shutdown => handlers::handle_shutdown(&ctx).await?,
         Commands::Info { target } => handlers::handle_info(&ctx, target).await?,
-        Commands::Events { target, limit } => handlers::handle_events(&ctx, target, *limit).await?,
+        Commands::Events {
+            target,
+            limit,
+            from,
+            to,
+            event_type,
+            exit_code,
+            q,
+            stats,
+        } => {
+            handlers::handle_events(
+                &ctx,
+                target,
+                *limit,
+                *from,
+                *to,
+                event_type.clone(),
+                *exit_code,
+                q.clone(),
+                *stats,
+            )
+            .await?
+        }
         Commands::Logs {
             target,
             tail,

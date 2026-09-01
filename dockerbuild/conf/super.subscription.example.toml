@@ -32,6 +32,8 @@ enable_docs = false
 [storage]
 data_file = "data/snapshot.json"
 log_dir = "logs"
+events_file = "data/events.db"   # SQLite event history
+events_keep_days = 30            # prune events older than 30 days; 0 = keep everything
 
 [logging]
 log_level = "info"

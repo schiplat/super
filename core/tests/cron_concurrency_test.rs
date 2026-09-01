@@ -11,7 +11,7 @@ use tokio::sync::{broadcast, mpsc};
 struct NoopExtension;
 impl Extension for NoopExtension {}
 
-fn manager_with_temp(log_dir: std::path::PathBuf) -> (ManagerHandle, tempfile::TempDir) {
+async fn manager_with_temp(log_dir: std::path::PathBuf) -> (ManagerHandle, tempfile::TempDir) {
     let (log_tx, _) = broadcast::channel(100);
     let temp_dir = tempfile::tempdir().unwrap();
     let data_file = temp_dir.path().join("data.json");
@@ -21,6 +21,9 @@ fn manager_with_temp(log_dir: std::path::PathBuf) -> (ManagerHandle, tempfile::T
     config.storage.log_dir = log_dir;
 
     let (cmd_tx, cmd_rx) = mpsc::channel(100);
+    let event_db = super_core::event_db::EventDb::open(&temp_dir.path().join("events.db"))
+        .await
+        .unwrap();
     let manager = Manager::new(
         config,
         temp_dir.path().join("super.toml"),
@@ -28,9 +31,9 @@ fn manager_with_temp(log_dir: std::path::PathBuf) -> (ManagerHandle, tempfile::T
         cmd_rx,
         cmd_tx.clone(),
         HashMap::new(),
-        HashMap::new(),
         log_tx,
         Box::new(NoopExtension),
+        event_db,
     );
     tokio::spawn(async move {
         manager.run().await;
@@ -94,7 +97,7 @@ fn assert_no_overlap(lines: &[String]) {
 async fn max_concurrent_allows_overlapping_runs() {
     let logs = tempfile::tempdir().unwrap();
     let marker = logs.path().join("overlap.log");
-    let (handle, _temp) = manager_with_temp(logs.path().to_path_buf());
+    let (handle, _temp) = manager_with_temp(logs.path().to_path_buf()).await;
 
     // `sh -c` appends "start" then sleeps 3s then appends "end". With overlap,
     // at least two "start" lines appear before the first "end" line.
@@ -152,7 +155,7 @@ async fn max_concurrent_allows_overlapping_runs() {
 async fn default_max_concurrent_one_prevents_overlap() {
     let logs = tempfile::tempdir().unwrap();
     let marker = logs.path().join("default.log");
-    let (handle, _temp) = manager_with_temp(logs.path().to_path_buf());
+    let (handle, _temp) = manager_with_temp(logs.path().to_path_buf()).await;
 
     let script = format!(
         "echo start >> {}; sleep 2; echo end >> {}",
@@ -202,7 +205,7 @@ async fn default_max_concurrent_one_prevents_overlap() {
 async fn on_overlap_skip_drops_ticks_at_max_concurrent() {
     let logs = tempfile::tempdir().unwrap();
     let marker = logs.path().join("skip.log");
-    let (handle, _temp) = manager_with_temp(logs.path().to_path_buf());
+    let (handle, _temp) = manager_with_temp(logs.path().to_path_buf()).await;
 
     let script = format!(
         "echo start >> {}; sleep 3; echo end >> {}",
@@ -258,7 +261,7 @@ async fn on_overlap_skip_drops_ticks_at_max_concurrent() {
 async fn on_overlap_queue_drains_after_slot_frees() {
     let logs = tempfile::tempdir().unwrap();
     let marker = logs.path().join("queue-drain.log");
-    let (handle, _temp) = manager_with_temp(logs.path().to_path_buf());
+    let (handle, _temp) = manager_with_temp(logs.path().to_path_buf()).await;
 
     let script = format!(
         "echo start >> {}; sleep 2; echo end >> {}",
@@ -313,7 +316,7 @@ async fn on_overlap_queue_drains_after_slot_frees() {
 async fn on_overlap_kill_terminates_running_instance() {
     let logs = tempfile::tempdir().unwrap();
     let marker = logs.path().join("kill.log");
-    let (handle, _temp) = manager_with_temp(logs.path().to_path_buf());
+    let (handle, _temp) = manager_with_temp(logs.path().to_path_buf()).await;
 
     // Trap TERM to write a marker: a killed instance shows up as "killed"
     // instead of completing its 5s sleep to "end".
@@ -379,7 +382,7 @@ async fn on_overlap_kill_terminates_running_instance() {
 async fn on_overlap_kill_with_siblings_keeps_one_running() {
     let logs = tempfile::tempdir().unwrap();
     let marker = logs.path().join("kill-sibling.log");
-    let (handle, _temp) = manager_with_temp(logs.path().to_path_buf());
+    let (handle, _temp) = manager_with_temp(logs.path().to_path_buf()).await;
 
     let script = format!(
         "trap 'echo killed >> {}; exit 0' TERM; echo start >> {}; sleep 2; echo end >> {}",
@@ -439,7 +442,7 @@ async fn on_overlap_kill_with_siblings_keeps_one_running() {
 async fn max_queued_drops_firings_and_records_event() {
     let logs = tempfile::tempdir().unwrap();
     let marker = logs.path().join("drop.log");
-    let (handle, _temp) = manager_with_temp(logs.path().to_path_buf());
+    let (handle, _temp) = manager_with_temp(logs.path().to_path_buf()).await;
 
     // 2s task on a 1s cron with a single slot and a tiny queue: most ticks hit
     // a full queue and are dropped.
@@ -492,7 +495,7 @@ async fn max_queued_drops_firings_and_records_event() {
 #[tokio::test]
 async fn zero_values_mean_defaults() {
     let logs = tempfile::tempdir().unwrap();
-    let (handle, _temp) = manager_with_temp(logs.path().to_path_buf());
+    let (handle, _temp) = manager_with_temp(logs.path().to_path_buf()).await;
 
     let req = CreateProgramRequest {
         name: Some("zero-cron".to_string()),
@@ -532,7 +535,7 @@ async fn zero_values_mean_defaults() {
 #[tokio::test]
 async fn update_changes_concurrency_policy() {
     let logs = tempfile::tempdir().unwrap();
-    let (handle, _temp) = manager_with_temp(logs.path().to_path_buf());
+    let (handle, _temp) = manager_with_temp(logs.path().to_path_buf()).await;
 
     let req = CreateProgramRequest {
         name: Some("updatable-cron".to_string()),

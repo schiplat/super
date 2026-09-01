@@ -54,6 +54,10 @@ async fn setup_manager() -> (ManagerHandle, TempDir, MockExtension) {
 
     let log_reloader = Box::new(|_| Ok(()));
 
+    let event_db = super_core::event_db::EventDb::open(&temp_dir.path().join("events.db"))
+        .await
+        .unwrap();
+
     let manager = Manager::new(
         config,
         config_file,
@@ -61,9 +65,9 @@ async fn setup_manager() -> (ManagerHandle, TempDir, MockExtension) {
         rx,
         tx.clone(),
         HashMap::new(),
-        HashMap::new(),
         log_tx,
         Box::new(extension.clone()),
+        event_db,
     );
 
     tokio::spawn(async move {
@@ -437,6 +441,9 @@ autostart = false
     let (log_tx, _) = broadcast::channel(100);
     let (tx, rx) = mpsc::channel(32);
     let log_reloader = Box::new(|_| Ok(()));
+    let event_db = super_core::event_db::EventDb::open(&temp_dir.path().join("events.db"))
+        .await
+        .unwrap();
     let manager = Manager::new(
         config,
         config_file,
@@ -444,9 +451,9 @@ autostart = false
         rx,
         tx.clone(),
         HashMap::new(),
-        HashMap::new(),
         log_tx,
         Box::new(extension.clone()),
+        event_db,
     );
     tokio::spawn(async move {
         manager.run().await;

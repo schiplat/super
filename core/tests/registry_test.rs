@@ -46,7 +46,7 @@ fn running_state(pid: u32) -> RuntimeState {
 
 #[test]
 fn test_registry_crud() {
-    let mut registry = ProcessRegistry::new(HashMap::new(), HashMap::new());
+    let mut registry = ProcessRegistry::new(HashMap::new());
     let id = Uuid::new_v4();
     let config = mock_config("test-app");
 
@@ -94,7 +94,7 @@ fn test_registry_crud() {
 
 #[test]
 fn test_registry_concurrent_instances() {
-    let mut registry = ProcessRegistry::new(HashMap::new(), HashMap::new());
+    let mut registry = ProcessRegistry::new(HashMap::new());
     let id = Uuid::new_v4();
 
     for (pid, healthy) in [(1001, true), (1002, false), (1003, true)] {
@@ -143,7 +143,7 @@ fn test_registry_concurrent_instances() {
 fn remove_running_by_pid_unknown_pid_falls_back_to_primary() {
     // Documented fallback: when the reported pid no longer matches any instance
     // (a race with a restart), the primary instance is removed instead.
-    let mut registry = ProcessRegistry::new(HashMap::new(), HashMap::new());
+    let mut registry = ProcessRegistry::new(HashMap::new());
     let id = Uuid::new_v4();
     for pid in [2001u32, 2002, 2003] {
         registry.insert_running(id, running_state(pid));
@@ -168,7 +168,7 @@ fn remove_running_by_pid_unknown_pid_falls_back_to_primary() {
 fn remove_running_primary_keeps_siblings_then_drops_key() {
     // `remove_running` (single-instance exit path) only removes the primary;
     // siblings keep the program registered until the last one exits.
-    let mut registry = ProcessRegistry::new(HashMap::new(), HashMap::new());
+    let mut registry = ProcessRegistry::new(HashMap::new());
     let id = Uuid::new_v4();
     for pid in [3001u32, 3002, 3003] {
         registry.insert_running(id, running_state(pid));
@@ -191,7 +191,7 @@ fn remove_running_primary_keeps_siblings_then_drops_key() {
 
 #[test]
 fn all_running_pids_spans_programs_and_siblings() {
-    let mut registry = ProcessRegistry::new(HashMap::new(), HashMap::new());
+    let mut registry = ProcessRegistry::new(HashMap::new());
     let a = Uuid::new_v4();
     let b = Uuid::new_v4();
     registry.insert_running(a, running_state(4001));
@@ -211,85 +211,4 @@ fn all_running_pids_spans_programs_and_siblings() {
     registry.remove_running_by_pid(&b, 4003).unwrap();
     assert_eq!(registry.all_running_pids(), Vec::new());
     assert!(registry.running_empty());
-}
-
-#[test]
-fn test_events_push_caps_at_max() {
-    use common::ProgramEventRecord;
-    use super_core::manager::registry::MAX_EVENTS_PER_PROGRAM;
-
-    let mut registry = ProcessRegistry::new(HashMap::new(), HashMap::new());
-    let id = Uuid::new_v4();
-
-    for i in 0..(MAX_EVENTS_PER_PROGRAM + 25) {
-        registry.push_event(
-            id,
-            ProgramEventRecord {
-                ts: i as u64,
-                event: "process_backoff".into(),
-                exit_code: Some(1),
-                signal: None,
-                retry_count: Some(1),
-                msg: format!("crash {i}"),
-            },
-        );
-    }
-
-    let events = registry.get_events(&id);
-    assert_eq!(events.len(), MAX_EVENTS_PER_PROGRAM);
-    // Oldest entries were dropped, newest retained
-    assert_eq!(events[0].ts, 25);
-    assert_eq!(
-        events.last().unwrap().ts,
-        MAX_EVENTS_PER_PROGRAM as u64 + 24
-    );
-    assert!(registry.events_dirty);
-}
-
-#[test]
-fn test_events_remove_drops_bucket() {
-    use common::ProgramEventRecord;
-
-    let mut registry = ProcessRegistry::new(HashMap::new(), HashMap::new());
-    let id = Uuid::new_v4();
-    registry.push_event(
-        id,
-        ProgramEventRecord {
-            ts: 1,
-            event: "process_fatal".into(),
-            exit_code: None,
-            signal: Some(9),
-            retry_count: None,
-            msg: "oom".into(),
-        },
-    );
-
-    assert_eq!(registry.get_events(&id).len(), 1);
-    registry.remove_events(&id);
-    assert!(registry.get_events(&id).is_empty());
-}
-
-#[test]
-fn test_events_restore_from_initial_state() {
-    use common::ProgramEventRecord;
-
-    let id = Uuid::new_v4();
-    let mut initial = HashMap::new();
-    initial.insert(
-        id,
-        vec![ProgramEventRecord {
-            ts: 1700000000,
-            event: "process_exit".into(),
-            exit_code: None,
-            signal: Some(9),
-            retry_count: None,
-            msg: "Process killed by signal 9".into(),
-        }],
-    );
-
-    let registry = ProcessRegistry::new(HashMap::new(), initial);
-    let events = registry.get_events(&id);
-    assert_eq!(events.len(), 1);
-    assert_eq!(events[0].signal, Some(9));
-    assert!(!registry.events_dirty);
 }

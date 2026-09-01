@@ -69,6 +69,16 @@ pub enum Command {
         id: Uuid,
         reply: oneshot::Sender<Vec<common::ProgramEventRecord>>,
     },
+    /// Query persisted events with filters (program-scoped or global).
+    QueryEvents {
+        query: crate::event_db::EventQuery,
+        reply: oneshot::Sender<Vec<common::ProgramEventRecord>>,
+    },
+    /// Retention statistics (optional program scope).
+    EventStats {
+        program_id: Option<Uuid>,
+        reply: oneshot::Sender<common::EventStats>,
+    },
 
     // Group operation commands
     StartGroup {

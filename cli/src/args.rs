@@ -326,12 +326,30 @@ pub enum Commands {
     /// Show detailed information for a specific program
     Info { target: String },
 
-    /// Show persisted lifecycle/exception event history for a program
+    /// Show persisted event history for a program (filterable)
     Events {
         target: String,
         /// Number of most recent events to show (default: all)
         #[arg(long)]
         limit: Option<usize>,
+        /// Inclusive start of time window (Unix seconds)
+        #[arg(long)]
+        from: Option<u64>,
+        /// Inclusive end of time window (Unix seconds)
+        #[arg(long)]
+        to: Option<u64>,
+        /// Exact event type (e.g. process_fatal, cron_exit)
+        #[arg(long)]
+        event_type: Option<String>,
+        /// Exact exit code
+        #[arg(long = "exit-code")]
+        exit_code: Option<i32>,
+        /// Free-text match on the event message
+        #[arg(long)]
+        q: Option<String>,
+        /// Show retention statistics instead of the event list
+        #[arg(long)]
+        stats: bool,
     },
 
     /// Stream or read logs for a specific program

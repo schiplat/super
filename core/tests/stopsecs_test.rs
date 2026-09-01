@@ -24,17 +24,14 @@ fn test_stopsecs_fallback_to_server_default() {
     );
 
     let id = Uuid::new_v4();
-    let mut registry = ProcessRegistry::new(
-        HashMap::from([(
-            id,
-            ProgramConfig {
-                name: "svc".into(),
-                command: "/bin/true".into(),
-                ..Default::default()
-            },
-        )]),
-        HashMap::new(),
-    );
+    let mut registry = ProcessRegistry::new(HashMap::from([(
+        id,
+        ProgramConfig {
+            name: "svc".into(),
+            command: "/bin/true".into(),
+            ..Default::default()
+        },
+    )]));
 
     assert_eq!(controller.stop_timeout(&registry, id), 42);
 

@@ -1,4 +1,5 @@
 pub mod api;
+pub mod event_db;
 pub mod logger;
 pub mod manager;
 pub mod process;
@@ -48,7 +49,6 @@ pub struct SystemPaths {
     pub config_file: PathBuf,
     pub notify_file: PathBuf,
     pub state_file: PathBuf,
-    pub events_file: PathBuf,
     pub auth_file: PathBuf,
     pub log_dir: PathBuf,
     pub plugins_dir: PathBuf,
@@ -81,7 +81,6 @@ pub async fn bootstrap(extension: Box<dyn Extension>) -> anyhow::Result<SystemCo
         config_file: conf_dir.join("super.toml"),
         notify_file: conf_dir.join("notify.toml"),
         state_file: data_dir.join("snapshot.json"),
-        events_file: data_dir.join("events.json"),
         auth_file: data_dir.join("auth.json"),
         log_dir: log_dir.clone(),
         plugins_dir: root.join("plugins"),
@@ -157,8 +156,26 @@ pub async fn bootstrap(extension: Box<dyn Extension>) -> anyhow::Result<SystemCo
         }
     };
 
-    // 5b. Load persisted lifecycle event history (auxiliary; never fatal)
-    let initial_events = store::load_events_with_recovery(&paths.events_file).await?;
+    // 5b. Open the SQLite-backed event history store (auxiliary; never fatal).
+    // The batch writer drains into it in the background. Path comes from
+    // `[storage] events_file` (default `./data/events.db`); relative paths
+    // resolve under SUPER_ROOT.
+    let events_db_path = if server_config.storage.events_file.is_absolute() {
+        server_config.storage.events_file.clone()
+    } else {
+        root.join(&server_config.storage.events_file)
+    };
+    let event_db = match crate::event_db::EventDb::open(&events_db_path).await {
+        Ok(db) => db,
+        Err(e) => {
+            tracing::error!(
+                "Failed to open events database at {}: {} — event history disabled",
+                events_db_path.display(),
+                e
+            );
+            return Err(e);
+        }
+    };
 
     let (log_tx, _) = broadcast::channel(100);
     let (shutdown_tx, shutdown_rx) = broadcast::channel(1);
@@ -173,7 +190,6 @@ pub async fn bootstrap(extension: Box<dyn Extension>) -> anyhow::Result<SystemCo
 
     let mut runtime_config = server_config.clone();
     runtime_config.storage.data_file = paths.state_file.clone();
-    runtime_config.storage.events_file = paths.events_file.clone();
     runtime_config.storage.log_dir = paths.log_dir.clone();
 
     // 6. Init Manager (core actor)
@@ -184,9 +200,9 @@ pub async fn bootstrap(extension: Box<dyn Extension>) -> anyhow::Result<SystemCo
         rx,
         tx.clone(),
         initial_programs,
-        initial_events,
         log_tx.clone(),
         extension,
+        event_db,
     );
     let manager_handle = ManagerHandle::new(tx.clone());
 

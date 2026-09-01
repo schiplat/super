@@ -103,6 +103,35 @@ impl ManagerHandle {
         Ok(rx.await?)
     }
 
+    /// Query persisted events with filters. `program_id` scopes to one program
+    /// when set; all other filters (time window, type, exit code, free-text)
+    /// apply globally otherwise.
+    pub async fn query_events(
+        &self,
+        query: crate::event_db::EventQuery,
+    ) -> anyhow::Result<Vec<common::ProgramEventRecord>> {
+        let (tx, rx) = oneshot::channel();
+        self.tx
+            .send(Command::QueryEvents { query, reply: tx })
+            .await?;
+        Ok(rx.await?)
+    }
+
+    /// Event retention statistics, optionally scoped to one program.
+    pub async fn event_stats(
+        &self,
+        program_id: Option<Uuid>,
+    ) -> anyhow::Result<common::EventStats> {
+        let (tx, rx) = oneshot::channel();
+        self.tx
+            .send(Command::EventStats {
+                program_id,
+                reply: tx,
+            })
+            .await?;
+        Ok(rx.await?)
+    }
+
     pub async fn shutdown(&self) -> anyhow::Result<()> {
         let (tx, rx) = oneshot::channel();
         self.tx.send(Command::Shutdown { reply: tx }).await?;

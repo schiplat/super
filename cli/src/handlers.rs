@@ -309,18 +309,52 @@ pub async fn handle_info(ctx: &Context, target: &str) -> anyhow::Result<()> {
     Ok(())
 }
 
+#[allow(clippy::too_many_arguments)]
 pub async fn handle_events(
     ctx: &Context,
     target: &str,
     limit: Option<usize>,
+    from: Option<u64>,
+    to: Option<u64>,
+    event_type: Option<String>,
+    exit_code: Option<i32>,
+    q: Option<String>,
+    stats: bool,
 ) -> anyhow::Result<()> {
     let ids = client::resolve_targets(&ctx.client, &ctx.base_url, target).await?;
     if ids.len() != 1 {
         eprintln!("Error: Events command only supports a single target.");
         return Ok(());
     }
+    let pid = ids[0];
 
-    let url = format!("{}/api/v1/programs/{}/events", ctx.base_url, ids[0]);
+    if stats {
+        let url = format!("{}/api/v1/events/stats?program_id={}", ctx.base_url, pid);
+        let resp = ctx.client.get(&url).send().await?;
+        if resp.status().is_success() {
+            let stats: common::EventStats = resp.json().await?;
+            display::print_event_stats(&stats);
+        } else {
+            eprintln!("Error: Failed to fetch event stats: {}", resp.status());
+        }
+        return Ok(());
+    }
+
+    let mut url = format!("{}/api/v1/programs/{}/events", ctx.base_url, pid);
+    let mut first = true;
+    for (key, val) in [
+        ("from", from.map(|v| v.to_string())),
+        ("to", to.map(|v| v.to_string())),
+        ("event_type", event_type),
+        ("exit_code", exit_code.map(|v| v.to_string())),
+        ("q", q),
+    ] {
+        if let Some(v) = val {
+            url.push_str(&format!("{}{}={}", if first { "?" } else { "&" }, key, v));
+            first = false;
+        }
+    }
+
     let resp = ctx.client.get(&url).send().await?;
 
     if resp.status().is_success() {

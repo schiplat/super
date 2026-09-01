@@ -192,8 +192,14 @@ pub struct StorageSection {
     pub data_file: PathBuf,
     #[serde(default = "default_log_dir")]
     pub log_dir: PathBuf,
+    /// Location of the SQLite event-history database. Relative paths resolve
+    /// under `SUPER_ROOT`. Defaults to `./data/events.db`.
     #[serde(default = "default_events_file")]
     pub events_file: PathBuf,
+    /// Retention window (days) for persisted event history. Events older than
+    /// this are pruned once per day. `0` keeps everything.
+    #[serde(default = "default_events_keep_days")]
+    pub events_keep_days: u64,
 }
 
 impl Default for StorageSection {
@@ -202,6 +208,7 @@ impl Default for StorageSection {
             data_file: default_data_file(),
             log_dir: default_log_dir(),
             events_file: default_events_file(),
+            events_keep_days: default_events_keep_days(),
         }
     }
 }
@@ -299,11 +306,14 @@ fn default_ota_verify_timeout() -> u64 {
 fn default_data_file() -> PathBuf {
     "./data/snapshot.json".into()
 }
-fn default_events_file() -> PathBuf {
-    "./data/events.json".into()
-}
 fn default_log_dir() -> PathBuf {
     "./logs".into()
+}
+fn default_events_file() -> PathBuf {
+    "./data/events.db".into()
+}
+fn default_events_keep_days() -> u64 {
+    30
 }
 fn default_log_level() -> String {
     "info".to_string()

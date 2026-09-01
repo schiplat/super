@@ -64,6 +64,10 @@ async fn setup_system_full() -> (
     let (tx, rx) = mpsc::channel(32);
     let log_reloader = Box::new(|_| Ok(()));
 
+    let event_db = super_core::event_db::EventDb::open(&root.join("events.db"))
+        .await
+        .unwrap();
+
     let manager = Manager::new(
         config,
         config_file,
@@ -71,9 +75,9 @@ async fn setup_system_full() -> (
         rx,
         tx.clone(),
         HashMap::new(),
-        HashMap::new(),
         log_tx,
         Box::new(NoOpExtension),
+        event_db,
     );
 
     tokio::spawn(async move {

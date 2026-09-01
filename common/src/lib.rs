@@ -850,12 +850,25 @@ impl SystemEvent {
     }
 }
 
-/// One persisted runtime/exception event in a program's lifecycle history.
+/// One persisted event in a program's (or the system's) history.
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct ProgramEventRecord {
     /// Unix timestamp (seconds).
     pub ts: u64,
-    /// Event type: `process_fatal`, `process_backoff`, `process_recovered`, or `process_exit`.
+    /// Unix timestamp (milliseconds) — precise time point, stable ordering.
+    pub ts_ms: u64,
+    /// Owning program id, if this is a program-scoped event (global events like
+    /// `system_startup` have none).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub program_id: Option<Uuid>,
+    /// Owning program name, if any.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub program_name: Option<String>,
+    /// Event type, aligned with `SystemEvent::event_type()` where applicable:
+    /// `process_fatal`, `process_backoff`, `process_started`, `process_recovered`,
+    /// `process_exit`, `health_restart`, `system_startup`, `system_shutdown`,
+    /// `memory_pressure`, `memory_oom_kill`, `cron_started`, `cron_exit`,
+    /// `cron_spawn_failed`, `queue_full`.
     pub event: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub exit_code: Option<i32>,
@@ -864,7 +877,31 @@ pub struct ProgramEventRecord {
     pub signal: Option<i32>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub retry_count: Option<u32>,
+    /// Execution duration in seconds, when the event represents a completed run
+    /// (`cron_exit`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub duration_secs: Option<u64>,
     pub msg: String,
+}
+
+/// One row of an `event_type`/count aggregation.
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+pub struct EventTypeCount {
+    pub event: String,
+    pub count: u64,
+}
+
+/// Retention statistics for a program or the whole event history.
+#[derive(Debug, Clone, Default, Serialize, Deserialize, ToSchema)]
+pub struct EventStats {
+    pub total: u64,
+    pub by_type: Vec<EventTypeCount>,
+    /// Earliest retained timestamp (Unix seconds), if any.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub first_ts: Option<u64>,
+    /// Latest retained timestamp (Unix seconds), if any.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub last_ts: Option<u64>,
 }
 
 #[derive(Debug, Deserialize, Serialize, ToSchema)]

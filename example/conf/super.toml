@@ -28,6 +28,12 @@ max_size_mb = 10    # max 10MB per child log
 max_backups = 5     # keep 5 backups per child
 max_line_size_kb = 64   # max line length
 
+# Data storage & event retention (relative paths resolve under SUPER_ROOT)
+[storage]
+data_file = "./data/snapshot.json"  # runtime program snapshot
+events_file = "./data/events.db"    # SQLite event history
+events_keep_days = 30               # prune events older than 30 days; 0 = keep everything
+
 # Program stack files: TOML by default (see conf.d/extra-services.toml).
 # Legacy .json stacks are still parsed. Applied on daemon start and `super reload`.
 [include]

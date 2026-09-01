@@ -8,7 +8,7 @@ members = [
 ]
 
 [workspace.package]
-version = "1.4.0"
+version = "1.5.0"
 edition = "2024"
 license = "MIT"
 rust-version = "1.85"
@@ -38,6 +38,8 @@ tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt"] }
 axum = { version = "0.8.1", features = ["ws", "macros"] }
 tower-http = { version = "0.6.2", features = ["cors", "fs", "trace"] }
 reqwest = { version = "0.12", features = ["json", "stream"] }
+# SQLite persistence for event history (SQL querying, stats, migrations)
+sqlx = { version = "0.8", features = ["runtime-tokio", "sqlite", "migrate"] }
 
 tokio-tungstenite = { version = "0.20", features = ["native-tls"] }
 futures-util = "0.3"

@@ -1,10 +1,7 @@
-use common::{ProgramConfig, ProgramEventRecord};
+use common::ProgramConfig;
 use std::collections::{HashMap, HashSet};
 use tokio::task::JoinHandle;
 use uuid::Uuid;
-
-/// Maximum number of persisted lifecycle events kept per program (oldest dropped).
-pub const MAX_EVENTS_PER_PROGRAM: usize = 100;
 
 /// Runtime state (formerly private to Manager; now public).
 pub struct RuntimeState {
@@ -52,20 +49,12 @@ pub struct ProcessRegistry {
     /// with `retry_limit`.
     pub health_restart_count: HashMap<Uuid, u32>,
 
-    /// Persisted lifecycle/exception event history (keyed by program id).
-    pub events: HashMap<Uuid, Vec<ProgramEventRecord>>,
-
     // Dirty flag (persistence)
     pub dirty: bool,
-    /// Whether the event history changed since last flush.
-    pub events_dirty: bool,
 }
 
 impl ProcessRegistry {
-    pub fn new(
-        initial_programs: HashMap<Uuid, ProgramConfig>,
-        initial_events: HashMap<Uuid, Vec<ProgramEventRecord>>,
-    ) -> Self {
+    pub fn new(initial_programs: HashMap<Uuid, ProgramConfig>) -> Self {
         Self {
             programs: initial_programs,
             running: HashMap::new(),
@@ -74,34 +63,7 @@ impl ProcessRegistry {
             crashed: HashSet::new(),
             startup_errors: HashMap::new(),
             health_restart_count: HashMap::new(),
-            events: initial_events,
             dirty: false,
-            events_dirty: false,
-        }
-    }
-
-    /// Append a lifecycle event to a program's history, capping the retained size.
-    pub fn push_event(&mut self, id: Uuid, record: ProgramEventRecord) {
-        let bucket = self.events.entry(id).or_default();
-        bucket.push(record);
-        if bucket.len() > MAX_EVENTS_PER_PROGRAM {
-            let excess = bucket.len() - MAX_EVENTS_PER_PROGRAM;
-            bucket.drain(..excess);
-        }
-        self.dirty = true;
-        self.events_dirty = true;
-    }
-
-    /// Immutable event history for a program (empty if none).
-    pub fn get_events(&self, id: &Uuid) -> Vec<ProgramEventRecord> {
-        self.events.get(id).cloned().unwrap_or_default()
-    }
-
-    /// Drop event history for a program (used on remove).
-    pub fn remove_events(&mut self, id: &Uuid) {
-        if self.events.remove(id).is_some() {
-            self.dirty = true;
-            self.events_dirty = true;
         }
     }
 

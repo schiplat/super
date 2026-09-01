@@ -11,7 +11,7 @@ use uuid::Uuid;
 struct NoopExtension;
 impl Extension for NoopExtension {}
 
-fn manager_with_temp(log_dir: std::path::PathBuf) -> (ManagerHandle, tempfile::TempDir) {
+async fn manager_with_temp(log_dir: std::path::PathBuf) -> (ManagerHandle, tempfile::TempDir) {
     let (log_tx, _) = broadcast::channel(100);
     let temp_dir = tempfile::tempdir().unwrap();
     let data_file = temp_dir.path().join("data.json");
@@ -21,6 +21,9 @@ fn manager_with_temp(log_dir: std::path::PathBuf) -> (ManagerHandle, tempfile::T
     config.storage.log_dir = log_dir;
 
     let (cmd_tx, cmd_rx) = mpsc::channel(100);
+    let event_db = super_core::event_db::EventDb::open(&temp_dir.path().join("events.db"))
+        .await
+        .unwrap();
     let manager = Manager::new(
         config,
         temp_dir.path().join("super.toml"),
@@ -28,9 +31,9 @@ fn manager_with_temp(log_dir: std::path::PathBuf) -> (ManagerHandle, tempfile::T
         cmd_rx,
         cmd_tx.clone(),
         HashMap::new(),
-        HashMap::new(),
         log_tx,
         Box::new(NoopExtension),
+        event_db,
     );
     tokio::spawn(async move {
         manager.run().await;
@@ -134,7 +137,7 @@ fn event_retry_counts(events: &[ProgramEventRecord], kind: &str) -> Vec<u32> {
 #[tokio::test]
 async fn health_failures_restart_then_fatal_after_retry_limit() {
     let logs = tempfile::tempdir().unwrap();
-    let (handle, _temp) = manager_with_temp(logs.path().to_path_buf());
+    let (handle, _temp) = manager_with_temp(logs.path().to_path_buf()).await;
 
     // Always fails; interval 1s, restart after 1 failure, retry_limit 2.
     let id = spawn_with_health(&handle, "doomed", "exit 1".to_string(), 1, 0, 1, 2).await;
@@ -196,7 +199,7 @@ async fn health_failures_restart_then_fatal_after_retry_limit() {
 #[tokio::test]
 async fn max_failures_zero_disables_restart() {
     let logs = tempfile::tempdir().unwrap();
-    let (handle, _temp) = manager_with_temp(logs.path().to_path_buf());
+    let (handle, _temp) = manager_with_temp(logs.path().to_path_buf()).await;
 
     let id = spawn_with_health(
         &handle,
@@ -237,7 +240,7 @@ async fn max_failures_zero_disables_restart() {
 async fn recovery_resets_health_restart_counter() {
     let logs = tempfile::tempdir().unwrap();
     let flag = logs.path().join("ready.flag");
-    let (handle, _temp) = manager_with_temp(logs.path().to_path_buf());
+    let (handle, _temp) = manager_with_temp(logs.path().to_path_buf()).await;
 
     let health_cmd = format!("[ -f {} ] && exit 0 || exit 1", flag.display());
     let id = spawn_with_health(&handle, "recoverer", health_cmd, 1, 0, 1, 3).await;
@@ -294,7 +297,7 @@ async fn recovery_resets_health_restart_counter() {
 async fn start_period_delays_first_probe() {
     let logs = tempfile::tempdir().unwrap();
     let probes = logs.path().join("probes.log");
-    let (handle, _temp) = manager_with_temp(logs.path().to_path_buf());
+    let (handle, _temp) = manager_with_temp(logs.path().to_path_buf()).await;
 
     let health_cmd = format!("echo probe >> {}; exit 0", probes.display());
     let id = spawn_with_health(&handle, "graceful", health_cmd, 1, 3, 0, 3).await;
@@ -324,7 +327,7 @@ async fn start_period_delays_first_probe() {
 async fn interval_controls_probe_cadence() {
     let logs = tempfile::tempdir().unwrap();
     let probes = logs.path().join("probes.log");
-    let (handle, _temp) = manager_with_temp(logs.path().to_path_buf());
+    let (handle, _temp) = manager_with_temp(logs.path().to_path_buf()).await;
 
     let health_cmd = format!("echo probe >> {}; exit 0", probes.display());
     let id = spawn_with_health(&handle, "metered", health_cmd, 1, 0, 0, 3).await;
