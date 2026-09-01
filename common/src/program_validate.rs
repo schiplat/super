@@ -63,6 +63,7 @@ pub fn validate_create_program_request(
     if let Some(limits) = &req.resource_limits {
         validate_resource_limits_create(limits)?;
     }
+    validate_cron_concurrency(req.max_concurrent, req.max_queued)?;
     Ok(())
 }
 
@@ -89,6 +90,30 @@ pub fn validate_update_program_request(
     )?;
     if let Some(artifact) = &req.artifact {
         validate_artifact_config(artifact)?;
+    }
+    validate_cron_concurrency(req.max_concurrent, req.max_queued)?;
+    Ok(())
+}
+
+/// Shared bounds for cron concurrency fields (create and update).
+fn validate_cron_concurrency(
+    max_concurrent: Option<u32>,
+    max_queued: Option<u32>,
+) -> anyhow::Result<()> {
+    if let Some(c) = max_concurrent {
+        if c == 0 {
+            // 0 means "use the default" — allowed, same as unset.
+        } else if c > crate::MAX_CONCURRENT_CAP {
+            bail!(
+                "max_concurrent: must be ≤ {} (got {c})",
+                crate::MAX_CONCURRENT_CAP
+            );
+        }
+    }
+    if let Some(q) = max_queued
+        && q > crate::MAX_QUEUED_CAP
+    {
+        bail!("max_queued: must be ≤ {} (got {q})", crate::MAX_QUEUED_CAP);
     }
     Ok(())
 }
@@ -159,16 +184,16 @@ fn validate_resource_limits_create(limits: &ResourceLimits) -> anyhow::Result<()
 fn validate_health_check(hc: Option<&HealthCheck>) -> anyhow::Result<()> {
     match hc {
         None | Some(HealthCheck::Disabled) => Ok(()),
-        Some(HealthCheck::Tcp { host, port }) => {
+        Some(check @ HealthCheck::Tcp { host, port, .. }) => {
             if host.trim().is_empty() {
                 bail!("health_check.host: must not be empty");
             }
             if *port == 0 {
                 bail!("health_check.port: must not be 0");
             }
-            Ok(())
+            validate_health_tuning(check)
         }
-        Some(HealthCheck::Http { url, method }) => {
+        Some(check @ HealthCheck::Http { url, method, .. }) => {
             let u = url.trim();
             if !(u.starts_with("http://") || u.starts_with("https://")) {
                 bail!("health_check.url: must start with http:// or https:// (got {u:?})");
@@ -179,15 +204,48 @@ fn validate_health_check(hc: Option<&HealthCheck>) -> anyhow::Result<()> {
                     bail!("health_check.method: must be GET, HEAD, or POST (got {method:?})");
                 }
             }
-            Ok(())
+            validate_health_tuning(check)
         }
-        Some(HealthCheck::Exec { command }) => {
+        Some(check @ HealthCheck::Exec { command, .. }) => {
             if command.trim().is_empty() {
                 bail!("health_check.command: must not be empty");
             }
-            Ok(())
+            validate_health_tuning(check)
         }
     }
+}
+
+/// Shared bounds for the health probe tuning knobs.
+fn validate_health_tuning(hc: &HealthCheck) -> anyhow::Result<()> {
+    let interval = hc.interval_secs();
+    if interval == 0 || interval > crate::MAX_HEALTH_INTERVAL_SECS {
+        bail!(
+            "health_check.interval_secs: must be 0 (default) or 1..={} (got {interval})",
+            crate::MAX_HEALTH_INTERVAL_SECS
+        );
+    }
+    let timeout = hc.timeout_secs();
+    if timeout == 0 || timeout > crate::MAX_HEALTH_TIMEOUT_SECS {
+        bail!(
+            "health_check.timeout_secs: must be 0 (default) or 1..={} (got {timeout})",
+            crate::MAX_HEALTH_TIMEOUT_SECS
+        );
+    }
+    let start_period = hc.start_period_secs();
+    if start_period > crate::MAX_HEALTH_INTERVAL_SECS {
+        bail!(
+            "health_check.start_period_secs: must be 0 (default) or 1..={} (got {start_period})",
+            crate::MAX_HEALTH_INTERVAL_SECS
+        );
+    }
+    if hc.max_failures() > crate::MAX_HEALTH_MAX_FAILURES {
+        bail!(
+            "health_check.max_failures: must be 0 (disabled) or 1..={} (got {})",
+            crate::MAX_HEALTH_MAX_FAILURES,
+            hc.max_failures()
+        );
+    }
+    Ok(())
 }
 
 #[cfg(test)]
@@ -225,11 +283,77 @@ mod tests {
         req.health_check = Some(HealthCheck::Http {
             url: "127.0.0.1/health".into(),
             method: None,
+            interval_secs: 0,
+            timeout_secs: 0,
+            start_period_secs: 0,
+            max_failures: 0,
         });
         let err = validate_create_program_request(&req, dir.path()).unwrap_err();
         let msg = err.to_string();
         assert!(msg.contains("health_check.url"), "{msg}");
         assert!(msg.contains("127.0.0.1/health"), "{msg}");
+    }
+
+    #[test]
+    fn create_rejects_health_tuning_out_of_bounds() {
+        let dir = tmp_logs();
+        let mut req = minimal_create("/bin/true");
+        req.health_check = Some(HealthCheck::Exec {
+            command: "true".into(),
+            interval_secs: crate::MAX_HEALTH_INTERVAL_SECS + 1,
+            timeout_secs: 0,
+            start_period_secs: 0,
+            max_failures: 0,
+        });
+        let err = validate_create_program_request(&req, dir.path()).unwrap_err();
+        assert!(err.to_string().contains("interval_secs"), "{err}");
+
+        let mut req = minimal_create("/bin/true");
+        req.health_check = Some(HealthCheck::Exec {
+            command: "true".into(),
+            interval_secs: 0,
+            timeout_secs: crate::MAX_HEALTH_TIMEOUT_SECS + 1,
+            start_period_secs: 0,
+            max_failures: 0,
+        });
+        let err = validate_create_program_request(&req, dir.path()).unwrap_err();
+        assert!(err.to_string().contains("timeout_secs"), "{err}");
+
+        let mut req = minimal_create("/bin/true");
+        req.health_check = Some(HealthCheck::Exec {
+            command: "true".into(),
+            interval_secs: 0,
+            timeout_secs: 0,
+            start_period_secs: crate::MAX_HEALTH_INTERVAL_SECS + 1,
+            max_failures: 0,
+        });
+        let err = validate_create_program_request(&req, dir.path()).unwrap_err();
+        assert!(err.to_string().contains("start_period_secs"), "{err}");
+
+        let mut req = minimal_create("/bin/true");
+        req.health_check = Some(HealthCheck::Exec {
+            command: "true".into(),
+            interval_secs: 0,
+            timeout_secs: 0,
+            start_period_secs: 0,
+            max_failures: crate::MAX_HEALTH_MAX_FAILURES + 1,
+        });
+        let err = validate_create_program_request(&req, dir.path()).unwrap_err();
+        assert!(err.to_string().contains("max_failures"), "{err}");
+    }
+
+    #[test]
+    fn create_accepts_health_tuning_defaults_and_zero() {
+        let dir = tmp_logs();
+        let mut req = minimal_create("/bin/true");
+        req.health_check = Some(HealthCheck::Exec {
+            command: "true".into(),
+            interval_secs: 0,
+            timeout_secs: 0,
+            start_period_secs: 0,
+            max_failures: 0,
+        });
+        validate_create_program_request(&req, dir.path()).unwrap();
     }
 
     #[test]
@@ -282,5 +406,85 @@ mod tests {
             err.to_string(),
             "services[2] (name=web): command: must not be empty"
         );
+    }
+
+    #[test]
+    fn create_rejects_max_concurrent_over_cap() {
+        let dir = tmp_logs();
+        let mut req = minimal_create("/bin/true");
+        req.max_concurrent = Some(crate::MAX_CONCURRENT_CAP + 1);
+        let err = validate_create_program_request(&req, dir.path()).unwrap_err();
+        assert!(err.to_string().contains("max_concurrent"), "{err}");
+    }
+
+    #[test]
+    fn create_rejects_max_queued_over_cap() {
+        let dir = tmp_logs();
+        let mut req = minimal_create("/bin/true");
+        req.max_queued = Some(crate::MAX_QUEUED_CAP + 1);
+        let err = validate_create_program_request(&req, dir.path()).unwrap_err();
+        assert!(err.to_string().contains("max_queued"), "{err}");
+    }
+
+    #[test]
+    fn create_accepts_zero_and_defaults() {
+        let dir = tmp_logs();
+        let mut req = minimal_create("/bin/true");
+        req.max_concurrent = Some(0); // 0 means default
+        req.max_queued = Some(0);
+        validate_create_program_request(&req, dir.path()).unwrap();
+    }
+
+    #[test]
+    fn update_validates_cron_concurrency_bounds() {
+        let dir = tmp_logs();
+        let req = UpdateProgramRequest {
+            max_concurrent: Some(crate::MAX_CONCURRENT_CAP + 1),
+            max_queued: Some(3),
+            ..Default::default()
+        };
+        let err = validate_update_program_request(&req, dir.path()).unwrap_err();
+        assert!(err.to_string().contains("max_concurrent"), "{err}");
+
+        let req = UpdateProgramRequest {
+            max_concurrent: Some(4),
+            max_queued: Some(crate::MAX_QUEUED_CAP + 1),
+            ..Default::default()
+        };
+        let err = validate_update_program_request(&req, dir.path()).unwrap_err();
+        assert!(err.to_string().contains("max_queued"), "{err}");
+    }
+
+    #[test]
+    fn effective_values_normalize() {
+        use crate::ProgramConfig;
+
+        let default = ProgramConfig {
+            name: "x".into(),
+            command: "true".into(),
+            ..Default::default()
+        };
+        assert_eq!(default.max_concurrent_eff(), 1);
+        assert_eq!(default.max_queued_eff(), 100);
+
+        let zero = ProgramConfig {
+            name: "x".into(),
+            command: "true".into(),
+            max_concurrent: Some(0),
+            max_queued: Some(0),
+            ..Default::default()
+        };
+        assert_eq!(zero.max_concurrent_eff(), 1);
+        assert_eq!(zero.max_queued_eff(), 100);
+
+        let capped = ProgramConfig {
+            name: "x".into(),
+            command: "true".into(),
+            max_concurrent: Some(crate::MAX_CONCURRENT_CAP * 2),
+            max_queued: Some(crate::MAX_QUEUED_CAP * 2),
+            ..Default::default()
+        };
+        assert_eq!(capped.max_concurrent_eff(), crate::MAX_CONCURRENT_CAP);
+        assert_eq!(capped.max_queued_eff(), crate::MAX_QUEUED_CAP);
     }
 }

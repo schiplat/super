@@ -3,8 +3,8 @@ use crate::client::{self, ApiClient, ApiResponse, WaitTarget};
 use crate::display;
 use common::{
     ArtifactConfig, AutorestartPolicy, BatchAction, BatchProgramRequest, BatchProgramResponse,
-    CreateProgramRequest, ProgramInfo, ProgramLogsResponse, ProgramSummary, ResourceLimits,
-    StackApplyRequest, UpdateProgramRequest,
+    CreateProgramRequest, CronCatchup, CronOverlap, ProgramInfo, ProgramLogsResponse,
+    ProgramSummary, ResourceLimits, StackApplyRequest, UpdateProgramRequest,
 };
 use common::{CreateTokenRequest, CreateTokenResponse, UserRole};
 use std::collections::HashMap;
@@ -35,6 +35,24 @@ fn parse_autorestart(s: &str) -> anyhow::Result<AutorestartPolicy> {
         _ => Err(anyhow::anyhow!(
             "autorestart must be unexpected, true, or false"
         )),
+    }
+}
+
+fn parse_cron_overlap(s: &str) -> anyhow::Result<CronOverlap> {
+    match s.to_lowercase().as_str() {
+        "skip" => Ok(CronOverlap::Skip),
+        "queue" => Ok(CronOverlap::Queue),
+        "kill" => Ok(CronOverlap::Kill),
+        _ => Err(anyhow::anyhow!("on-overlap must be skip, queue, or kill")),
+    }
+}
+
+fn parse_cron_catchup(s: &str) -> anyhow::Result<CronCatchup> {
+    match s.to_lowercase().as_str() {
+        "skip" => Ok(CronCatchup::Skip),
+        "latest" => Ok(CronCatchup::Latest),
+        "all" => Ok(CronCatchup::All),
+        _ => Err(anyhow::anyhow!("catchup must be skip, latest, or all")),
     }
 }
 
@@ -384,6 +402,11 @@ pub async fn handle_add(ctx: &Context, cmd: &args::Commands) -> anyhow::Result<(
         numprocs,
         process_name,
         cron,
+        on_overlap,
+        catchup,
+        jitter,
+        max_concurrent,
+        max_queued,
         cpu,
         memory,
         memory_warn_percent,
@@ -457,6 +480,16 @@ pub async fn handle_add(ctx: &Context, cmd: &args::Commands) -> anyhow::Result<(
             None => None,
         };
 
+        let on_overlap_policy = match on_overlap.as_deref() {
+            Some(s) => Some(parse_cron_overlap(s)?),
+            None => None,
+        };
+
+        let catchup_policy = match catchup.as_deref() {
+            Some(s) => Some(parse_cron_catchup(s)?),
+            None => None,
+        };
+
         let payload = CreateProgramRequest {
             name: name.clone(),
             command: command.clone(),
@@ -475,6 +508,11 @@ pub async fn handle_add(ctx: &Context, cmd: &args::Commands) -> anyhow::Result<(
             hooks: Default::default(),
             artifact: None,
             cron: cron.clone(),
+            on_overlap: on_overlap_policy,
+            catchup: catchup_policy,
+            jitter_sec: *jitter,
+            max_concurrent: *max_concurrent,
+            max_queued: *max_queued,
             resource_limits: limits,
             autorestart: autorestart_policy.unwrap_or_default(),
             exitcodes: exitcodes.clone().unwrap_or(vec![0]),
@@ -533,6 +571,11 @@ pub async fn handle_update(ctx: &Context, cmd: &args::Commands) -> anyhow::Resul
         exitcodes,
         startsecs,
         stopsecs,
+        on_overlap,
+        catchup,
+        jitter,
+        max_concurrent,
+        max_queued,
         artifact_url,
         artifact_sha256,
         artifact_destination,
@@ -654,6 +697,17 @@ pub async fn handle_update(ctx: &Context, cmd: &args::Commands) -> anyhow::Resul
             hooks: None,
             artifact,
             cron: cron.clone(),
+            on_overlap: match on_overlap.as_deref() {
+                Some(s) => Some(parse_cron_overlap(s)?),
+                None => None,
+            },
+            catchup: match catchup.as_deref() {
+                Some(s) => Some(parse_cron_catchup(s)?),
+                None => None,
+            },
+            jitter_sec: *jitter,
+            max_concurrent: *max_concurrent,
+            max_queued: *max_queued,
             resource_limits: limits,
             ..Default::default()
         };

@@ -186,6 +186,21 @@ pub fn print_info(info: ProgramInfo) {
     }
     if let Some(cron) = &info.config.cron {
         println!("Cron:      {}", cron);
+        if let Some(o) = &info.config.on_overlap {
+            println!("Overlap:   {:?}", o);
+        }
+        if let Some(c) = &info.config.catchup {
+            println!("Catchup:   {:?}", c);
+        }
+        if let Some(j) = info.config.jitter_sec {
+            println!("Jitter:    {}s", j);
+        }
+        if let Some(mc) = info.config.max_concurrent {
+            println!("MaxConc:   {}", mc);
+        }
+        if let Some(mq) = info.config.max_queued {
+            println!("MaxQueued: {}", mq);
+        }
     }
 
     // Print env file reference
@@ -201,14 +216,26 @@ pub fn print_info(info: ProgramInfo) {
     }
 
     if let Some(hc) = &info.config.health_check {
+        let tuning = format!(
+            " [every {}s, timeout {}s, start {}s, restart after {}x]",
+            hc.interval_secs(),
+            hc.timeout_secs(),
+            hc.start_period_secs(),
+            hc.max_failures()
+        );
         match hc {
-            HealthCheck::Tcp { port, host } => println!("Health:    TCP {}:{}", host, port),
-            HealthCheck::Http { url, method } => println!(
-                "Health:    HTTP {} {}",
+            HealthCheck::Tcp { port, host, .. } => {
+                println!("Health:    TCP {}:{}{}", host, port, tuning)
+            }
+            HealthCheck::Http { url, method, .. } => println!(
+                "Health:    HTTP {} {}{}",
                 method.as_deref().unwrap_or("GET"),
-                url
+                url,
+                tuning
             ),
-            HealthCheck::Exec { command } => println!("Health:    EXEC '{}'", command),
+            HealthCheck::Exec { command, .. } => {
+                println!("Health:    EXEC '{}'{}", command, tuning)
+            }
 
             // Server usually maps Disabled to None; edge cases may still see it
             HealthCheck::Disabled => println!("Health:    Disabled (Pending Removal)"),

@@ -61,15 +61,26 @@ impl LifecycleController {
         retry_count: u32,
     ) -> anyhow::Result<()> {
         // 1. Basic checks
-        if registry.running.contains_key(&id) {
-            return Err(anyhow::anyhow!("Program is already running"));
-        }
-
         let config = registry
             .programs
             .get(&id)
-            .ok_or_else(|| anyhow::anyhow!("Program not found"))?
-            .clone();
+            .cloned()
+            .ok_or_else(|| anyhow::anyhow!("Program not found"))?;
+
+        // Scheduled tasks with `max_concurrent > 1` may run several instances
+        // at once; everything else allows a single running instance.
+        let max_concurrent = config.max_concurrent_eff() as usize;
+        if registry.running_count(&id) >= max_concurrent {
+            let msg = if config.cron.is_some() {
+                format!(
+                    "Program is already running at max_concurrent={}",
+                    config.max_concurrent_eff()
+                )
+            } else {
+                "Program is already running".to_string()
+            };
+            return Err(anyhow::anyhow!(msg));
+        }
 
         let program_name = config.name.clone();
 
@@ -161,7 +172,7 @@ impl LifecycleController {
 
                 match dep_id {
                     Some(did) => {
-                        if let Some(state) = registry.running.get(&did) {
+                        if let Some(state) = registry.get_running(&did) {
                             if !state.is_healthy {
                                 all_ready = false;
                                 missing_deps.push(format!("{} (Not Healthy)", dep_name));
@@ -207,7 +218,7 @@ impl LifecycleController {
                 // Kick off eligible dependencies. They go through the normal start
                 // path; once healthy, the waiting queue re-tries this program.
                 for did in auto_start_deps {
-                    if registry.running.contains_key(&did) {
+                    if registry.is_running(&did) {
                         continue;
                     }
                     tracing::info!("Program {} auto-starting dependency {}", config.name, did);
@@ -430,29 +441,74 @@ impl LifecycleController {
         let mut is_healthy = false;
 
         if let Some(check_config) = &config.health_check {
-            let tx = self.tx_self.clone();
-            let check = check_config.clone();
+            if check_config.is_enabled() {
+                let tx = self.tx_self.clone();
+                let check = check_config.clone();
+                // Read tuning before entering the async block (they are cheap).
+                let interval = check.interval_secs().max(1);
+                let start_period = check.start_period_secs();
+                let max_failures = check.max_failures();
 
-            // Start background health check task
-            health_task = Some(tokio::spawn(async move {
-                // Wait briefly for process to stabilize
-                tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
-                loop {
-                    let outcome = health::perform_check(&check).await;
-                    if tx
+                // Start background health check task
+                health_task = Some(tokio::spawn(async move {
+                    // Grace period before the first probe (start_period_secs)
+                    tokio::time::sleep(tokio::time::Duration::from_secs(start_period)).await;
+                    let mut consecutive_failures = 0u32;
+                    loop {
+                        let outcome = health::perform_check(&check).await;
+                        if outcome.healthy {
+                            consecutive_failures = 0;
+                        } else {
+                            consecutive_failures += 1;
+                        }
+                        if tx
+                            .send(Command::InternalHealthUpdate {
+                                id,
+                                is_healthy: outcome.healthy,
+                                failure_detail: outcome.detail.clone(),
+                            })
+                            .await
+                            .is_err()
+                        {
+                            break;
+                        }
+                        // Auto-restart after `max_failures` consecutive failures
+                        // (0 disables). A fresh health task is spawned with the
+                        // new process, so this task ends here.
+                        if max_failures > 0 && consecutive_failures >= max_failures {
+                            let detail = outcome
+                                .detail
+                                .unwrap_or_else(|| "health check failed".to_string());
+                            if tx
+                                .send(Command::HealthRestart {
+                                    id,
+                                    failure_detail: detail,
+                                })
+                                .await
+                                .is_err()
+                            {
+                                break;
+                            }
+                            break;
+                        }
+                        tokio::time::sleep(tokio::time::Duration::from_secs(interval)).await;
+                    }
+                }));
+            } else {
+                // Disabled health check; treat as healthy.
+                is_healthy = true;
+                let tx = self.tx_self.clone();
+                tokio::spawn(async move {
+                    tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+                    let _ = tx
                         .send(Command::InternalHealthUpdate {
                             id,
-                            is_healthy: outcome.healthy,
-                            failure_detail: outcome.detail,
+                            is_healthy: true,
+                            failure_detail: None,
                         })
-                        .await
-                        .is_err()
-                    {
-                        break;
-                    }
-                    tokio::time::sleep(tokio::time::Duration::from_secs(5)).await;
-                }
-            }));
+                        .await;
+                });
+            }
         } else {
             // No health check configured; treat as healthy by default
             is_healthy = true;
@@ -473,7 +529,7 @@ impl LifecycleController {
         }
 
         // 13. Record runtime state
-        registry.running.insert(
+        registry.insert_running(
             id,
             RuntimeState {
                 pid,
@@ -548,7 +604,15 @@ impl LifecycleController {
                     (None, None)
                 }
             };
-            if let Err(e) = tx.send(Command::ProcessExited { id, code, signal }).await {
+            if let Err(e) = tx
+                .send(Command::ProcessExited {
+                    id,
+                    pid,
+                    code,
+                    signal,
+                })
+                .await
+            {
                 tracing::error!("Failed to send ProcessExited for {}: {}", id, e);
             }
         });
@@ -643,70 +707,81 @@ impl LifecycleController {
         }
         registry.mark_dirty();
 
-        // 1. Try to get PID
-        let target_pid = if let Some(state) = registry.running.get_mut(&id) {
-            state.stopping = true;
-            Some(state.pid)
-        } else {
-            None
-        };
+        // Collect every running instance (a scheduled task may have several
+        // overlapping instances when `max_concurrent > 1`).
+        let running_states: Vec<u32> = registry
+            .get_running_all(&id)
+            .iter()
+            .map(|s| s.pid)
+            .collect();
+
+        // Mark all as stopping so exit handling does not auto-restart them.
+        if let Some(states) = registry.get_running_all_mut(&id) {
+            for state in states.iter_mut() {
+                state.stopping = true;
+            }
+        }
 
         // Case 1: Running
-        if let Some(pid) = target_pid {
+        if let Some(primary_pid) = running_states.first().copied() {
             // [Hook] Pre-Stop
             if let Some(config) = registry.programs.get(&id)
                 && let Some(cmd) = &config.hooks.pre_stop
             {
-                let envs = self.build_context(id, config, Some(pid), None, None);
+                let envs = self.build_context(id, config, Some(primary_pid), None, None);
                 use crate::hooks;
                 tracing::info!("Executing pre-stop hook for {}", config.name);
                 let _ = hooks::run_hook(cmd, &envs).await;
             }
 
-            // Send stop signal
-            if force {
-                tracing::warn!("Force stopping program group: {} (PGID: {})", id, pid);
-                if let Err(e) = signal::kill(Pid::from_raw(-(pid as i32)), Signal::SIGKILL) {
-                    // Process not found; already exited — trigger cleanup
-                    if e == nix::errno::Errno::ESRCH {
-                        tracing::warn!(
-                            "Process {} (PGID {}) not found during force stop. Assuming exited.",
-                            id,
-                            pid
-                        );
-                        let _ = self
-                            .tx_self
-                            .send(Command::ProcessExited {
+            for pid in &running_states {
+                // Send stop signal
+                if force {
+                    tracing::warn!("Force stopping program group: {} (PGID: {})", id, pid);
+                    if let Err(e) = signal::kill(Pid::from_raw(-(*pid as i32)), Signal::SIGKILL) {
+                        // Process not found; already exited — trigger cleanup
+                        if e == nix::errno::Errno::ESRCH {
+                            tracing::warn!(
+                                "Process {} (PGID {}) not found during force stop. Assuming exited.",
                                 id,
-                                code: None,
-                                signal: None,
-                            })
-                            .await;
-                        return Ok(());
+                                pid
+                            );
+                            let _ = self
+                                .tx_self
+                                .send(Command::ProcessExited {
+                                    id,
+                                    pid: *pid,
+                                    code: None,
+                                    signal: None,
+                                })
+                                .await;
+                            continue;
+                        }
                     }
-                }
-            } else {
-                tracing::info!("Stopping program group: {} (PGID: {})", id, pid);
-                if let Err(e) = signal::kill(Pid::from_raw(-(pid as i32)), Signal::SIGTERM) {
-                    // ESRCH on signal: treat as exited immediately, do not wait for timeout
-                    if e == nix::errno::Errno::ESRCH {
-                        tracing::warn!(
-                            "Process {} (PGID {}) not found during stop. Assuming exited.",
-                            id,
-                            pid
-                        );
-                        // Send ProcessExited to Manager for cleanup
-                        let _ = self
-                            .tx_self
-                            .send(Command::ProcessExited {
+                } else {
+                    tracing::info!("Stopping program group: {} (PGID: {})", id, pid);
+                    if let Err(e) = signal::kill(Pid::from_raw(-(*pid as i32)), Signal::SIGTERM) {
+                        // ESRCH on signal: treat as exited immediately, do not wait for timeout
+                        if e == nix::errno::Errno::ESRCH {
+                            tracing::warn!(
+                                "Process {} (PGID {}) not found during stop. Assuming exited.",
                                 id,
-                                code: None,
-                                signal: None,
-                            })
-                            .await;
-                        return Ok(());
+                                pid
+                            );
+                            // Send ProcessExited to Manager for cleanup
+                            let _ = self
+                                .tx_self
+                                .send(Command::ProcessExited {
+                                    id,
+                                    pid: *pid,
+                                    code: None,
+                                    signal: None,
+                                })
+                                .await;
+                            continue;
+                        }
+                        return Err(e.into());
                     }
-                    return Err(e.into());
                 }
             }
 
@@ -732,7 +807,7 @@ impl LifecycleController {
                 let _ = tx
                     .send(Command::CheckTimeoutKill {
                         id,
-                        target_pid: pid,
+                        target_pid: primary_pid,
                     })
                     .await;
             });

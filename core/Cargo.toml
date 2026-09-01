@@ -40,6 +40,7 @@ futures-util = "0.3"
 libloading = "0.8"
 mime_guess = "2.0"
 libc = "0.2"
+rand = "0.8"
 
 dotenvy = "0.15"
 

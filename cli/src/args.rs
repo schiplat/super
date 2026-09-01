@@ -48,6 +48,7 @@ pub enum Commands {
     Top,
 
     /// List all managed programs
+    #[command(alias = "ls")]
     List,
 
     /// Add a new program to be managed
@@ -91,6 +92,26 @@ pub enum Commands {
         /// Cron expression for scheduled tasks (e.g. "0 0 3 * * *")
         #[arg(long, help_heading = "Resource Isolation")]
         cron: Option<String>,
+
+        /// Cron overlap policy when the previous run is still active: skip (default), queue, kill
+        #[arg(long, value_parser = ["skip", "queue", "kill"])]
+        on_overlap: Option<String>,
+
+        /// Cron catchup policy for slots missed while the daemon was down: skip (default), latest, all
+        #[arg(long, value_parser = ["skip", "latest", "all"])]
+        catchup: Option<String>,
+
+        /// Max random delay (seconds) before each cron trigger to spread load
+        #[arg(long)]
+        jitter: Option<u64>,
+
+        /// Max overlapping cron runs allowed at once (default 1)
+        #[arg(long)]
+        max_concurrent: Option<u32>,
+
+        /// Cap on queued cron firings when at max_concurrent (default 100; 0 means default)
+        #[arg(long)]
+        max_queued: Option<u32>,
 
         /// CPU quota in cores (e.g. 1.5 for 1.5 cores; requires isolation plugin)
         #[arg(long, help_heading = "Resource Isolation")]
@@ -171,6 +192,26 @@ pub enum Commands {
         /// Cron expression for scheduled tasks
         #[arg(long, help_heading = "Resource Isolation")]
         cron: Option<String>,
+
+        /// Cron overlap policy when the previous run is still active: skip (default), queue, kill
+        #[arg(long, value_parser = ["skip", "queue", "kill"])]
+        on_overlap: Option<String>,
+
+        /// Cron catchup policy for slots missed while the daemon was down: skip (default), latest, all
+        #[arg(long, value_parser = ["skip", "latest", "all"])]
+        catchup: Option<String>,
+
+        /// Max random delay (seconds) before each cron trigger to spread load
+        #[arg(long)]
+        jitter: Option<u64>,
+
+        /// Max overlapping cron runs allowed at once (default 1; 0 means default)
+        #[arg(long)]
+        max_concurrent: Option<u32>,
+
+        /// Cap on queued cron firings when at max_concurrent (default 100; 0 means default)
+        #[arg(long)]
+        max_queued: Option<u32>,
 
         /// CPU quota in cores (requires isolation plugin)
         #[arg(long, help_heading = "Resource Isolation")]
@@ -263,6 +304,7 @@ pub enum Commands {
     },
 
     /// Restart program(s). Supports `all` or `@group`
+    #[command(alias = "rs")]
     Restart {
         target: String,
         /// Wait for the process to reach Running/Healthy state
@@ -293,6 +335,7 @@ pub enum Commands {
     },
 
     /// Stream or read logs for a specific program
+    #[command(alias = "log")]
     Logs {
         target: String,
         /// Read last N lines from disk (omit to stream live logs only)
@@ -368,4 +411,117 @@ pub enum TokenCommands {
     /// Revoke (delete) a token by ID
     #[command(alias = "rm")]
     Revoke { id: String },
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn add_parses_concurrency_flags() {
+        let cli = Cli::try_parse_from([
+            "super",
+            "add",
+            "--name",
+            "cron-job",
+            "--max-concurrent",
+            "4",
+            "--max-queued",
+            "250",
+            "echo",
+            "hi",
+        ])
+        .expect("add must parse");
+        match cli.command {
+            Commands::Add {
+                max_concurrent,
+                max_queued,
+                ..
+            } => {
+                assert_eq!(max_concurrent, Some(4));
+                assert_eq!(max_queued, Some(250));
+            }
+            _ => panic!("expected add command, got a different subcommand"),
+        }
+    }
+
+    #[test]
+    fn add_omitted_concurrency_flags_default_none() {
+        let cli = Cli::try_parse_from(["super", "add", "echo", "hi"]).expect("add must parse");
+        match cli.command {
+            Commands::Add {
+                max_concurrent,
+                max_queued,
+                ..
+            } => {
+                assert_eq!(max_concurrent, None);
+                assert_eq!(max_queued, None);
+            }
+            _ => panic!("expected add command, got a different subcommand"),
+        }
+    }
+
+    #[test]
+    fn update_parses_concurrency_flags() {
+        let cli = Cli::try_parse_from([
+            "super",
+            "update",
+            "my-job",
+            "--max-concurrent",
+            "3",
+            "--max-queued",
+            "0",
+        ])
+        .expect("update must parse");
+        match cli.command {
+            Commands::Update {
+                max_concurrent,
+                max_queued,
+                ..
+            } => {
+                assert_eq!(max_concurrent, Some(3));
+                assert_eq!(max_queued, Some(0));
+            }
+            _ => panic!("expected update command, got a different subcommand"),
+        }
+    }
+
+    #[test]
+    fn add_rejects_non_numeric_concurrency_flags() {
+        let err = Cli::try_parse_from([
+            "super",
+            "add",
+            "--max-concurrent",
+            "many",
+            "--max-queued",
+            "50",
+            "echo",
+        ]);
+        assert!(err.is_err(), "non-numeric max_concurrent must be rejected");
+    }
+
+    #[test]
+    fn subcommand_aliases_parse() {
+        for (alias, kind) in [
+            ("ls", "list"),
+            ("log", "logs"),
+            ("rs", "restart"),
+            ("rm", "remove"),
+        ] {
+            let args: Vec<&str> = if kind == "list" {
+                vec!["super", alias]
+            } else {
+                vec!["super", alias, "myapp"]
+            };
+            let cli = Cli::try_parse_from(&args)
+                .unwrap_or_else(|e| panic!("alias {alias:?} must parse: {e}"));
+            match cli.command {
+                Commands::List => assert_eq!(kind, "list"),
+                Commands::Logs { .. } => assert_eq!(kind, "logs"),
+                Commands::Restart { .. } => assert_eq!(kind, "restart"),
+                Commands::Remove { .. } => assert_eq!(kind, "remove"),
+                _ => panic!("alias {alias:?} resolved to an unexpected command"),
+            }
+        }
+    }
 }

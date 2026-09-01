@@ -87,6 +87,9 @@ pub enum Command {
 
     ProcessExited {
         id: Uuid,
+        /// PID of the instance that exited (disambiguates concurrent instances
+        /// of the same scheduled task).
+        pid: u32,
         code: Option<i32>,
         signal: Option<i32>,
     },
@@ -109,6 +112,13 @@ pub enum Command {
         id: Uuid,
         is_healthy: bool,
         failure_detail: Option<String>,
+    },
+
+    // Sent by the health probe task after `max_failures` consecutive failures:
+    // auto-restart the program (or give up if the retry limit is reached).
+    HealthRestart {
+        id: Uuid,
+        failure_detail: String,
     },
 
     // Declarative stack deployment

@@ -30,6 +30,17 @@ use std::time::Duration;
 use tokio::sync::{broadcast, mpsc};
 use uuid::Uuid;
 
+/// Upper bound for `catchup=all` backfills, so a long daemon outage cannot
+/// flood the machine with catch-up runs.
+const CRON_CATCHUP_CAP: u32 = 10;
+
+/// Reconstruct the last cron run instant from a persisted epoch timestamp.
+fn cron_last_run_dt(config: &ProgramConfig) -> Option<chrono::DateTime<chrono::Utc>> {
+    config
+        .cron_last_run
+        .and_then(|t| chrono::DateTime::<chrono::Utc>::from_timestamp(t as i64, 0))
+}
+
 /// Merge `resource_limits` from an update request into stored config.
 /// `-1.0` cpu / `0` memory / `0` warn+high are sentinels that clear a field.
 fn apply_resource_limits_patch(existing: &mut Option<ResourceLimits>, patch: ResourceLimits) {
@@ -133,6 +144,10 @@ pub struct Manager {
     scheduler: CronScheduler,
     monitor: Arc<ResourceMonitor>,
 
+    /// Cron runs queued behind a still-running instance (`overlap=queue`) or
+    /// waiting to be backfilled (`catchup=all`). Drained one run per tick.
+    pending_cron: HashMap<Uuid, u32>,
+
     extension: Arc<dyn Extension>,
 }
 impl Manager {
@@ -205,6 +220,7 @@ impl Manager {
             controller,
             scheduler,
             monitor,
+            pending_cron: HashMap::new(),
             extension,
         }
     }
@@ -253,7 +269,9 @@ impl Manager {
         // Restore state & WAL check
         for (id, config) in &mut self.registry.programs {
             if let Some(cron) = &config.cron {
-                self.scheduler.upsert(*id, cron);
+                let jitter = config.jitter_sec.unwrap_or(0);
+                let last_run = cron_last_run_dt(config);
+                self.scheduler.upsert(*id, cron, jitter, last_run);
             }
             // [WAL recovery check]
             // restore_path at startup means Manager crashed during upgrade validation.
@@ -452,49 +470,57 @@ impl Manager {
                     }
                 }
 
-                Command::ProcessExited { id, code, signal } => {
-                    self.handle_exited(id, code, signal).await;
+                Command::ProcessExited {
+                    id,
+                    pid,
+                    code,
+                    signal,
+                } => {
+                    self.handle_exited(id, pid, code, signal).await;
                 }
                 Command::CheckTimeoutKill { id, target_pid } => {
                     // 1. Check whether forced cleanup is needed
                     let mut force_cleanup = false;
 
                     // 2. Only if registry still considers process running
-                    if let Some(state) = self.registry.get_running(&id) {
-                        // Kill only if PID matches (avoid killing a new instance after restart)
-                        if state.pid == target_pid {
-                            tracing::warn!("Stop timeout reached for {}. Sending SIGKILL.", id);
+                    let pid_match = self.registry.is_running(&id)
+                        && self
+                            .registry
+                            .get_running_all(&id)
+                            .iter()
+                            .any(|s| s.pid == target_pid);
+                    if pid_match {
+                        tracing::warn!("Stop timeout reached for {}. Sending SIGKILL.", id);
 
-                            // Send SIGKILL
-                            let kill_result = nix::sys::signal::kill(
-                                nix::unistd::Pid::from_raw(-(state.pid as i32)),
-                                Signal::SIGKILL,
-                            );
+                        // Send SIGKILL
+                        let kill_result = nix::sys::signal::kill(
+                            nix::unistd::Pid::from_raw(-(target_pid as i32)),
+                            Signal::SIGKILL,
+                        );
 
-                            match kill_result {
-                                Ok(_) => {
-                                    // SIGKILL sent; wait for child.wait() -> ProcessExited
-                                }
-                                Err(nix::errno::Errno::ESRCH) => {
-                                    // Process already gone
-                                    // Force cleanup or state stays Stopping forever
-                                    tracing::warn!(
-                                        "Process {} (PID {}) gone during timeout kill. Forcing cleanup.",
-                                        id,
-                                        state.pid
-                                    );
-                                    force_cleanup = true;
-                                }
-                                Err(e) => {
-                                    tracing::error!("Failed to SIGKILL {}: {}", id, e);
-                                }
+                        match kill_result {
+                            Ok(_) => {
+                                // SIGKILL sent; wait for child.wait() -> ProcessExited
+                            }
+                            Err(nix::errno::Errno::ESRCH) => {
+                                // Process already gone
+                                // Force cleanup or state stays Stopping forever
+                                tracing::warn!(
+                                    "Process {} (PID {}) gone during timeout kill. Forcing cleanup.",
+                                    id,
+                                    target_pid
+                                );
+                                force_cleanup = true;
+                            }
+                            Err(e) => {
+                                tracing::error!("Failed to SIGKILL {}: {}", id, e);
                             }
                         }
                     }
 
                     // 3. Force cleanup (avoids borrow conflict above)
                     if force_cleanup {
-                        self.handle_exited(id, None, None).await;
+                        self.handle_exited(id, target_pid, None, None).await;
                     }
                 }
                 Command::ScheduledRestart { id, retry_count } => {
@@ -518,6 +544,9 @@ impl Manager {
                 } => {
                     self.handle_health_update(id, is_healthy, failure_detail)
                         .await;
+                }
+                Command::HealthRestart { id, failure_detail } => {
+                    self.handle_health_restart(id, failure_detail).await;
                 }
                 Command::ApplyStack { request, reply } => {
                     let res = self.handle_apply_stack(request).await;
@@ -550,26 +579,182 @@ impl Manager {
                     }
                 }
                 Command::CronTick => {
-                    let triggered_ids = self.scheduler.tick();
-                    for id in triggered_ids {
-                        let name = match self.registry.get_config(&id) {
-                            Some(cfg) => cfg.name.clone(),
+                    let triggers = self.scheduler.tick();
+                    for t in triggers {
+                        let cfg = match self.registry.get_config(&t.id) {
+                            Some(c) => c.clone(),
                             None => continue,
                         };
-                        if self.registry.running.contains_key(&id) {
-                            tracing::warn!(
-                                "Cron job {} is still running, skipping this tick.",
-                                name
+                        let name = cfg.name.clone();
+                        let overlap = cfg.on_overlap.unwrap_or_default();
+                        let catchup = cfg.catchup.unwrap_or_default();
+                        let max_concurrent = cfg.max_concurrent_eff() as usize;
+                        let max_queued = cfg.max_queued_eff();
+
+                        // Catchup: how many runs this tick represents. On-time
+                        // triggers (missed_slots == 1) always count as one run.
+                        let mut runs = 1u32;
+                        if t.missed_slots > 1 {
+                            runs = match catchup {
+                                common::CronCatchup::Skip => 0,
+                                common::CronCatchup::Latest => 1,
+                                common::CronCatchup::All => t.missed_slots.min(CRON_CATCHUP_CAP),
+                            };
+                            tracing::info!(
+                                "Cron job {} missed {} slot(s); catchup={:?} -> {} run(s)",
+                                name,
+                                t.missed_slots,
+                                catchup,
+                                runs
                             );
+                        }
+                        if runs == 0 {
                             continue;
                         }
-                        tracing::info!("Cron job triggered: {}", name);
-                        if let Err(e) = self
-                            .controller
-                            .spawn_program(&mut self.registry, id, 0)
-                            .await
-                        {
-                            tracing::error!("Failed to spawn cron job {}: {}", name, e);
+
+                        // Concurrency gate: a firing is admitted whenever fewer
+                        // than `max_concurrent` instances are already running.
+                        // Only when every slot is taken does `on_overlap` decide
+                        // whether to skip, queue (bounded by `max_queued`), or
+                        // kill the oldest run for the new one.
+                        let active = self.registry.running_count(&t.id);
+                        if active >= max_concurrent {
+                            match overlap {
+                                common::CronOverlap::Skip => {
+                                    tracing::warn!(
+                                        "Cron job {} is running at max_concurrent={max_concurrent}, skipping this tick.",
+                                        name
+                                    );
+                                    continue;
+                                }
+                                common::CronOverlap::Queue => {
+                                    let queued = self.pending_cron.entry(t.id).or_insert(0);
+                                    let dropped = if *queued >= max_queued {
+                                        tracing::warn!(
+                                            "Cron job {} queue full ({} pending); dropping firing.",
+                                            name,
+                                            *queued
+                                        );
+                                        true
+                                    } else {
+                                        *queued = queued.saturating_add(runs);
+                                        tracing::info!(
+                                            "Cron job {} is at max_concurrent={max_concurrent}; queued {} run(s).",
+                                            name,
+                                            runs
+                                        );
+                                        false
+                                    };
+                                    if dropped {
+                                        self.record_event(
+                                            t.id,
+                                            "queue_full",
+                                            None,
+                                            None,
+                                            None,
+                                            format!(
+                                                "Cron queue full ({max_queued}); firing dropped"
+                                            ),
+                                        );
+                                    }
+                                    continue;
+                                }
+                                common::CronOverlap::Kill => {
+                                    tracing::warn!(
+                                        "Cron job {} is running at max_concurrent={max_concurrent}; terminating oldest run for the new one.",
+                                        name
+                                    );
+                                    let _ = self.apply_signal_oldest(t.id, Signal::SIGTERM);
+                                    let queued = self.pending_cron.entry(t.id).or_insert(0);
+                                    let dropped = if *queued >= max_queued {
+                                        tracing::warn!(
+                                            "Cron job {} queue full ({} pending); dropping firing.",
+                                            name,
+                                            *queued
+                                        );
+                                        true
+                                    } else {
+                                        *queued = queued.saturating_add(runs);
+                                        false
+                                    };
+                                    if dropped {
+                                        self.record_event(
+                                            t.id,
+                                            "queue_full",
+                                            None,
+                                            None,
+                                            None,
+                                            format!(
+                                                "Cron queue full ({max_queued}); firing dropped"
+                                            ),
+                                        );
+                                    }
+                                    continue;
+                                }
+                            }
+                        }
+
+                        // Admitted: enqueue for the drain pass below.
+                        let queued = self.pending_cron.entry(t.id).or_insert(0);
+                        let dropped = if *queued >= max_queued {
+                            tracing::warn!(
+                                "Cron job {} queue full ({} pending); dropping firing.",
+                                name,
+                                *queued
+                            );
+                            true
+                        } else {
+                            *queued = queued.saturating_add(runs);
+                            false
+                        };
+                        if dropped {
+                            self.record_event(
+                                t.id,
+                                "queue_full",
+                                None,
+                                None,
+                                None,
+                                format!("Cron queue full ({max_queued}); firing dropped"),
+                            );
+                        }
+                    }
+
+                    // Drain the pending queue: spawn as many runs as free
+                    // `max_concurrent` slots allow, so admitted firings that
+                    // cannot overlap the current instance start as it exits.
+                    let due: Vec<(Uuid, u32)> =
+                        self.pending_cron.iter().map(|(id, n)| (*id, *n)).collect();
+                    for (id, count) in due {
+                        let mut remaining = count;
+                        while remaining > 0 {
+                            let cfg = match self.registry.get_config(&id) {
+                                Some(c) => c.clone(),
+                                None => {
+                                    remaining = 0;
+                                    break;
+                                }
+                            };
+                            let max_concurrent = cfg.max_concurrent_eff() as usize;
+                            if self.registry.running_count(&id) >= max_concurrent {
+                                break; // no free slot right now; wait for a later tick
+                            }
+                            tracing::info!("Cron job triggered: {}", cfg.name);
+                            if let Err(e) = self
+                                .controller
+                                .spawn_program(&mut self.registry, id, 0)
+                                .await
+                            {
+                                tracing::error!("Failed to spawn cron job {}: {}", cfg.name, e);
+                                break;
+                            } else if let Some(cfg) = self.registry.get_config_mut(&id) {
+                                cfg.cron_last_run = Some(chrono::Utc::now().timestamp() as u64);
+                            }
+                            remaining -= 1;
+                        }
+                        if remaining == 0 {
+                            self.pending_cron.remove(&id);
+                        } else {
+                            self.pending_cron.insert(id, remaining);
                         }
                     }
                 }
@@ -596,7 +781,11 @@ impl Manager {
 
     // Unified signal delivery
     fn apply_signal(&self, id: Uuid, signal: Signal) -> anyhow::Result<()> {
-        if let Some(state) = self.registry.get_running(&id) {
+        let states = self.registry.get_running_all(&id);
+        if states.is_empty() {
+            return Err(anyhow::anyhow!("Program is not running"));
+        }
+        for state in states {
             tracing::info!(
                 "Sending signal {:?} to program {} (PGID: {})",
                 signal,
@@ -605,10 +794,27 @@ impl Manager {
             );
             // Negative PID targets the process group
             nix::sys::signal::kill(nix::unistd::Pid::from_raw(-(state.pid as i32)), signal)
-                .map_err(|e| e.into())
-        } else {
-            Err(anyhow::anyhow!("Program is not running"))
+                .map_err(|e| anyhow::anyhow!("Failed to signal program {}: {}", id, e))?;
         }
+        Ok(())
+    }
+
+    /// Send a signal to the oldest running instance only. Used by the cron
+    /// `on_overlap = kill` policy, which must free a single `max_concurrent`
+    /// slot for the new firing rather than terminate every instance.
+    fn apply_signal_oldest(&self, id: Uuid, signal: Signal) -> anyhow::Result<()> {
+        let Some(state) = self.registry.get_running(&id) else {
+            return Err(anyhow::anyhow!("Program is not running"));
+        };
+        tracing::info!(
+            "Sending signal {:?} to program {} oldest instance (PGID: {})",
+            signal,
+            id,
+            state.pid
+        );
+        // Negative PID targets the process group
+        nix::sys::signal::kill(nix::unistd::Pid::from_raw(-(state.pid as i32)), signal)
+            .map_err(|e| anyhow::anyhow!("Failed to signal program {}: {}", id, e))
     }
 
     //
@@ -710,7 +916,28 @@ impl Manager {
 
             if let Some(v) = req.cron {
                 config.cron = Some(v.clone());
-                self.scheduler.upsert(id, &v);
+                let last_run = cron_last_run_dt(config);
+                self.scheduler
+                    .upsert(id, &v, config.jitter_sec.unwrap_or(0), last_run);
+            }
+
+            if let Some(v) = req.on_overlap {
+                config.on_overlap = Some(v);
+            }
+            if let Some(v) = req.catchup {
+                config.catchup = Some(v);
+            }
+            if let Some(v) = req.jitter_sec {
+                config.jitter_sec = Some(v);
+                if config.cron.is_some() {
+                    self.scheduler.set_jitter(&id, v);
+                }
+            }
+            if let Some(v) = req.max_concurrent {
+                config.max_concurrent = Some(v);
+            }
+            if let Some(v) = req.max_queued {
+                config.max_queued = Some(v);
             }
 
             if let Some(v) = req.autostart {
@@ -946,11 +1173,20 @@ impl Manager {
     }
 
     // Process exit handler (OTA commit/rollback & borrow fixes)
-    async fn handle_exited(&mut self, id: Uuid, code: Option<i32>, signal: Option<i32>) {
-        // 1. Clear runtime state
-        let state = match self.registry.running.remove(&id) {
+    async fn handle_exited(&mut self, id: Uuid, pid: u32, code: Option<i32>, signal: Option<i32>) {
+        // 1. Clear runtime state (disambiguate concurrent instances by pid)
+        let state = match self.registry.remove_running_by_pid(&id, pid) {
             Some(s) => s,
-            None => return,
+            None => {
+                // A newer instance replaced this one before the exit event
+                // arrived (rare race); treat as already handled.
+                tracing::warn!(
+                    "Program {} (PID {}) exited but no matching running state; ignoring.",
+                    id,
+                    pid
+                );
+                return;
+            }
         };
 
         let exited_pid = state.pid;
@@ -960,7 +1196,15 @@ impl Manager {
         if let Some(task) = state.health_task {
             task.abort();
         }
+        // If sibling instances remain (scheduled task with `max_concurrent > 1`),
+        // keep the monitor pointed at the new primary.
+        let siblings = self.registry.get_running_all(&id).len();
         self.monitor.unwatch(&id);
+        if siblings > 0
+            && let Some(next) = self.registry.get_running(&id)
+        {
+            self.monitor.watch(id, next.pid);
+        }
 
         tracing::info!(
             "Program exited: {} (PID: {}), Code: {:?}",
@@ -1105,20 +1349,28 @@ impl Manager {
 
         // 5. Cron job handling
         if config.cron.is_some() {
+            // With `max_concurrent > 1`, sibling instances may still be running;
+            // only flip the status when the last instance exits.
+            let siblings = self.registry.running_count(&id);
             if let Some(0) = code {
-                tracing::info!("Cron job '{}' finished successfully.", program_name);
-                let _ = self.log_tx.send(WsMessage::StatusChange {
-                    id,
-                    status: ProcessStatus::Stopped,
-                    name: program_name.clone(),
-                });
+                tracing::info!(
+                    "Cron job '{}' finished successfully{}.",
+                    program_name,
+                    if siblings > 0 {
+                        " (sibling still running)"
+                    } else {
+                        ""
+                    }
+                );
+                if siblings == 0 {
+                    let _ = self.log_tx.send(WsMessage::StatusChange {
+                        id,
+                        status: ProcessStatus::Stopped,
+                        name: program_name.clone(),
+                    });
+                }
             } else {
                 tracing::error!("Cron job '{}' failed with code {:?}.", program_name, code);
-                let _ = self.log_tx.send(WsMessage::StatusChange {
-                    id,
-                    status: ProcessStatus::Fatal,
-                    name: program_name.clone(),
-                });
                 self.record_event(
                     id,
                     "process_fatal",
@@ -1138,6 +1390,13 @@ impl Manager {
                     log_tail: None,
                 };
                 self.emit_event(event);
+                if siblings == 0 {
+                    let _ = self.log_tx.send(WsMessage::StatusChange {
+                        id,
+                        status: ProcessStatus::Fatal,
+                        name: program_name.clone(),
+                    });
+                }
             }
             return; // cron jobs do not auto-restart
         }
@@ -1333,7 +1592,26 @@ impl Manager {
         is_healthy: bool,
         failure_detail: Option<String>,
     ) {
-        if let Some(state) = self.registry.running.get_mut(&id) {
+        // Snapshot config-derived values before mutating runtime state so the
+        // `get_running_mut` borrow does not span other registry reads.
+        let program_name = self
+            .registry
+            .programs
+            .get(&id)
+            .map(|c| c.name.clone())
+            .unwrap_or_default();
+        let log_cfg = self
+            .registry
+            .programs
+            .get(&id)
+            .map(|c| (c.stdout_logfile.clone(), c.stderr_logfile.clone()));
+
+        let mut recovery: Option<(u32, u64)> = None;
+        {
+            let state = match self.registry.get_running_mut(&id) {
+                Some(s) => s,
+                None => return,
+            };
             // Ignore health updates while stopping
             // Prevents Stop -> Stopping -> (health race) -> Healthy
             if state.stopping {
@@ -1344,15 +1622,19 @@ impl Manager {
                 if let Some(detail) = failure_detail {
                     let changed = state.health_error.as_deref() != Some(detail.as_str());
                     state.health_error = Some(detail.clone());
-                    if changed && let Some(cfg) = self.registry.programs.get(&id) {
+                    if changed {
                         let log_dir = &self.config.storage.log_dir;
                         let log_timestamp = self.config.child_logging.timestamp;
+                        let (stdout_logfile, stderr_logfile) = log_cfg
+                            .as_ref()
+                            .map(|c| (c.0.as_deref(), c.1.as_deref()))
+                            .unwrap_or((None, None));
                         crate::logger::emit_superd_line(
                             id,
                             &format!("health_check failed: {detail}"),
                             log_dir,
-                            cfg.stdout_logfile.as_deref(),
-                            cfg.stderr_logfile.as_deref(),
+                            stdout_logfile,
+                            stderr_logfile,
                             log_timestamp,
                             &self.log_tx,
                         )
@@ -1366,76 +1648,208 @@ impl Manager {
             if state.is_healthy != is_healthy {
                 state.is_healthy = is_healthy;
 
-                let name = self
-                    .registry
-                    .programs
-                    .get(&id)
-                    .map(|c| c.name.clone())
-                    .unwrap_or_default();
                 let display_status = if is_healthy {
                     ProcessStatus::Healthy
                 } else {
                     ProcessStatus::Running
                 };
-                tracing::info!("Program {} health changed: {}", name, is_healthy);
+                tracing::info!("Program {} health changed: {}", program_name, is_healthy);
 
                 let _ = self.log_tx.send(WsMessage::StatusChange {
                     id,
                     status: display_status,
-                    name: name.clone(),
+                    name: program_name.clone(),
                 });
 
                 if is_healthy && state.alert_pending_recovery {
                     state.alert_pending_recovery = false;
                     let recovered_pid = state.pid;
                     let uptime = chrono::Utc::now().timestamp() as u64 - state.start_time;
-                    self.record_event(
-                        id,
-                        "process_recovered",
-                        None,
-                        None,
-                        None,
-                        format!("Process recovered and healthy (up {}s)", uptime),
-                    );
-                    self.emit_event(common::SystemEvent::ProcessRecovered {
-                        program_id: id,
-                        program_name: name.clone(),
-                        pid: Some(recovered_pid),
-                        uptime_sec: uptime,
-                    });
-                    tracing::info!("Program {} has RECOVERED from crash!", name);
-                }
-
-                // Commit Upgrade Transaction
-                // If program is healthy and has a pending restore path, commit the upgrade.
-                if is_healthy {
-                    let mut backup_to_delete = None;
-                    if let Some(cfg) = self.registry.get_config_mut(&id)
-                        && let Some(backup) = cfg.restore_path.take()
-                    {
-                        backup_to_delete = Some(backup);
-                        tracing::info!("Upgrade verified for {}. Committing changes.", id);
-                    }
-
-                    if let Some(backup) = backup_to_delete {
-                        // Persist clean state (restore_path removed)
-                        self.registry.mark_dirty();
-                        let _ = self.flush_to_disk().await;
-
-                        // Async delete backup
-                        tokio::spawn(async move {
-                            use crate::artifact;
-                            artifact::commit(Path::new(&backup)).await;
-                        });
-                    }
-
-                    let tx = self.tx_self.clone();
-                    tokio::spawn(async move {
-                        let _ = tx.send(Command::CheckWaitingQueue).await;
-                    });
+                    recovery = Some((recovered_pid, uptime));
                 }
             }
         }
+
+        if let Some((recovered_pid, uptime)) = recovery {
+            self.record_event(
+                id,
+                "process_recovered",
+                None,
+                None,
+                None,
+                format!("Process recovered and healthy (up {}s)", uptime),
+            );
+            self.emit_event(common::SystemEvent::ProcessRecovered {
+                program_id: id,
+                program_name: program_name.clone(),
+                pid: Some(recovered_pid),
+                uptime_sec: uptime,
+            });
+            tracing::info!("Program {} has RECOVERED from crash!", program_name);
+        }
+
+        // Commit Upgrade Transaction
+        // If program is healthy and has a pending restore path, commit the upgrade.
+        if is_healthy {
+            // The program recovered; reset the health-restart counter so a
+            // later failure cycle starts fresh against `retry_limit`.
+            self.registry.health_restart_count.remove(&id);
+
+            let mut backup_to_delete = None;
+            if let Some(cfg) = self.registry.get_config_mut(&id)
+                && let Some(backup) = cfg.restore_path.take()
+            {
+                backup_to_delete = Some(backup);
+                tracing::info!("Upgrade verified for {}. Committing changes.", id);
+            }
+
+            if let Some(backup) = backup_to_delete {
+                // Persist clean state (restore_path removed)
+                self.registry.mark_dirty();
+                let _ = self.flush_to_disk().await;
+
+                // Async delete backup
+                tokio::spawn(async move {
+                    use crate::artifact;
+                    artifact::commit(Path::new(&backup)).await;
+                });
+            }
+
+            let tx = self.tx_self.clone();
+            tokio::spawn(async move {
+                let _ = tx.send(Command::CheckWaitingQueue).await;
+            });
+        }
+    }
+
+    /// Auto-restart triggered by `max_failures` consecutive health-check
+    /// failures. Restarts are counted per program and guarded by `retry_limit`:
+    /// once a program stays unhealthy across that many health restarts, it
+    /// enters the Fatal state instead of restarting forever. The counter resets
+    /// as soon as the program reports healthy again (`handle_health_update`).
+    async fn handle_health_restart(&mut self, id: Uuid, failure_detail: String) {
+        // Guards: program must exist, still be running, and not be in the
+        // middle of a stop/restart already.
+        if self.registry.running_count(&id) == 0 {
+            return;
+        }
+        let Some(config) = self.registry.programs.get(&id).cloned() else {
+            return;
+        };
+        let states = self.registry.get_running_all(&id);
+        if states.is_empty() || states.iter().any(|s| s.stopping || s.restart_requested) {
+            return;
+        }
+        let state = &states[0];
+        let now = chrono::Utc::now().timestamp() as u64;
+        let program_name = config.name.clone();
+        let pid = state.pid;
+        let uptime_secs = now.saturating_sub(state.start_time);
+
+        let retry_count = self
+            .registry
+            .health_restart_count
+            .get(&id)
+            .copied()
+            .unwrap_or(0)
+            + 1;
+        let retry_limit = config.retry_limit;
+
+        if retry_count > retry_limit {
+            // Give up: mark Fatal and stop the unhealthy process. `stopping` is
+            // set by stop_program so exit handling does not auto-restart it.
+            tracing::error!(
+                "Program {} failed health checks too many times. Entering FATAL state.",
+                program_name
+            );
+            self.registry.health_restart_count.remove(&id);
+            self.registry.crashed.insert(id);
+            if let Some(cfg) = self.registry.get_config_mut(&id) {
+                cfg.autostart = false; // prevent auto-start on next Manager restart
+                cfg.updated_at = now;
+            }
+            let err_msg = format!(
+                "Stopped after {retry_count} health restarts. Last failure: {failure_detail}"
+            );
+            self.registry.startup_errors.insert(id, err_msg.clone());
+            self.record_event(
+                id,
+                "process_fatal",
+                None,
+                None,
+                Some(retry_count),
+                err_msg.clone(),
+            );
+            self.emit_event(common::SystemEvent::ProcessFatal {
+                program_id: id,
+                program_name: program_name.clone(),
+                pid: Some(pid),
+                uptime_secs,
+                exit_code: None,
+                signal: None,
+                msg: err_msg,
+                log_tail: None,
+            });
+            let _ = self.log_tx.send(WsMessage::StatusChange {
+                id,
+                status: ProcessStatus::Fatal,
+                name: program_name.clone(),
+            });
+            self.registry.mark_dirty();
+            let _ = self
+                .controller
+                .stop_program(&mut self.registry, id, true)
+                .await;
+            return;
+        }
+
+        self.registry.health_restart_count.insert(id, retry_count);
+
+        // Record the trigger event so operators see why the restart happened,
+        // then terminate the process(es); exit handling respawns immediately
+        // via the `restart_requested` path.
+        self.record_event(
+            id,
+            "health_restart",
+            None,
+            None,
+            Some(retry_count),
+            format!("Health check failed {retry_count} time(s): {failure_detail}"),
+        );
+        self.emit_event(common::SystemEvent::HealthRestart {
+            program_id: id,
+            program_name: program_name.clone(),
+            pid: Some(pid),
+            uptime_secs,
+            retry_count,
+            msg: failure_detail,
+        });
+
+        let pids: Vec<u32> = self
+            .registry
+            .get_running_all(&id)
+            .iter()
+            .map(|s| s.pid)
+            .collect();
+        if let Some(states) = self.registry.get_running_all_mut(&id) {
+            for s in states.iter_mut() {
+                s.restart_requested = true;
+            }
+        }
+        for state_pid in &pids {
+            let _ = nix::sys::signal::kill(
+                nix::unistd::Pid::from_raw(*state_pid as i32),
+                Signal::SIGTERM,
+            );
+        }
+        // Arm a force-kill timer in case the process ignores SIGTERM.
+        let tx = self.tx_self.clone();
+        let target_pid = pids.first().copied().unwrap_or(0);
+        let timeout_sec = self.controller.stop_timeout(&self.registry, id);
+        tokio::spawn(async move {
+            tokio::time::sleep(tokio::time::Duration::from_secs(timeout_sec)).await;
+            let _ = tx.send(Command::CheckTimeoutKill { id, target_pid }).await;
+        });
     }
 
     async fn handle_apply_stack(
@@ -1501,6 +1915,11 @@ impl Manager {
                         hooks: Some(config.hooks),
                         artifact: config.artifact,
                         cron: config.cron,
+                        on_overlap: config.on_overlap,
+                        catchup: config.catchup,
+                        jitter_sec: config.jitter_sec,
+                        max_concurrent: config.max_concurrent,
+                        max_queued: config.max_queued,
 
                         ..Default::default()
                     };
@@ -1519,7 +1938,8 @@ impl Manager {
 
                     if let Some(cron_expr) = &config.cron {
                         should_start = false;
-                        self.scheduler.upsert(id, cron_expr);
+                        let jitter = config.jitter_sec.unwrap_or(0);
+                        self.scheduler.upsert(id, cron_expr, jitter, None);
                         tracing::info!("Cron job '{}' registered via stack apply.", name);
                     }
 
@@ -1582,7 +2002,7 @@ impl Manager {
         tracing::info!("Shutdown plan computed for {} services.", total);
 
         for (i, id) in order.iter().enumerate() {
-            if self.registry.running.contains_key(id) {
+            if self.registry.is_running(id) {
                 if let Some(conf) = self.registry.get_config(id) {
                     tracing::info!("[{}/{}] Stopping {}...", i + 1, total, conf.name);
                 }
@@ -1603,20 +2023,21 @@ impl Manager {
         tracing::info!("Waiting for processes to exit...");
 
         loop {
-            if self.registry.running.is_empty() {
+            if self.registry.running_empty() {
                 tracing::info!("All processes exited cleanly.");
                 break;
             }
 
             if tokio::time::Instant::now() > deadline {
+                let running = self.registry.all_running_pids();
                 tracing::warn!(
                     "Shutdown timeout reached. {} processes still running.",
-                    self.registry.running.len()
+                    running.len()
                 );
-                for state in self.registry.running.values() {
-                    tracing::warn!("Force killing PID {}", state.pid);
+                for (_id, state_pid) in running {
+                    tracing::warn!("Force killing PID {}", state_pid);
                     let _ = nix::sys::signal::kill(
-                        nix::unistd::Pid::from_raw(state.pid as i32),
+                        nix::unistd::Pid::from_raw(state_pid as i32),
                         Signal::SIGKILL,
                     );
                 }
@@ -1625,8 +2046,14 @@ impl Manager {
 
             match self.rx.try_recv() {
                 Ok(cmd) => {
-                    if let Command::ProcessExited { id, code, signal } = cmd {
-                        self.handle_exited(id, code, signal).await;
+                    if let Command::ProcessExited {
+                        id,
+                        pid,
+                        code,
+                        signal,
+                    } = cmd
+                    {
+                        self.handle_exited(id, pid, code, signal).await;
                     }
                 }
                 Err(mpsc::error::TryRecvError::Empty) => {
@@ -1739,7 +2166,8 @@ impl Manager {
             let name = config.name.clone();
 
             if let Some(cron_expr) = &config.cron {
-                self.scheduler.upsert(id, cron_expr);
+                let jitter = config.jitter_sec.unwrap_or(0);
+                self.scheduler.upsert(id, cron_expr, jitter, None);
             }
 
             self.registry.programs.insert(id, config);
@@ -1876,8 +2304,7 @@ impl Manager {
             last_error: self.registry.startup_errors.get(id).cloned(),
             health_error: self
                 .registry
-                .running
-                .get(id)
+                .get_running(id)
                 .and_then(|s| s.health_error.clone()),
             cpu_usage: cpu,
             mem_usage: mem,
@@ -1920,23 +2347,37 @@ impl Manager {
             last_error: self.registry.startup_errors.get(&id).cloned(),
             health_error: self
                 .registry
-                .running
-                .get(&id)
+                .get_running(&id)
                 .and_then(|s| s.health_error.clone()),
         })
     }
 
     async fn handle_restart_request(&mut self, id: Uuid) -> anyhow::Result<()> {
-        if let Some(state) = self.registry.get_running_mut(&id) {
-            tracing::info!("Restart requested for {}. Stopping current process...", id);
-            state.restart_requested = true;
-            let _ = nix::sys::signal::kill(
-                nix::unistd::Pid::from_raw(state.pid as i32),
-                Signal::SIGTERM,
+        if self.registry.is_running(&id) {
+            tracing::info!(
+                "Restart requested for {}. Stopping current process(es)...",
+                id
             );
+            let pids: Vec<u32> = self
+                .registry
+                .get_running_all(&id)
+                .iter()
+                .map(|s| s.pid)
+                .collect();
+            if let Some(states) = self.registry.get_running_all_mut(&id) {
+                for state in states.iter_mut() {
+                    state.restart_requested = true;
+                }
+            }
+            for state_pid in &pids {
+                let _ = nix::sys::signal::kill(
+                    nix::unistd::Pid::from_raw(*state_pid as i32),
+                    Signal::SIGTERM,
+                );
+            }
 
             let tx = self.tx_self.clone();
-            let target_pid = state.pid;
+            let target_pid = *pids.first().unwrap_or(&0);
             let timeout_sec = self.controller.stop_timeout(&self.registry, id);
             tokio::spawn(async move {
                 tokio::time::sleep(tokio::time::Duration::from_secs(timeout_sec)).await;
@@ -1957,7 +2398,7 @@ impl Manager {
     }
 
     async fn handle_remove(&mut self, id: Uuid) -> anyhow::Result<()> {
-        if self.registry.running.contains_key(&id) {
+        if self.registry.is_running(&id) {
             return Err(anyhow::anyhow!("Cannot remove running program"));
         }
         let config_opt = self.registry.programs.remove(&id);
@@ -1969,8 +2410,10 @@ impl Manager {
         self.registry.waiting.remove(&id);
         self.registry.crashed.remove(&id);
         self.registry.startup_errors.remove(&id);
+        self.registry.health_restart_count.remove(&id);
         self.registry.remove_events(&id);
         self.scheduler.remove(&id);
+        self.pending_cron.remove(&id);
         self.registry.mark_dirty();
 
         if let Some(cfg) = config_opt {
@@ -2290,6 +2733,11 @@ impl Manager {
                 hooks: req.hooks.clone(),
                 artifact: req.artifact.clone(),
                 cron: req.cron.clone(),
+                on_overlap: req.on_overlap,
+                catchup: req.catchup,
+                jitter_sec: req.jitter_sec,
+                max_concurrent: req.max_concurrent,
+                max_queued: req.max_queued,
                 created_at: chrono::Utc::now().timestamp() as u64,
                 updated_at: chrono::Utc::now().timestamp() as u64,
                 restore_path: None,

@@ -241,6 +241,10 @@ async fn test_ota_transaction_commit() {
         autostart: true,
         health_check: Some(common::HealthCheck::Exec {
             command: "true".to_string(),
+            interval_secs: 0,
+            timeout_secs: 0,
+            start_period_secs: 0,
+            max_failures: 0,
         }),
         ..Default::default()
     };

@@ -190,6 +190,20 @@ pub fn build_payload(event: &SystemEvent) -> anyhow::Result<String> {
             "pid": pid,
             "uptime_secs": uptime_sec,
         })),
+        SystemEvent::HealthRestart {
+            program_id,
+            program_name,
+            pid,
+            uptime_secs,
+            retry_count,
+            ..
+        } => Some(json!({
+            "id": program_id,
+            "name": program_name,
+            "pid": pid,
+            "uptime_secs": uptime_secs,
+            "retry_count": retry_count,
+        })),
         SystemEvent::MemoryPressure {
             program_id,
             program_name,
@@ -234,6 +248,11 @@ pub fn build_payload(event: &SystemEvent) -> anyhow::Result<String> {
         }),
         SystemEvent::ProcessStarted { .. } => json!({}),
         SystemEvent::ProcessRecovered { uptime_sec, .. } => json!({ "uptime_sec": uptime_sec }),
+        SystemEvent::HealthRestart {
+            retry_count, msg, ..
+        } => {
+            json!({ "retry_count": retry_count, "msg": msg })
+        }
         SystemEvent::SystemStartup { hostname } => json!({ "hostname": hostname }),
         SystemEvent::SystemShutdown => json!({}),
         SystemEvent::MemoryPressure {
@@ -328,6 +347,22 @@ fn build_env(event: &SystemEvent) -> HashMap<String, String> {
             }
             env.insert("SUPER_UPTIME_SECS".to_string(), uptime_sec.to_string());
         }
+        SystemEvent::HealthRestart {
+            program_id,
+            program_name,
+            pid,
+            uptime_secs,
+            retry_count,
+            ..
+        } => {
+            env.insert("SUPER_ID".to_string(), program_id.to_string());
+            env.insert("SUPER_NAME".to_string(), program_name.clone());
+            if let Some(p) = pid {
+                env.insert("SUPER_PID".to_string(), p.to_string());
+            }
+            env.insert("SUPER_UPTIME_SECS".to_string(), uptime_secs.to_string());
+            env.insert("SUPER_RETRY_COUNT".to_string(), retry_count.to_string());
+        }
         SystemEvent::MemoryPressure {
             program_id,
             program_name,
@@ -400,5 +435,58 @@ mod tests {
             log_tail: None,
         };
         assert!(!matches_hook(&hook, &other));
+    }
+
+    #[test]
+    fn health_restart_event_has_type_and_filter() {
+        let id = uuid::Uuid::new_v4();
+        let event = SystemEvent::HealthRestart {
+            program_id: id,
+            program_name: "api".into(),
+            pid: Some(42),
+            uptime_secs: 9,
+            retry_count: 2,
+            msg: "probe failed".into(),
+        };
+        assert_eq!(event.event_type(), "health_restart");
+        assert_eq!(event.program_name(), Some("api"));
+
+        let hook = EventHookConfig {
+            command: "true".into(),
+            url: None,
+            headers: None,
+            events: vec!["health_restart".into()],
+            programs: vec!["api".into()],
+            r#async: true,
+            timeout_secs: 5,
+            id: None,
+        };
+        assert!(matches_hook(&hook, &event));
+        assert!(!matches_hook(&hook, &SystemEvent::SystemShutdown));
+    }
+
+    #[test]
+    fn health_restart_payload_serializes_retry_and_msg() {
+        let id = uuid::Uuid::new_v4();
+        let event = SystemEvent::HealthRestart {
+            program_id: id,
+            program_name: "api".into(),
+            pid: Some(42),
+            uptime_secs: 9,
+            retry_count: 2,
+            msg: "probe failed".into(),
+        };
+        let payload = build_payload(&event).unwrap();
+        let v: serde_json::Value = serde_json::from_str(&payload).unwrap();
+        assert_eq!(v["event"], "health_restart");
+        assert_eq!(v["program"]["name"], "api");
+        assert_eq!(v["payload"]["retry_count"], 2);
+        assert_eq!(v["payload"]["msg"], "probe failed");
+
+        // Event hooks receive SUPER_RETRY_COUNT in the environment.
+        let env = build_env(&event);
+        assert_eq!(env.get("SUPER_RETRY_COUNT").map(String::as_str), Some("2"));
+        assert_eq!(env.get("SUPER_UPTIME_SECS").map(String::as_str), Some("9"));
+        assert_eq!(env.get("SUPER_PID").map(String::as_str), Some("42"));
     }
 }

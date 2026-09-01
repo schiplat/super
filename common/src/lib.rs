@@ -76,6 +76,53 @@ fn default_priority() -> i32 {
     999
 }
 
+/// Default seconds between health probes.
+pub const DEFAULT_HEALTH_INTERVAL_SECS: u64 = 5;
+/// Default per-probe timeout for TCP health checks.
+pub const DEFAULT_TCP_HEALTH_TIMEOUT_SECS: u64 = 3;
+/// Default per-probe timeout for HTTP health checks.
+pub const DEFAULT_HTTP_HEALTH_TIMEOUT_SECS: u64 = 5;
+/// Default per-probe timeout for exec health checks.
+pub const DEFAULT_EXEC_HEALTH_TIMEOUT_SECS: u64 = 7;
+/// Default grace period before the first probe after process start.
+pub const DEFAULT_HEALTH_START_PERIOD_SECS: u64 = 1;
+/// Default consecutive failures before the daemon auto-restarts the program.
+pub const DEFAULT_HEALTH_MAX_FAILURES: u32 = 3;
+/// Upper bound for health probe intervals (24h).
+pub const MAX_HEALTH_INTERVAL_SECS: u64 = 86400;
+/// Upper bound for a single probe timeout (1h).
+pub const MAX_HEALTH_TIMEOUT_SECS: u64 = 3600;
+/// Upper bound for the health failure threshold.
+pub const MAX_HEALTH_MAX_FAILURES: u32 = 1000;
+
+fn default_health_interval_secs() -> u64 {
+    DEFAULT_HEALTH_INTERVAL_SECS
+}
+fn default_tcp_health_timeout_secs() -> u64 {
+    DEFAULT_TCP_HEALTH_TIMEOUT_SECS
+}
+fn default_http_health_timeout_secs() -> u64 {
+    DEFAULT_HTTP_HEALTH_TIMEOUT_SECS
+}
+fn default_exec_health_timeout_secs() -> u64 {
+    DEFAULT_EXEC_HEALTH_TIMEOUT_SECS
+}
+fn default_health_start_period_secs() -> u64 {
+    DEFAULT_HEALTH_START_PERIOD_SECS
+}
+fn default_health_max_failures() -> u32 {
+    DEFAULT_HEALTH_MAX_FAILURES
+}
+
+/// Default number of overlapping cron runs allowed for a scheduled task.
+pub const DEFAULT_MAX_CONCURRENT: u32 = 1;
+/// Default cap on queued cron firings when `max_concurrent` is reached.
+pub const DEFAULT_MAX_QUEUED: u32 = 100;
+/// Hard upper bound for `max_concurrent`.
+pub const MAX_CONCURRENT_CAP: u32 = 64;
+/// Hard upper bound for `max_queued`.
+pub const MAX_QUEUED_CAP: u32 = 10000;
+
 /// Auto-restart policy (Supervisor-compatible semantics)
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, ToSchema, Default)]
 #[serde(rename_all = "lowercase")]
@@ -97,6 +144,32 @@ impl AutorestartPolicy {
             Self::Unexpected => !ProgramConfig::is_expected_exit(code, exitcodes),
         }
     }
+}
+
+/// What to do when a cron tick fires while the previous run is still active.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, ToSchema, Default)]
+#[serde(rename_all = "lowercase")]
+pub enum CronOverlap {
+    /// Skip the tick — never run concurrently with the previous run (default).
+    #[default]
+    Skip,
+    /// Queue the run and start it as soon as the previous run exits.
+    Queue,
+    /// Terminate the running instance, then start the new run.
+    Kill,
+}
+
+/// What to do with cron slots that were missed while the daemon was down or lagged.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, ToSchema, Default)]
+#[serde(rename_all = "lowercase")]
+pub enum CronCatchup {
+    /// Never backfill missed slots (default).
+    #[default]
+    Skip,
+    /// Run once for the most recent missed slot, immediately after recovery.
+    Latest,
+    /// Backfill every missed slot, capped to avoid a flood.
+    All,
 }
 
 /// Process lifecycle status
@@ -198,6 +271,35 @@ pub struct ProgramConfig {
     /// Cron expression (e.g. "0 0 * * * *"). Scheduled tasks do not autostart on daemon boot.
     pub cron: Option<String>,
 
+    /// Cron overlap policy when the previous run is still executing.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub on_overlap: Option<CronOverlap>,
+
+    /// Policy for cron slots missed while the daemon was down.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub catchup: Option<CronCatchup>,
+
+    /// Max random delay (seconds) added before each cron trigger to spread load.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub jitter_sec: Option<u64>,
+
+    /// Max overlapping cron runs allowed at once (default 1). Scheduled tasks
+    /// may share the same cron expression; `max_concurrent` lets up to N runs
+    /// of the same task be in flight simultaneously.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub max_concurrent: Option<u32>,
+
+    /// Cap on queued cron firings when `max_concurrent` is reached and
+    /// `on_overlap = queue`/`kill`. New firings beyond the cap are dropped and
+    /// recorded as `queue_full`. `0` means the default (100).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub max_queued: Option<u32>,
+
+    /// Internal: last successful cron spawn (epoch secs). Used to detect slots
+    /// missed while the daemon was down so the catchup policy can backfill them.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub cron_last_run: Option<u64>,
+
     /// Linux cgroup resource limits (requires isolation plugin on Linux).
     #[serde(default)]
     pub resource_limits: Option<ResourceLimits>,
@@ -228,9 +330,34 @@ impl ProgramConfig {
     pub fn should_autorestart(&self, code: Option<i32>) -> bool {
         self.autorestart.should_restart(code, &self.exitcodes)
     }
+
+    /// Effective `max_concurrent` (1 default, 0 treated as default, capped at 64).
+    pub fn max_concurrent_eff(&self) -> u32 {
+        let v = self.max_concurrent.unwrap_or(DEFAULT_MAX_CONCURRENT);
+        if v == 0 {
+            DEFAULT_MAX_CONCURRENT
+        } else {
+            v.min(MAX_CONCURRENT_CAP)
+        }
+    }
+
+    /// Effective `max_queued` (100 default, 0 treated as default, capped at 10000).
+    pub fn max_queued_eff(&self) -> u32 {
+        let v = self.max_queued.unwrap_or(DEFAULT_MAX_QUEUED);
+        if v == 0 {
+            DEFAULT_MAX_QUEUED
+        } else {
+            v.min(MAX_QUEUED_CAP)
+        }
+    }
 }
 
-/// Health check configuration
+/// Health check configuration.
+///
+/// Every probe type shares the same tuning knobs (`interval_secs`,
+/// `timeout_secs`, `start_period_secs`, `max_failures`). A value of `0` for
+/// interval/timeout/start_period falls back to the default; `max_failures = 0`
+/// disables auto-restart on health failure (mark unhealthy only).
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 #[serde(tag = "type", rename_all = "lowercase")]
 pub enum HealthCheck {
@@ -238,16 +365,126 @@ pub enum HealthCheck {
         #[serde(default = "default_localhost")]
         host: String,
         port: u16,
+        #[serde(default = "default_health_interval_secs")]
+        interval_secs: u64,
+        #[serde(default = "default_tcp_health_timeout_secs")]
+        timeout_secs: u64,
+        #[serde(default = "default_health_start_period_secs")]
+        start_period_secs: u64,
+        #[serde(default = "default_health_max_failures")]
+        max_failures: u32,
     },
     Http {
         url: String,
         method: Option<String>,
+        #[serde(default = "default_health_interval_secs")]
+        interval_secs: u64,
+        #[serde(default = "default_http_health_timeout_secs")]
+        timeout_secs: u64,
+        #[serde(default = "default_health_start_period_secs")]
+        start_period_secs: u64,
+        #[serde(default = "default_health_max_failures")]
+        max_failures: u32,
     },
     Exec {
         command: String,
+        #[serde(default = "default_health_interval_secs")]
+        interval_secs: u64,
+        #[serde(default = "default_exec_health_timeout_secs")]
+        timeout_secs: u64,
+        #[serde(default = "default_health_start_period_secs")]
+        start_period_secs: u64,
+        #[serde(default = "default_health_max_failures")]
+        max_failures: u32,
     },
 
     Disabled,
+}
+
+impl HealthCheck {
+    /// Seconds between probes (0 = default; unused for `Disabled`). Upper
+    /// bounds are enforced by config validation (`validate_health_tuning`).
+    pub fn interval_secs(&self) -> u64 {
+        match self {
+            HealthCheck::Tcp { interval_secs, .. }
+            | HealthCheck::Http { interval_secs, .. }
+            | HealthCheck::Exec { interval_secs, .. } => {
+                if *interval_secs == 0 {
+                    DEFAULT_HEALTH_INTERVAL_SECS
+                } else {
+                    *interval_secs
+                }
+            }
+            HealthCheck::Disabled => 0,
+        }
+    }
+
+    /// Max seconds a single probe may take (0 = default; unused for `Disabled`).
+    pub fn timeout_secs(&self) -> u64 {
+        match self {
+            HealthCheck::Tcp { timeout_secs, .. } => {
+                if *timeout_secs == 0 {
+                    DEFAULT_TCP_HEALTH_TIMEOUT_SECS
+                } else {
+                    *timeout_secs
+                }
+            }
+            HealthCheck::Http { timeout_secs, .. } => {
+                if *timeout_secs == 0 {
+                    DEFAULT_HTTP_HEALTH_TIMEOUT_SECS
+                } else {
+                    *timeout_secs
+                }
+            }
+            HealthCheck::Exec { timeout_secs, .. } => {
+                if *timeout_secs == 0 {
+                    DEFAULT_EXEC_HEALTH_TIMEOUT_SECS
+                } else {
+                    *timeout_secs
+                }
+            }
+            HealthCheck::Disabled => 0,
+        }
+    }
+
+    /// Grace period (seconds) after process start before the first probe
+    /// (0 = default; unused for `Disabled`).
+    pub fn start_period_secs(&self) -> u64 {
+        match self {
+            HealthCheck::Tcp {
+                start_period_secs, ..
+            }
+            | HealthCheck::Http {
+                start_period_secs, ..
+            }
+            | HealthCheck::Exec {
+                start_period_secs, ..
+            } => {
+                if *start_period_secs == 0 {
+                    DEFAULT_HEALTH_START_PERIOD_SECS
+                } else {
+                    *start_period_secs
+                }
+            }
+            HealthCheck::Disabled => 0,
+        }
+    }
+
+    /// Consecutive failures before the daemon auto-restarts the program.
+    /// `0` disables auto-restart (the process is only marked unhealthy).
+    pub fn max_failures(&self) -> u32 {
+        match self {
+            HealthCheck::Tcp { max_failures, .. }
+            | HealthCheck::Http { max_failures, .. }
+            | HealthCheck::Exec { max_failures, .. } => *max_failures,
+            HealthCheck::Disabled => 0,
+        }
+    }
+
+    /// True when this check can actually fail (i.e. it is not `Disabled`).
+    pub fn is_enabled(&self) -> bool {
+        !matches!(self, HealthCheck::Disabled)
+    }
 }
 
 /// Lifecycle hooks
@@ -314,6 +551,27 @@ pub struct CreateProgramRequest {
     pub process_name: Option<String>,
 
     pub cron: Option<String>,
+
+    /// Cron overlap policy when the previous run is still executing.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub on_overlap: Option<CronOverlap>,
+
+    /// Policy for cron slots missed while the daemon was down.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub catchup: Option<CronCatchup>,
+
+    /// Max random delay (seconds) added before each cron trigger.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub jitter_sec: Option<u64>,
+
+    /// Max overlapping cron runs allowed at once (default 1; 0 means default).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub max_concurrent: Option<u32>,
+
+    /// Cap on queued cron firings when at `max_concurrent` (default 100; 0 means default).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub max_queued: Option<u32>,
+
     /// Linux cgroup resource limits (requires isolation plugin on Linux).
     #[serde(default)]
     pub resource_limits: Option<ResourceLimits>,
@@ -346,6 +604,27 @@ pub struct UpdateProgramRequest {
     pub artifact: Option<ArtifactConfig>,
 
     pub cron: Option<String>,
+
+    /// Cron overlap policy when the previous run is still executing.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub on_overlap: Option<CronOverlap>,
+
+    /// Policy for cron slots missed while the daemon was down.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub catchup: Option<CronCatchup>,
+
+    /// Max random delay (seconds) added before each cron trigger.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub jitter_sec: Option<u64>,
+
+    /// Max overlapping cron runs allowed at once (default 1; 0 means default).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub max_concurrent: Option<u32>,
+
+    /// Cap on queued cron firings when at `max_concurrent` (default 100; 0 means default).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub max_queued: Option<u32>,
+
     /// Linux cgroup resource limits (requires isolation plugin on Linux).
     #[serde(default)]
     pub resource_limits: Option<ResourceLimits>,
@@ -495,6 +774,20 @@ pub enum SystemEvent {
         pid: Option<u32>,
         uptime_sec: u64,
     },
+    /// Health probes failed `max_failures` times consecutively; the daemon is
+    /// auto-restarting the process.
+    HealthRestart {
+        program_id: Uuid,
+        program_name: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        pid: Option<u32>,
+        #[serde(default)]
+        uptime_secs: u64,
+        /// How many consecutive health-triggered restarts so far.
+        retry_count: u32,
+        /// Last probe failure detail.
+        msg: String,
+    },
     /// Manager process shutting down
     SystemShutdown,
     /// Anonymous memory of a limited cgroup crossed the warning threshold
@@ -535,6 +828,7 @@ impl SystemEvent {
             SystemEvent::ProcessStarted { .. } => "process_started",
             SystemEvent::SystemStartup { .. } => "system_startup",
             SystemEvent::ProcessRecovered { .. } => "process_recovered",
+            SystemEvent::HealthRestart { .. } => "health_restart",
             SystemEvent::SystemShutdown => "system_shutdown",
             SystemEvent::MemoryPressure { .. } => "memory_pressure",
             SystemEvent::MemoryOomKill { .. } => "memory_oom_kill",
@@ -547,6 +841,7 @@ impl SystemEvent {
             | SystemEvent::ProcessBackoff { program_name, .. }
             | SystemEvent::ProcessStarted { program_name, .. }
             | SystemEvent::ProcessRecovered { program_name, .. }
+            | SystemEvent::HealthRestart { program_name, .. }
             | SystemEvent::MemoryPressure { program_name, .. }
             | SystemEvent::MemoryOomKill { program_name, .. } => Some(program_name),
             SystemEvent::SystemStartup { .. } | SystemEvent::SystemShutdown => None,

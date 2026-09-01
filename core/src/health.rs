@@ -1,24 +1,8 @@
 use common::HealthCheck;
 use common::security::{FetchUrlPolicy, validate_outbound_url};
 use std::process::Stdio;
-use std::sync::OnceLock;
 use std::time::Duration;
 use tokio::net::TcpStream;
-
-// Shared HTTP client; avoid rebuilding connection pool per check
-static HTTP_CLIENT: OnceLock<reqwest::Client> = OnceLock::new();
-
-fn get_http_client() -> &'static reqwest::Client {
-    HTTP_CLIENT.get_or_init(|| {
-        reqwest::Client::builder()
-            .timeout(Duration::from_secs(5))
-            .user_agent("Superd-HealthCheck/1.0")
-            // Health checks hit localhost/LAN; disable proxy to skip extra hops
-            .no_proxy()
-            .build()
-            .expect("Failed to initialize HealthCheck HTTP Client")
-    })
-}
 
 /// Result of a single health probe, with a human-readable failure reason when unhealthy.
 #[derive(Debug, Clone)]
@@ -43,31 +27,49 @@ impl CheckOutcome {
     }
 }
 
-/// Run one health check.
+/// Run one health check, honoring the probe's configured `timeout_secs`.
 pub async fn perform_check(check: &HealthCheck) -> CheckOutcome {
     match check {
-        HealthCheck::Tcp { host, port } => check_tcp(host, *port).await,
-        HealthCheck::Http { url, method } => check_http(url, method.as_deref()).await,
-        HealthCheck::Exec { command } => check_exec(command).await,
+        HealthCheck::Tcp { host, port, .. } => {
+            check_tcp(host, *port, Duration::from_secs(check.timeout_secs())).await
+        }
+        HealthCheck::Http { url, method, .. } => {
+            check_http(
+                url,
+                method.as_deref(),
+                Duration::from_secs(check.timeout_secs()),
+            )
+            .await
+        }
+        HealthCheck::Exec { command, .. } => {
+            check_exec(command, Duration::from_secs(check.timeout_secs())).await
+        }
         HealthCheck::Disabled => CheckOutcome::ok(),
     }
 }
 
-async fn check_tcp(host: &str, port: u16) -> CheckOutcome {
+async fn check_tcp(host: &str, port: u16, timeout: Duration) -> CheckOutcome {
     let addr = format!("{}:{}", host, port);
-    match tokio::time::timeout(Duration::from_secs(3), TcpStream::connect(&addr)).await {
+    match tokio::time::timeout(timeout, TcpStream::connect(&addr)).await {
         Ok(Ok(_)) => CheckOutcome::ok(),
         Ok(Err(e)) => CheckOutcome::fail(format!("TCP {}: connection failed: {}", addr, e)),
         Err(_) => CheckOutcome::fail(format!("TCP {}: connection timed out", addr)),
     }
 }
 
-async fn check_http(url: &str, method: Option<&str>) -> CheckOutcome {
+async fn check_http(url: &str, method: Option<&str>, timeout: Duration) -> CheckOutcome {
     if let Err(e) = validate_outbound_url(url, FetchUrlPolicy::HealthCheck) {
         return CheckOutcome::fail(format!("Health check URL rejected: {e}"));
     }
 
-    let client = get_http_client();
+    // Rebuild per probe so the timeout matches the configured `timeout_secs`.
+    let client = reqwest::Client::builder()
+        .timeout(timeout)
+        .user_agent("Superd-HealthCheck/1.0")
+        // Health checks hit localhost/LAN; disable proxy to skip extra hops
+        .no_proxy()
+        .build()
+        .expect("Failed to initialize HealthCheck HTTP Client");
 
     let method_str = method.unwrap_or("GET");
     let method = match method_str.to_uppercase().as_str() {
@@ -89,7 +91,7 @@ async fn check_http(url: &str, method: Option<&str>) -> CheckOutcome {
     }
 }
 
-async fn check_exec(command: &str) -> CheckOutcome {
+async fn check_exec(command: &str, timeout: Duration) -> CheckOutcome {
     let check_future = async {
         match tokio::process::Command::new("sh")
             .arg("-c")
@@ -119,8 +121,8 @@ async fn check_exec(command: &str) -> CheckOutcome {
         }
     };
 
-    match tokio::time::timeout(Duration::from_secs(7), check_future).await {
+    match tokio::time::timeout(timeout, check_future).await {
         Ok(outcome) => outcome,
-        Err(_) => CheckOutcome::fail(format!("exec {:?}: timed out after 7s", command)),
+        Err(_) => CheckOutcome::fail(format!("exec {:?}: timed out", command)),
     }
 }
