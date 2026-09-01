@@ -71,7 +71,7 @@ Hooks are **not** defined in `super.toml` at the global level — `super.toml` h
 
 ## Environment variables
 
-Hook scripts receive context via environment variables (in addition to the program's `env` / `env_file`):
+Hook scripts receive context via environment variables (in addition to the program's `env` / `env_file`). These are *injected by the daemon* at run time — distinct from the [public environment variables](/docs/06-internals/environment-variables) that configure `superd`/`super` itself:
 
 | Variable | `pre_start` | `post_start` | `pre_stop` | `post_stop` |
 | :--- | :---: | :---: | :---: | :---: |

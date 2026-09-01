@@ -67,7 +67,7 @@ See [Event notifications](/docs/05-advanced-management/event-notifications#storm
 
 ## Deploy the ui plugin
 
-Install the **`ui`** plugin library from your subscription delivery package into `$SUPER_ROOT/plugins/`.
+Install the **`ui`** plugin library from your subscription delivery package into `$SUPER_ROOT/plugins/` (instance root resolved from the [`SUPER_ROOT` environment variable](/docs/06-internals/environment-variables#super_root)).
 
 Restart `superd` after updating plugins.
 

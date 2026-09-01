@@ -16,6 +16,7 @@ This page is the canonical list of all event types. Configuration for reacting t
 | `process_fatal` | `ProcessFatal` | Process stopped and will **not** auto-restart (retries exhausted, manual fatal, spawn/pre-start failure, cron failure, OTA rollback trigger, etc.) | `program_id`, `program_name`, `pid`, `uptime_secs`, `exit_code`, `signal`, `msg`, `log_tail` |
 | `process_backoff` | `ProcessBackoff` | Process crashed but **will** retry (autorestart still active) | `program_id`, `program_name`, `pid`, `uptime_secs`, `exit_code`, `signal`, `retry_count` |
 | `process_recovered` | `ProcessRecovered` | Process was unstable (backoff/fatal path) and is now **Healthy** again | `program_id`, `program_name`, `pid`, `uptime_sec` |
+| `health_restart` | `HealthRestart` | Health probes failed `max_failures` times consecutively; the daemon auto-restarted the process | `program_id`, `program_name`, `pid`, `uptime_secs`, `retry_count`, `msg` |
 | `system_startup` | `SystemStartup` | `superd` manager loop started (after loading programs) | `hostname` |
 | `system_shutdown` | `SystemShutdown` | `superd` is shutting down gracefully | *(none)* |
 | `memory_pressure` | `MemoryPressure` | Live (anonymous) memory of a limited cgroup crossed the warning threshold — process still running | `program_id`, `program_name`, `pid`, `usage_bytes`, `limit_bytes`, `warn_bytes` |
@@ -27,7 +28,7 @@ This page is the canonical list of all event types. Configuration for reacting t
 * **`memory_pressure` / `memory_oom_kill`**: emitted by the licensed `isolation` plugin on Linux for programs with `resource_limits.memory_limit`. `memory_pressure` is a **pre-kill warning** (Tier 1 / opt-in Tier 2 throttle); `memory_oom_kill` is a **post-kill confirmation** that makes an OOM kill distinguishable from a manual `kill -9`. See [Resource Isolation — Warning & visibility](/docs/05-advanced-management/resource-isolation#warning--visibility-three-tier).
 * **`process_fatal` + `log_tail`**: Licensed webhooks (`notify` plugin) can attach the last lines of stderr when `include_log_tail = true` on a channel. The tail is read at event time from the program log file.
 * **`process_recovered`**: Only emitted after a prior crash/backoff (`alert_pending_recovery`). A clean first start does not emit recovery.
-* **Health check failures alone** do not emit a dedicated event today. A failing health check keeps status at `Running`; repeated process exits still emit `process_backoff` / `process_fatal`.
+* **`health_restart`**: Emitted when a health check fails `max_failures` times in a row (see [Health Checks](/docs/03-orchestration/health-checks)). It fires *before* the restart, and the process is restarted regardless of `autorestart`/`exitcodes` (those only govern exit handling). After `retry_limit` health restarts the process goes Fatal (`process_fatal`) instead.
 * **Cron jobs**: exit `0` → stopped quietly; non-zero exit → `process_fatal`.
 
 ## JSON shape (internal)

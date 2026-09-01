@@ -116,6 +116,8 @@ $SUPER_ROOT/
   logs/
 ```
 
+> `$SUPER_ROOT` is resolved from the [`SUPER_ROOT` environment variable](/docs/06-internals/environment-variables#super_root) (then the binary layout, then the working directory).
+
 **Install licensed plugins** (from your subscription delivery package):
 
 ```bash

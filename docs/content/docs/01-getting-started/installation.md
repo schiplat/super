@@ -134,6 +134,6 @@ sudo systemctl status superd
 ```
 
 > [!NOTE]
-> Default layout is `$SUPER_ROOT/conf/super.toml`. Set `SUPER_ROOT` if your layout differs.
+> Default layout is `$SUPER_ROOT/conf/super.toml`. Set `SUPER_ROOT` if your layout differs (see [Environment Variables](/docs/06-internals/environment-variables#super_root)).
 >
 > **Daemonize without systemd:** `superd --daemon` (or `[server] daemon = true`) writes `$SUPER_ROOT/run/superd.pid` by default. Do **not** combine that with this unit — `superd` refuses to start if both are detected. Stop with `super shutdown` as usual.

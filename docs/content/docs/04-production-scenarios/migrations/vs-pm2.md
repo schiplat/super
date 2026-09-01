@@ -61,7 +61,7 @@ Super rotates child logs in the OSS daemon. You do not install a plugin to keep 
 
 ## 5. Command parity
 
-`super` uses the same single-target style as PM2 — name, group, id, or `all` (see [CLI Reference — Process Operations](/docs/06-internals/cli-reference#process-operations)):
+`super` uses the same single-target style as PM2 — name, group, id, or `all` (see [CLI Reference — Lifecycle](/docs/06-internals/cli-reference#lifecycle)):
 
 ```bash
 super <start|stop|restart|remove> <name|@group|id|all>

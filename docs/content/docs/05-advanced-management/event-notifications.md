@@ -20,6 +20,8 @@ Notifications are configured in a separate file **`conf/notify.toml`** (sibling 
 
 ### File location
 
+Notifications are configured in a separate file **`conf/notify.toml`** (sibling to `super.toml`). This separation allows you to hot-reload alerting rules without restarting your processes.
+
 ```
 $SUPER_ROOT/
 ├── conf/
@@ -31,6 +33,8 @@ $SUPER_ROOT/
 ```
 
 If `notify.toml` does not exist, the plugin starts with zero channels and no notifications are sent.
+
+> `$SUPER_ROOT` is the instance root resolved from the [`SUPER_ROOT` environment variable](/docs/06-internals/environment-variables#super_root) (falling back to the binary layout / working directory).
 
 ---
 
@@ -194,6 +198,7 @@ Use these strings in the `triggers` field. Full payload reference: [System Event
 | `process_fatal` | A process crashed and exhausted retries. **Includes stderr tail when `include_log_tail = true`.** |
 | `process_backoff` | A process crashed but is restarting (flapping). |
 | `process_recovered` | A previously-crashing process has become healthy. |
+| `health_restart` | Health probes failed `max_failures` times consecutively; the daemon auto-restarted the process. |
 | `system_startup` | The daemon started. |
 | `system_shutdown` | The daemon is shutting down. |
 | `memory_pressure` | 💎 `isolation` — live memory of a limited cgroup crossed the warning threshold (pre-kill warning). |
@@ -317,6 +322,7 @@ url = "https://api.example.com/alerts"
 | `process_fatal` | `program_id`, `program_name`, `pid`, `uptime_secs`, `exit_code`, `signal`, `msg`, `log_tail` |
 | `process_backoff` | `program_id`, `program_name`, `pid`, `uptime_secs`, `exit_code`, `signal`, `retry_count` |
 | `process_recovered` | `program_id`, `program_name`, `pid`, `uptime_sec` |
+| `health_restart` | `program_id`, `program_name`, `pid`, `uptime_secs`, `retry_count`, `msg` |
 | `process_started` | `program_id`, `program_name`, `pid` |
 | `system_startup` | `hostname` |
 | `system_shutdown` | *(none)* |

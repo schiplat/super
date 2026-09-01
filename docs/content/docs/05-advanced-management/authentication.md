@@ -32,6 +32,8 @@ If `[license].key` is set but verification fails (bad signature, expired with `r
 | Licensed intent (plugins under `plugins/`, `auth_secret` set, or non-loopback bind) | **Refuse startup** — avoids silent loss of API auth or Pro features |
 | `[license].strict = true` or `SUPER_LICENSE_STRICT=1` | **Refuse startup** always |
 
+The `SUPER_LICENSE` / `SUPER_LICENSE_STRICT` env overrides are documented in [Environment Variables](/docs/06-internals/environment-variables#license-licensed-deployments).
+
 Production subscription templates ship with `strict = true`. Fix the key, renew, or remove licensed-only configuration to run in OSS mode.
 
 | Mode | API auth | Startup if `security` missing |

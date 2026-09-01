@@ -104,6 +104,11 @@ Partially update an existing program. Only fields present in the body are change
 | `stdout_logfile`, `stderr_logfile` | Custom log paths (must resolve under `storage.log_dir`) |
 | `artifact` | OTA binary update — see below |
 | `cron` | Cron expression — see [Scheduled Tasks](/docs/02-essentials/scheduled-tasks). |
+| `on_overlap` | `skip` (default) / `queue` / `kill` — cron overlap policy |
+| `catchup` | `skip` (default) / `latest` / `all` — missed-slot backfill policy |
+| `jitter_sec` | Max random delay (seconds) before each cron trigger |
+| `max_concurrent` | Max overlapping cron runs at once (default `1`, 1–64) |
+| `max_queued` | Cap on queued cron firings when at `max_concurrent` (default `100`; `0` = default) — firings beyond the cap are dropped and recorded as `queue_full` events |
 | `resource_limits` | 💎 Requires `isolation` plugin on Linux — stored in config always; enforced only when plugin is loaded |
 
 > [!IMPORTANT] Update persists config only
@@ -204,7 +209,7 @@ Read a program's persisted lifecycle/exception event history (`data/events.json`
 | Field | Description |
 | :--- | :--- |
 | `ts` | Unix timestamp (seconds) |
-| `event` | `process_fatal` · `process_backoff` · `process_recovered` · `process_exit` |
+| `event` | `process_fatal` · `process_backoff` · `process_recovered` · `process_exit` · `health_restart` |
 | `exit_code` | Process exit code, when captured |
 | `signal` | Terminating signal (e.g. `9` = SIGKILL, includes cgroup OOM kills) |
 | `retry_count` | Backoff retry counter (fatal/backoff only) |

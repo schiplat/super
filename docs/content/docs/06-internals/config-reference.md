@@ -20,13 +20,15 @@ description: "Complete schema for super.toml."
 | :--- | :--- |
 | Root (`super.toml`) | `auth_secret` 💎 |
 | `[license]` | `key` 💎 — cryptographically signed subscription token from your vendor |
-| `conf/conf.d/*.json` *(program stacks)* | `services[].resource_limits` (`cpu_quota`, `memory_limit`) 💎 |
+| `conf/conf.d/*.json` *(program stacks)* | `services[].resource_limits` (`cpu_quota`, `memory_limit`, `memory_warn_percent`, `memory_warn_headroom`, `memory_high`) 💎 |
 | `conf/notify.toml` *(separate file)* | `[[channels]]` 💎 — see [Event Notifications](/docs/05-advanced-management/event-notifications) |
 
 > [!NOTE]
 > See [Configuration — OSS security defaults](/docs/02-essentials/configuration#oss-security-defaults-fail-closed) for fail-closed bind, log path confinement, and other defensive defaults.
 
 ## Instance layout (`SUPER_ROOT`)
+
+The instance root is resolved from `SUPER_ROOT` first, then the binary's directory layout, then the working directory — see [Environment Variables](/docs/06-internals/environment-variables#super_root).
 
 | Path | Purpose |
 | :--- | :--- |
@@ -90,6 +92,8 @@ When a key is present but **does not verify**, behavior depends on deployment si
 | Loopback OSS dev (no plugins, no `auth_secret`) | **Degrade** to OSS with stderr/tracing warnings |
 | **Licensed intent** (plugins on disk, `auth_secret` set, or non-loopback bind) | **Refuse startup** |
 | `[license].strict = true` (or `SUPER_LICENSE_STRICT=1`) | **Refuse startup** always |
+
+The `SUPER_LICENSE` and `SUPER_LICENSE_STRICT` overrides are documented in [Environment Variables](/docs/06-internals/environment-variables#license-licensed-deployments).
 
 | Key | Type | Default | Description |
 | :--- | :--- | :--- | :--- |
@@ -161,6 +165,8 @@ The keys below describe a **single program entry** — one item in a stack file'
 | `cwd` | string | — | Working directory. |
 | `user` | string | — | Run as this user (requires root). |
 | `group` | string | — | Logical group for batch control (e.g. `@backend`). |
+| `numprocs` | int | `1` | Spawn N process instances (CLI: `super add --numprocs`). |
+| `process_name` | string | `{name}-{num}` | Process name template for multiple instances (e.g. `worker-{num}`). |
 
 ### Restart & stop behaviour
 
@@ -194,6 +200,11 @@ Example: `autostart = false` with `autorestart = "true"` gives a manually starte
 | :--- | :--- | :--- | :--- |
 | `depends_on` | list | `[]` | Program names that must be **Healthy** before this one starts. |
 | `cron` | string | — | Cron expression (e.g. `0 0 * * * *`). See [Scheduled Tasks](/docs/02-essentials/scheduled-tasks). |
+| `on_overlap` | string | `skip` | Cron overlap policy: `skip` (drop tick while previous run is active), `queue` (run after the current instance exits), or `kill` (terminate the running instance, then run). |
+| `catchup` | string | `skip` | Cron catch-up policy for slots missed while the daemon was down: `skip` (drop), `latest` (backfill the most recent slot once), or `all` (backfill every missed slot, capped at 10). |
+| `jitter_sec` | int | `0` | Max random delay in **seconds** added to each cron trigger to spread load. `0` disables jitter. |
+| `max_concurrent` | int | `1` | Max overlapping cron runs allowed at once (1–64; `0` means the default). See [Scheduled Tasks](/docs/02-essentials/scheduled-tasks). |
+| `max_queued` | int | `100` | Cap on queued cron firings when `max_concurrent` is reached and `on_overlap` is `queue`/`kill` (0–10000; `0` means the default). Firings beyond the cap are dropped and recorded as `queue_full` events. |
 
 ### `hooks`
 
@@ -211,9 +222,15 @@ Per-program lifecycle shell hooks. Full behavior table: [Lifecycle Hooks](/docs/
 | Key | Type | Default | Description |
 | :--- | :--- | :--- | :--- |
 | `type` | string | — | **Required.** `tcp`, `http`, or `exec`. |
+| `host` | string | `127.0.0.1` | For `tcp` checks. |
 | `port` | int | — | For `tcp` checks. |
 | `url` | string | — | For `http` checks. |
+| `method` | string | `GET` | For `http` checks: `GET`, `HEAD`, or `POST`. |
 | `command` | string | — | For `exec` checks. |
+| `interval_secs` | int | `5` | Seconds between probes. `0` = default. |
+| `timeout_secs` | int | `3` (tcp) · `5` (http) · `7` (exec) | Max seconds a single probe may take. `0` = default. |
+| `start_period_secs` | int | `1` | Grace period after start before the first probe. `0` = default. |
+| `max_failures` | int | `3` | Consecutive failures before auto-restart; `0` disables auto-restart. Bounded by `retry_limit` — see [Health Checks](/docs/03-orchestration/health-checks#auto-restart--retry-limit). |
 
 ### `resource_limits` 💎
 
