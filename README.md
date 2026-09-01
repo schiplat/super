@@ -1,4 +1,4 @@
-# 🦸 Project Super
+# Project Super
 
 **The API-First, Lightweight Process Orchestrator for the Edge.**
 
