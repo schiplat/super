@@ -112,6 +112,17 @@ key = "eyJjbGFpbXMiOnsiaXNzdWVkX3RvIjoi..."
 
 See [Configuration](/docs/02-essentials/configuration) and [Logging](/docs/02-essentials/logging) for examples. Keys mirror `ServerConfig` in `common/src/config.rs`.
 
+### `[storage]` — data paths & event retention
+
+| Key | Type | Default | Description |
+| :--- | :--- | :--- | :--- |
+| `data_file` | path | `./data/snapshot.json` | Runtime program snapshot (`snapshot.json`). See [Snapshot persistence & restore](/docs/04-production-scenarios/delivery/snapshot-and-restore). |
+| `log_dir` | path | `./logs` | Daemon + child log directory. |
+| `events_file` | path | `./data/events.db` | SQLite event-history database location. Relative paths resolve under `SUPER_ROOT`. |
+| `events_keep_days` | int | `30` | Retention window (days) for persisted event history. Events older than this are pruned once per day. `0` keeps everything (unlimited). |
+
+Event history is persisted to SQLite at `events_file` (default `data/events.db`, WAL mode). Every lifecycle event is recorded — program crashes, exits, recoveries, health restarts, cron runs (`cron_started`/`cron_exit`/`cron_spawn_failed`), queue drops, and daemon startup/shutdown. The store supports time/type/exit-code/text filtering and retention statistics via `super events` and the events API. The database is tuned for high write/query throughput: batched transactional inserts from a background writer, indexes aligned with the millisecond sort key, and WAL PRAGMA settings (large page cache, memory temp tables, capped WAL growth) are applied automatically. See [Event History](/docs/03-orchestration/events/history) for usage.
+
 ### `[child_logging]` — child process log capture
 
 | Key | Type | Default | Description |
@@ -255,7 +266,7 @@ Per-program lifecycle shell hooks. Full behavior table: [Lifecycle Hooks](/docs/
 
 ## `[[event_hooks]]` *(OSS)*
 
-Global event listeners: **local scripts** (JSON on stdin) or **native webhooks** (`url`). Distinct from licensed `conf/notify.toml` webhooks (`notify` plugin). Full reference: [Event Hooks](/docs/03-orchestration/event-hooks).
+Global event listeners: **local scripts** (JSON on stdin) or **native webhooks** (`url`). Distinct from licensed `conf/notify.toml` webhooks (`notify` plugin). Full reference: [Event Hooks](/docs/03-orchestration/events/hooks).
 
 > [!WARNING]
 > `[webhook]` is not supported in `super.toml`. `superd` and `super check` reject configs that still contain a `[webhook]` table. For IM-specific templates, use `conf/notify.toml` with the `notify` plugin.
@@ -277,10 +288,10 @@ Global event listeners: **local scripts** (JSON on stdin) or **native webhooks**
 
 ## System events & reactions
 
-Super emits [System Events](/docs/03-orchestration/system-events) (`process_fatal`, `process_started`, etc.). Where to configure reactions:
+Super emits [System Events](/docs/03-orchestration/events/types) (`process_fatal`, `process_started`, etc.). Where to configure reactions:
 
 | Mechanism | Config file | Edition | Status |
 | :--- | :--- | :--- | :--- |
 | Lifecycle hooks | per-program `hooks` (stack JSON / API) | OSS | ✅ Active |
-| Event hooks | `super.toml` → `[[event_hooks]]` | OSS | ✅ [Event Hooks](/docs/03-orchestration/event-hooks) |
+| Event hooks | `super.toml` → `[[event_hooks]]` | OSS | ✅ [Event Hooks](/docs/03-orchestration/events/hooks) |
 | Webhook notifications | `conf/notify.toml` | 💎 Licensed (`notify`) | ✅ [Event Notifications](/docs/05-advanced-management/event-notifications) |

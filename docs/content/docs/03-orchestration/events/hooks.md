@@ -1,10 +1,15 @@
 ---
 title: "Event Hooks"
-weight: 5
+weight: 3
 description: "Run local scripts or POST to webhooks on system events."
+aliases:
+  - /docs/03-orchestration/event-hooks/
 ---
 
-Event hooks let you react to [System Events](/docs/03-orchestration/system-events) by running shell commands on the **same machine** as `superd`, or by POSTing the event JSON to an HTTP(S) **webhook** — no plugin or license required. This is the OSS equivalent of Supervisor's `[eventlistener]`; licensed [Event Notifications](/docs/05-advanced-management/event-notifications) (the `notify` plugin) additionally provide IM-specific templates and channel routing.
+Event hooks let you react to [events](/docs/03-orchestration/events/types) by running shell commands on the **same machine** as `superd`, or by POSTing the event JSON to an HTTP(S) **webhook** — no plugin or license required. This is the OSS equivalent of Supervisor's `[eventlistener]`; licensed [Event Notifications](/docs/05-advanced-management/event-notifications) (the `notify` plugin) additionally provide IM-specific templates and channel routing.
+
+> [!NOTE]
+> Hooks fire on `SystemEvent`s (lifecycle, health, memory events). **Record-only** events (`cron_started`, `cron_exit`, `cron_spawn_failed`, `queue_full`) are persisted to the [event history](/docs/03-orchestration/events/history) but never trigger hooks.
 
 ## Configuration
 
@@ -130,6 +135,8 @@ In addition to stdin JSON, hooks receive:
 
 ## Related
 
-* [System Events](/docs/03-orchestration/system-events) — full event catalog
+* [Events overview](/docs/03-orchestration/events) — the three-layer event system
+* [Event Types](/docs/03-orchestration/events/types) — full event catalog
+* [Event History](/docs/03-orchestration/events/history) — persisted record of all events
 * [Lifecycle Hooks](/docs/03-orchestration/lifecycle-hooks) — per-program start/stop scripts
-* [Config Reference](/docs/06-internals/config-reference#event_hooks-oss)
+* [Config Reference — `[[event_hooks]]`](/docs/06-internals/config-reference#event_hooks-oss)

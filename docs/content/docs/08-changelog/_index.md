@@ -12,6 +12,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [Unreleased]
+
+### Added
+
+- **SQLite-backed event history** (OSS): lifecycle events are now persisted to a SQLite database (`[storage] events_file`, default `data/events.db`, WAL mode) instead of `data/events.json`. **All** events are recorded — not just anomalies — including program crashes, exits, recoveries, health restarts, cron runs, queue drops, and daemon startup/shutdown. Retention is **unlimited by default**; `[storage] events_keep_days` (default `30`, `0` = keep everything) prunes older events once per day.
+- **Event filtering & statistics**: `super events` gains `--from` / `--to` (time window), `--type`, `--exit-code`, and `--q` (free-text) filters, plus `--stats` for retention statistics. New API endpoints: `GET /api/v1/events` (global query with optional `program_id`) and `GET /api/v1/events/stats`. `GET /api/v1/programs/{id}/events` accepts the same filter query params.
+- **Millisecond timestamps**: every event records `ts_ms` (Unix milliseconds) alongside `ts` (seconds) for precise, stable ordering of high-frequency events.
+- **Cron run events**: `cron_started`, `cron_exit` (with `duration_secs` run duration and exit code), and `cron_spawn_failed` are recorded per firing; `super events <name> --type cron_exit` audits all runs.
+- **Configurable event database path**: `[storage] events_file` (default `./data/events.db`) sets where event history lives; relative paths resolve under `SUPER_ROOT`.
+
+### Changed
+
+- Event history is written by a background batch writer (dedicated task draining a queue into SQLite transaction batches) — event persistence never blocks the manager actor loop.
+- The event database is tuned for high-throughput workloads: batched transactional inserts, indexes aligned with the `(ts_ms, id)` sort key, and WAL PRAGMA settings (64 MiB page cache, memory temp tables, capped WAL growth) are applied automatically.
+- Removed the per-program 100-event cap and the legacy `data/events.json` store.
+
+---
+
 ## [1.4.0] - 2026-08-31
 
 ### Breaking
@@ -266,7 +284,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [1.1.7] - 2026-07-07
 
 ### Added
-- Event hooks — run scripts on [system events](/docs/03-orchestration/system-events).
+- Event hooks — run scripts on [system events](/docs/03-orchestration/events/types).
 - `post_stop` lifecycle hook.
 - Supervisor-compatible fields: `stopsecs`, `priority`, log file paths, `autorestart` / `exitcodes` / `startsecs`.
 - Historical logs API and `super logs --tail`.

@@ -137,4 +137,4 @@ Supervisor and Super use different configuration models. Use this table when mig
 | :--- | :--- |
 | `stopsignal` (per program) | `super signal <name> <sig>` manually; default stop uses SIGTERM |
 | `redirect_stderr=true` | Not supported; stdout/stderr are separate files |
-| `[eventlistener:x]` | OSS `[[event_hooks]]` + licensed `notify.toml`; see [Event Hooks](/docs/03-orchestration/event-hooks) |
+| `[eventlistener:x]` | OSS `[[event_hooks]]` + licensed `notify.toml`; see [Event Hooks](/docs/03-orchestration/events/hooks) |

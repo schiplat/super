@@ -187,9 +187,22 @@ Read the last N lines from on-disk log files (`{uuid}.out` / `{uuid}.err`).
 
 ### Event History
 
-Read a program's persisted lifecycle/exception event history (`data/events.json`), newest first order is not guaranteed — sort by `ts` on the client.
+Read a program's persisted event history (`data/events.db`, SQLite), oldest first. **All** lifecycle events are recorded — not just anomalies. Optional query filters are combinable. For a user-oriented walkthrough of storage, retention, and querying, see [Event History](/docs/03-orchestration/events/history).
 
 *   **GET** `/api/v1/programs/{id}/events`
+
+| Query param | Type | Description |
+| :--- | :--- | :--- |
+| `from` | int | Inclusive lower bound on `ts` (Unix seconds) |
+| `to` | int | Inclusive upper bound on `ts` (Unix seconds) |
+| `event_type` | string | Exact event type (e.g. `process_fatal`, `cron_exit`) |
+| `exit_code` | int | Exact exit code |
+| `q` | string | Free-text match on `msg` |
+| `limit` | int | Max rows (oldest-first) |
+| `offset` | int | Pagination offset |
+
+*   **GET** `/api/v1/events` — same filters, plus `program_id` to scope to one program (omit for the whole daemon).
+*   **GET** `/api/v1/events/stats?program_id=<uuid>` — retention statistics: `total`, `by_type` (count per event type), `first_ts`/`last_ts` (retained time range).
 
 **Response:** array of event records:
 
@@ -197,10 +210,14 @@ Read a program's persisted lifecycle/exception event history (`data/events.json`
 [
   {
     "ts": 1760000000,
+    "ts_ms": 1760000000123,
+    "program_id": "2d4c3f1e-...",
+    "program_name": "web",
     "event": "process_fatal",
     "exit_code": null,
     "signal": 9,
     "retry_count": 3,
+    "duration_secs": null,
     "msg": "Stopped after 3 retries. Last exit code: None"
   }
 ]
@@ -209,13 +226,17 @@ Read a program's persisted lifecycle/exception event history (`data/events.json`
 | Field | Description |
 | :--- | :--- |
 | `ts` | Unix timestamp (seconds) |
-| `event` | `process_fatal` · `process_backoff` · `process_recovered` · `process_exit` · `health_restart` |
+| `ts_ms` | Unix timestamp (milliseconds) — precise time point, stable ordering |
+| `program_id` | Owning program id (`null` for system-wide events) |
+| `program_name` | Owning program name (`null` for system-wide events) |
+| `event` | `process_fatal` · `process_backoff` · `process_recovered` · `process_exit` · `health_restart` · `cron_started` · `cron_exit` · `cron_spawn_failed` · `queue_full` · `system_startup` · `system_shutdown` |
 | `exit_code` | Process exit code, when captured |
 | `signal` | Terminating signal (e.g. `9` = SIGKILL, includes cgroup OOM kills) |
 | `retry_count` | Backoff retry counter (fatal/backoff only) |
+| `duration_secs` | Execution duration in seconds (cron runs only) |
 | `msg` | Human-readable detail |
 
-Events are retained per program (**max 100**, oldest dropped) across `superd` restarts. Every record includes the `ts` Unix timestamp (seconds) shown in the field table above.
+Events are retained **unlimited by default** across `superd` restarts. Set `events_keep_days` in `[storage]` to prune events older than N days (once per day).
 
 ### Send Signal
 

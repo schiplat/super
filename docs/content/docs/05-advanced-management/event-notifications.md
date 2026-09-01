@@ -197,7 +197,7 @@ Sends the raw Super JSON envelope (see [Default Envelope](#default-envelope-webh
 
 ## Supported Events
 
-Use these strings in the `triggers` field. Full payload reference: [System Events](/docs/03-orchestration/system-events).
+Use these strings in the `triggers` field. Full payload reference: [System Events](/docs/03-orchestration/events/types).
 
 | Event | Description |
 |-------|-------------|
@@ -246,7 +246,7 @@ When `type = "webhook"`, Super sends this structured JSON payload:
 }
 ```
 
-The `data` field is the **tagged** [System Event](/docs/03-orchestration/system-events) envelope — event fields live under `data.payload.*`.
+The `data` field is the **tagged** [System Event](/docs/03-orchestration/events/types) envelope — event fields live under `data.payload.*`.
 
 | Field | Description |
 |-------|-------------|

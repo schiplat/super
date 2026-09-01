@@ -61,6 +61,22 @@ Super defaults to **restrictive, fail-closed** behaviour in OSS. You can opt int
 
 See [Authentication](/docs/05-advanced-management/authentication#licensed-deployments-require-security) and [SECURITY.md](https://github.com/schiplat/super/blob/master/SECURITY.md) for the full OSS security model.
 
+## Data Storage & Event Retention
+
+The `[storage]` section controls where Super keeps its data files. Example from `conf/super.toml`:
+
+```toml
+# conf/super.toml — [storage]
+[storage]
+data_file = "./data/snapshot.json"  # runtime program snapshot
+events_file = "./data/events.db"    # SQLite event history (default)
+events_keep_days = 30               # prune events older than 30 days; 0 = keep everything
+```
+
+- **Event history** is written to `events_file` (SQLite, WAL mode) and grows **unlimited by default**; `events_keep_days` prunes events older than N days once per day.
+- `data_file` is the program snapshot persisted at runtime — see [Snapshot persistence & restore](/docs/04-production-scenarios/delivery/snapshot-and-restore).
+- Relative paths resolve under `SUPER_ROOT`. Full key reference: [Config reference — `[storage]`](/docs/06-internals/config-reference/#storage).
+
 ## Program Configuration
 
 Programs are **not** declared in `super.toml`. Define them via stack files, the API, or the CLI — Super persists them to `data/snapshot.json` and reloads them on start.

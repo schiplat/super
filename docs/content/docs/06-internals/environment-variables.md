@@ -69,6 +69,6 @@ The following are **not** read by `superd` — they are *written into the enviro
 | `SUPER_ID`, `SUPER_NAME`, `SUPER_HOSTNAME`, `SUPER_GROUP` | Managed child processes and lifecycle hooks ([Lifecycle Hooks](/docs/03-orchestration/lifecycle-hooks)) |
 | `SUPER_PID`, `SUPER_EXIT_CODE`, `SUPER_UPTIME_SECS` | Lifecycle hook scripts (post-start / pre-stop / post-stop) |
 | `SUPER_PROCESS_NUM`, `SUPER_PROCESS_TOTAL` | `numprocs > 1` instances (`worker-0`, `worker-1`, …) |
-| `SUPER_EVENT`, `SUPER_USAGE_BYTES`, `SUPER_LIMIT_BYTES`, `SUPER_WARN_BYTES`, `SUPER_RETRY_COUNT`, … | OSS `[[event_hooks]]` scripts ([System Events](/docs/03-orchestration/system-events)) |
+| `SUPER_EVENT`, `SUPER_USAGE_BYTES`, `SUPER_LIMIT_BYTES`, `SUPER_WARN_BYTES`, `SUPER_RETRY_COUNT`, … | OSS `[[event_hooks]]` scripts ([System Events](/docs/03-orchestration/events/types)) |
 
 These variables are set by the daemon at spawn time; you should not set them yourself.

@@ -44,7 +44,7 @@ Resource limits are defined per program — via stack files (TOML/JSON), the API
 
 ## Warning & visibility (three-tier)
 
-Super combines **pre-kill warning**, an **opt-in kernel throttle**, and **post-kill OOM confirmation** around the hard cap. All three surface as `SystemEvent`s — recorded in the event history (`super events <name>`), forwarded by OSS [event hooks](/docs/03-orchestration/event-hooks), and alerted by licensed [event notifications](/docs/05-advanced-management/event-notifications).
+Super combines **pre-kill warning**, an **opt-in kernel throttle**, and **post-kill OOM confirmation** around the hard cap. All three surface as `SystemEvent`s — recorded in the [event history](/docs/03-orchestration/events/history) (`super events <name>`), forwarded by OSS [event hooks](/docs/03-orchestration/events/hooks), and alerted by licensed [event notifications](/docs/05-advanced-management/event-notifications).
 
 ### Tier 1 — pre-kill warning (default on)
 

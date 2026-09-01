@@ -32,7 +32,20 @@ When a program has a `cron` expression, Super fundamentally changes how it manag
 
 1. **No Autostart**: Even if `autostart` is `true`, the process will **not** start immediately when the daemon boots. It will remain in the `Stopped` state until the cron scheduler triggers it.
 2. **Success (Exit 0)**: When the job finishes successfully (exit code `0`), Super marks it as `Stopped`. It **does not** attempt to restart it. It simply waits for the next cron tick.
-3. **Failure (Exit != 0)**: If the job fails, Super marks it as `Fatal` and fires a `process_fatal` system event. Pair with [Event Hooks](/docs/03-orchestration/event-hooks) (OSS) or licensed [Event Notifications](/docs/05-advanced-management/event-notifications) (`notify` plugin) for external alerting.
+3. **Failure (Exit != 0)**: If the job fails, Super marks it as `Fatal` and fires a `process_fatal` system event. Pair with [Event Hooks](/docs/03-orchestration/events/hooks) (OSS) or licensed [Event Notifications](/docs/05-advanced-management/event-notifications) (`notify` plugin) for external alerting.
+
+### Cron run events
+
+Every cron firing is recorded in the program's event history (SQLite, default `data/events.db`), visible via `super events`. Retention is **unlimited by default**; set `[storage] events_keep_days` (default `30`, `0` = keep everything) to prune older events once per day — see [Configuration — Data Storage](/docs/02-essentials/configuration#data-storage--event-retention):
+
+| Event | When | Notes |
+| :--- | :--- | :--- |
+| `cron_started` | A firing is admitted and the run is spawned | |
+| `cron_exit` | The run exits (success **or** failure) | `duration_secs` records the run duration; `exit_code`/`signal` carry the exit detail |
+| `cron_spawn_failed` | The run could not be spawned | `msg` carries the spawn error |
+| `queue_full` | A firing was dropped because the queue was full | See overlap policy below |
+
+Use these to audit execution history: `super events <name> --type cron_exit` lists all runs with their durations and exit codes.
 
 ## Overlap Policy
 
@@ -187,4 +200,4 @@ super start daily-cleanup
 ## Related
 
 * [Config Reference — `cron`](/docs/06-internals/config-reference)
-* [System Events — cron failures](/docs/03-orchestration/system-events)
+* [System Events — cron failures](/docs/03-orchestration/events/types)

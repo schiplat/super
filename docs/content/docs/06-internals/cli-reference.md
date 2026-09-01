@@ -49,7 +49,7 @@ CLI overrides: `--daemon` / `--foreground` / `--pidfile <PATH>`. See [Config ref
 | :--- | :--- | :--- |
 | [`super list`](#list) | `ls` | List all managed programs with status, CPU, RAM, uptime |
 | [`super info <name\|id>`](#info) | — | Detailed config / state for one program |
-| [`super events <name\|id>`](#events) | — | Persisted lifecycle & exception event history |
+| [`super events <name\|id>`](#events) | — | Persisted event history (filterable) + stats |
 | [`super logs <name\|id>`](#logs) | `log` | Stream or read program logs |
 | [`super top`](#top) | — | Full-screen real-time monitoring UI |
 
@@ -107,18 +107,29 @@ super info <name|id>
 ```
 
 ### `events`
-Show the persisted lifecycle/exception event history for a program (crashes, OOM kills, backoff retries, recoveries, unexpected exits). Newest first.
+Show the persisted event history for a program — **all** lifecycle events are recorded (crashes, OOM kills, backoff retries, recoveries, exits, cron runs, system startup/shutdown), not just anomalies. Newest first. For storage, retention, and workflow guidance, see [Event History](/docs/03-orchestration/events/history).
 
 ```bash
-super events <name|id>          # all recorded events
-super events <name|id> --limit 10   # last 10 events
+super events <name|id>                    # all recorded events
+super events <name|id> --limit 10         # last 10 events
+super events <name|id> --type process_fatal   # only fatal events
+super events <name|id> --exit-code 1      # only runs that exited with code 1
+super events <name|id> --q "oom"          # free-text match on the message
+super events <name|id> --from 1735689600 --to 1735776000   # time window (Unix seconds)
+super events <name|id> --stats            # retention statistics instead of the list
 ```
 
 | Flag | Type | Default | Description |
 | :--- | :--- | :--- | :--- |
 | `--limit N` | int | all events | Show only the N most recent events |
+| `--from TS` | int | — | Inclusive start of the time window (Unix seconds) |
+| `--to TS` | int | — | Inclusive end of the time window (Unix seconds) |
+| `--type NAME` | string | — | Exact event type (e.g. `process_fatal`, `cron_exit`, `health_restart`) |
+| `--exit-code N` | int | — | Exact exit code |
+| `--q TEXT` | string | — | Free-text match on the event message |
+| `--stats` | flag | — | Show counts by event type and the retained time range |
 
-Events are recorded by `superd` to `data/events.json`. Every event carries a **Unix timestamp** (seconds, `ts` field in the API/JSON) — the table's `Time` column renders it as local time. Events are kept **newest per program, capped at 100 per program, oldest dropped** (across `superd` restarts). The `signal` column shows the terminating signal — `9` (`SIGKILL`) typically indicates a cgroup/kernel OOM kill under `resource_limits`. Backed by `GET /api/v1/programs/{id}/events`.
+Events are persisted by `superd` to a SQLite database (default `data/events.db`) — see [Event History](/docs/03-orchestration/events/history) for storage, retention (`events_keep_days`), and the full event catalog. Every event carries a **Unix timestamp** (`ts`, seconds) and a millisecond-precision `ts_ms`; the table's `Time` column renders it as local time. The `signal` column shows the terminating signal — `9` (`SIGKILL`) typically indicates a cgroup/kernel OOM kill under `resource_limits`. Backed by `GET /api/v1/programs/{id}/events` (plus `GET /api/v1/events` and `GET /api/v1/events/stats`).
 
 ### `logs`
 Read historical lines from disk and/or stream live output via WebSocket.

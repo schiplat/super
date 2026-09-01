@@ -355,7 +355,7 @@ the daemon rolls back automatically.
 
 4. **Program keeps restarting (restart loop)**
    - `super events <name>` shows `process_fatal` / backoff / OOM history
-     (capped at 100 events, oldest dropped).
+     (all events are retained in the SQLite event store, default `data/events.db`; filter with `--type`).
    - Check `autorestart` + `exitcodes`: an exit code not in `exitcodes` (and not
      `0`) counts as a crash under `unexpected`.
    - `retry_limit` consecutive crashes → `Fatal` (no more auto-restarts).
