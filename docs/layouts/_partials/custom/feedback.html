@@ -1,0 +1,66 @@
+{{- /* Docs feedback — Docsy-style params.ui.feedback. Minimal Yes/No; No → pre-filled GitHub issue. */ -}}
+{{- $fb := site.Params.ui.feedback | default dict -}}
+{{- with $fb -}}
+{{- if .enable | default true -}}
+{{- $text := .text | default "Was this page helpful?" -}}
+{{- $thanks := .thanks | default "Thanks for your feedback!" -}}
+{{- $issuePrompt := .issuePrompt | default "Still have questions?" -}}
+{{- $repo := .issueRepo | default "schiplat/super" -}}
+{{- $sourceHref := .sourceURL | default (printf "https://github.com/%s" $repo) -}}
+{{- $pageTitle := $.Title -}}
+{{- $pageURL := $.Permalink -}}
+{{- $issueTitle := printf "Docs feedback: %s" $pageTitle -}}
+{{- $issueBody := printf "**Page:** [%s](%s)\n\n**What was unclear or missing?**\n\n_(please describe)_" $pageTitle $pageURL -}}
+{{- $issueHref := printf "https://github.com/%s/issues/new?title=%s&body=%s" $repo ($issueTitle | urlquery) ($issueBody | urlquery) | safeURL -}}
+{{- $feedbackKey := printf "docs-feedback-%s" $.RelPermalink | sha256 | truncate 24 "" -}}
+<div class="hextra-feedback hx:mt-12 hx:border-t hx:border-gray-200 hx:dark:border-neutral-800 hx:pt-6 hx:text-sm">
+  <p class="hextra-feedback-prompt hx:flex hx:flex-wrap hx:items-center hx:gap-x-2 hx:text-gray-600 hx:dark:text-gray-400">
+    <span>{{ $text }}</span>
+    <span class="hextra-feedback-actions hx:flex hx:items-center hx:gap-x-2">
+      <button type="button" data-feedback="yes" class="hx:font-medium hx:text-primary-600 hx:underline hx:underline-offset-2 hx:hover:opacity-80">Yes</button>
+      <span aria-hidden="true" class="hx:text-gray-300 hx:dark:text-neutral-700">/</span>
+      <button type="button" data-feedback="no" class="hx:font-medium hx:text-primary-600 hx:underline hx:underline-offset-2 hx:hover:opacity-80">No</button>
+    </span>
+    <span class="hextra-feedback-thanks hx:hidden">{{ $thanks }}</span>
+  </p>
+  <p class="hextra-feedback-issue hx:hidden hx:mt-2 hx:text-gray-600 hx:dark:text-gray-400">
+    {{ $issuePrompt }}
+    <a href="{{ $issueHref }}" target="_blank" rel="noopener noreferrer" class="hx:font-medium hx:text-primary-600 hx:underline hx:underline-offset-2 hx:hover:opacity-80">Open an issue</a>
+    or
+    <a href="{{ $sourceHref }}" target="_blank" rel="noopener noreferrer" class="hx:font-medium hx:text-primary-600 hx:underline hx:underline-offset-2 hx:hover:opacity-80">browse the source</a>.
+  </p>
+</div>
+<script>
+(function () {
+  var key = "docs-feedback-{{ $feedbackKey }}";
+  var root = document.currentScript ? document.currentScript.previousElementSibling : null;
+  if (!root) return;
+
+  var actions = root.querySelector(".hextra-feedback-actions");
+  var thanks = root.querySelector(".hextra-feedback-thanks");
+  var issue = root.querySelector(".hextra-feedback-issue");
+
+  function apply(state) {
+    actions.classList.add("hx:hidden");
+    thanks.classList.remove("hx:hidden");
+    if (state === "no") issue.classList.remove("hx:hidden");
+  }
+
+  var stored = null;
+  try { stored = localStorage.getItem(key); } catch (e) {}
+  if (stored === "yes" || stored === "no") apply(stored);
+
+  root.querySelector("[data-feedback=yes]").addEventListener("click", function (e) {
+    e.preventDefault();
+    try { localStorage.setItem(key, "yes"); } catch (err) {}
+    apply("yes");
+  });
+  root.querySelector("[data-feedback=no]").addEventListener("click", function (e) {
+    e.preventDefault();
+    try { localStorage.setItem(key, "no"); } catch (err) {}
+    apply("no");
+  });
+})();
+</script>
+{{- end -}}
+{{- end -}}

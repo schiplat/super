@@ -59,6 +59,13 @@ params:
   # Change checkout_url and redeploy docs only (no superd release).
   purchase:
     checkout_url: "https://ifdian.net/a/hibdmm"
+  # Top-of-page release banner (Hextra). key persists the dismiss state in
+  # localStorage; message supports Markdown links. Bump key on each release
+  # so the banner shows again for returning visitors.
+  banner:
+    key: "super-release-banner-v1-4-0"
+    message: |
+      🎉 **Super 1.4.0 is here** — cron concurrency & bounded queue, health-check auto-restart, unix-socket transport and more. [See what's new →](/docs/08-changelog/)
   contact:
     api_url: "https://open.schiplat.com/api/v1/demands"
   externalLinkDecoration: true
@@ -80,6 +87,16 @@ params:
     width: wide
     tabs:
       sync: true
+  # Docs feedback block at the bottom of docs pages (Docsy-style config).
+  # enable: false removes the block entirely.
+  ui:
+    feedback:
+      enable: true
+      issueRepo: "schiplat/super"
+      sourceURL: "https://github.com/schiplat/super/tree/master/docs"
+      text: "Was this page helpful?"
+      thanks: "Thanks for your feedback!"
+      issuePrompt: "Still have questions?"
   displayUpdatedDate: true
   dateFormat: "January 2, 2006"
   toc:

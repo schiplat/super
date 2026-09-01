@@ -4,12 +4,12 @@ weight: 5
 description: "Real-time alerts via Webhooks, Slack, DingTalk, Lark, and Teams."
 ---
 
+> [!IMPORTANT] Licensed feature — `notify` plugin
+> This page covers a **licensed feature** provided by the **`notify` plugin**. It requires a valid subscription `[license].key` and the plugin library in `$SUPER_ROOT/plugins/`. OSS builds without the plugin ignore `conf/notify.toml` and expose no `/api/v1/system/notify` routes.
+
 ### Webhook System 💎
 
 Super acts as an intelligent observer. Instead of just logging errors, it can actively push events to external systems like Slack, Microsoft Teams, or your company's internal IM tools.
-
-> [!NOTE]
-> Event notifications require the `notify` plugin and a valid subscription license. OSS builds without the plugin will ignore `conf/notify.toml`.
 
 ## Configuration
 

@@ -4,6 +4,9 @@ weight: 2
 description: "Fine-grained permissions for teams."
 ---
 
+> [!IMPORTANT] Licensed feature — `security` plugin
+> This page covers a **licensed feature** provided by the **`security` plugin**, which is included with every subscription and **required for licensed startup**. It needs a valid `[license].key`, the plugin library in `$SUPER_ROOT/plugins/`, and `auth_secret`. OSS `superd` without the plugin does not register the RBAC / role APIs.
+
 ### Role-Based Access Control 💎
 
 When multiple engineers manage a system, you don't want everyone to have `root` access. The `security` plugin implements RBAC to separate concerns.

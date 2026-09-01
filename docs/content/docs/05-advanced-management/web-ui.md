@@ -8,8 +8,8 @@ aliases:
   - /docs/02-essentials/web-ui
 ---
 
-> [!NOTE]
-> The dashboard requires the **`ui`** plugin in `[license].key`. OSS `superd` serves a short notice at `/` instead of a dashboard.
+> [!IMPORTANT] Licensed feature — `ui` plugin
+> This page covers a **licensed feature** provided by the **`ui` plugin**. It requires a valid subscription `[license].key` and the plugin library in `$SUPER_ROOT/plugins/`. OSS `superd` serves a short notice at `/` instead of a dashboard.
 
 ## OSS vs subscription
 

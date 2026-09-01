@@ -4,6 +4,9 @@ weight: 3
 description: "Enforcing limits with Linux Cgroups v2."
 ---
 
+> [!IMPORTANT] Licensed feature — `isolation` plugin
+> This page covers a **licensed feature** provided by the **`isolation` plugin** (Linux only, cgroups v2, privileged access to `/sys/fs/cgroup`). It requires a valid subscription `[license].key` and the plugin library in `$SUPER_ROOT/plugins/`. OSS `superd` without the plugin ignores `resource_limits` and emits no cgroup events.
+
 ### Cgroups Integration 💎
 
 Super integrates directly with the Linux Kernel's Control Groups (v2) to provide hardware-level isolation for managed processes.

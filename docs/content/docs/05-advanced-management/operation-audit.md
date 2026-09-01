@@ -4,6 +4,9 @@ weight: 4
 description: "Track 'Who did What and When'."
 ---
 
+> [!IMPORTANT] Licensed feature — `security` plugin
+> This page covers a **licensed feature** provided by the **`security` plugin**, which is included with every subscription and **required for licensed startup**. It needs a valid `[license].key`, the plugin library in `$SUPER_ROOT/plugins/`, and `auth_secret`. OSS `superd` without the plugin writes no audit log.
+
 ### Audit Logging 💎
 
 For compliance and security analysis, knowing the current state isn't enough—you need a history of changes. Super maintains a secure, write-only audit log of all administrative actions.

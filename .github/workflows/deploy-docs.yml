@@ -45,7 +45,7 @@ jobs:
           HUGO_BASEURL: ${{ steps.pages.outputs.base_url }}/
         run: |
           hugo --minify
-          cp gh-pages-README.md public/README.md
+          cp README.md public/README.md
 
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
