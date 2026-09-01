@@ -16,9 +16,9 @@ use axum::{
 use common::{
     ArtifactConfig, BatchAction, BatchProgramRequest, BatchProgramResponse, CreateProgramRequest,
     HealthCheck, HealthResponse, LicenseInfo, ProcessStatus, ProgramConfig, ProgramHooks,
-    ProgramInfo, ProgramLogFile, ProgramLogsResponse, ProgramSummary, SignalProgramRequest,
-    StackApplyRequest, SystemStats, UpdateProgramRequest, UserContext, UserRole, WsMessage,
-    mask_env_map,
+    ProgramInfo, ProgramLogFile, ProgramLogsResponse, ProgramSummary, ReloadResponse,
+    SignalProgramRequest, StackApplyRequest, SystemStats, UpdateProgramRequest, UserContext,
+    UserRole, WsMessage, mask_env_map,
 };
 
 use crate::logger::{self, LogSource};
@@ -710,17 +710,34 @@ async fn restart_group(
     path = "/api/v1/system/reload",
     tag = "system",
     responses(
-        (status = 200, description = "Configuration reloaded"),
+        (status = 200, description = "Configuration reloaded", body = ReloadResponse),
         (status = 500, description = "Reload failed")
     )
 )]
-async fn system_reload(State(state): State<AppState>) -> Result<StatusCode, AppError> {
-    state
+async fn system_reload(
+    State(state): State<AppState>,
+    Query(params): Query<ReloadQuery>,
+) -> Result<Json<ReloadResponse>, AppError> {
+    let resp = state
         .manager
-        .reload()
+        .reload(params.wait, params.timeout)
         .await
         .map_err(|e| AppError(StatusCode::INTERNAL_SERVER_ERROR, e))?;
-    Ok(StatusCode::OK)
+    Ok(Json(resp))
+}
+
+#[derive(serde::Deserialize)]
+pub struct ReloadQuery {
+    /// Wait for affected programs to become Healthy before responding.
+    #[serde(default)]
+    wait: bool,
+    /// Readiness wait timeout in seconds (default: 30).
+    #[serde(default = "default_reload_timeout")]
+    timeout: u64,
+}
+
+fn default_reload_timeout() -> u64 {
+    30
 }
 
 /// Host-level CPU and memory snapshot

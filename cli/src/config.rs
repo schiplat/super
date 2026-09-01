@@ -36,6 +36,13 @@ impl CliConfig {
         Self::default()
     }
 
+    /// Whether a persisted CLI config file exists — i.e. the user has made a
+    /// deliberate endpoint choice (via `super login`), which we never
+    /// auto-override with socket discovery.
+    pub fn exists() -> bool {
+        Self::path().exists()
+    }
+
     /// Save config to disk (atomic write + permission control)
     pub fn save(&self) -> anyhow::Result<()> {
         let path = Self::path();

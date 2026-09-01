@@ -25,8 +25,9 @@ pub use daemon::{
 };
 pub use paths::{resolve_super_root, resolve_super_root_for_config};
 pub use security::{
-    FetchUrlPolicy, MAX_LICENSE_B64_LEN, MAX_LICENSE_JSON_LEN, is_loopback_bind_host, mask_env_map,
-    mask_secret_value, resolve_confined_log_path, resolve_plugin_library, sanitize_ui_asset_path,
+    DEFAULT_SOCKET_MODE, FetchUrlPolicy, MAX_LICENSE_B64_LEN, MAX_LICENSE_JSON_LEN,
+    is_loopback_bind_host, mask_env_map, mask_secret_value, parse_socket_mode,
+    resolve_confined_log_path, resolve_plugin_library, sanitize_ui_asset_path,
     validate_license_grant_ids, validate_outbound_url,
 };
 
@@ -391,6 +392,18 @@ pub struct ProgramInfo {
     /// Latest health_check failure while running (not yet Healthy).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub health_error: Option<String>,
+}
+
+/// API response: readiness-aware reload (`POST /api/v1/system/reload`).
+#[derive(Debug, Serialize, Deserialize, Clone, ToSchema)]
+pub struct ReloadResponse {
+    /// Programs touched by the reload (created or updated from include stacks).
+    pub affected: Vec<ProgramSummary>,
+    /// Whether every affected program reached `Healthy` within the wait window
+    /// (`true` immediately when no wait was requested or nothing was affected).
+    pub ready: bool,
+    /// Seconds actually waited (0 when wait was not requested).
+    pub waited_secs: u64,
 }
 
 /// WebSocket message protocol

@@ -21,12 +21,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **Three-tier memory warning & visibility** (licensed `isolation` plugin, Linux): `memory_pressure` pre-kill warning (Tier 1) when anonymous memory crosses `memory_warn_percent` / `memory_warn_headroom`; optional `memory_high` kernel soft limit (Tier 2, `memory.high` throttling); `memory_oom_kill` post-kill confirmation (Tier 3) that distinguishes a cgroup OOM kill from a manual `kill -9`.
 - Plugin → host event bridge: the `isolation` plugin emits `memory_pressure` / `memory_oom_kill` through the same event pipeline as lifecycle events (event history, OSS event hooks, licensed notifications).
+- **Readiness-aware reload**: `super reload --wait [--timeout]` (and `POST /api/v1/system/reload?wait=&timeout=`) waits for every affected program to pass its health checks before reporting success, and exits non-zero if any program is not ready in time. `super start`/`restart` also gain `--wait-healthy` (wait for `Healthy` rather than just `Running`).
+- **Batch operation safety**: `super start|stop|restart|remove|signal` on `@group` / `all` targets print the list of affected programs and ask for confirmation before proceeding. Global `--yes`/`-y` skips the prompt for scripts, and `--dry-run` prints the preview list and exits without executing anything. Single-target operations never prompt.
+- **OTA verification window**: new `[server] ota_verify_timeout` (default `60`, `0` disables). After an OTA update restarts a program, the new version must pass its health checks within the window; on timeout the daemon automatically rolls back to the previous version (file rollback → WAL recovery → old version restarted), so a bad artifact cannot leave the service down.
+- **Unix socket transport**: `[server] socket = "run/superd.sock"` exposes the API on a Unix domain socket with owner-only permissions by default (`socket_mode = "0600"`; `"0660"` / `"0640"` grant group access, world-writable modes are refused). `socket_only = true` disables the TCP listener entirely — zero network exposure for local-only management. The CLI connects via `super --server unix:///path/to/superd.sock` (REST and `super logs --follow` WebSocket both ride the socket); when neither `--server` nor a persisted `~/.super/cli.json` endpoint is given, the CLI auto-discovers `$SUPER_ROOT/run/superd.sock` (a real socket file) and prefers it over TCP, falling back to the default `http://127.0.0.1:9002`. superd refuses to start on a path that is a symlink, a non-socket file, or a socket held by another live process; stale sockets are cleaned up on restart.
 
 ### Changed
 
 - `super update` hot-updates `memory_warn_percent`, `memory_warn_headroom`, and `memory_high` on running programs alongside `memory_limit` / `cpu_quota`.
 - Dashboard create/edit forms expose the three new memory fields; process detail shows MB/cores units.
 - Program event history raised from 50 to **100 events per program** (oldest dropped); every record carries a Unix `ts` timestamp (docs now state it explicitly).
+- Captured child `stdout`/`stderr` lines are now prefixed with a timestamp by default: `[YYYY-MM-DD HH:MM:SS]` (daemon's local time). New `[child_logging] timestamp = "local" | "utc" | "none"` controls the prefix (`none` restores the previous raw format). The WebSocket log stream still carries the raw, un-prefixed line.
 
 ### Fixed
 

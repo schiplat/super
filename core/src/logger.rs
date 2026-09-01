@@ -1,5 +1,6 @@
+use chrono::{Local, Utc};
 use common::WsMessage;
-use common::config::LogDriver;
+use common::config::{LogDriver, LogTimestamp};
 use std::io::SeekFrom;
 use std::path::Path;
 use std::path::PathBuf;
@@ -43,6 +44,8 @@ pub struct LogConfig {
     pub driver: LogDriver,
     pub program_name: String,
     pub max_line_bytes: usize,
+    /// Timestamp prefix mode for captured child log lines.
+    pub timestamp: LogTimestamp,
     /// Supervisor-style custom log path; when set, overrides `{log_dir}/{uuid}.{out|err}`.
     pub custom_path: Option<PathBuf>,
 }
@@ -142,14 +145,28 @@ pub fn spawn_log_consumer(
         // Internal macro: unified line output (shared logic)
         macro_rules! emit_line {
             ($line_str:expr) => {
+                // Timestamp prefix, captured at consume time. `None` keeps raw lines.
+                let ts = match config.timestamp {
+                    LogTimestamp::Local => {
+                        Some(Local::now().format("%Y-%m-%d %H:%M:%S").to_string())
+                    }
+                    LogTimestamp::Utc => Some(Utc::now().format("%Y-%m-%dT%H:%M:%SZ").to_string()),
+                    LogTimestamp::None => None,
+                };
                 // A. Stdout driver
                 if config.driver == LogDriver::Stdout {
-                    let output = format!("{}{}\n", prefix, $line_str);
+                    let output = match &ts {
+                        Some(ts) => format!("[{ts}] {prefix}{line}\n", line = $line_str),
+                        None => format!("{prefix}{line}\n", line = $line_str),
+                    };
                     let _ = stdout_handle.write_all(output.as_bytes()).await;
                 }
                 // B. File driver (with rotation)
                 else if let Some(file) = &mut file_opt {
-                    let line_with_newline = format!("{}\n", $line_str);
+                    let line_with_newline = match &ts {
+                        Some(ts) => format!("[{ts}] {line}\n", line = $line_str),
+                        None => format!("{line}\n", line = $line_str),
+                    };
                     let bytes_len = line_with_newline.len() as u64;
 
                     if current_size + bytes_len > config.max_size {
@@ -308,9 +325,18 @@ pub async fn emit_superd_line(
     log_dir: &Path,
     stdout_logfile: Option<&str>,
     stderr_logfile: Option<&str>,
+    timestamp: LogTimestamp,
     tx: &broadcast::Sender<WsMessage>,
 ) {
-    let prefixed = format!("[superd] {}", line);
+    let ts = match timestamp {
+        LogTimestamp::Local => Some(Local::now().format("%Y-%m-%d %H:%M:%S").to_string()),
+        LogTimestamp::Utc => Some(Utc::now().format("%Y-%m-%dT%H:%M:%SZ").to_string()),
+        LogTimestamp::None => None,
+    };
+    let prefixed = match ts {
+        Some(ts) => format!("[{ts}] [superd] {line}"),
+        None => format!("[superd] {line}"),
+    };
     let path = match resolve_log_file_path(
         log_dir,
         id,

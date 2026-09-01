@@ -13,6 +13,7 @@ Super is built on the philosophy of **Transparency**. We believe you should unde
 *   [**FAQ**](./faq): Technical deep-dives into Zombies, Signals, and Systemd comparisons.
 
 #### Reference Manuals
+*   [**What's New in 1.4.0**](./whats-new-1.4.0): Readiness-aware reload, Unix socket transport, timestamped child logs.
 *   [**Config Reference**](./config-reference): Complete `super.toml` schema.
 *   [**CLI Reference**](./cli-reference): Command-line arguments and flags.
 *   [**API Reference**](./api-reference): HTTP endpoints and JSON schemas.

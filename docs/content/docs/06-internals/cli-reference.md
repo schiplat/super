@@ -7,7 +7,15 @@ description: "Command-line arguments for the 'super' client."
 The `super` binary is the primary way to interact with the daemon.
 
 **Global Flags:**
-*   `--server <URL>`: Override the server URL (default: `http://127.0.0.1:9002`).
+*   `--server <URL>`: Override the server endpoint. Accepts an HTTP(S) URL (`http://127.0.0.1:9002`, default) or a Unix socket (`unix:///path/to/superd.sock`). Relative socket paths resolve under `SUPER_ROOT`.
+
+**Endpoint selection** (how `super` picks a daemon to talk to):
+
+1. `--server <URL>` — highest priority; used for this command only.
+2. `~/.super/cli.json` `server_url` — persisted by `super login <secret> [url]`; all subsequent commands follow it.
+3. **Auto-discovery** (only when neither of the above applies, i.e. no `--server` and no `~/.super/cli.json`): if `$SUPER_ROOT/run/superd.sock` (or `./run/superd.sock` without `SUPER_ROOT`) exists and is a real socket file, the CLI uses `unix://` there; otherwise it falls back to the default `http://127.0.0.1:9002`.
+
+When the daemon listens on both TCP and a Unix socket, an unconfigured CLI therefore prefers the Unix socket automatically. To force TCP, pass `--server http://host:port` or run `super login <secret> http://host:port` to persist it. Auto-discovery only recognizes the conventional `run/superd.sock` path — a custom socket path or a non-default TCP port still needs an explicit `--server` (or a persisted login).
 
 ## Starting `superd` (daemon binary)
 
@@ -98,12 +106,28 @@ super <start|stop|restart|remove> <name|@group|id|all>
 
 Super has no `json_conf` target — declarative batches go through a stack file instead (`super apply <file>`). A target that matches several programs is rejected as ambiguous, with the candidates listed.
 
+Batch targets are protected by three safety knobs (global flags, accepted on any control command):
+
+| Flag | Description |
+| :--- | :--- |
+| `--yes` / `-y` | Skip the interactive confirmation prompt. Batch operations (`@group` / `all`) ask for confirmation before touching more than one program; `--yes` bypasses it for scripts |
+| `--dry-run` | Show which programs the operation would affect (preview list) and exit without executing anything |
+
+Without `--yes`, a batch operation on more than one program prints the affected program list and asks `[y/N]`; answering anything other than `y`/`yes` aborts. Single-target operations never prompt.
+
 ### `start`
 Start a stopped process.
 
 ```bash
-super start <name|@group|id|all> [--wait] [--timeout N]
+super start <name|@group|id|all> [--wait] [--wait-healthy] [--timeout N]
 ```
+
+| Flag | Description |
+| :--- | :--- |
+| `--wait` | Poll until the program(s) reach `Running`/`Healthy` |
+| `--wait-healthy` | Poll until the program(s) reach `Healthy` (readiness check passed). Mutually exclusive with `--wait` |
+| `--timeout N` | Wait timeout in seconds (default: `5`) |
+| `--yes` / `--dry-run` | Batch safety: skip confirmation / preview only (see above) |
 
 ### `stop`
 Stop a running process.
@@ -117,13 +141,21 @@ super stop <name|@group|id|all> [--wait] [--timeout N] [--force]
 | `--wait` | Poll until the program(s) reach `Stopped` |
 | `--timeout N` | Wait timeout in seconds (default: `5`) |
 | `--force` | Skip graceful shutdown and SIGKILL immediately |
+| `--yes` / `--dry-run` | Batch safety: skip confirmation / preview only (see above) |
 
 ### `restart`
 Restart a process.
 
 ```bash
-super restart <name|@group|id|all> [--wait] [--timeout N]
+super restart <name|@group|id|all> [--wait] [--wait-healthy] [--timeout N]
 ```
+
+| Flag | Description |
+| :--- | :--- |
+| `--wait` | Poll until the program(s) reach `Running`/`Healthy` |
+| `--wait-healthy` | Poll until the program(s) reach `Healthy` (readiness check passed). Mutually exclusive with `--wait` |
+| `--timeout N` | Wait timeout in seconds (default: `5`) |
+| `--yes` / `--dry-run` | Batch safety: skip confirmation / preview only (see above) |
 
 ### `signal`
 Send a specific POSIX signal.
@@ -185,8 +217,15 @@ Reload system configuration from `super.toml` (logging, includes, event hooks), 
 
 ```bash
 super reload                              # reload super.toml (no program restart)
+super reload --wait [--timeout N]         # reload and wait for affected programs to become Healthy
 super reload <name|@group|id|all>         # SIGHUP to program(s) — e.g. nginx config reload
 ```
+
+| Flag | Description |
+| :--- | :--- |
+| `--wait` | Readiness-aware reload: after applying the new config, wait for every affected program to pass its health checks before reporting success. Prints the affected programs and exits non-zero if any is not ready in time |
+| `--timeout N` | Readiness wait timeout in seconds (default: `30`) |
+| `--yes` / `--dry-run` | Batch safety on the SIGHUP target: skip confirmation / preview only (see above) |
 
 ### `apply`
 Apply a declarative stack configuration (JSON).

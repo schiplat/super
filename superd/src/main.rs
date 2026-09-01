@@ -1,3 +1,4 @@
+use anyhow::Context;
 use axum::{
     Router,
     http::{HeaderValue, StatusCode, Uri, header},
@@ -390,6 +391,9 @@ async fn async_main() -> anyhow::Result<()> {
         tracing::warn!("No license in AppState; GET /api/v1/system/license will return 404");
     }
 
+    // Spare sender so a second listener can subscribe to the same shutdown signal.
+    let extra_shutdown_tx = core.shutdown_tx.clone();
+
     let base_router = api::make_api_router(
         core.manager_handle.clone(),
         core.log_tx,
@@ -420,43 +424,230 @@ async fn async_main() -> anyhow::Result<()> {
     });
 
     let addr = format!("{}:{}", core.config.server.host, core.config.server.port);
+    let server = &core.config.server;
+    let socket_cfg = server.socket.as_deref();
+    let socket_only = server.socket_only;
 
-    if !common::is_loopback_bind_host(&core.config.server.host)
-        && !auth_required
-        && !core.config.server.allow_insecure_public_bind
-    {
+    if socket_only && socket_cfg.is_none() {
+        anyhow::bail!("[server].socket_only = true requires [server].socket to be set");
+    }
+    if socket_cfg.is_some() && cfg!(not(unix)) {
         anyhow::bail!(
-            "Refusing to bind to {} without authentication. \
-             Set server.allow_insecure_public_bind = true to acknowledge the risk, \
-             bind to 127.0.0.1, or load the security plugin.",
-            core.config.server.host
+            "[server].socket requires a Unix platform (macOS/Linux); this build does not support Unix sockets"
         );
     }
 
-    let listener = tokio::net::TcpListener::bind(&addr).await?;
-
-    if auth_required {
-        tracing::info!(
-            "Superd listening on {} (plugins: {:?}, auth enabled)",
-            addr,
-            loaded_plugins
-        );
-    } else if is_licensed {
-        tracing::info!(
-            "Superd listening on {} (plugins: {:?})",
-            addr,
-            loaded_plugins
-        );
+    // TCP listener — skipped entirely in socket-only mode, so no network exposure at all.
+    let tcp_listener = if socket_only {
+        None
     } else {
-        tracing::info!("Superd (OSS) listening on {}", addr);
-    }
+        if !common::is_loopback_bind_host(&server.host)
+            && !auth_required
+            && !server.allow_insecure_public_bind
+        {
+            anyhow::bail!(
+                "Refusing to bind to {} without authentication. \
+                 Set server.allow_insecure_public_bind = true to acknowledge the risk, \
+                 bind to 127.0.0.1, or load the security plugin.",
+                server.host
+            );
+        }
 
-    axum::serve(
-        listener,
-        app.into_make_service_with_connect_info::<std::net::SocketAddr>(),
-    )
-    .with_graceful_shutdown(shutdown_signal(core.shutdown_rx, core.manager_handle))
-    .await?;
+        let listener = tokio::net::TcpListener::bind(&addr).await?;
+        if auth_required {
+            tracing::info!(
+                "Superd listening on {} (plugins: {:?}, auth enabled)",
+                addr,
+                loaded_plugins
+            );
+        } else if is_licensed {
+            tracing::info!(
+                "Superd listening on {} (plugins: {:?})",
+                addr,
+                loaded_plugins
+            );
+        } else {
+            tracing::info!("Superd (OSS) listening on {}", addr);
+        }
+        Some(listener)
+    };
+
+    // Optional Unix socket endpoint (permission-controlled; see bind_unix_socket).
+    let unix_socket = match socket_cfg {
+        Some(raw) => {
+            #[cfg(unix)]
+            {
+                Some(bind_unix_socket(&resolve_socket_path(&root, raw), &server.socket_mode).await?)
+            }
+            #[cfg(not(unix))]
+            {
+                unreachable!("guarded above")
+            }
+        }
+        None => None,
+    };
+
+    // Serve TCP and/or Unix socket. Both share the same graceful shutdown signal.
+    let serve_result: anyhow::Result<()> = match (tcp_listener, unix_socket) {
+        (Some(tcp), Some((unix, sock_path))) => {
+            let s1 = shutdown_signal(core.shutdown_rx, core.manager_handle.clone());
+            let s2 = shutdown_signal(extra_shutdown_tx.subscribe(), core.manager_handle);
+            let app2 = app.clone();
+            let t1 = tokio::spawn(async move {
+                axum::serve(
+                    tcp,
+                    app2.into_make_service_with_connect_info::<std::net::SocketAddr>(),
+                )
+                .with_graceful_shutdown(s1)
+                .await
+            });
+            let t2 = tokio::spawn(async move {
+                axum::serve(unix, app.into_make_service())
+                    .with_graceful_shutdown(s2)
+                    .await
+            });
+            t1.await.map_err(anyhow::Error::from)??;
+            t2.await.map_err(anyhow::Error::from)??;
+            cleanup_unix_socket(&sock_path).await;
+            Ok(())
+        }
+        (Some(tcp), None) => {
+            axum::serve(
+                tcp,
+                app.into_make_service_with_connect_info::<std::net::SocketAddr>(),
+            )
+            .with_graceful_shutdown(shutdown_signal(core.shutdown_rx, core.manager_handle))
+            .await?;
+            Ok(())
+        }
+        (None, Some((unix, sock_path))) => {
+            axum::serve(unix, app.into_make_service())
+                .with_graceful_shutdown(shutdown_signal(core.shutdown_rx, core.manager_handle))
+                .await?;
+            cleanup_unix_socket(&sock_path).await;
+            Ok(())
+        }
+        (None, None) => unreachable!("at least one listener is bound"),
+    };
+    serve_result?;
 
     Ok(())
+}
+
+/// Resolve a configured socket path: absolute stays as-is, relative resolves
+/// under `SUPER_ROOT` (like pidfiles).
+fn resolve_socket_path(root: &Path, raw: &Path) -> PathBuf {
+    if raw.is_absolute() {
+        raw.to_path_buf()
+    } else {
+        root.join(raw)
+    }
+}
+
+/// Bind the API to a Unix domain socket with strict permission controls:
+///
+/// - Parent directory is created with 0700 when missing (only the daemon user
+///   can create/replace the socket there). A group/other-writable parent is
+///   flagged with a warning.
+/// - Pre-bind guards: refuses to replace a symlink (hijack vector), refuses to
+///   delete a non-socket file, and refuses to start when another live process
+///   is already listening on the path. Only stale sockets are unlinked.
+/// - The socket file is chmod'ed to `socket_mode` (default 0600) after binding,
+///   independent of the process umask.
+#[cfg(unix)]
+async fn bind_unix_socket(
+    path: &Path,
+    mode_str: &str,
+) -> anyhow::Result<(tokio::net::UnixListener, PathBuf)> {
+    use std::os::unix::fs::{FileTypeExt, PermissionsExt};
+    use tokio::net::{UnixListener, UnixStream};
+
+    if let Some(parent) = path.parent()
+        && !parent.as_os_str().is_empty()
+    {
+        if !parent.exists() {
+            tokio::fs::create_dir_all(parent)
+                .await
+                .with_context(|| format!("create unix socket parent {}", parent.display()))?;
+            let _ =
+                tokio::fs::set_permissions(parent, std::fs::Permissions::from_mode(0o700)).await;
+        }
+        if let Ok(meta) = tokio::fs::metadata(parent).await {
+            let mode = meta.permissions().mode();
+            if mode & 0o022 != 0 {
+                tracing::warn!(
+                    "unix socket parent {} is writable by group/others (mode {:04o}); \
+                     another local user could swap the socket file — consider keeping it under SUPER_ROOT",
+                    parent.display(),
+                    mode & 0o777
+                );
+            }
+        }
+    }
+
+    match tokio::fs::symlink_metadata(path).await {
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+        Ok(meta) => {
+            let ft = meta.file_type();
+            if ft.is_symlink() {
+                anyhow::bail!(
+                    "refusing to bind unix socket {:?}: path is a symlink (possible hijack)",
+                    path
+                );
+            }
+            if !ft.is_socket() {
+                anyhow::bail!(
+                    "refusing to remove non-socket file at unix socket path {:?}",
+                    path
+                );
+            }
+            // Connecting to a listening socket succeeds at the kernel level even
+            // without an active accept; a stale socket (no listener) is refused.
+            match UnixStream::connect(path).await {
+                Ok(_) => anyhow::bail!("unix socket {:?} is in use by another process", path),
+                Err(e)
+                    if e.kind() == std::io::ErrorKind::ConnectionRefused
+                        || e.kind() == std::io::ErrorKind::NotFound =>
+                {
+                    tracing::info!("Removing stale unix socket {:?}", path);
+                    tokio::fs::remove_file(path).await?;
+                }
+                Err(e) => anyhow::bail!(
+                    "unix socket {:?} exists but liveness cannot be verified ({e}); \
+                     refusing to remove it — remove the stale file manually if it is safe",
+                    path
+                ),
+            }
+        }
+        Err(e) => anyhow::bail!("cannot inspect unix socket path {:?}: {e}", path),
+    }
+
+    let mode = common::parse_socket_mode(mode_str)
+        .with_context(|| format!("invalid [server].socket_mode {mode_str:?}"))?;
+    let listener =
+        UnixListener::bind(path).with_context(|| format!("bind unix socket {:?}", path))?;
+    // Enforce the configured mode regardless of the process umask.
+    tokio::fs::set_permissions(path, std::fs::Permissions::from_mode(mode))
+        .await
+        .with_context(|| format!("chmod unix socket {:?} to {:04o}", path, mode))?;
+
+    tracing::info!(
+        "Superd listening on unix socket {} (mode {:04o})",
+        path.display(),
+        mode
+    );
+    Ok((listener, path.to_path_buf()))
+}
+
+/// Best-effort removal of the socket file on shutdown. Only unlinks a leftover
+/// socket — never follows symlinks or deletes other file types.
+#[cfg(unix)]
+async fn cleanup_unix_socket(path: &Path) {
+    use std::os::unix::fs::FileTypeExt;
+    let Ok(meta) = tokio::fs::symlink_metadata(path).await else {
+        return;
+    };
+    if meta.file_type().is_socket() {
+        let _ = tokio::fs::remove_file(path).await;
+    }
 }

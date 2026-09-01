@@ -24,6 +24,12 @@ url = "2.5"
 toml = "0.8"
 colored = "2.0"
 glob = "0.3"
+# Unix socket transport for the API (unix:// server URLs)
+hyper = { version = "1", features = ["client", "http1"] }
+hyper-util = { version = "0.1", features = ["client-legacy", "http1", "tokio"] }
+http-body-util = "0.1"
+hyperlocal = "0.9"
+bytes = "1"
 # Root privilege check (geteuid)
 libc = "0.2"
 # Table formatting

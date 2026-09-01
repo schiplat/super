@@ -1,11 +1,13 @@
 use nix::sys::signal::Signal;
 use std::collections::HashMap;
+use std::time::{Duration, Instant};
 use tokio::sync::{mpsc, oneshot};
 use uuid::Uuid;
 
 use common::{
-    BatchProgramRequest, BatchProgramResponse, CreateProgramRequest, HealthResponse, ProgramConfig,
-    ProgramInfo, ProgramSummary, StackApplyRequest, SystemStats, UpdateProgramRequest,
+    BatchProgramRequest, BatchProgramResponse, CreateProgramRequest, HealthResponse, ProcessStatus,
+    ProgramConfig, ProgramInfo, ProgramSummary, ReloadResponse, StackApplyRequest, SystemStats,
+    UpdateProgramRequest,
 };
 
 use crate::manager::Command;
@@ -20,10 +22,62 @@ impl ManagerHandle {
         Self { tx }
     }
 
-    pub async fn reload(&self) -> anyhow::Result<()> {
+    pub async fn reload(&self, wait: bool, timeout_sec: u64) -> anyhow::Result<ReloadResponse> {
         let (tx, rx) = oneshot::channel();
         self.tx.send(Command::Reload { reply: tx }).await?;
-        rx.await?
+        let affected: Vec<ProgramSummary> = rx.await??;
+
+        if !wait || affected.is_empty() {
+            return Ok(ReloadResponse {
+                affected,
+                ready: true,
+                waited_secs: 0,
+            });
+        }
+
+        // Readiness wait: runs in the caller task (HTTP handler), never inside the
+        // manager actor loop, so other commands keep flowing while we wait.
+        let deadline = Instant::now() + Duration::from_secs(timeout_sec.max(1));
+        let started = Instant::now();
+
+        loop {
+            let mut all_ready = true;
+            for p in &affected {
+                match self.get_program(p.id).await {
+                    Ok(info) => match info.state {
+                        ProcessStatus::Healthy | ProcessStatus::Stopped => {}
+                        ProcessStatus::Fatal | ProcessStatus::Backoff => {
+                            return Err(anyhow::anyhow!(
+                                "Reload failed: program '{}' is {:?} (health_error: {})",
+                                info.config.name,
+                                info.state,
+                                info.health_error.as_deref().unwrap_or("none")
+                            ));
+                        }
+                        _ => all_ready = false,
+                    },
+                    Err(e) => {
+                        return Err(anyhow::anyhow!("Reload readiness check failed: {e}"));
+                    }
+                }
+            }
+
+            if all_ready {
+                return Ok(ReloadResponse {
+                    waited_secs: started.elapsed().as_secs(),
+                    ready: true,
+                    affected,
+                });
+            }
+            if Instant::now() >= deadline {
+                return Ok(ReloadResponse {
+                    waited_secs: started.elapsed().as_secs(),
+                    ready: false,
+                    affected,
+                });
+            }
+            tokio::time::sleep(Duration::from_millis(500)).await;
+        }
     }
 
     pub async fn list_programs(&self) -> anyhow::Result<Vec<ProgramSummary>> {

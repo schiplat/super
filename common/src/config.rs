@@ -106,6 +106,12 @@ pub struct ServerSection {
     #[serde(default = "default_download_timeout")]
     pub download_timeout: u64,
 
+    /// OTA verification window (seconds): if the new version is not Healthy within
+    /// this window, superd force-kills it and rolls back to the previous binary.
+    /// `0` disables the timeout rollback.
+    #[serde(default = "default_ota_verify_timeout")]
+    pub ota_verify_timeout: u64,
+
     // Flapping detection
     // Window length in seconds (default 60)
     #[serde(default = "default_flapping_window")]
@@ -132,6 +138,30 @@ pub struct ServerSection {
     /// When daemonizing and unset, defaults to `run/superd.pid`.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub pidfile: Option<PathBuf>,
+
+    /// Optional Unix socket endpoint for the API. Relative paths resolve under
+    /// `SUPER_ROOT` (e.g. `run/superd.sock`). Default: none (TCP only).
+    ///
+    /// The socket file is created with `socket_mode` permissions (default 0600,
+    /// owner-only) and is removed on clean shutdown. On startup superd refuses to
+    /// replace a symlink, a non-socket file, or a socket held by another live
+    /// listener, and unlinks only stale sockets.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub socket: Option<PathBuf>,
+
+    /// Unix socket file permission mode (octal string, e.g. `"0600"`).
+    /// Only the owner can connect by default. World-writable modes are refused.
+    #[serde(default = "default_socket_mode")]
+    pub socket_mode: String,
+
+    /// Bind only the Unix socket and skip the TCP listener entirely.
+    #[serde(default)]
+    pub socket_only: bool,
+}
+
+/// Default Unix socket permission mode as an octal string.
+fn default_socket_mode() -> String {
+    format!("{:04o}", crate::security::DEFAULT_SOCKET_MODE)
 }
 
 // Manual Default impl using helper functions above
@@ -142,12 +172,16 @@ impl Default for ServerSection {
             port: default_port(),
             shutdown_timeout: default_shutdown_timeout(),
             download_timeout: default_download_timeout(),
+            ota_verify_timeout: default_ota_verify_timeout(),
             flapping_window: default_flapping_window(),
             flapping_threshold: default_flapping_threshold(),
             enable_docs: default_enable_docs(),
             allow_insecure_public_bind: false,
             daemon: false,
             pidfile: None,
+            socket: None,
+            socket_mode: default_socket_mode(),
+            socket_only: false,
         }
     }
 }
@@ -204,6 +238,16 @@ impl Default for LoggingSection {
     }
 }
 
+// Child log line timestamp mode: prefix each captured line with a timestamp.
+#[derive(Debug, Deserialize, Clone, Copy, PartialEq, Eq, Default)]
+#[serde(rename_all = "lowercase")]
+pub enum LogTimestamp {
+    #[default]
+    Local,
+    Utc,
+    None,
+}
+
 #[derive(Debug, Deserialize, Clone)]
 pub struct ChildLoggingSection {
     // Child log driver: file or stdout
@@ -218,6 +262,10 @@ pub struct ChildLoggingSection {
     // Max single-line log length (KB), default 16KB
     #[serde(default = "default_child_line_max_kb")]
     pub max_line_size_kb: u64,
+
+    // Prefix child log lines with a timestamp: local | utc | none (default: local)
+    #[serde(default)]
+    pub timestamp: LogTimestamp,
 }
 
 impl Default for ChildLoggingSection {
@@ -227,6 +275,7 @@ impl Default for ChildLoggingSection {
             max_size_mb: default_child_max_mb(),
             max_backups: default_child_backups(),
             max_line_size_kb: default_child_line_max_kb(),
+            timestamp: LogTimestamp::default(),
         }
     }
 }
@@ -244,6 +293,9 @@ fn default_shutdown_timeout() -> u64 {
 fn default_download_timeout() -> u64 {
     86400
 } // default download timeout: 24 hours
+fn default_ota_verify_timeout() -> u64 {
+    60
+}
 fn default_data_file() -> PathBuf {
     "./data/snapshot.json".into()
 }

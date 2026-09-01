@@ -47,17 +47,28 @@ Global settings for the daemon.
 | `port` | int | `9002` | Bind port. |
 | `allow_insecure_public_bind` | bool | `false` | Explicit opt-in to bind on a non-loopback address without the `security` plugin. OSS **refuses startup** when `host` is not loopback and this is `false`. **Licensed deployments always load `security`** — this flag applies to OSS only. |
 | `shutdown_timeout` | int | `10` | Seconds to wait for SIGTERM before SIGKILL during shutdown. |
+| `ota_verify_timeout` | int | `60` | OTA verification window (seconds). After an OTA update restarts a program, the new version must pass its health checks within this window; on timeout the daemon rolls back to the previous version automatically. `0` disables the timeout (no automatic rollback). |
 | `flapping_window` | int | `60` | Time window (seconds) to detect restart loops. |
 | `flapping_threshold` | int | `5` | Max restarts allowed within the window. |
 | `enable_docs` | bool | `false` | Enable Swagger UI (`/api/docs`) when the binary is built with the docs feature. |
 | `daemon` | bool | `false` | Unix only: self-daemonize after start (like nginx `daemon on`). Keep **`false`** under systemd/Docker (`Type=simple` / PID 1). CLI: `--daemon` / `--foreground` override this. |
 | `pidfile` | string | — | Optional pidfile path. Relative paths resolve under `SUPER_ROOT`. When daemonizing and unset, defaults to `run/superd.pid`. Foreground writes a pidfile only when this (or `--pidfile`) is set. CLI: `--pidfile`. |
+| `socket` | string | — | Optional Unix socket endpoint for the API, e.g. `socket = "run/superd.sock"`. Relative paths resolve under `SUPER_ROOT`; absolute paths are used as-is. Unix only (macOS/Linux). When set, the daemon listens on **both** TCP and the socket unless `socket_only = true`. The socket file is created with `socket_mode` permissions (default `0600`, owner only) and removed on clean shutdown. |
+| `socket_mode` | string | `0600` | Unix socket file permission mode as an octal string (`0600` = owner read/write, `0660` = owner + group, `0640` = owner read/write + group read). **World-writable modes (`0666`) are refused** — a world-writable socket would let any local user drive the control API. |
+| `socket_only` | bool | `false` | When `true`, bind **only** the Unix socket and skip the TCP listener entirely (zero network exposure). Requires `socket` to be set. The non-loopback bind check no longer applies because no TCP port is opened. |
 
 ```toml
 [server]
 # Optional self-daemonize when not using systemd/Docker:
 # daemon = true
 # pidfile = "run/superd.pid"   # default when daemonizing
+
+# Optional Unix socket endpoint (default 0600, owner-only):
+# socket = "run/superd.sock"
+# socket_mode = "0600"   # "0600" | "0640" | "0660" — never world-writable
+# socket_only = true     # disable the TCP listener entirely
+
+# CLI: super --server unix:///path/to/superd.sock list
 ```
 
 ## Root keys (Licensed 💎)
@@ -93,7 +104,26 @@ key = "eyJjbGFpbXMiOnsiaXNzdWVkX3RvIjoi..."
 
 ## `[storage]` / `[logging]` / `[child_logging]`
 
-See [Configuration](/docs/02-essentials/configuration) for examples. Keys mirror `ServerConfig` in `common/src/config.rs`.
+See [Configuration](/docs/02-essentials/configuration) and [Logging](/docs/02-essentials/logging) for examples. Keys mirror `ServerConfig` in `common/src/config.rs`.
+
+### `[child_logging]` — child process log capture
+
+| Key | Type | Default | Description |
+| :--- | :--- | :--- | :--- |
+| `driver` | `file` \| `stdout` | `file` | Where captured child `stdout`/`stderr` lines go. `stdout` prints them (prefixed with `[name:source]`) to the daemon's own stdout; `file` writes to `{log_dir}/{id}.out` / `.err`. |
+| `max_size_mb` | int | `10` | Max size per log file before rotation (MB). |
+| `max_backups` | int | `5` | Number of rotated backups to keep. |
+| `max_line_size_kb` | int | `16` | Max single-line length; longer lines are truncated. |
+| `timestamp` | `local` \| `utc` \| `none` | `local` | Prefix each captured line with a timestamp. `local` → `[YYYY-MM-DD HH:MM:SS]`, `utc` → `[YYYY-MM-DDTHH:MM:SSZ]`, `none` → raw line. Applied when the daemon consumes the line; the WebSocket stream always carries the raw line. |
+
+```toml
+[child_logging]
+driver = "file"
+max_size_mb = 10
+max_backups = 5
+max_line_size_kb = 16
+timestamp = "local"
+```
 
 ## `[include]` — program stack files
 

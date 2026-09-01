@@ -17,12 +17,36 @@ fn mask_secret(key: &str, value: &str) -> String {
     }
 }
 
-pub fn confirm_batch(count: usize, action: &str) -> bool {
+const PREVIEW_LIMIT: usize = 20;
+
+/// Split a program-name preview into (lines to print, hidden count). Both the
+/// interactive confirmation and `--dry-run` share this truncation so a large
+/// fleet cannot flood the terminal and the two previews always agree.
+fn preview_split(names: &[String]) -> (Vec<&str>, usize) {
+    let shown = names.len().min(PREVIEW_LIMIT);
+    let lines: Vec<&str> = names.iter().take(shown).map(String::as_str).collect();
+    let hidden = names.len().saturating_sub(PREVIEW_LIMIT);
+    (lines, hidden)
+}
+
+/// Confirm a multi-program batch operation. `preview` lists the affected
+/// program names so the user sees exactly what would be touched.
+///
+/// `count <= 1` never prompts (single-program operations are the norm and the
+/// target is already explicit). Otherwise the user must type `y`/`yes`.
+pub fn confirm_batch(count: usize, action: &str, preview: &[String]) -> bool {
     if count <= 1 {
         return true;
     }
 
     println!("WARNING: You are about to {} {} programs.", action, count);
+    let (lines, hidden) = preview_split(preview);
+    for name in lines {
+        println!("   - {}", name);
+    }
+    if hidden > 0 {
+        println!("   ... and {} more", hidden);
+    }
     print!("Are you sure you want to continue? [y/N] ");
     let _ = std::io::stdout().flush();
 
@@ -32,6 +56,25 @@ pub fn confirm_batch(count: usize, action: &str) -> bool {
         return t == "y" || t == "yes";
     }
     false
+}
+
+/// Print the programs a dry-run batch operation would affect. Truncated to
+/// [`PREVIEW_LIMIT`] like the interactive confirmation, so a large fleet
+/// cannot flood the terminal.
+pub fn print_dry_run(action: &str, target: &str, names: &[String]) {
+    println!(
+        "DRY RUN: would {} {} program(s) for target '{}':",
+        action,
+        names.len(),
+        target
+    );
+    let (lines, hidden) = preview_split(names);
+    for name in lines {
+        println!("   - {}", name);
+    }
+    if hidden > 0 {
+        println!("   ... and {} more", hidden);
+    }
 }
 
 pub fn print_list_table(mut programs: Vec<ProgramSummary>) {
@@ -296,4 +339,59 @@ pub fn print_token_table(tokens: Vec<common::AuthTokenInfo>) {
         ]);
     }
     println!("{table}");
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn names(v: &[&str]) -> Vec<String> {
+        v.iter().map(|s| s.to_string()).collect()
+    }
+
+    #[test]
+    fn confirm_batch_never_prompts_for_single() {
+        assert!(confirm_batch(0, "STOP", &[]));
+        let one = vec!["web".to_string()];
+        assert!(confirm_batch(1, "STOP", &one));
+    }
+
+    #[test]
+    fn confirm_batch_aborts_without_stdin() {
+        // In a test binary stdin is not a TTY and there is no input; the
+        // fail-closed path returns false.
+        let names: Vec<String> = ["a", "b", "c"].iter().map(|s| s.to_string()).collect();
+        assert!(!confirm_batch(3, "STOP", &names));
+    }
+
+    #[test]
+    fn confirm_batch_accepts_empty_preview() {
+        // count > 1 with no preview still prompts (old behaviour).
+        assert!(!confirm_batch(3, "RESTART", &[]));
+    }
+
+    #[test]
+    fn preview_split_shows_everything_under_limit() {
+        let src = names(&["a", "b"]);
+        let (lines, hidden) = preview_split(&src);
+        assert_eq!(lines, vec!["a", "b"]);
+        assert_eq!(hidden, 0);
+    }
+
+    #[test]
+    fn preview_split_truncates_at_limit() {
+        let many: Vec<String> = (0..PREVIEW_LIMIT + 7).map(|i| format!("p{i}")).collect();
+        let (lines, hidden) = preview_split(&many);
+        assert_eq!(lines.len(), PREVIEW_LIMIT);
+        assert_eq!(hidden, 7);
+        assert_eq!(lines[0], many[0]);
+        assert_eq!(lines[PREVIEW_LIMIT - 1], many[PREVIEW_LIMIT - 1]);
+    }
+
+    #[test]
+    fn preview_split_empty() {
+        let (lines, hidden) = preview_split(&[]);
+        assert!(lines.is_empty());
+        assert_eq!(hidden, 0);
+    }
 }

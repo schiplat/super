@@ -498,6 +498,7 @@ impl LifecycleController {
             driver: self.config.child_logging.driver.clone(),
             program_name: config.name.clone(),
             max_line_bytes: (self.config.child_logging.max_line_size_kb * 1024) as usize,
+            timestamp: self.config.child_logging.timestamp,
             custom_path: None,
         };
 

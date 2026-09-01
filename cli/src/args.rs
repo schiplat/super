@@ -13,6 +13,14 @@ pub struct Cli {
     #[arg(long, env = "SUPER_TOKEN")]
     pub token: Option<String>,
 
+    /// Skip batch confirmation prompts (use for scripts). Equivalent to answering 'y' to every prompt
+    #[arg(short = 'y', long, global = true)]
+    pub yes: bool,
+
+    /// Show which programs a batch operation would affect and exit without executing
+    #[arg(long, global = true)]
+    pub dry_run: bool,
+
     #[command(subcommand)]
     pub command: Commands,
 }
@@ -231,6 +239,10 @@ pub enum Commands {
         #[arg(short, long)]
         wait: bool,
 
+        /// Wait until the process becomes Healthy (readiness check passed)
+        #[arg(long, conflicts_with = "wait")]
+        wait_healthy: bool,
+
         /// Timeout in seconds for wait operation (default: 5)
         #[arg(long, default_value = "5")]
         timeout: u64,
@@ -256,6 +268,9 @@ pub enum Commands {
         /// Wait for the process to reach Running/Healthy state
         #[arg(short, long)]
         wait: bool,
+        /// Wait until the process becomes Healthy (readiness check passed)
+        #[arg(long, conflicts_with = "wait")]
+        wait_healthy: bool,
         /// Timeout in seconds for wait operation (default: 5)
         #[arg(long, default_value = "5")]
         timeout: u64,
@@ -302,6 +317,14 @@ pub enum Commands {
         /// Target program (supports `all`, `@group`). If empty, reloads system config.
         #[arg(value_name = "TARGET")]
         target: Option<String>,
+
+        /// Wait until all affected programs become Healthy (readiness-aware reload)
+        #[arg(long)]
+        wait: bool,
+
+        /// Readiness wait timeout in seconds (default: 30)
+        #[arg(long, default_value = "30")]
+        timeout: u64,
     },
 
     /// Send a specific signal to program(s)

@@ -244,6 +244,49 @@ pub fn resolve_plugin_library(plugins_dir: &Path, id: &str) -> Option<PathBuf> {
     None
 }
 
+/// Default Unix socket permission mode: owner read/write only.
+pub const DEFAULT_SOCKET_MODE: u32 = 0o600;
+
+/// Parse and validate a Unix socket permission mode (octal string like `"0600"`).
+///
+/// Returns the raw mode bits. Empty input falls back to the 0600 default.
+/// Refuses world-writable modes (`0o002` set): a world-writable socket would let
+/// any local user connect to the control API, defeating the point of a Unix
+/// socket transport. Group/other read bits are harmless (connecting a Unix
+/// socket requires write permission).
+pub fn parse_socket_mode(raw: &str) -> anyhow::Result<u32> {
+    let raw = raw.trim();
+    if raw.is_empty() {
+        return Ok(DEFAULT_SOCKET_MODE);
+    }
+    let digits = raw.strip_prefix("0o").unwrap_or(raw);
+    if digits.is_empty() || !digits.bytes().all(|b| (b'0'..=b'7').contains(&b)) {
+        anyhow::bail!("socket_mode must be an octal string like \"0600\" (got {raw:?})");
+    }
+    if digits.len() > 4 {
+        anyhow::bail!("socket_mode must be at most 4 octal digits (got {raw:?})");
+    }
+    let mode = u32::from_str_radix(digits, 8).map_err(|_| {
+        anyhow::anyhow!("socket_mode must be an octal string like \"0600\" (got {raw:?})")
+    })?;
+    if mode > 0o777 {
+        anyhow::bail!("socket_mode must be an octal mode between 000 and 0777 (got {raw:?})");
+    }
+    if mode == 0 {
+        anyhow::bail!(
+            "socket_mode must not be 000 — no local user would be able to connect; \
+             use 0600 (owner only) or 0660/0640 to grant group access"
+        );
+    }
+    if mode & 0o002 != 0 {
+        anyhow::bail!(
+            "socket_mode must not be world-writable (mode {raw:?} has the 'other' write bit set); \
+             use 0600 (owner only) or 0660/0640 to grant group access"
+        );
+    }
+    Ok(mode)
+}
+
 /// Reject UI asset paths with traversal or absolute segments.
 pub fn sanitize_ui_asset_path(path: &str) -> Option<String> {
     let path = path.trim_start_matches('/');
@@ -323,6 +366,26 @@ mod tests {
         assert!(is_loopback_bind_host("::1"));
         assert!(!is_loopback_bind_host("0.0.0.0"));
         assert!(!is_loopback_bind_host("192.168.1.1"));
+    }
+
+    #[test]
+    fn socket_mode_parsing() {
+        assert_eq!(parse_socket_mode("").unwrap(), 0o600);
+        assert_eq!(parse_socket_mode("0600").unwrap(), 0o600);
+        assert_eq!(parse_socket_mode("0o660").unwrap(), 0o660);
+        assert_eq!(parse_socket_mode("640").unwrap(), 0o640);
+        assert!(
+            parse_socket_mode("0666").is_err(),
+            "world-writable must be refused"
+        );
+        assert!(parse_socket_mode("0662").is_err());
+        assert!(parse_socket_mode("888").is_err());
+        assert!(parse_socket_mode("abc").is_err());
+        assert!(parse_socket_mode("06000").is_err());
+        assert!(
+            parse_socket_mode("0").is_err(),
+            "empty-ish 0 is not an octal mode string"
+        );
     }
 
     #[test]

@@ -15,7 +15,9 @@ pub enum Command {
         reply: oneshot::Sender<()>,
     },
     Reload {
-        reply: oneshot::Sender<anyhow::Result<()>>,
+        // Reply carries the affected program summaries (programs created/updated
+        // by the reload). Readiness waiting happens outside the actor loop.
+        reply: oneshot::Sender<anyhow::Result<Vec<ProgramSummary>>>,
     },
 
     // Generic batch operation commands
@@ -118,6 +120,11 @@ pub enum Command {
     InternalArtifactReady {
         id: Uuid,
         path: PathBuf,
+    },
+    // Fired by the OTA verification timer: the new version did not become
+    // Healthy within `server.ota_verify_timeout`; force rollback.
+    OtaVerifyTimeout {
+        id: Uuid,
     },
     DumpPrograms {
         reply: oneshot::Sender<Vec<ProgramConfig>>,

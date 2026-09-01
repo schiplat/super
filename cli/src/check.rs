@@ -3,6 +3,7 @@ use common::config::{
     LEGACY_WEBHOOK_SECTION_MSG, ServerConfig, legacy_webhook_section_present, resolve_license_key,
 };
 use common::is_loopback_bind_host;
+use common::parse_socket_mode;
 use common::resolve_super_root_for_config;
 use common::{
     StackApplyRequest, format_serde_json_error, licensed_deployment_intent, resolve_license_strict,
@@ -12,6 +13,9 @@ use common::{
 use std::fs;
 use std::net::TcpListener;
 use std::path::{Path, PathBuf};
+
+#[cfg(unix)]
+use std::os::unix::fs::PermissionsExt;
 
 /// Run configuration check command
 pub fn run(file_path: Option<PathBuf>) -> anyhow::Result<()> {
@@ -56,41 +60,111 @@ pub fn run(file_path: Option<PathBuf>) -> anyhow::Result<()> {
     }
 
     // 3. Check server config (port availability and privileges)
-    let bind_addr = format!("{}:{}", config.server.host, config.server.port);
-    print!("   Server Addr: {} ... ", bind_addr);
+    let socket_only = config.server.socket_only;
 
-    // Try binding the port to detect conflicts
-    match TcpListener::bind(&bind_addr) {
-        Ok(_) => {
-            print!("{}", "Available".green());
-        }
-        Err(e) => {
-            print!("{}", "Occupied".red());
-            errors.push(format!(
-                "Port {} is likely in use: {}",
-                config.server.port, e
-            ));
-        }
+    if socket_only && config.server.socket.is_none() {
+        errors.push("[server].socket_only = true requires [server].socket to be set.".into());
+    }
+    if let Err(e) = parse_socket_mode(&config.server.socket_mode) {
+        errors.push(format!("[server].socket_mode: {e}"));
     }
 
-    // Privileged ports (<1024) require root
-    if config.server.port < 1024 && config.server.port != 0 {
+    if socket_only {
+        print!("   Server Addr: {} ... ", "socket-only".yellow());
+        println!("{}", "(TCP disabled)".green());
+    } else {
+        let bind_addr = format!("{}:{}", config.server.host, config.server.port);
+        print!("   Server Addr: {} ... ", bind_addr);
+
+        // Try binding the port to detect conflicts
+        match TcpListener::bind(&bind_addr) {
+            Ok(_) => {
+                print!("{}", "Available".green());
+            }
+            Err(e) => {
+                print!("{}", "Occupied".red());
+                errors.push(format!(
+                    "Port {} is likely in use: {}",
+                    config.server.port, e
+                ));
+            }
+        }
+
+        // Privileged ports (<1024) require root
+        if config.server.port < 1024 && config.server.port != 0 {
+            #[cfg(unix)]
+            if unsafe { libc::geteuid() } != 0 {
+                print!(" {}", "(Non-Root Warning)".yellow());
+                warnings.push(format!(
+                    "Port {} usually requires root privileges",
+                    config.server.port
+                ));
+            }
+        }
+        println!();
+    }
+
+    // Unix socket endpoint (permission-controlled transport).
+    if let Some(sock) = &config.server.socket {
+        let root = resolve_super_root_for_config(&path);
+        let resolved = if sock.is_absolute() {
+            sock.clone()
+        } else {
+            root.join(sock)
+        };
+        print!(
+            "   Socket:      {} (mode {}) ... ",
+            resolved.display(),
+            config.server.socket_mode
+        );
+        match resolved.parent() {
+            Some(parent) if !parent.as_os_str().is_empty() && !parent.exists() => {
+                let (writable, _) = check_ancestor_writable(parent);
+                if writable {
+                    println!("{}", "OK (parent will be created)".green());
+                } else {
+                    println!("{}", "Permission Denied".red());
+                    errors.push(format!(
+                        "Cannot create unix socket under read-only ancestor: {:?}",
+                        parent
+                    ));
+                }
+            }
+            _ => {
+                if resolved.exists() {
+                    println!("{}", "Path exists".yellow());
+                    warnings.push(format!(
+                        "Socket path {} already exists — superd will remove it only if it is a stale socket",
+                        resolved.display()
+                    ));
+                } else {
+                    println!("{}", "OK".green());
+                }
+            }
+        }
         #[cfg(unix)]
-        if unsafe { libc::geteuid() } != 0 {
-            print!(" {}", "(Non-Root Warning)".yellow());
+        if let Ok(m) = fs::metadata(resolved.parent().unwrap_or(Path::new(".")))
+            && m.permissions().mode() & 0o022 != 0
+        {
+            let parent = resolved.parent().unwrap_or(Path::new("."));
             warnings.push(format!(
-                "Port {} usually requires root privileges",
-                config.server.port
+                "Unix socket parent {:?} is writable by group/others — another local user could swap the socket file. Prefer a path under SUPER_ROOT (default perms 0700).",
+                parent
             ));
         }
+        #[cfg(not(unix))]
+        warnings.push(
+            "[server].socket is only supported on Unix (macOS/Linux); superd will refuse to start with it on this platform."
+                .into(),
+        );
     }
-    println!();
 
     let licensed_ready = check_licensed_deployment(&path, &config, &mut errors, &mut warnings);
 
     if !licensed_ready
         && !is_loopback_bind_host(&config.server.host)
         && !config.server.allow_insecure_public_bind
+        && !socket_only
     {
         errors.push(format!(
             "Server binds to {} without loopback isolation. \

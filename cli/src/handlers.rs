@@ -1,5 +1,5 @@
 use crate::args::{self, TokenCommands};
-use crate::client::{self, WaitTarget};
+use crate::client::{self, ApiClient, ApiResponse, WaitTarget};
 use crate::display;
 use common::{
     ArtifactConfig, AutorestartPolicy, BatchAction, BatchProgramRequest, BatchProgramResponse,
@@ -8,11 +8,13 @@ use common::{
 };
 use common::{CreateTokenRequest, CreateTokenResponse, UserRole};
 use std::collections::HashMap;
+use std::path::PathBuf;
 use uuid::Uuid;
 
 pub struct Context {
-    pub client: reqwest::Client,
+    pub client: ApiClient,
     pub base_url: String,
+    pub socket_path: Option<PathBuf>,
     pub auth_token: Option<String>,
 }
 
@@ -67,7 +69,7 @@ fn is_live_resource_limits_update(payload: &UpdateProgramRequest, ota_triggered:
     payload.resource_limits.is_some() && !update_requires_restart(payload, ota_triggered)
 }
 
-pub async fn check_resp(resp: reqwest::Response) -> anyhow::Result<()> {
+pub async fn check_resp(resp: ApiResponse) -> anyhow::Result<()> {
     let status = resp.status();
     if status.is_success() {
         println!("Success");
@@ -92,6 +94,15 @@ pub async fn check_resp(resp: reqwest::Response) -> anyhow::Result<()> {
     Ok(())
 }
 
+/// Extra safety knobs shared by every batch command.
+#[derive(Clone, Copy, Default)]
+pub struct BatchOptions {
+    /// Show which programs a batch operation would affect, then exit.
+    pub dry_run: bool,
+    /// Skip the interactive confirmation prompt (equivalent to answering `y`).
+    pub assume_yes: bool,
+}
+
 // Batch action handler (server-side atomic operations)
 pub async fn handle_batch_action(
     ctx: &Context,
@@ -100,6 +111,7 @@ pub async fn handle_batch_action(
     wait: bool,
     wait_target: Option<WaitTarget>,
     timeout_sec: u64,
+    opts: BatchOptions,
 ) -> anyhow::Result<()> {
     let action_verb = match &action {
         BatchAction::Start => "START",
@@ -117,29 +129,67 @@ pub async fn handle_batch_action(
         action: action.clone(),
     };
 
-    // 2. Resolve target
-    let count_hint = if target == "all" {
+    // 2. Resolve target — keep the full program list so the confirmation
+    //    preview and `--dry-run` can show exactly which programs are affected.
+    //    For `all`/`@group`, resolve failure is tolerated in the live path
+    //    (count is only a hint for the prompt; the batch request itself is the
+    //    authority), but `--dry-run` must fail loudly instead of printing a
+    //    misleading "0 program(s)" preview.
+    let mut resolve_err: Option<anyhow::Error> = None;
+    let (count_hint, preview_names) = if target == "all" {
         req.select_all = true;
-        // Best-effort: resolve the real program count for the confirmation prompt.
-        match client::resolve_targets(&ctx.client, &ctx.base_url, &target).await {
-            Ok(ids) => ids.len(),
-            Err(_) => 0,
+        match client::resolve_target_details(&ctx.client, &ctx.base_url, &target).await {
+            Ok(progs) => {
+                let names: Vec<String> = progs.iter().map(|p| p.name.clone()).collect();
+                (progs.len(), names)
+            }
+            Err(e) => {
+                resolve_err = Some(e);
+                (0, Vec::new())
+            }
         }
     } else if let Some(group) = target.strip_prefix('@') {
         req.group_name = Some(group.to_string());
-        match client::resolve_targets(&ctx.client, &ctx.base_url, &target).await {
-            Ok(ids) => ids.len(),
-            Err(_) => 0,
+        match client::resolve_target_details(&ctx.client, &ctx.base_url, &target).await {
+            Ok(progs) => {
+                let names: Vec<String> = progs
+                    .iter()
+                    .map(|p| {
+                        let group_tag = p.group.as_deref().unwrap_or("");
+                        if group_tag.is_empty() {
+                            p.name.clone()
+                        } else {
+                            format!("{} (@{})", p.name, group_tag)
+                        }
+                    })
+                    .collect();
+                (progs.len(), names)
+            }
+            Err(e) => {
+                resolve_err = Some(e);
+                (0, Vec::new())
+            }
         }
     } else {
-        // For a specific name or wildcard, resolve IDs first (single request, no loop)
-        let ids = client::resolve_targets(&ctx.client, &ctx.base_url, &target).await?;
-        req.target_ids = Some(ids);
-        req.target_ids.as_ref().map_or(0, Vec::len)
+        let progs = client::resolve_target_details(&ctx.client, &ctx.base_url, &target).await?;
+        let names: Vec<String> = progs.iter().map(|p| p.name.clone()).collect();
+        req.target_ids = Some(progs.into_iter().map(|p| p.id).collect());
+        (req.target_ids.as_ref().map_or(0, Vec::len), names)
     };
 
-    // Safety confirmation
-    if !display::confirm_batch(count_hint, action_verb) {
+    // 3. Dry-run: the preview must be authoritative. Resolve errors (daemon
+    //    unreachable, unknown group, no programs) are surfaced instead of
+    //    pretending nothing would be affected.
+    if opts.dry_run {
+        if let Some(e) = resolve_err {
+            return Err(e);
+        }
+        display::print_dry_run(action_verb, &target, &preview_names);
+        return Ok(());
+    }
+
+    // 4. Safety confirmation: skipped when `--yes` or for single targets.
+    if !opts.assume_yes && !display::confirm_batch(count_hint, action_verb, &preview_names) {
         println!("Aborted.");
         return Ok(());
     }
@@ -309,6 +359,7 @@ pub async fn handle_logs(
 
     client::monitor_logs(
         &ctx.base_url,
+        ctx.socket_path.as_deref(),
         id,
         &ctx.auth_token
             .as_ref()
@@ -697,7 +748,13 @@ pub async fn handle_shutdown(ctx: &Context) -> anyhow::Result<()> {
     Ok(())
 }
 
-pub async fn handle_reload(ctx: &Context, target: &Option<String>) -> anyhow::Result<()> {
+pub async fn handle_reload(
+    ctx: &Context,
+    target: &Option<String>,
+    wait: bool,
+    timeout: u64,
+    opts: BatchOptions,
+) -> anyhow::Result<()> {
     if let Some(name) = target {
         handle_batch_action(
             ctx,
@@ -708,18 +765,71 @@ pub async fn handle_reload(ctx: &Context, target: &Option<String>) -> anyhow::Re
             false,
             None,
             5,
+            opts,
         )
         .await?;
-    } else {
-        println!("Reloading System Configuration...");
-        let resp = ctx
-            .client
-            .post(format!("{}/api/v1/system/reload", ctx.base_url))
-            .send()
-            .await?;
-        check_resp(resp).await?;
+        return Ok(());
     }
-    Ok(())
+
+    println!("Reloading System Configuration...");
+    let url = format!(
+        "{}/api/v1/system/reload?wait={}&timeout={}",
+        ctx.base_url, wait, timeout
+    );
+    let resp = ctx.client.post(&url).send().await?;
+    let status = resp.status();
+    if !status.is_success() {
+        let body = resp.text().await.unwrap_or_default();
+        eprintln!("Error: {}", body);
+        return Ok(());
+    }
+
+    let body: common::ReloadResponse = resp.json().await?;
+
+    if body.affected.is_empty() {
+        println!("Configuration reloaded. No programs affected.");
+        return Ok(());
+    }
+
+    for p in &body.affected {
+        let health = match &p.health_error {
+            Some(e) if p.status != common::ProcessStatus::Healthy => format!(" ({e})"),
+            _ => String::new(),
+        };
+        println!(
+            "  {} ({}) → {}{}",
+            p.name,
+            p.id,
+            format!("{:?}", p.status).to_lowercase(),
+            health
+        );
+    }
+
+    if body.ready {
+        if wait {
+            println!(
+                "Reload complete: all {} affected program(s) healthy after {}s.",
+                body.affected.len(),
+                body.waited_secs
+            );
+        } else {
+            println!(
+                "Configuration reloaded ({} affected program(s)).",
+                body.affected.len()
+            );
+        }
+        Ok(())
+    } else {
+        eprintln!(
+            "Reload incomplete: {} program(s) not healthy within {}s.",
+            body.affected.len(),
+            timeout
+        );
+        Err(anyhow::anyhow!(
+            "Readiness timeout: {} program(s) did not become healthy.",
+            body.affected.len()
+        ))
+    }
 }
 
 pub async fn handle_apply(ctx: &Context, file: &std::path::PathBuf) -> anyhow::Result<()> {

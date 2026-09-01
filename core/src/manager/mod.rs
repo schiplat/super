@@ -26,6 +26,7 @@ use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
 use std::sync::Arc;
+use std::time::Duration;
 use tokio::sync::{broadcast, mpsc};
 use uuid::Uuid;
 
@@ -520,7 +521,7 @@ impl Manager {
                 }
                 Command::ApplyStack { request, reply } => {
                     let res = self.handle_apply_stack(request).await;
-                    let _ = reply.send(res);
+                    let _ = reply.send(res.map(|(logs, _ids)| logs));
                 }
                 Command::DumpPrograms { reply } => {
                     let configs: Vec<ProgramConfig> =
@@ -529,6 +530,9 @@ impl Manager {
                 }
                 Command::InternalArtifactReady { id, path } => {
                     self.handle_artifact_ready(id, path).await;
+                }
+                Command::OtaVerifyTimeout { id } => {
+                    self.handle_ota_verify_timeout(id).await;
                 }
                 Command::CheckWaitingQueue => {
                     self.check_waiting_queue().await;
@@ -886,6 +890,59 @@ impl Manager {
                 .spawn_program(&mut self.registry, id, 0)
                 .await;
         }
+
+        // 5. OTA verification deadline: if the new version is not Healthy within
+        //    `server.ota_verify_timeout`, force-kill it so the exit handler rolls
+        //    back to the previous binary. Disabled when set to 0.
+        let verify_timeout = self.config.server.ota_verify_timeout;
+        if verify_timeout > 0 {
+            let tx = self.tx_self.clone();
+            tokio::spawn(async move {
+                tokio::time::sleep(Duration::from_secs(verify_timeout)).await;
+                let _ = tx.send(Command::OtaVerifyTimeout { id }).await;
+            });
+        }
+    }
+
+    /// Fired by the OTA verification timer when the new version did not reach
+    /// `Healthy` in time. If the upgrade transaction is still pending and the
+    /// process is running (but unhealthy), force-kill it; the exit handler owns
+    /// the actual file rollback + restart, so there is a single rollback path.
+    async fn handle_ota_verify_timeout(&mut self, id: Uuid) {
+        let pending = self
+            .registry
+            .get_config(&id)
+            .and_then(|c| c.restore_path.clone())
+            .is_some();
+        if !pending {
+            // Already committed or rolled back.
+            return;
+        }
+        let Some(state) = self.registry.get_running(&id) else {
+            tracing::warn!(
+                "OTA verify timeout for {} but process is not running; leaving WAL for next startup.",
+                id
+            );
+            return;
+        };
+        if state.stopping || state.restart_requested {
+            return;
+        }
+        let name = self
+            .registry
+            .programs
+            .get(&id)
+            .map(|c| c.name.clone())
+            .unwrap_or_default();
+        tracing::error!(
+            "OTA verification timed out for {} ({}). Force-killing new version; rolling back.",
+            name,
+            id
+        );
+        let _ = nix::sys::signal::kill(
+            nix::unistd::Pid::from_raw(-(state.pid as i32)),
+            Signal::SIGKILL,
+        );
     }
 
     // Process exit handler (OTA commit/rollback & borrow fixes)
@@ -1289,12 +1346,14 @@ impl Manager {
                     state.health_error = Some(detail.clone());
                     if changed && let Some(cfg) = self.registry.programs.get(&id) {
                         let log_dir = &self.config.storage.log_dir;
+                        let log_timestamp = self.config.child_logging.timestamp;
                         crate::logger::emit_superd_line(
                             id,
                             &format!("health_check failed: {detail}"),
                             log_dir,
                             cfg.stdout_logfile.as_deref(),
                             cfg.stderr_logfile.as_deref(),
+                            log_timestamp,
                             &self.log_tx,
                         )
                         .await;
@@ -1379,9 +1438,13 @@ impl Manager {
         }
     }
 
-    async fn handle_apply_stack(&mut self, req: StackApplyRequest) -> anyhow::Result<Vec<String>> {
+    async fn handle_apply_stack(
+        &mut self,
+        req: StackApplyRequest,
+    ) -> anyhow::Result<(Vec<String>, Vec<Uuid>)> {
         let mut logs = Vec::new();
         let mut touched_programs = HashSet::new();
+        let mut affected_ids = Vec::new();
 
         self.validate_stack_service_names(&req.services)?;
 
@@ -1412,6 +1475,7 @@ impl Manager {
                     .map(|(id, _)| *id);
 
                 if let Some(id) = existing_id {
+                    affected_ids.push(id);
                     logs.push(format!("Updating service: {}", name));
                     // Construct Update Request to trigger potential OTA
                     #[allow(unused_mut)]
@@ -1450,6 +1514,7 @@ impl Manager {
                 } else {
                     logs.push(format!("Creating service: {}", name));
                     let id = Uuid::new_v4();
+                    affected_ids.push(id);
                     let mut should_start = config.autostart;
 
                     if let Some(cron_expr) = &config.cron {
@@ -1497,7 +1562,7 @@ impl Manager {
         if let Err(e) = self.flush_to_disk().await {
             tracing::error!("Failed to persist stack apply: {}", e);
         }
-        Ok(logs)
+        Ok((logs, affected_ids))
     }
 
     async fn handle_shutdown(&mut self) {
@@ -1698,7 +1763,7 @@ impl Manager {
         let _ = reply.send(Ok(created_ids));
     }
 
-    async fn handle_reload(&mut self) -> anyhow::Result<()> {
+    async fn handle_reload(&mut self) -> anyhow::Result<Vec<ProgramSummary>> {
         tracing::info!("Reloading configuration from {:?}", self.config_path);
         let content = tokio::fs::read_to_string(&self.config_path).await?;
         let new_config: ServerConfig = toml::from_str(&content)?;
@@ -1717,11 +1782,29 @@ impl Manager {
         if let Err(e) = self.extension.on_reload() {
             tracing::error!("Failed to reload extension: {}", e);
         }
-        if let Err(e) = self.process_includes().await {
-            tracing::error!("Failed to process includes during reload: {}", e);
-        }
-        tracing::info!("Configuration reloaded successfully.");
-        Ok(())
+        let affected_ids = match self.process_includes().await {
+            Ok(ids) => ids,
+            Err(e) => {
+                tracing::error!("Failed to process includes during reload: {}", e);
+                Vec::new()
+            }
+        };
+
+        let affected: Vec<ProgramSummary> = affected_ids
+            .into_iter()
+            .filter_map(|id| {
+                self.registry
+                    .programs
+                    .get(&id)
+                    .map(|cfg| self.build_summary(&id, cfg))
+            })
+            .collect();
+
+        tracing::info!(
+            "Configuration reloaded successfully ({} affected program(s)).",
+            affected.len()
+        );
+        Ok(affected)
     }
 
     async fn flush_to_disk(&mut self) -> anyhow::Result<()> {
@@ -1747,57 +1830,60 @@ impl Manager {
     fn handle_list(&self) -> Vec<ProgramSummary> {
         let mut list = Vec::new();
         for (id, config) in &self.registry.programs {
-            let (status, pid, uptime, cpu, mem) = if let Some(state) = self.registry.get_running(id)
-            {
-                let now = chrono::Utc::now().timestamp() as u64;
-
-                let s = if state.stopping {
-                    ProcessStatus::Stopping
-                } else if state.is_healthy {
-                    ProcessStatus::Healthy
-                } else {
-                    ProcessStatus::Running
-                };
-
-                (
-                    s,
-                    Some(state.pid),
-                    Some(now.saturating_sub(state.start_time)),
-                    Some(state.cpu_usage),
-                    Some(state.mem_usage),
-                )
-            } else if self.registry.restarting.contains(id) {
-                (ProcessStatus::Backoff, None, None, None, None)
-            } else if self.registry.waiting.contains(id) {
-                (ProcessStatus::Waiting, None, None, None, None)
-            } else if self.registry.crashed.contains(id) {
-                (ProcessStatus::Fatal, None, None, None, None)
-            } else {
-                (ProcessStatus::Stopped, None, None, None, None)
-            };
-
-            list.push(ProgramSummary {
-                id: *id,
-                name: config.name.clone(),
-                group: config.group.clone(),
-                status,
-                pid,
-                uptime_sec: uptime,
-                created_at: config.created_at,
-                updated_at: config.updated_at,
-                last_error: self.registry.startup_errors.get(id).cloned(),
-                health_error: self
-                    .registry
-                    .running
-                    .get(id)
-                    .and_then(|s| s.health_error.clone()),
-                cpu_usage: cpu,
-                mem_usage: mem,
-                depends_on: config.depends_on.clone(),
-                resource_limits: config.resource_limits.clone(),
-            });
+            list.push(self.build_summary(id, config));
         }
         list
+    }
+
+    fn build_summary(&self, id: &Uuid, config: &ProgramConfig) -> ProgramSummary {
+        let (status, pid, uptime, cpu, mem) = if let Some(state) = self.registry.get_running(id) {
+            let now = chrono::Utc::now().timestamp() as u64;
+
+            let s = if state.stopping {
+                ProcessStatus::Stopping
+            } else if state.is_healthy {
+                ProcessStatus::Healthy
+            } else {
+                ProcessStatus::Running
+            };
+
+            (
+                s,
+                Some(state.pid),
+                Some(now.saturating_sub(state.start_time)),
+                Some(state.cpu_usage),
+                Some(state.mem_usage),
+            )
+        } else if self.registry.restarting.contains(id) {
+            (ProcessStatus::Backoff, None, None, None, None)
+        } else if self.registry.waiting.contains(id) {
+            (ProcessStatus::Waiting, None, None, None, None)
+        } else if self.registry.crashed.contains(id) {
+            (ProcessStatus::Fatal, None, None, None, None)
+        } else {
+            (ProcessStatus::Stopped, None, None, None, None)
+        };
+
+        ProgramSummary {
+            id: *id,
+            name: config.name.clone(),
+            group: config.group.clone(),
+            status,
+            pid,
+            uptime_sec: uptime,
+            created_at: config.created_at,
+            updated_at: config.updated_at,
+            last_error: self.registry.startup_errors.get(id).cloned(),
+            health_error: self
+                .registry
+                .running
+                .get(id)
+                .and_then(|s| s.health_error.clone()),
+            cpu_usage: cpu,
+            mem_usage: mem,
+            depends_on: config.depends_on.clone(),
+            resource_limits: config.resource_limits.clone(),
+        }
     }
 
     fn handle_get(&self, id: Uuid) -> anyhow::Result<ProgramInfo> {
@@ -1899,12 +1985,13 @@ impl Manager {
         Ok(())
     }
 
-    async fn process_includes(&mut self) -> anyhow::Result<()> {
+    async fn process_includes(&mut self) -> anyhow::Result<Vec<Uuid>> {
         let patterns = self.config.include.files.clone();
         if patterns.is_empty() {
-            return Ok(());
+            return Ok(Vec::new());
         }
         let root = crate::resolve_root();
+        let mut affected = Vec::new();
 
         for pattern in patterns {
             let pattern_path = std::path::Path::new(&pattern);
@@ -1921,12 +2008,17 @@ impl Manager {
                     if let Ok(content) = tokio::fs::read_to_string(&entry).await
                         && let Ok(stack) = serde_json::from_str::<StackApplyRequest>(&content)
                     {
-                        let _ = self.handle_apply_stack(stack).await;
+                        match self.handle_apply_stack(stack).await {
+                            Ok((_logs, ids)) => affected.extend(ids),
+                            Err(e) => {
+                                tracing::error!("Failed to apply include stack {:?}: {}", entry, e)
+                            }
+                        }
                     }
                 }
             }
         }
-        Ok(())
+        Ok(affected)
     }
 
     async fn check_waiting_queue(&mut self) {

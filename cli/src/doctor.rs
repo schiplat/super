@@ -30,19 +30,19 @@ pub async fn run(base_url: &str, token: Option<&String>) -> anyhow::Result<()> {
 
     // 2. Daemon connectivity + health.
     println!("\n{}", "== Daemon ==".bold());
-    let base_url = base_url.trim_end_matches('/');
+    let (base, _socket) = client::split_server(base_url);
     println!("   Server URL:      {}", base_url.cyan());
     report_pidfile_status();
 
-    let client = match client::build_client(token) {
+    let client = match client::build_api_client(base_url, token) {
         Ok(c) => c,
         Err(e) => {
-            println!("   {}", format!("cannot build HTTP client: {e}").red());
+            println!("   {}", format!("cannot build API client: {e}").red());
             return Ok(());
         }
     };
 
-    let health_url = format!("{base_url}/health");
+    let health_url = format!("{base}/health");
     let resp = match client.get(&health_url).send().await {
         Ok(r) => r,
         Err(e) => {
@@ -78,7 +78,7 @@ pub async fn run(base_url: &str, token: Option<&String>) -> anyhow::Result<()> {
     // 3. License / edition (404 in OSS mode is expected, not an error).
     println!("\n{}", "== License ==".bold());
     let config_license = config_license_status();
-    let license_url = format!("{base_url}/api/v1/system/license");
+    let license_url = format!("{base}/api/v1/system/license");
     match client.get(&license_url).send().await {
         Ok(r) if r.status() == reqwest::StatusCode::NOT_FOUND => match &config_license {
             ConfigLicenseStatus::Invalid { reason } => {
