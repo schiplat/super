@@ -231,7 +231,7 @@ When `type = "webhook"`, Super sends this structured JSON payload:
     "version": "1.4.0"
   },
   "summary": "[Fatal] worker on prod-server-1: killed by SIGKILL (9)",
-  "markdown": "### Process Fatal Alert\n- Service: worker\n- Host: prod-server-1\n- Signal: SIGKILL (9)\n- Cause: Killed by SIGKILL (may be a kernel/cgroup OOM kill; check resource_limits and system logs)\n- Exit Code: None\n- Reason: Stopped after 3 retries.",
+  "markdown": "### Process Fatal Alert\n- Service: worker\n- Program ID: `550e8400-e29b-41d4-a716-446655440000`\n- Host: prod-server-1\n- Signal: SIGKILL (9)\n- Cause: Killed by SIGKILL (may be a kernel/cgroup OOM kill; check resource_limits and system logs)\n- Exit Code: None\n- Reason: Stopped after 3 retries.\n\n---\nSent from Super · host `prod-server-1`\n",
   "data": {
     "type": "ProcessFatal",
     "payload": {
@@ -256,10 +256,10 @@ The `data` field is the **tagged** [System Event](/docs/03-orchestration/events/
 | `id` | Unique notification ID (UUID v4) |
 | `timestamp` | ISO 8601 timestamp (UTC) |
 | `event` | Event type string |
-| `system.hostname` | Host where `superd` is running |
+| `system.hostname` | Host where `superd` is running (override with `SUPER_HOSTNAME` — see [Environment Variables](/docs/06-internals/environment-variables#super_hostname)) |
 | `system.version` | Plugin version |
 | `summary` | One-line plain-text summary |
-| `markdown` | Pre-rendered markdown with event details |
+| `markdown` | Pre-rendered markdown with event details. Program-scoped alerts always include **Program ID** (UUID). Always ends with a **source footer**: `Sent from Super · host \`<hostname>\`` (same hostname resolution as `system.hostname`, including `SUPER_HOSTNAME`). |
 | `data` | Tagged event payload (`{ "type", "payload" }`) — event-specific fields under `data.payload` |
 | `data.payload.exit_code` | Process exit code (present when the process exited normally; `null` when killed by a signal) |
 | `data.payload.signal` | Terminating signal number — e.g. `9` = SIGKILL. `signal: 9` with `exit_code: null` is typical of a **cgroup/kernel OOM kill** when [resource limits](/docs/05-advanced-management/resource-isolation) are enforced |
@@ -320,7 +320,7 @@ url = "https://api.example.com/alerts"
 
 | Variable | Type | Description |
 |----------|------|-------------|
-| `system_hostname` | string | Hostname where `superd` is running |
+| `system_hostname` | string | Hostname where `superd` is running (`SUPER_HOSTNAME` override supported) |
 | `system_version` | string | Plugin version |
 | `rendered_summary` | string | One-line plain-text summary |
 | `rendered_markdown` | string | Pre-rendered markdown with event details and log tail |
@@ -384,7 +384,9 @@ The plugin re-reads `conf/notify.toml` and applies the new channel list immediat
 | `GET` | `/api/v1/system/notify` | any (secrets redacted for Viewer) | Read current config |
 | `PUT` | `/api/v1/system/notify` | Admin, Operator | Replace entire config |
 | `PUT` | `/api/v1/system/notify/channel` | Admin, Operator | Upsert a single channel |
-| `GET` | `/api/v1/system/notify/stats` | any authenticated | Delivery metrics / snapshots |
+| `GET` | `/api/v1/system/notify/stats` | any authenticated | In-memory delivery metrics since daemon start |
+| `GET` | `/api/v1/system/notify/deliveries` | any authenticated | Persisted delivery history (filterable) |
+| `GET` | `/api/v1/system/notify/deliveries/stats` | any authenticated | Retained delivery counts by outcome |
 | `POST` | `/api/v1/system/notify/test` | Admin, Operator | Send test notification |
 
 ### Read configuration
@@ -503,12 +505,13 @@ Super's **storm suppression** system prevents notification floods with two compl
 | **Delivery Strategy** | Per webhook (`[[channels]]`) | Controls how frequently that destination receives notifications |
 | **Inhibition** | Global | Suppresses related events after a source event fires (same program) |
 
-In the licensed **Web UI** ([Notification Settings](/docs/05-advanced-management/web-ui)), these map to two tabs:
+In the licensed **Web UI** ([Notification Settings](/docs/05-advanced-management/web-ui)), these map to:
 
-| Dashboard tab | Configures |
-|---------------|------------|
-| **Webhooks** | Destinations, triggers, headers, and per-webhook **Delivery Strategy** |
-| **Inhibition rules** | Global rules: **When** → **Mute targets** → **For** (duration) |
+| Dashboard | Configures |
+|-----------|------------|
+| **Webhooks** (`/settings/notify/webhooks`) | Destinations, triggers, headers, and per-webhook **Delivery Strategy** |
+| **Inhibition rules** (`/settings/notify/rules`) | Global rules: **When** → **Mute targets** → **For** (duration) |
+| **Delivery** (`/settings/notify/delivery`) | Persisted send / skip history |
 
 ### Delivery Strategy
 
@@ -599,12 +602,12 @@ max_events = 10          # Flush early when 10 events are queued
     "version": "1.4.0"
   },
   "summary": "[Super] 5 events on 1 host(s)",
-  "markdown": "### [Super] 5 events in the last window\n\n| Program | Host | Event | Detail |\n|---------|------|-------|--------|\n| worker-1 | prod-server-1 | 💥 Fatal | exit code 137 – Stopped after 3 retries. |\n| worker-2 | prod-server-1 | ⚠️ Backoff | retry #2 exit_code=Some(1) |\n\n2 program(s) affected on 1 host(s)",
+  "markdown": "### [Super] 5 events in the last window\n\n| Program | Program ID | Host | Event | Detail |\n|---------|------------|------|-------|--------|\n| worker-1 | `550e8400-e29b-41d4-a716-446655440000` | prod-server-1 | 💥 Fatal | exit code 137 – Stopped after 3 retries. |\n| worker-2 | `660e8400-e29b-41d4-a716-446655440001` | prod-server-1 | ⚠️ Backoff | retry #2 exit_code=Some(1) |\n\n2 program(s) affected on 1 host(s)\n\n---\nSent from Super · host `prod-server-1`\n",
   "batch": true
 }
 ```
 
-`summary` aggregates total events and affected host count; `markdown` is a rendered table with one row per queued event.
+`summary` aggregates total events and affected host count; `markdown` is a rendered table with one row per queued event (including **Program ID**).
 
 ### Inhibition
 
@@ -695,7 +698,12 @@ ttl_secs = 300                           # For: 5 minutes
 
 #### Audit Logging
 
-Suppressed events are recorded in the notify audit log (`notify.log`) with a `suppressed_by` field pointing to the inhibiting rule ID. This ensures you can audit what was suppressed and why.
+Skipped deliveries (cooldown / inhibition) and HTTP outcomes are written to:
+
+- **`$SUPER_ROOT/logs/notify.log`** — append-only ops tail (`OK` / `FAIL` / `SKIP`)
+- **`$SUPER_ROOT/data/notify_delivery.db`** — queryable history (see [Delivery history](#delivery-history))
+
+Inhibition skips store `detail=rule_id=…` on the delivery row (and a `SKIP | outcome=inhibited` line in the log).
 
 ### Choosing the Right Combination
 
@@ -765,6 +773,39 @@ super reload
 
 ---
 
+## Delivery history
+
+Successful sends, failures, cooldown skips, and inhibition skips are stored in SQLite under the instance root (default **`$SUPER_ROOT/data/notify_delivery.db`**). This is separate from process event history (`events.db`).
+
+Optional top-level keys in `conf/notify.toml`:
+
+```toml
+delivery_keep_days = 14                 # 0 = never prune; default 14
+delivery_db = "data/notify_delivery.db" # relative to SUPER_ROOT
+```
+
+| Outcome | Meaning |
+|---------|---------|
+| `ok` | HTTP 2xx (including Test and batch flush) |
+| `fail` | Config / template / transport / non-2xx |
+| `cooldown` | Channel cooldown skipped the send |
+| `inhibited` | Global inhibition skipped the event (one row; see `detail` for `rule_id`) |
+
+Browse and filter in the dashboard: **Notification Settings → Delivery** (`/settings/notify/delivery`). Outcome chips (OK / Fail / Cooldown / Inhibited) toggle filters; table columns are sortable. Or query the API:
+
+```bash
+curl -H "Authorization: Bearer $TOKEN" \
+  'http://127.0.0.1:9002/api/v1/system/notify/deliveries?outcome=fail&sort_by=time&order=desc&limit=20'
+```
+
+Query params: `outcome`, `channel_id`, `program_id`, `event_type`, `q`, `limit`, `offset`, `sort_by` (`time` \| `outcome` \| `channel` \| `event` \| `program` \| `detail`), `order` (`asc` \| `desc`).
+
+### Alert body identity
+
+Program-scoped webhook markdown always includes **Program ID** (UUID) next to the service name, and ends with a source footer `Sent from Super · host \`…\``. Override the host label with [`SUPER_HOSTNAME`](/docs/06-internals/environment-variables#super_hostname) when the OS hostname is not meaningful (containers).
+
+---
+
 ## Troubleshooting
 
 | Symptom | Cause | Solution |
@@ -776,3 +817,4 @@ super reload
 | Template rendering fails | Invalid Handlebars syntax | Check template for unclosed `{{ }}` or undefined variables |
 | `log_tail` missing in notification | `include_log_tail = false` or not a `process_fatal` event | Set `include_log_tail = true`; log tail only appears on `process_fatal` |
 | Sensitive fields visible in API | Using Admin token | Non-Admin users see redacted fields; this is expected |
+| Delivery tab empty after events | Old UI plugin / daemon | Redeploy `notify` + `ui` plugins and restart `superd`; confirm `data/notify_delivery.db` exists |

@@ -1,11 +1,11 @@
 use crate::manager::Command;
-use common::SystemStats;
+use common::{DiskPartitionStats, SystemStats};
 use std::collections::HashMap;
 use std::sync::{Arc, RwLock};
 use std::thread;
 use std::time::Duration;
 use sysinfo::{
-    CpuRefreshKind, MemoryRefreshKind, Pid as SysPid, ProcessRefreshKind, ProcessesToUpdate,
+    CpuRefreshKind, Disks, MemoryRefreshKind, Pid as SysPid, ProcessRefreshKind, ProcessesToUpdate,
     RefreshKind, System,
 };
 use tokio::sync::mpsc;
@@ -57,6 +57,56 @@ impl ResourceMonitor {
             .clone()
     }
 
+    fn collect_disks(disks: &mut Disks) -> Vec<DiskPartitionStats> {
+        disks.refresh(true);
+        let mut out: Vec<DiskPartitionStats> = disks
+            .list()
+            .iter()
+            .filter_map(|d| {
+                let total = d.total_space();
+                // Skip tiny / pseudo volumes (macOS system slices, empty mounts).
+                if total < 1_073_741_824 {
+                    return None;
+                }
+                let fs = d.file_system().to_string_lossy().to_ascii_lowercase();
+                if matches!(
+                    fs.as_str(),
+                    "autofs"
+                        | "devfs"
+                        | "devtmpfs"
+                        | "proc"
+                        | "sysfs"
+                        | "cgroup"
+                        | "cgroup2"
+                        | "squashfs"
+                        | "overlay"
+                ) {
+                    return None;
+                }
+                let mount = d.mount_point().to_string_lossy().to_string();
+                if mount.is_empty() {
+                    return None;
+                }
+                Some(DiskPartitionStats {
+                    mount_point: mount,
+                    available_bytes: d.available_space(),
+                    total_bytes: total,
+                    name: {
+                        let n = d.name().to_string_lossy();
+                        if n.is_empty() {
+                            None
+                        } else {
+                            Some(n.into_owned())
+                        }
+                    },
+                })
+            })
+            .collect();
+        out.sort_by(|a, b| a.mount_point.cmp(&b.mount_point));
+        out.truncate(12);
+        out
+    }
+
     fn run_loop(
         mapping: Arc<RwLock<HashMap<Uuid, i32>>>,
         system_stats: Arc<RwLock<SystemStats>>,
@@ -68,12 +118,14 @@ impl ResourceMonitor {
                 .with_memory(MemoryRefreshKind::everything())
                 .with_processes(ProcessRefreshKind::nothing().with_cpu().with_memory()),
         );
+        let mut disks = Disks::new();
 
         loop {
             thread::sleep(Duration::from_secs(3));
 
             sys.refresh_cpu_all();
             sys.refresh_memory();
+            let disk_stats = Self::collect_disks(&mut disks);
 
             if let Ok(mut stats) = system_stats.write() {
                 *stats = SystemStats {
@@ -81,6 +133,7 @@ impl ResourceMonitor {
                     memory_used_bytes: sys.used_memory(),
                     memory_total_bytes: sys.total_memory(),
                     timestamp: chrono::Utc::now().timestamp() as u64,
+                    disks: disk_stats,
                 };
             }
 

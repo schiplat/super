@@ -15,8 +15,8 @@ use axum::{
 
 use common::{
     ArtifactConfig, BatchAction, BatchProgramRequest, BatchProgramResponse, CreateProgramRequest,
-    HealthCheck, HealthResponse, LicenseInfo, ProcessStatus, ProgramConfig, ProgramHooks,
-    ProgramInfo, ProgramLogFile, ProgramLogsResponse, ProgramSummary, ReloadResponse,
+    DiskPartitionStats, HealthCheck, HealthResponse, LicenseInfo, ProcessStatus, ProgramConfig,
+    ProgramHooks, ProgramInfo, ProgramLogFile, ProgramLogsResponse, ProgramSummary, ReloadResponse,
     SignalProgramRequest, StackApplyRequest, SystemStats, UpdateProgramRequest, UserContext,
     UserRole, WsMessage, mask_env_map,
 };
@@ -225,6 +225,7 @@ struct LogQueryParams {
             ProgramLogsResponse,
             ProgramLogFile,
             SystemStats,
+            DiskPartitionStats,
             LicenseInfo,
             common::AutorestartPolicy,
             common::EventStats,
@@ -350,16 +351,34 @@ async fn handle_socket(
     filter_id: Option<Uuid>,
 ) {
     let mut rx = log_tx.subscribe();
-    while let Ok(msg) = rx.recv().await {
-        let should_send = match &msg {
-            WsMessage::Log { id, .. } => filter_id.is_none_or(|target| target == *id),
-            WsMessage::StatusChange { .. } => true,
-        };
-        if should_send
-            && let Ok(json) = serde_json::to_string(&msg)
-            && socket.send(Message::Text(json.into())).await.is_err()
-        {
-            break;
+    loop {
+        tokio::select! {
+            // Client frames (heartbeat ping / close). Must be drained or the socket stalls.
+            incoming = socket.recv() => {
+                match incoming {
+                    Some(Ok(Message::Close(_))) | None => break,
+                    Some(Ok(_)) => {} // ignore ping/pong/text/binary from client
+                    Some(Err(_)) => break,
+                }
+            }
+            // Broadcast log/status. Lagged must not tear down the socket.
+            result = rx.recv() => {
+                let msg = match result {
+                    Ok(msg) => msg,
+                    Err(broadcast::error::RecvError::Lagged(_)) => continue,
+                    Err(broadcast::error::RecvError::Closed) => break,
+                };
+                let should_send = match &msg {
+                    WsMessage::Log { id, .. } => filter_id.is_none_or(|target| target == *id),
+                    WsMessage::StatusChange { .. } => true,
+                };
+                if should_send
+                    && let Ok(json) = serde_json::to_string(&msg)
+                    && socket.send(Message::Text(json.into())).await.is_err()
+                {
+                    break;
+                }
+            }
         }
     }
 }

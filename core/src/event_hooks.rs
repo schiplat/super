@@ -145,9 +145,7 @@ fn matches_hook(hook: &EventHookConfig, event: &SystemEvent) -> bool {
 ///
 /// Exposed for integration tests; the canonical entry point is [`emit`].
 pub fn build_payload(event: &SystemEvent) -> anyhow::Result<String> {
-    let hostname = hostname::get()
-        .map(|h| h.to_string_lossy().to_string())
-        .unwrap_or_else(|_| "unknown".to_string());
+    let hostname = common::resolve_hostname();
 
     let program_json = match event {
         SystemEvent::ProcessFatal {
@@ -293,9 +291,7 @@ fn build_env(event: &SystemEvent) -> HashMap<String, String> {
     let mut env = HashMap::new();
     env.insert("SUPER_EVENT".to_string(), event.event_type().to_string());
 
-    let hostname = hostname::get()
-        .map(|h| h.to_string_lossy().to_string())
-        .unwrap_or_else(|_| "unknown".to_string());
+    let hostname = common::resolve_hostname();
     env.insert("SUPER_HOSTNAME".to_string(), hostname);
 
     match event {

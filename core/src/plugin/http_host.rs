@@ -250,7 +250,12 @@ async fn plugin_api_handler(
     req: axum::extract::Request,
 ) -> Response {
     let method = req.method().as_str().to_string();
-    let path = req.uri().path().to_string();
+    // Include query string so plugins can filter list endpoints (path matching
+    // already happened without the query; plugins parse `path?a=b` themselves).
+    let path = match req.uri().query() {
+        Some(q) if !q.is_empty() => format!("{}?{q}", req.uri().path()),
+        _ => req.uri().path().to_string(),
+    };
     let ctx_json = req
         .extensions()
         .get::<PluginAuthContext>()

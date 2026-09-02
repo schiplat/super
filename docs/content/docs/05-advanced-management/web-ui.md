@@ -56,11 +56,17 @@ Live stdout/stderr streaming from the process detail drawer, plus file log histo
   {{< /tab >}}
 
   {{< tab name="Inhibition rules" icon="bell" >}}
-**Notifications → Inhibition rules** when the **`notify`** plugin is licensed: When → Mute targets → For (cross-event storm suppression).
+**Notification Settings** when the **`notify`** plugin is licensed — three routes under `/settings/notify/`:
 
-See [Event notifications](/docs/05-advanced-management/event-notifications#storm-suppression).
+| Route | Page |
+| :--- | :--- |
+| `/settings/notify/webhooks` | Webhooks + delivery strategy |
+| `/settings/notify/rules` | Inhibition rules (When → Mute targets → For) |
+| `/settings/notify/delivery` | Persisted delivery history (OK / Fail / Cooldown / Inhibited) |
 
-{{< ui-screenshot src="/images/notify_mute.png" alt="Notification settings — Inhibition rules tab" caption="Notifications — Inhibition rules" >}}
+See [Event notifications](/docs/05-advanced-management/event-notifications#storm-suppression) and [Delivery history](/docs/05-advanced-management/event-notifications#delivery-history).
+
+{{< ui-screenshot src="/images/notify_mute.png" alt="Notification settings — Inhibition rules" caption="Notifications — Inhibition rules" >}}
   {{< /tab >}}
 
 {{< /tabs >}}
@@ -77,7 +83,7 @@ Restart `superd` after updating plugins.
 | :--- | :--- |
 | **Overview** | Process counts, host metrics, filters, list/graph views |
 | **Program detail** | Config, hooks, health checks, live logs, start/stop/restart |
-| **Notifications** | Webhooks + Inhibition rules (`notify` plugin) |
+| **Notifications** | Webhooks, Inhibition rules, and Delivery history (`notify` plugin) — `/settings/notify/*` |
 
 The dashboard also includes create/edit program forms, a [stack editor](/docs/04-production-scenarios/delivery/declarative-stack), API token management, and a license page — not shown above.
 

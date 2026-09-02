@@ -54,6 +54,47 @@ pub use program_validate::{
 };
 pub use resources::ResourceLimits;
 
+/// Hostname used for alerts, system events, and child `SUPER_HOSTNAME`.
+///
+/// Resolution order:
+/// 1. `SUPER_HOSTNAME` env (non-empty) — set on the daemon for containers / fleet labels
+/// 2. OS hostname via `hostname::get()`
+/// 3. `"unknown"`
+pub fn resolve_hostname() -> String {
+    if let Ok(v) = std::env::var("SUPER_HOSTNAME") {
+        let trimmed = v.trim();
+        if !trimmed.is_empty() {
+            return trimmed.to_string();
+        }
+    }
+    hostname::get()
+        .ok()
+        .map(|h| h.to_string_lossy().trim().to_string())
+        .filter(|s| !s.is_empty())
+        .unwrap_or_else(|| "unknown".to_string())
+}
+
+#[cfg(test)]
+mod hostname_tests {
+    use super::resolve_hostname;
+    use std::sync::Mutex;
+
+    static ENV_LOCK: Mutex<()> = Mutex::new(());
+
+    #[test]
+    fn prefers_super_hostname_override() {
+        let _guard = ENV_LOCK.lock().unwrap();
+        // SAFETY: single-threaded under ENV_LOCK for this test process.
+        unsafe {
+            std::env::set_var("SUPER_HOSTNAME", "  fleet-node-a  ");
+        }
+        assert_eq!(resolve_hostname(), "fleet-node-a");
+        unsafe {
+            std::env::remove_var("SUPER_HOSTNAME");
+        }
+    }
+}
+
 // Helpers
 fn default_true() -> bool {
     true
@@ -716,6 +757,19 @@ pub struct SystemStats {
     pub memory_used_bytes: u64,
     pub memory_total_bytes: u64,
     pub timestamp: u64,
+    /// Local disk partitions (filtered; free/total bytes).
+    #[serde(default)]
+    pub disks: Vec<DiskPartitionStats>,
+}
+
+/// One mounted filesystem / partition on the host.
+#[derive(Debug, Clone, Serialize, Deserialize, Default, ToSchema)]
+pub struct DiskPartitionStats {
+    pub mount_point: String,
+    pub available_bytes: u64,
+    pub total_bytes: u64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub name: Option<String>,
 }
 
 /// Declarative stack apply request
@@ -845,6 +899,20 @@ impl SystemEvent {
             | SystemEvent::HealthRestart { program_name, .. }
             | SystemEvent::MemoryPressure { program_name, .. }
             | SystemEvent::MemoryOomKill { program_name, .. } => Some(program_name),
+            SystemEvent::SystemStartup { .. } | SystemEvent::SystemShutdown => None,
+        }
+    }
+
+    /// Program UUID for program-scoped events (alerts, batch rows).
+    pub fn program_id(&self) -> Option<Uuid> {
+        match self {
+            SystemEvent::ProcessFatal { program_id, .. }
+            | SystemEvent::ProcessBackoff { program_id, .. }
+            | SystemEvent::ProcessStarted { program_id, .. }
+            | SystemEvent::ProcessRecovered { program_id, .. }
+            | SystemEvent::HealthRestart { program_id, .. }
+            | SystemEvent::MemoryPressure { program_id, .. }
+            | SystemEvent::MemoryOomKill { program_id, .. } => Some(*program_id),
             SystemEvent::SystemStartup { .. } | SystemEvent::SystemShutdown => None,
         }
     }

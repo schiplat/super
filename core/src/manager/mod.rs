@@ -349,9 +349,7 @@ impl Manager {
             self.registry.programs.len()
         );
 
-        let hostname = hostname::get()
-            .map(|h| h.to_string_lossy().to_string())
-            .unwrap_or_else(|_| "unknown".to_string());
+        let hostname = common::resolve_hostname();
         self.emit_event(common::SystemEvent::SystemStartup { hostname });
         self.record_system_event(
             "system_startup",
@@ -1513,7 +1511,25 @@ impl Manager {
         }
 
         // 5. Cron job handling
+        // Intentional stop/restart must run before the cron early-return — otherwise
+        // Restart API sets restart_requested, the process dies, and we never respawn.
         if config.cron.is_some() {
+            if state.restart_requested {
+                tracing::info!("Restarting cron program {} immediately...", id);
+                let _ = self
+                    .controller
+                    .spawn_program(&mut self.registry, id, 0)
+                    .await;
+                return;
+            }
+            if state.stopping {
+                let _ = self.log_tx.send(WsMessage::StatusChange {
+                    id,
+                    status: ProcessStatus::Stopped,
+                    name: program_name.clone(),
+                });
+                return;
+            }
             // With `max_concurrent > 1`, sibling instances may still be running;
             // only flip the status when the last instance exits.
             let siblings = self.registry.running_count(&id);

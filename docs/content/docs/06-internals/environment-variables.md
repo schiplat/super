@@ -60,9 +60,26 @@ superd
 
 Without `SUPER_LICENSE_STRICT`, startup still hard-fails when the key does not verify and any of these deployment signals is present: plugin libraries in `$SUPER_ROOT/plugins/`, an `auth_secret` configured, or a non-loopback bind. See [Authentication — license verification](/docs/05-advanced-management/authentication).
 
+### `SUPER_HOSTNAME`
+
+Optional display hostname for the daemon. When set (non-empty), it overrides the OS hostname for:
+
+- Notification / webhook payloads and the “Sent from Super · host …” footer
+- `system_startup` events
+- The `SUPER_HOSTNAME` value injected into managed children and hooks
+
+Useful in containers and Kubernetes where the kernel hostname is a random pod id:
+
+```bash
+export SUPER_HOSTNAME=api-prod-1
+superd
+```
+
+If unset, Super uses the OS hostname (`hostname` / `gethostname`).
+
 ## Variables injected into children and hooks
 
-The following are **not** read by `superd` — they are *written into the environment* of managed processes and hook/event scripts:
+The following are **written into** the environment of managed processes and hook/event scripts (you normally do not set them on children yourself). **`SUPER_HOSTNAME` is special**: if set on the **daemon** process, that value is what gets injected (see above).
 
 | Variable | Where it appears |
 | :--- | :--- |
@@ -70,5 +87,3 @@ The following are **not** read by `superd` — they are *written into the enviro
 | `SUPER_PID`, `SUPER_EXIT_CODE`, `SUPER_UPTIME_SECS` | Lifecycle hook scripts (post-start / pre-stop / post-stop) |
 | `SUPER_PROCESS_NUM`, `SUPER_PROCESS_TOTAL` | `numprocs > 1` instances (`worker-0`, `worker-1`, …) |
 | `SUPER_EVENT`, `SUPER_USAGE_BYTES`, `SUPER_LIMIT_BYTES`, `SUPER_WARN_BYTES`, `SUPER_RETRY_COUNT`, … | OSS `[[event_hooks]]` scripts ([System Events](/docs/03-orchestration/events/types)) |
-
-These variables are set by the daemon at spawn time; you should not set them yourself.

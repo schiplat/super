@@ -662,9 +662,7 @@ impl LifecycleController {
         }
 
         // 3. Inject built-in system variables
-        let hostname = hostname::get()
-            .map(|h| h.to_string_lossy().to_string())
-            .unwrap_or_else(|_| "unknown".to_string());
+        let hostname = common::resolve_hostname();
         envs.insert("SUPER_HOSTNAME".to_string(), hostname);
         envs.insert("SUPER_ID".to_string(), id.to_string());
         envs.insert("SUPER_NAME".to_string(), config.name.clone());
