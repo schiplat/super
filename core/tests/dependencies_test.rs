@@ -2,12 +2,14 @@ use common::{CreateProgramRequest, ProcessStatus};
 use std::collections::HashMap;
 use std::time::Duration;
 use super_core::ManagerHandle;
-use super_core::config::ServerConfig;
 use super_core::extension::Extension;
 use super_core::manager::Manager;
 use tempfile::TempDir;
 use tokio::sync::{broadcast, mpsc};
 use uuid::Uuid;
+
+#[path = "test_helpers.rs"]
+mod test_helpers;
 
 struct NoopExtension;
 impl Extension for NoopExtension {}
@@ -16,15 +18,13 @@ async fn setup_manager() -> (ManagerHandle, TempDir) {
     let temp_dir = TempDir::new().unwrap();
     let config_file = temp_dir.path().join("super.toml");
 
-    let mut config = ServerConfig::default();
-    config.storage.data_file = temp_dir.path().join("snapshot.json");
-    config.storage.log_dir = temp_dir.path().join("logs");
+    let config = test_helpers::test_server_config(&temp_dir);
 
     let (log_tx, _) = broadcast::channel(100);
     let (tx, rx) = mpsc::channel(32);
     let log_reloader = Box::new(|_| Ok(()));
 
-    let event_db = super_core::event_db::EventDb::open(&temp_dir.path().join("events.db"))
+    let event_db = super_core::event_db::EventDb::open(&config.storage.events_file)
         .await
         .unwrap();
 

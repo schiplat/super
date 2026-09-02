@@ -7,13 +7,15 @@ use std::io::Write;
 use std::path::PathBuf;
 use std::time::Duration;
 use super_core::ManagerHandle;
-use super_core::config::ServerConfig;
 use super_core::extension::NoOpExtension;
 use super_core::manager::{Command, Manager};
 use tempfile::TempDir;
 use tokio::sync::{broadcast, mpsc};
 use wiremock::matchers::{method, path};
 use wiremock::{Mock, MockServer, ResponseTemplate};
+
+#[path = "test_helpers.rs"]
+mod test_helpers;
 
 // + Helpers +
 
@@ -39,8 +41,6 @@ async fn setup_system_full() -> (
     let root = temp_dir.path();
 
     let config_file = root.join("super.toml");
-    let data_file = root.join("snapshot.json");
-    let log_dir = root.join("logs");
     let target_bin = root.join("my_app");
 
     // 1. Create initial version (v1)
@@ -55,16 +55,15 @@ async fn setup_system_full() -> (
         std::fs::set_permissions(&target_bin, perms).unwrap();
     }
 
-    let mut config = ServerConfig::default();
-    config.storage.data_file = data_file.clone();
-    config.storage.log_dir = log_dir;
+    let mut config = test_helpers::test_server_config(&temp_dir);
     config.server.shutdown_timeout = 1;
+    let data_file = config.storage.data_file.clone();
 
     let (log_tx, _) = broadcast::channel(100);
     let (tx, rx) = mpsc::channel(32);
     let log_reloader = Box::new(|_| Ok(()));
 
-    let event_db = super_core::event_db::EventDb::open(&root.join("events.db"))
+    let event_db = super_core::event_db::EventDb::open(&config.storage.events_file)
         .await
         .unwrap();
 

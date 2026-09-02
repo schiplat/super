@@ -202,6 +202,19 @@ pub struct StorageSection {
     pub events_keep_days: u64,
 }
 
+impl StorageSection {
+    /// Resolve relative `[storage]` paths under `SUPER_ROOT`.
+    pub fn resolve_under_root(&self, root: &std::path::Path) -> Self {
+        use crate::resolve_storage_path;
+        Self {
+            data_file: resolve_storage_path(root, &self.data_file),
+            log_dir: resolve_storage_path(root, &self.log_dir),
+            events_file: resolve_storage_path(root, &self.events_file),
+            events_keep_days: self.events_keep_days,
+        }
+    }
+}
+
 impl Default for StorageSection {
     fn default() -> Self {
         Self {

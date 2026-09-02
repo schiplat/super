@@ -72,30 +72,22 @@ pub async fn bootstrap(extension: Box<dyn Extension>) -> anyhow::Result<SystemCo
     // 1. Resolve path layout
     let root = resolve_root();
     let conf_dir = root.join("conf");
-    let data_dir = root.join("data");
-    let log_dir = root.join("logs");
     let run_dir = root.join("run");
 
     let paths = SystemPaths {
         root: root.clone(),
         config_file: conf_dir.join("super.toml"),
         notify_file: conf_dir.join("notify.toml"),
-        state_file: data_dir.join("snapshot.json"),
-        auth_file: data_dir.join("auth.json"),
-        log_dir: log_dir.clone(),
+        state_file: root.join("data/snapshot.json"),
+        auth_file: root.join("data/auth.json"),
+        log_dir: root.join("logs"),
         plugins_dir: root.join("plugins"),
     };
 
     // Ensure plugin directory exists (drop-in `.so` files at startup).
     tokio::fs::create_dir_all(&paths.plugins_dir).await?;
 
-    // 2. Create directories (run/ holds optional pidfile for --daemon)
-    tokio::fs::create_dir_all(&conf_dir).await?;
-    tokio::fs::create_dir_all(&data_dir).await?;
-    tokio::fs::create_dir_all(&log_dir).await?;
-    tokio::fs::create_dir_all(&run_dir).await?;
-
-    // 3. Load config (strict: parse errors fail fast)
+    // 2. Load config (strict: parse errors fail fast)
     let server_config = if paths.config_file.exists() {
         let content = tokio::fs::read_to_string(&paths.config_file).await?;
         if common::config::legacy_webhook_section_present(&content) {
@@ -115,9 +107,17 @@ pub async fn bootstrap(extension: Box<dyn Extension>) -> anyhow::Result<SystemCo
         ServerConfig::default()
     };
 
-    // 4. Init async logging
-    tokio::fs::create_dir_all(&server_config.storage.log_dir).await?;
-    let file_appender = tracing_appender::rolling::daily(&server_config.storage.log_dir, "app.log");
+    // Resolve `[storage]` paths under SUPER_ROOT (never relative to process CWD).
+    let storage = server_config.storage.resolve_under_root(&root);
+    if let Some(parent) = storage.data_file.parent() {
+        tokio::fs::create_dir_all(parent).await?;
+    }
+    tokio::fs::create_dir_all(&storage.log_dir).await?;
+    tokio::fs::create_dir_all(&conf_dir).await?;
+    tokio::fs::create_dir_all(&run_dir).await?;
+
+    // 3. Init async logging (same resolved log_dir as child process logs)
+    let file_appender = tracing_appender::rolling::daily(&storage.log_dir, "app.log");
 
     // Keep guard alive for ongoing log writes
     let (non_blocking, guard) = tracing_appender::non_blocking(file_appender);
@@ -138,14 +138,19 @@ pub async fn bootstrap(extension: Box<dyn Extension>) -> anyhow::Result<SystemCo
         .try_init();
 
     tracing::info!("Super Core starting...");
-    tracing::info!(root = ?root, config = ?paths.config_file, data = ?paths.state_file);
+    tracing::info!(
+        root = ?root,
+        config = ?paths.config_file,
+        data = ?storage.data_file,
+        logs = ?storage.log_dir,
+    );
 
     if !paths.config_file.exists() {
         tracing::warn!("Config file not found, using defaults");
     }
 
-    // 5. Load persisted runtime snapshot
-    let initial_programs = match store::load_with_recovery(&paths.state_file).await {
+    // 4. Load persisted runtime snapshot
+    let initial_programs = match store::load_with_recovery(&storage.data_file).await {
         Ok(p) => p,
         Err(e) => {
             // Unrecoverable error: log fatal and exit
@@ -156,21 +161,13 @@ pub async fn bootstrap(extension: Box<dyn Extension>) -> anyhow::Result<SystemCo
         }
     };
 
-    // 5b. Open the SQLite-backed event history store (auxiliary; never fatal).
-    // The batch writer drains into it in the background. Path comes from
-    // `[storage] events_file` (default `./data/events.db`); relative paths
-    // resolve under SUPER_ROOT.
-    let events_db_path = if server_config.storage.events_file.is_absolute() {
-        server_config.storage.events_file.clone()
-    } else {
-        root.join(&server_config.storage.events_file)
-    };
-    let event_db = match crate::event_db::EventDb::open(&events_db_path).await {
+    // 4b. Open the SQLite-backed event history store (auxiliary; never fatal).
+    let event_db = match crate::event_db::EventDb::open(&storage.events_file).await {
         Ok(db) => db,
         Err(e) => {
             tracing::error!(
                 "Failed to open events database at {}: {} — event history disabled",
-                events_db_path.display(),
+                storage.events_file.display(),
                 e
             );
             return Err(e);
@@ -189,10 +186,13 @@ pub async fn bootstrap(extension: Box<dyn Extension>) -> anyhow::Result<SystemCo
     });
 
     let mut runtime_config = server_config.clone();
-    runtime_config.storage.data_file = paths.state_file.clone();
-    runtime_config.storage.log_dir = paths.log_dir.clone();
+    runtime_config.storage = storage.clone();
 
-    // 6. Init Manager (core actor)
+    let mut paths = paths;
+    paths.state_file = storage.data_file.clone();
+    paths.log_dir = storage.log_dir.clone();
+
+    // 5. Init Manager (core actor)
     let manager = Manager::new(
         runtime_config.clone(),
         paths.config_file.clone(),

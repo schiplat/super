@@ -37,6 +37,18 @@ pub fn resolve_super_root_for_config(config_path: &Path) -> PathBuf {
     resolve_super_root()
 }
 
+/// Resolve a storage path relative to the instance root.
+///
+/// Absolute paths are returned unchanged; relative paths (including `./…`) join
+/// under `root` so daemon logs and data never depend on process CWD.
+pub fn resolve_storage_path(root: &Path, path: &Path) -> PathBuf {
+    if path.is_absolute() {
+        path.to_path_buf()
+    } else {
+        root.join(path)
+    }
+}
+
 fn env_super_root() -> Option<PathBuf> {
     env::var("SUPER_ROOT")
         .ok()
@@ -70,6 +82,26 @@ mod tests {
     fn env_lock() -> &'static Mutex<()> {
         static LOCK: OnceLock<Mutex<()>> = OnceLock::new();
         LOCK.get_or_init(|| Mutex::new(()))
+    }
+
+    #[test]
+    fn resolve_storage_path_joins_relative_under_root() {
+        let root = PathBuf::from("/tmp/super-demo");
+        assert_eq!(
+            resolve_storage_path(&root, Path::new("./logs")),
+            PathBuf::from("/tmp/super-demo/logs")
+        );
+        assert_eq!(
+            resolve_storage_path(&root, Path::new("data/events.db")),
+            PathBuf::from("/tmp/super-demo/data/events.db")
+        );
+    }
+
+    #[test]
+    fn resolve_storage_path_keeps_absolute() {
+        let root = PathBuf::from("/tmp/super-demo");
+        let abs = PathBuf::from("/var/log/super");
+        assert_eq!(resolve_storage_path(&root, &abs), abs);
     }
 
     #[test]

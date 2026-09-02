@@ -23,7 +23,7 @@ pub use daemon::{
     pidfile_parent_unwritable, release_pidfile, resolve_daemonize, resolve_pidfile_path,
     should_write_pidfile, under_systemd,
 };
-pub use paths::{resolve_super_root, resolve_super_root_for_config};
+pub use paths::{resolve_storage_path, resolve_super_root, resolve_super_root_for_config};
 pub use security::{
     DEFAULT_SOCKET_MODE, FetchUrlPolicy, MAX_LICENSE_B64_LEN, MAX_LICENSE_JSON_LEN,
     is_loopback_bind_host, mask_env_map, mask_secret_value, parse_socket_mode,

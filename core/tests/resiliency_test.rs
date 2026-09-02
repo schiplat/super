@@ -2,11 +2,13 @@ use anyhow::anyhow;
 use common::{ProcessStatus, ProgramConfig};
 use std::collections::HashMap;
 use super_core::ManagerHandle;
-use super_core::config::ServerConfig;
 use super_core::extension::Extension;
 use super_core::manager::Manager;
 use tokio::sync::{broadcast, mpsc};
 use uuid::Uuid;
+
+#[path = "test_helpers.rs"]
+mod test_helpers;
 
 // --- Mock Extension ---
 // Extension that can be configured to fail
@@ -33,9 +35,7 @@ async fn test_strict_policy_kills_process() {
     let (log_tx, _) = broadcast::channel(100);
 
     let temp_dir = tempfile::tempdir().unwrap();
-    let data_file = temp_dir.path().join("data.json");
-    let mut config = ServerConfig::default();
-    config.storage.data_file = data_file.clone();
+    let config = test_helpers::test_server_config(&temp_dir);
 
     // Extension returns an error from after_start
     let extension = Box::new(SaboteurExtension {
@@ -43,7 +43,7 @@ async fn test_strict_policy_kills_process() {
     });
 
     let (cmd_tx, cmd_rx) = mpsc::channel(100);
-    let event_db = super_core::event_db::EventDb::open(&temp_dir.path().join("events.db"))
+    let event_db = super_core::event_db::EventDb::open(&config.storage.events_file)
         .await
         .unwrap();
 

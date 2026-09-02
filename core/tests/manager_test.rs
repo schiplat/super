@@ -3,11 +3,13 @@ use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use super_core::ManagerHandle;
-use super_core::config::ServerConfig;
 use super_core::extension::Extension;
 use super_core::manager::Manager;
 use tempfile::TempDir;
 use tokio::sync::{broadcast, mpsc};
+
+#[path = "test_helpers.rs"]
+mod test_helpers;
 
 // + Mock components +
 
@@ -42,9 +44,7 @@ async fn setup_manager() -> (ManagerHandle, TempDir, MockExtension) {
     let temp_dir = TempDir::new().unwrap();
     let config_file = temp_dir.path().join("super.toml");
 
-    let mut config = ServerConfig::default();
-    config.storage.data_file = temp_dir.path().join("snapshot.json");
-    config.storage.log_dir = temp_dir.path().join("logs");
+    let mut config = test_helpers::test_server_config(&temp_dir);
     config.child_logging.max_size_mb = 1;
     config.child_logging.max_backups = 1;
 
@@ -54,7 +54,7 @@ async fn setup_manager() -> (ManagerHandle, TempDir, MockExtension) {
 
     let log_reloader = Box::new(|_| Ok(()));
 
-    let event_db = super_core::event_db::EventDb::open(&temp_dir.path().join("events.db"))
+    let event_db = super_core::event_db::EventDb::open(&config.storage.events_file)
         .await
         .unwrap();
 
@@ -430,9 +430,7 @@ autostart = false
     unsafe { std::env::set_var("SUPER_ROOT", root.path()) };
     let temp_dir = TempDir::new().unwrap();
     let config_file = temp_dir.path().join("super.toml");
-    let mut config = ServerConfig::default();
-    config.storage.data_file = temp_dir.path().join("snapshot.json");
-    config.storage.log_dir = temp_dir.path().join("logs");
+    let mut config = test_helpers::test_server_config(&temp_dir);
     config.child_logging.max_size_mb = 1;
     config.child_logging.max_backups = 1;
     config.include.files = vec!["conf/conf.d/*".to_string()];
@@ -441,7 +439,7 @@ autostart = false
     let (log_tx, _) = broadcast::channel(100);
     let (tx, rx) = mpsc::channel(32);
     let log_reloader = Box::new(|_| Ok(()));
-    let event_db = super_core::event_db::EventDb::open(&temp_dir.path().join("events.db"))
+    let event_db = super_core::event_db::EventDb::open(&config.storage.events_file)
         .await
         .unwrap();
     let manager = Manager::new(

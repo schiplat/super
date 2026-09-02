@@ -2,10 +2,12 @@ use common::{CreateProgramRequest, ProcessStatus};
 use std::collections::HashMap;
 use std::time::Duration;
 use super_core::ManagerHandle;
-use super_core::config::ServerConfig;
 use super_core::extension::Extension;
 use super_core::manager::Manager;
 use tokio::sync::{broadcast, mpsc};
+
+#[path = "test_helpers.rs"]
+mod test_helpers;
 
 struct NoopExtension;
 impl Extension for NoopExtension {}
@@ -14,17 +16,14 @@ impl Extension for NoopExtension {}
 async fn cron_job_exempt_from_flapping_detection() {
     let (log_tx, _) = broadcast::channel(100);
     let temp_dir = tempfile::tempdir().unwrap();
-    let data_file = temp_dir.path().join("data.json");
-
-    let mut config = ServerConfig::default();
-    config.storage.data_file = data_file.clone();
+    let mut config = test_helpers::test_server_config(&temp_dir);
     // Aggressive flapping config: any long-running service that restarts 2+ times
     // within 3s would be flagged as flapping.
     config.server.flapping_window = 3;
     config.server.flapping_threshold = 2;
 
     let (cmd_tx, cmd_rx) = mpsc::channel(100);
-    let event_db = super_core::event_db::EventDb::open(&temp_dir.path().join("events.db"))
+    let event_db = super_core::event_db::EventDb::open(&config.storage.events_file)
         .await
         .unwrap();
     let manager = Manager::new(

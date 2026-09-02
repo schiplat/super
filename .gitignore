@@ -3,6 +3,7 @@
 debug
 target/
 logs/
+core/logs/
 example/logs/
 example/data/
 
