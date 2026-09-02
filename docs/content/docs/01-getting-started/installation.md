@@ -6,6 +6,22 @@ description: "Install Super via Docker, GitHub Releases, or build from source."
 
 Project Super ships as static binaries (`superd`, `super`) with no runtime dependencies on Python or a JVM. Building from source requires **Rust 1.85+** (stable; edition 2024).
 
+## Supported platforms
+
+Super is **cross-platform** in the sense that the same `super.toml` and API workflow work wherever you run `superd` — but **how** you install depends on your OS:
+
+| Platform | Native binaries | Typical install |
+| :--- | :---: | :--- |
+| **Linux** (amd64, arm64) | ✅ [GitHub Releases](https://github.com/schiplat/super/releases) | Binary tarball, Docker, or systemd |
+| **macOS** (Intel, Apple Silicon) | ✅ Releases | Binary tarball or `install.sh` |
+| **FreeBSD** (amd64) | ✅ Releases | Binary tarball |
+| **Windows** | ❌ Not published | [Docker](#method-1-docker-recommended) on the host (Docker Desktop or WSL2) |
+
+> [!NOTE]
+> **Windows:** there is no native `superd.exe` release today. Run the official Linux container image locally, or develop on WSL2/Linux/macOS. See the warning under [Method 2](#method-2-github-releases-or-build-from-source) for details.
+
+On any supported host, set `SUPER_ROOT`, place config under `conf/super.toml`, and use the same CLI/API — whether you extracted a tarball or started a container.
+
 ## Method 1: Docker (Recommended)
 
 The official OSS image ships `superd` and `super` (API + CLI). There is no embedded web dashboard — install the optional UI plugin from your subscription package for the full control plane.
@@ -89,7 +105,7 @@ Pre-built archives are published on [GitHub Releases](https://github.com/schipla
 Each archive contains `bin/superd`, `bin/super`, and a `README` with quick-start steps and source links. A `SHA256SUMS` file is attached to every release.
 
 > [!WARNING]
-> Pre-built Windows binaries are **not published** at this time. Super targets Unix-like servers and edge devices. On Windows, use [Docker](#method-1-docker-recommended) (e.g. with WSL2), or build from source on Linux, macOS, or FreeBSD.
+> Pre-built **Windows** binaries are **not published** at this time. On Windows hosts, use [Docker](#method-1-docker-recommended) (Docker Desktop or WSL2) — see [Supported platforms](#supported-platforms). You can also build from source on Linux, macOS, or FreeBSD.
 
 To build locally (requires **Rust 1.85+**):
 

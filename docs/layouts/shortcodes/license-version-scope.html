@@ -4,11 +4,11 @@
 
   Usage:
     {{< license-version-scope >}}
-    {{< license-version-scope issued="1.2.x" through="1.4.x" next="1.5.x" >}}
+    {{< license-version-scope issued="1.5.x" through="1.7.x" next="1.8.x" >}}
 */ -}}
-{{- $issued := .Get "issued" | default "1.2.x" -}}
-{{- $through := .Get "through" | default "1.4.x" -}}
-{{- $next := .Get "next" | default "1.5.x" -}}
+{{- $issued := .Get "issued" | default "1.5.x" -}}
+{{- $through := .Get "through" | default "1.7.x" -}}
+{{- $next := .Get "next" | default "1.8.x" -}}
 <div class="license-scope not-prose" role="img" aria-label="License covers Super {{ $issued }} through {{ $through }}; {{ $next }} and newer need renewal">
   <div class="license-scope__labels">
     <span class="license-scope__label license-scope__label--issued">Issued for</span>

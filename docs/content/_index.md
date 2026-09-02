@@ -65,20 +65,20 @@ toc: false
 </div>
 <div class="feat-card">
 <div class="feat-card-icon"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"/></svg></div>
-<h3>Health &amp; Auto-Recovery</h3>
-<p>TCP, HTTP, and exec probes. <code>autorestart</code>, <code>exitcodes</code>, and exponential backoff recover crashed workers; probes also gate dependency startup.</p>
+<h3>Health Probes</h3>
+<p>TCP, HTTP, and exec checks mark programs Healthy; exit handling honors <code>autorestart</code>, <code>exitcodes</code>, and exponential backoff.</p>
 <a href="/docs/03-orchestration/health-checks" class="feat-card-link">Health checks →</a>
 </div>
 <div class="feat-card">
 <div class="feat-card-icon"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg></div>
-<h3>Crash-Loop Protection</h3>
-<p><code>retry_limit</code> stops runaway restart storms; events land in the ledger so you can see backoff before a process gives up.</p>
+<h3>Bounded Restarts</h3>
+<p><code>retry_limit</code> stops endless flapping — each backoff step is recorded in event history before status goes Fatal.</p>
 <a href="/docs/03-orchestration/events/types" class="feat-card-link">Event types →</a>
 </div>
 <div class="feat-card">
 <div class="feat-card-icon"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/></svg></div>
 <h3>Any Binary, One Daemon</h3>
-<p>Node, Python, Go, Rust, shell — if it runs in a terminal, Super can supervise it. Single static binary on Linux and macOS; no Python or JVM required.</p>
+<p>Node.js, Python, Go, Rust, shell scripts, or a compiled binary — whatever you launch from a shell, Super can take over. One <code>superd</code> manages them all via <code>command</code>.</p>
 <a href="/docs/02-essentials/configuration" class="feat-card-link">Configuration →</a>
 </div>
 <div class="feat-card">
