@@ -16,6 +16,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.5.1] - 2026-09-02
+
+### Added
+
+- **`SUPER_HOSTNAME`**: override the hostname used in managed-child / hook env, system stats, and webhook source footers when the OS hostname is not meaningful (containers / K8s).
+- **Host disk partitions** on `GET /api/v1/system/stats` (`disks[]` via sysinfo).
+- Plugin HTTP host now forwards **path + query string** to plugins (enables filtered delivery-history APIs).
+
+### Changed
+
+- Hostname resolution is centralized (`common::resolve_hostname`): `SUPER_HOSTNAME` → OS hostname → `unknown`.
+
+### Notes
+
+- Workspace **1.5.1**; pair with commercial plugin packages `super-plugins-1.5.1-…` (notify delivery history UI/API lives in the subscription plugins).
+
+---
+
 ## [1.5.0] - 2026-09-02
 
 ### Added

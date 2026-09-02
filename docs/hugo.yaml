@@ -65,7 +65,7 @@ params:
   banner:
     key: "super-release-banner-v1-5-0"
     message: |
-      **Super 1.5.0 is here** — SQLite event history, filtering & stats, cron lifecycle events, and more. [See what's new →](/docs/08-changelog/)
+      **Super 1.5.1 is here** — `SUPER_HOSTNAME`, host disk stats, and notify delivery APIs. [See what's new →](/docs/08-changelog/)
   contact:
     api_url: "https://open.schiplat.com/api/v1/demands"
   externalLinkDecoration: true
