@@ -1,0 +1,20 @@
+{{- /* Full-screen overlay shell — inline fixed styles so zoom works even if CSS is stale. */ -}}
+<div
+  id="mermaid-zoom"
+  class="mermaid-zoom"
+  hidden
+  aria-hidden="true"
+  style="position:fixed;inset:0;z-index:9999"
+>
+  <div class="mermaid-zoom__backdrop" data-mermaid-zoom-close></div>
+  <div class="mermaid-zoom__dialog" role="dialog" aria-modal="true" aria-label="Diagram enlarged">
+    <button type="button" class="mermaid-zoom__close" data-mermaid-zoom-close aria-label="Close">&times;</button>
+    <div class="mermaid-zoom__stage"></div>
+  </div>
+</div>
+{{- with resources.Get "js/mermaid-zoom.js" -}}
+  {{- $js := . | fingerprint -}}
+  <script defer src="{{ $js.RelPermalink }}" integrity="{{ $js.Data.Integrity }}" crossorigin="anonymous"></script>
+{{- else -}}
+  {{- errorf "mermaid-zoom.js not found in assets/js/" -}}
+{{- end -}}

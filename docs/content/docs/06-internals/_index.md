@@ -9,7 +9,7 @@ Super is built on the philosophy of **Transparency**. We believe you should unde
 ### In this section
 
 #### Architecture
-*   [**Design Philosophy**](./design-philosophy): System overview diagram, Rust rationale, Actor Model, WAL, and defensive defaults.
+*   [**Design Philosophy**](./design-philosophy): System overview diagram (snapshot + SQLite events), Rust rationale, Actor Model, WAL, and defensive defaults.
 *   [**FAQ**](./faq): Technical deep-dives into Zombies, Signals, and Systemd comparisons.
 
 #### Reference Manuals

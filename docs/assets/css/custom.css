@@ -348,3 +348,112 @@ a.hextra-nav-cta:hover {
 .dark [class*="hx:flex-col"][class*="hx:border-amber-200"] > p  { color: #fbbf24 !important; }
 .dark [class*="hx:flex-col"][class*="hx:border-red-200"] > p    { color: #f87171 !important; }
 
+/* Mermaid diagrams — click to enlarge (mermaid-zoom.js) */
+.mermaid--zoomable {
+  cursor: zoom-in;
+  overflow-x: auto;
+}
+
+.mermaid--zoomable svg {
+  max-width: 100%;
+  height: auto;
+}
+
+.mermaid--zoomable::after {
+  content: "Click diagram to enlarge";
+  display: block;
+  margin-top: 0.5rem;
+  font-size: 0.75rem;
+  line-height: 1.4;
+  text-align: center;
+  opacity: 0.85;
+  color: rgb(107 114 128);
+}
+
+.dark .mermaid--zoomable::after {
+  color: rgb(163 163 163);
+}
+
+body.mermaid-zoom-open {
+  overflow: hidden;
+}
+
+.mermaid-zoom[hidden] {
+  display: none !important;
+}
+
+.mermaid-zoom {
+  position: fixed !important;
+  inset: 0 !important;
+  z-index: 9999 !important;
+}
+
+.mermaid-zoom__backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  background: rgba(255, 255, 255, 0.98);
+}
+
+.mermaid-zoom__dialog {
+  position: fixed;
+  inset: 0;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 3rem 1rem 1.5rem;
+  box-sizing: border-box;
+  pointer-events: none;
+}
+
+.mermaid-zoom__stage {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  max-width: 95vw;
+  max-height: 92vh;
+  overflow: auto;
+  pointer-events: auto;
+}
+
+.mermaid-zoom__stage svg {
+  display: block;
+  height: auto;
+}
+
+.mermaid-zoom__close {
+  position: fixed;
+  top: 0.75rem;
+  right: 0.75rem;
+  z-index: 10000;
+  width: 2.25rem;
+  height: 2.25rem;
+  border: 1px solid rgb(229 231 235);
+  border-radius: 0.375rem;
+  background: rgb(255 255 255 / 0.95);
+  color: rgb(55 65 81);
+  font-size: 1.35rem;
+  line-height: 1;
+  cursor: pointer;
+  pointer-events: auto;
+}
+
+.mermaid-zoom__close:hover {
+  background: rgb(243 244 246);
+}
+
+.dark .mermaid-zoom__backdrop {
+  background: rgba(17, 17, 17, 0.98);
+}
+
+.dark .mermaid-zoom__close {
+  border-color: rgb(64 64 64);
+  background: rgb(38 38 38 / 0.95);
+  color: rgb(229 231 235);
+}
+
+.dark .mermaid-zoom__close:hover {
+  background: rgb(64 64 64);
+}
+

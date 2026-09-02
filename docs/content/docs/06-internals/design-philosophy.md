@@ -1,7 +1,7 @@
 ---
 title: "Design Philosophy"
 weight: 1
-description: "System architecture overview, Actor Model, crash safety, and defensive defaults."
+description: "System architecture overview, Actor Model, persistence (snapshot + SQLite events), crash safety, and defensive defaults."
 ---
 
 Project Super was built to solve specific architectural shortcomings in existing process managers like Supervisor (Python) and PM2 (Node.js). We don't just manage processes; we engineer for edge cases, memory constraints, and high-concurrency storms.
@@ -25,24 +25,30 @@ flowchart TB
     WS["WebSocket /ws logs"]
     MET["/metrics Prometheus"]
     MGR["Process Manager\nActor + registry"]
+    EVTW["Event batch writer\n(non-blocking SQLite flush)"]
+    HOOKS["Event hooks\n[[event_hooks]]"]
     API --> MGR
     WS --> MGR
     MET --> MGR
+    MGR -->|try_send| EVTW
+    MGR --> HOOKS
   end
 
   subgraph optional["Optional plugins runtime"]
     SEC["security\nAPI auth · RBAC"]
     UI["ui\nDashboard"]
-    NOT["notify\nWebhooks"]
+    NOT["notify\nWebhooks · IM"]
     ISO["isolation\ncgroups Linux"]
   end
 
   subgraph data["On disk SUPER_ROOT"]
     CONF["conf/super.toml"]
-    SNAP["data/snapshot.json"]
-    LOGS["logs/"]
-    RUN["run/superd.pid"]
+    SNAP["data/snapshot.json\nprogram registry"]
+    EVDB["data/events.db\nSQLite event history"]
+    LOGS["logs/\ndaemon + child"]
+    RUN["run/\nsocket · pidfile"]
     PLUG["plugins/*.so"]
+    AUTH["data/auth.json\nLicensed tokens"]
   end
 
   subgraph workloads["Managed programs"]
@@ -61,7 +67,13 @@ flowchart TB
   LOGS --> MGR
   PLUG --> optional
   optional --> superd
+  AUTH -.->|Licensed| SEC
 
+  EVTW -->|batch INSERT| EVDB
+  MGR -->|query / stats| EVDB
+  API -->|GET /events*| MGR
+
+  MGR -->|SystemEvent| NOT
   MGR --> P1
   MGR --> P2
   MGR --> P3
@@ -75,19 +87,23 @@ flowchart TB
 | :--- | :--- |
 | **`superd`** | Long-running daemon: spawns processes, health checks, OTA updates, persistence, API. Runs in the **foreground** by default; optional Unix `--daemon` / `[server] daemon` when not under systemd/Docker. |
 | **`super` CLI** | Local or remote control against the API (create/start/logs/stack). Same commands whether `superd` is foreground or self-daemonized. |
-| **REST + WebSocket** | Declarative control and live log streaming for automation. |
+| **REST + WebSocket** | Declarative control, live log streaming, and event history queries (`GET /api/v1/events`, `/events/stats`). |
 | **`/metrics`** | Prometheus scrape endpoint (OSS). |
-| **`conf/super.toml`** | Daemon settings (including optional `daemon` / `pidfile`), optional `[license].key`, `auth_secret` when subscribed. |
-| **`data/snapshot.json`** | Durable program registry (atomic writes). |
-| **`logs/`** | Daemon and child process logs (rotation configurable). |
-| **`run/`** | Runtime state; default pidfile `run/superd.pid` when self-daemonizing. |
-| **Plugins** | Optional `.so` / `.dylib` loaded at runtime after license verification. |
+| **`conf/super.toml`** | Daemon settings (including optional `daemon` / `pidfile`, `[[event_hooks]]`), optional `[license].key`, `auth_secret` when subscribed. |
+| **`data/snapshot.json`** | Durable program registry (atomic writes + `.bak` recovery). See [Snapshot persistence](/docs/04-production-scenarios/delivery/snapshot-and-restore). |
+| **`data/events.db`** | SQLite event history (WAL mode): **all** lifecycle events — crashes, recoveries, cron runs, daemon startup/shutdown. The Manager queues records to a **background batch writer** so the actor loop never blocks on disk; retention is configurable via `[storage] events_keep_days`. See [Event History](/docs/03-orchestration/events/history). |
+| **`logs/`** | Daemon (`app.log`) and child process stdout/stderr (rotation configurable). Paths resolve under `SUPER_ROOT`. |
+| **`run/`** | Optional Unix socket (`run/superd.sock`) and pidfile when self-daemonizing. |
+| **`data/auth.json`** | Licensed: persisted API tokens (`security` plugin). |
+| **Plugins** | Optional `.so` / `.dylib` loaded at runtime after license verification. `notify` subscribes to the same `SystemEvent` stream as OSS hooks. |
 
 **OSS (default):** loopback-first bind, no built-in dashboard, API open only on the bind address you configure. See [Configuration — OSS security defaults](/docs/02-essentials/configuration#oss-security-defaults-fail-closed).
 
 **Subscription:** same `superd` binary; add `[license].key`, deploy plugin libraries under `plugins/`, and set `auth_secret`. The **`security` plugin is included with every subscription** and is required for licensed startup — API token auth and RBAC then protect the control plane. See [Authentication](/docs/05-advanced-management/authentication#licensed-deployments-require-security) and the [Feature matrix](/docs/07-editions/feature-matrix/).
 
-**Typical control flow:** an operator or pipeline sends `POST /api/v1/programs` (or `super add`) → the Manager validates config → spawns the child in its own **process group** → streams stdout/stderr to disk and WebSocket → health probes and dependency rules decide when downstream services start. Shutdown and OTA paths use the same Manager mailbox so state stays consistent under load.
+**Typical control flow:** an operator or pipeline sends `POST /api/v1/programs` (or `super add`) → the Manager validates config → spawns the child in its own **process group** → streams stdout/stderr to disk and WebSocket → records lifecycle events to the SQLite queue (batch-flushed to `events.db`) → health probes and dependency rules decide when downstream services start. Shutdown and OTA paths use the same Manager mailbox so state stays consistent under load.
+
+**Event flow (separate from program config):** every lifecycle signal is emitted as a `SystemEvent` → optionally forwarded to `[[event_hooks]]` or the licensed `notify` plugin in real time → **always** queued for persisted history in `events.db` (query later via `super events` or the events API). See [Events](/docs/03-orchestration/events).
 
 For day-to-day configuration rather than internals, start with [Configuration](/docs/02-essentials/configuration) and [Quick Start](/docs/01-getting-started/quick-start/).
 
@@ -121,6 +137,7 @@ Older process managers assume *any* exit means a crash. Super respects POSIX sta
 Super uses an **Actor-like architecture** based on Tokio `mpsc` channels.
 
 *   **Single Source of Truth**: There is only *one* owner of the system state (`ProcessRegistry`) running in a single event loop. All external actions (API requests, Health Checks, Exits) are converted into `Command` enums and sent to the Manager's mailbox.
+*   **Non-blocking event persistence**: Lifecycle events are **not** written synchronously in the actor loop. The Manager `try_send`s each record to a dedicated background task that batch-inserts into SQLite (`events.db`). If the queue is full, new records are dropped rather than blocking process control — the actor never waits on disk I/O.
 *   **Preventing Deadlocks**: The core mailbox has a massive capacity (2048). Furthermore, non-critical background tasks (like periodic CPU/Memory metric collection) use `try_send` instead of blocking. If the manager is saturated under a massive API load, metrics are silently dropped rather than causing a system-wide deadlock.
 *   **Anti-Avalanche (Staggered Startup)**: When a server reboots, starting 30 microservices simultaneously causes a massive CPU/IO spike, often leading to health-check timeouts and crash loops. Super implements **Staggered Startup (Jitter)**. It pauses for 100ms between each process spawn, smoothing out the IO spike and bringing the entire cluster online gracefully.
 
@@ -134,6 +151,9 @@ If power is lost mid-update, Super reads the WAL upon reboot, notices an unfinis
 
 ### Atomic State Swaps
 When saving state to `snapshot.json`, Super writes to a `.tmp` file, calls `fs::sync()`, and then performs an atomic `fs::rename()`. The config file is never corrupted, even during a sudden power loss.
+
+### SQLite Event History
+Program lifecycle events are stored in **`data/events.db`** (SQLite, WAL journaling mode — distinct from the OTA restore WAL file). All events are recorded with millisecond timestamps; optional `events_keep_days` prunes old rows once per UTC day. Indexes align with the `(ts_ms, id)` sort key used by the events API so large histories stay queryable without loading everything into RAM. Path is configurable via `[storage] events_file` (relative paths resolve under `SUPER_ROOT`).
 
 ### Secret Mounting & Display Masking
 We **do not** use master-key encryption for secrets, as rotating the key would permanently destroy configurations (Crypto-shredding). Instead, we use a **Reference & Masking** architecture:
