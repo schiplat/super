@@ -33,6 +33,7 @@ max_line_size_kb = 64   # max line length
 data_file = "./data/snapshot.json"  # runtime program snapshot
 events_file = "./data/events.db"    # SQLite event history
 events_keep_days = 30               # prune events older than 30 days; 0 = keep everything
+log_dir = "logs"                    # child + daemon logs → $SUPER_ROOT/logs
 
 # Program stack files: TOML by default (see conf.d/extra-services.toml).
 # Legacy .json stacks are still parsed. Applied on daemon start and `super reload`.

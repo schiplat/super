@@ -514,6 +514,8 @@ async fn get_program_logs(
 /// - `exit_code`: exact exit code
 /// - `q`: free-text match on the message
 /// - `limit` / `offset`: pagination
+/// - `sort_by`: `time` (default) · `event` · `exit_code` · `signal` · `retry_count` · `duration_secs` · `msg`
+/// - `order`: `asc` (default) or `desc`
 #[utoipa::path(
     get,
     path = "/api/v1/programs/{id}/events",
@@ -525,8 +527,10 @@ async fn get_program_logs(
         ("event_type" = Option<String>, Query, description = "Exact event type"),
         ("exit_code" = Option<i32>, Query, description = "Exact exit code"),
         ("q" = Option<String>, Query, description = "Free-text match on message"),
-        ("limit" = Option<u32>, Query, description = "Max rows (oldest-first)"),
+        ("limit" = Option<u32>, Query, description = "Max rows"),
         ("offset" = Option<u32>, Query, description = "Pagination offset"),
+        ("sort_by" = Option<String>, Query, description = "time|event|exit_code|signal|retry_count|duration_secs|msg"),
+        ("order" = Option<String>, Query, description = "asc (default) or desc"),
     ),
     responses(
         (status = 200, description = "Event history", body = Vec<common::ProgramEventRecord>),
@@ -566,8 +570,10 @@ async fn get_program_events(
         ("event_type" = Option<String>, Query, description = "Exact event type"),
         ("exit_code" = Option<i32>, Query, description = "Exact exit code"),
         ("q" = Option<String>, Query, description = "Free-text match on message"),
-        ("limit" = Option<u32>, Query, description = "Max rows (oldest-first)"),
+        ("limit" = Option<u32>, Query, description = "Max rows"),
         ("offset" = Option<u32>, Query, description = "Pagination offset"),
+        ("sort_by" = Option<String>, Query, description = "time|event|exit_code|signal|retry_count|duration_secs|msg"),
+        ("order" = Option<String>, Query, description = "asc (default) or desc"),
     ),
     responses(
         (status = 200, description = "Event history", body = Vec<common::ProgramEventRecord>)
@@ -622,10 +628,18 @@ struct EventQueryParams {
     q: Option<String>,
     limit: Option<u32>,
     offset: Option<u32>,
+    /// `time` (default) · `event` · `exit_code` · `signal` · `retry_count` · `duration_secs` · `msg`
+    sort_by: Option<String>,
+    /// `asc` (default) or `desc`.
+    order: Option<String>,
 }
 
 impl EventQueryParams {
     fn into_event_query(self, program_id: Option<Uuid>) -> crate::event_db::EventQuery {
+        let sort_desc = self
+            .order
+            .as_deref()
+            .is_some_and(|o| o.eq_ignore_ascii_case("desc"));
         crate::event_db::EventQuery {
             program_id,
             from: self.from,
@@ -635,6 +649,8 @@ impl EventQueryParams {
             q: self.q,
             limit: self.limit,
             offset: self.offset,
+            sort_by: crate::event_db::EventSortBy::parse(self.sort_by.as_deref()),
+            sort_desc,
         }
     }
 }

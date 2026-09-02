@@ -73,7 +73,7 @@ events_file = "./data/events.db"    # SQLite event history (default)
 events_keep_days = 30               # prune events older than 30 days; 0 = keep everything
 ```
 
-- **Event history** is written to `events_file` (SQLite, WAL mode) and grows **unlimited by default**; `events_keep_days` prunes events older than N days once per day.
+- **Event history** is written to `events_file` (SQLite, WAL mode). Default retention is **30 days** (`events_keep_days`); set `0` to keep everything. Pruning runs once per day.
 - `data_file` is the program snapshot persisted at runtime — see [Snapshot persistence & restore](/docs/04-production-scenarios/delivery/snapshot-and-restore).
 - Relative paths resolve under `SUPER_ROOT`. Full key reference: [Config reference — `[storage]`](/docs/06-internals/config-reference/#storage).
 

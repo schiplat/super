@@ -129,8 +129,8 @@ Event history is persisted to SQLite at `events_file` (default `data/events.db`,
 | :--- | :--- | :--- | :--- |
 | `driver` | `file` \| `stdout` | `file` | Where captured child `stdout`/`stderr` lines go. `stdout` prints them (prefixed with `[name:source]`) to the daemon's own stdout; `file` writes to `{log_dir}/{id}.out` / `.err`. |
 | `max_size_mb` | int | `10` | Max size per log file before rotation (MB). |
-| `max_backups` | int | `5` | Number of rotated backups to keep. |
-| `max_line_size_kb` | int | `16` | Max single-line length; longer lines are truncated. |
+| `max_backups` | int | `5` | Number of rotated backups to keep; older backups are deleted (not an infinite archive). |
+| `max_line_size_kb` | int | `16` | Max single-line length in KB; longer lines are truncated before disk/WebSocket. |
 | `timestamp` | `local` \| `utc` \| `none` | `local` | Prefix each captured line with a timestamp. `local` → `[YYYY-MM-DD HH:MM:SS]`, `utc` → `[YYYY-MM-DDTHH:MM:SSZ]`, `none` → raw line. Applied when the daemon consumes the line; the WebSocket stream always carries the raw line. |
 
 ```toml

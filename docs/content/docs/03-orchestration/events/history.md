@@ -32,7 +32,7 @@ events_keep_days = 30             # 0 = keep everything (default is 30)
 | `events_keep_days` | int | `30` | Retention window (days). Events older than this are pruned **once per day**. `0` keeps everything (unlimited). |
 
 > [!NOTE] Storage isn't manual
-> Events are written by a background batch writer (dedicated task draining a queue into SQLite transaction batches), so event persistence never blocks the manager actor. The database is tuned for high-throughput workloads: indexes aligned with the `(ts_ms, id)` sort key, WAL PRAGMA settings (large page cache, memory temp tables, capped WAL growth).
+> The Manager `try_send`s each record to a dedicated background task that drains a bounded queue into SQLite transaction batches (up to 512 rows per flush). Persistence never blocks the actor loop — if the queue is full, new records are dropped rather than stalling process control. The database is tuned for high-throughput workloads: indexes aligned with the `(ts_ms, id)` sort key, WAL PRAGMA settings (large page cache, memory temp tables, capped WAL growth).
 
 ### Retention
 
@@ -71,7 +71,7 @@ Every record carries a **Unix timestamp** (`ts`, seconds) and a millisecond-prec
 
 The same querying is available over the API:
 
-* **`GET /api/v1/programs/{id}/events`** — a program's event history (oldest first). Query params: `from`, `to`, `event_type`, `exit_code`, `q`, `limit`, `offset`.
+* **`GET /api/v1/programs/{id}/events`** — a program's event history. Query params: `from`, `to`, `event_type`, `exit_code`, `q`, `limit`, `offset`, `sort_by` (`time` · `event` · `exit_code` · `signal` · `retry_count` · `duration_secs` · `msg`), `order` (`asc` / `desc`).
 * **`GET /api/v1/events`** — same filters, plus `program_id` to scope to one program (omit for the whole daemon).
 * **`GET /api/v1/events/stats?program_id=<uuid>`** — retention statistics: `total`, `by_type` (count per event type), `first_ts`/`last_ts` (retained time range).
 

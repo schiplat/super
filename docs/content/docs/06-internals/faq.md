@@ -30,8 +30,8 @@ For deployment patterns (including `tini` in Docker), see [Container Deployment]
 
 **Q: Why are my log lines cut off?**
 
-**A:** To protect the daemon's memory stability and WebSocket bandwidth, Super truncates any single log line longer than **16KB**.
-If an application goes into a loop printing 100MB lines, it would otherwise crash the supervisor (OOM). We prioritize the stability of the management plane over the completeness of a runaway log line.
+**A:** To protect the daemon's memory stability and WebSocket bandwidth, Super truncates any single log line longer than **`max_line_size_kb`** (default **16KB**).
+If an application goes into a loop printing 100MB lines, it would otherwise crash the supervisor (OOM). We prioritize the stability of the management plane over the completeness of a runaway log line. Raise `[child_logging].max_line_size_kb` if you need longer lines locally. On-disk child logs are also bounded by rotation (`max_size_mb` / `max_backups`) — see [Logging — Retention and completeness](/docs/02-essentials/logging#retention-and-completeness).
 
 ## Lost Admin Token
 

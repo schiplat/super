@@ -968,8 +968,11 @@ impl Manager {
         validate_update_program_request(&req, &self.config.storage.log_dir).map_err(|e| {
             with_program_location(e, req.name.as_deref().or(existing_name.as_deref()), None)
         })?;
-        if req.cron.is_some() {
-            self.validate_parameters(req.cron.as_deref()).map_err(|e| {
+        // Empty cron string is the clear-sentinel; only validate non-empty expressions.
+        if let Some(c) = req.cron.as_deref()
+            && !c.trim().is_empty()
+        {
+            self.validate_parameters(Some(c)).map_err(|e| {
                 with_program_location(e, req.name.as_deref().or(existing_name.as_deref()), None)
             })?;
         }
@@ -1014,18 +1017,23 @@ impl Manager {
                 .get_config_mut(&id)
                 .ok_or_else(|| anyhow::anyhow!("Program not found"))?;
 
-            // [Trigger Logic] Checksum change detection to trigger OTA
+            // [Trigger Logic] Checksum change detection to trigger OTA.
+            // Empty `source` clears artifact (same sentinel pattern as cwd/user/logs).
             if let Some(v) = &req.artifact {
-                let old_sum = config
-                    .artifact
-                    .as_ref()
-                    .map(|a| a.checksum.clone())
-                    .unwrap_or_default();
-                if v.checksum != old_sum {
-                    trigger_ota = true;
-                    artifact_cfg = Some(v.clone());
+                if v.source.trim().is_empty() {
+                    config.artifact = None;
+                } else {
+                    let old_sum = config
+                        .artifact
+                        .as_ref()
+                        .map(|a| a.checksum.clone())
+                        .unwrap_or_default();
+                    if v.checksum != old_sum {
+                        trigger_ota = true;
+                        artifact_cfg = Some(v.clone());
+                    }
+                    config.artifact = Some(v.clone());
                 }
-                config.artifact = Some(v.clone());
             }
 
             if let Some(v) = req.name {
@@ -1056,11 +1064,24 @@ impl Manager {
                 config.group = if v.trim().is_empty() { None } else { Some(v) };
             }
 
+            // Empty cron clears schedule + related policy (UI Enable-off / cleared expression).
             if let Some(v) = req.cron {
-                config.cron = Some(v.clone());
-                let last_run = cron_last_run_dt(config);
-                self.scheduler
-                    .upsert(id, &v, config.jitter_sec.unwrap_or(0), last_run);
+                if v.trim().is_empty() {
+                    config.cron = None;
+                    config.on_overlap = None;
+                    config.catchup = None;
+                    config.jitter_sec = None;
+                    config.max_concurrent = None;
+                    config.max_queued = None;
+                    config.cron_last_run = None;
+                    self.scheduler.remove(&id);
+                    self.pending_cron.remove(&id);
+                } else {
+                    config.cron = Some(v.clone());
+                    let last_run = cron_last_run_dt(config);
+                    self.scheduler
+                        .upsert(id, &v, config.jitter_sec.unwrap_or(0), last_run);
+                }
             }
 
             if let Some(v) = req.on_overlap {

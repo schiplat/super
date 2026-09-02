@@ -9,9 +9,10 @@ use uuid::Uuid;
 /// Event history persistence backed by SQLite.
 ///
 /// `events.db` is the **source of truth** for lifecycle/run history. All events
-/// are recorded (not just anomalies); retention is unlimited by default, with an
-/// optional `events_keep_days` window for time-based pruning. Queries (filter,
-/// stats, aggregation) run as SQL so large histories stay efficient.
+/// are recorded (not just anomalies). Retention defaults to 30 days via
+/// `events_keep_days` (`0` = unlimited); pruning runs once per UTC day.
+/// Queries (filter, stats, aggregation) run as SQL so large histories stay
+/// efficient.
 #[derive(Clone)]
 pub struct EventDb {
     pool: SqlitePool,
@@ -29,10 +30,53 @@ pub struct EventQuery {
     pub exit_code: Option<i32>,
     /// Free-text match on `msg`.
     pub q: Option<String>,
-    /// Row limit (oldest-first ordering after filters).
+    /// Row limit.
     pub limit: Option<u32>,
     /// Offset for pagination.
     pub offset: Option<u32>,
+    /// Column to sort by (whitelist — never interpolated from raw user input).
+    pub sort_by: EventSortBy,
+    /// Sort descending when true.
+    pub sort_desc: bool,
+}
+
+/// Whitelisted sort columns for event queries.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum EventSortBy {
+    #[default]
+    Time,
+    Event,
+    ExitCode,
+    Signal,
+    RetryCount,
+    Duration,
+    Msg,
+}
+
+impl EventSortBy {
+    pub fn parse(raw: Option<&str>) -> Self {
+        match raw.map(|s| s.trim().to_ascii_lowercase()).as_deref() {
+            Some("event") => Self::Event,
+            Some("exit_code") | Some("exit") => Self::ExitCode,
+            Some("signal") => Self::Signal,
+            Some("retry_count") | Some("retry") => Self::RetryCount,
+            Some("duration_secs") | Some("duration") => Self::Duration,
+            Some("msg") | Some("message") => Self::Msg,
+            _ => Self::Time,
+        }
+    }
+
+    fn sql_expr(self) -> &'static str {
+        match self {
+            Self::Time => "ts_ms",
+            Self::Event => "event",
+            Self::ExitCode => "exit_code",
+            Self::Signal => "signal",
+            Self::RetryCount => "retry_count",
+            Self::Duration => "duration_secs",
+            Self::Msg => "msg",
+        }
+    }
 }
 
 impl EventDb {
@@ -146,7 +190,19 @@ impl EventDb {
         if q.q.is_some() {
             sql.push_str(" AND msg LIKE ?");
         }
-        sql.push_str(" ORDER BY ts_ms ASC, id ASC");
+        // Whitelisted column + direction (never format raw user strings into SQL).
+        let dir = if q.sort_desc { "DESC" } else { "ASC" };
+        sql.push_str(" ORDER BY ");
+        sql.push_str(q.sort_by.sql_expr());
+        sql.push(' ');
+        sql.push_str(dir);
+        // Stable tie-breakers so pages don't reshuffle.
+        if q.sort_by != EventSortBy::Time {
+            sql.push_str(", ts_ms ");
+            sql.push_str(dir);
+        }
+        sql.push_str(", id ");
+        sql.push_str(dir);
         if q.limit.is_some() {
             sql.push_str(" LIMIT ?");
         }

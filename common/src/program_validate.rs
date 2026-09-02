@@ -122,7 +122,10 @@ pub fn validate_update_program_request(
         req.stdout_logfile.as_deref(),
         req.stderr_logfile.as_deref(),
     )?;
-    if let Some(artifact) = &req.artifact {
+    // Empty `source` is the update clear-sentinel (omit field = no change; empty = remove).
+    if let Some(artifact) = &req.artifact
+        && !artifact.source.trim().is_empty()
+    {
         validate_artifact_config(artifact)?;
     }
     validate_cron_concurrency(req.max_concurrent, req.max_queued)?;

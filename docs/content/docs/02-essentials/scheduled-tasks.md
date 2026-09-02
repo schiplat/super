@@ -36,7 +36,7 @@ When a program has a `cron` expression, Super fundamentally changes how it manag
 
 ### Cron run events
 
-Every cron firing is recorded in the program's event history (SQLite, default `data/events.db`), visible via `super events`. Retention is **unlimited by default**; set `[storage] events_keep_days` (default `30`, `0` = keep everything) to prune older events once per day — see [Configuration — Data Storage](/docs/02-essentials/configuration#data-storage--event-retention):
+Every cron firing is recorded in the program's event history (SQLite, default `data/events.db`), visible via `super events`. Default retention is **30 days** (`[storage] events_keep_days`); set `0` to keep everything. Pruning runs once per day — see [Configuration — Data Storage](/docs/02-essentials/configuration#data-storage--event-retention):
 
 | Event | When | Notes |
 | :--- | :--- | :--- |

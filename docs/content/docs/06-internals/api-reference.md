@@ -187,7 +187,7 @@ Read the last N lines from on-disk log files (`{uuid}.out` / `{uuid}.err`).
 
 ### Event History
 
-Read a program's persisted event history (`data/events.db`, SQLite), oldest first. **All** lifecycle events are recorded — not just anomalies. Optional query filters are combinable. For a user-oriented walkthrough of storage, retention, and querying, see [Event History](/docs/03-orchestration/events/history).
+Read a program's persisted event history (`data/events.db`, SQLite). Default sort is `time` ascending; pass `order=desc` and/or `sort_by=…` to change. **All** lifecycle events are recorded — not just anomalies. Optional query filters are combinable. For a user-oriented walkthrough of storage, retention, and querying, see [Event History](/docs/03-orchestration/events/history).
 
 *   **GET** `/api/v1/programs/{id}/events`
 
@@ -198,8 +198,10 @@ Read a program's persisted event history (`data/events.db`, SQLite), oldest firs
 | `event_type` | string | Exact event type (e.g. `process_fatal`, `cron_exit`) |
 | `exit_code` | int | Exact exit code |
 | `q` | string | Free-text match on `msg` |
-| `limit` | int | Max rows (oldest-first) |
+| `limit` | int | Max rows |
 | `offset` | int | Pagination offset |
+| `sort_by` | string | `time` (default) · `event` · `exit_code` · `signal` · `retry_count` · `duration_secs` · `msg` |
+| `order` | string | `asc` (default) or `desc` |
 
 *   **GET** `/api/v1/events` — same filters, plus `program_id` to scope to one program (omit for the whole daemon).
 *   **GET** `/api/v1/events/stats?program_id=<uuid>` — retention statistics: `total`, `by_type` (count per event type), `first_ts`/`last_ts` (retained time range).
@@ -236,7 +238,7 @@ Read a program's persisted event history (`data/events.db`, SQLite), oldest firs
 | `duration_secs` | Execution duration in seconds (cron runs only) |
 | `msg` | Human-readable detail |
 
-Events are retained **unlimited by default** across `superd` restarts. Set `events_keep_days` in `[storage]` to prune events older than N days (once per day).
+Events survive `superd` restarts. Default retention is **30 days** (`[storage] events_keep_days`); set `0` to keep everything. Pruning runs once per day.
 
 ### Send Signal
 
