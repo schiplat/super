@@ -14,6 +14,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+---
+
+## [1.5.0] - 2026-09-02
+
 ### Added
 
 - **SQLite-backed event history** (OSS): lifecycle events are now persisted to a SQLite database (`[storage] events_file`, default `data/events.db`, WAL mode) instead of `data/events.json`. **All** events are recorded — not just anomalies — including program crashes, exits, recoveries, health restarts, cron runs, queue drops, and daemon startup/shutdown. Retention is **unlimited by default**; `[storage] events_keep_days` (default `30`, `0` = keep everything) prunes older events once per day.
@@ -27,6 +31,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Event history is written by a background batch writer (dedicated task draining a queue into SQLite transaction batches) — event persistence never blocks the manager actor loop.
 - The event database is tuned for high-throughput workloads: batched transactional inserts, indexes aligned with the `(ts_ms, id)` sort key, and WAL PRAGMA settings (64 MiB page cache, memory temp tables, capped WAL growth) are applied automatically.
 - Removed the per-program 100-event cap and the legacy `data/events.json` store.
+
+### Fixed
+
+- Storage paths (`log_dir`, `data_file`, `events_file`, pidfile) now resolve relative to `SUPER_ROOT` instead of the process working directory, preventing stray log/data files when `superd` is started from another cwd.
+
+### Notes
+
+- Workspace **1.5.0**; pair with commercial plugin packages `super-plugins-1.5.0-…`.
 
 ---
 

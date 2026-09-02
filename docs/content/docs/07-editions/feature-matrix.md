@@ -10,23 +10,29 @@ description: "OSS core vs optional licensed plugins."
 | **Dependency Orchestration** | ✅ | ✅ |
 | **Atomic OTA Updates** | ✅ | ✅ |
 | **Health Checks (TCP/HTTP)** | ✅ | ✅ |
-| **Web UI (Dashboard)** | ❌ | ✅ (`ui` plugin) |
 | **Log Rotation & Streaming** | ✅ | ✅ |
-| **Prometheus Metrics** | ✅ <br>(basic) | ✅ <br>(+ plugin metrics) |
+| **Prometheus Metrics**<br>Basic scrape in OSS; plugin metrics when licensed | ✅ | ✅ |
 | **Historical Logs API** | ✅ | ✅ |
 | **System Stats API** | ✅ | ✅ |
-| **Event Hooks** (`[[event_hooks]]`) | ✅ <br>(local scripts + native webhook) | ✅ |
+| **Event reactions** (`[[event_hooks]]`) | ✅ <br>local scripts **or** webhook POST (`command` or `url`) | ✅ <br>same hooks; optional `notify` alongside |
 | **Cron Scheduled Tasks** | ✅ | ✅ |
-| **Linux Cgroups Isolation** | ❌ | ✅ (`isolation` plugin, **Linux only**) |
-| **RBAC (User Roles)** | ❌ | ✅ (`security` plugin — **required** for licensed startup) |
-| **Audit Logging** | ❌ | ✅ (`security` plugin — **required** for licensed startup) |
-| **Webhook Notifications** | ✅ <br>(generic HTTP POST via `[[event_hooks]]`) | ✅ <br>(`notify` plugin: IM templates + channels) |
-| **License** | MIT | Commercial plugin license |
+| **RBAC (User Roles)**<br>`security` plugin (**required** for licensed startup) | ❌ | ✅ |
+| **Audit Logging**<br>`security` plugin (**required** for licensed startup) | ❌ | ✅ |
+| **Linux Cgroups Isolation**<br>`isolation` plugin (**Linux only**) | ❌ | ✅ |
+| **Dashboard**<br>`ui` plugin; OSS is API/CLI only | ❌ | ✅ |
+| **Alerting**<br>`notify` plugin: IM templates, multi-channel routing, [storm suppression](/docs/05-advanced-management/event-notifications#storm-suppression) | ❌ | ✅ |
+| **License** | MIT | Commercial |
 
 Same **`superd`** and **`super`** binaries for both columns — **Licensed** is OSS plus commercial plugins: drop `plugins/*.so` + `[license].key` in `conf/super.toml` to enable the right-hand column (see [Editions](/docs/07-editions/)).
 
 > [!IMPORTANT]
 > `security` is included with every subscription and is **required for startup** when `[license].key` is valid. RBAC, audit logs, and API token auth come from the `security` plugin. See [Authentication](/docs/05-advanced-management/authentication#licensed-deployments-require-security).
+
+## Event hooks vs alerting
+
+**OSS has one reaction mechanism:** `[[event_hooks]]` in `super.toml` — use `command` for local scripts or `url` for a basic webhook POST (raw event JSON). There is no separate “webhook notifications” row or config in OSS; webhook POST **is** an event hook.
+
+**Licensed alerting** is the optional **`notify`** plugin (`conf/notify.toml`) — Slack/钉钉/Teams presets, channel routing, cooldown/batch, and inhibition rules. It listens to the *same* events; you can use **both** hooks and `notify` together.
 
 ## Which setup do I need?
 
@@ -41,7 +47,7 @@ Same **`superd`** and **`super`** binaries for both columns — **Licensed** is 
 
 *   **`security.so` + `auth_secret`** — required for any licensed startup (included with subscription). `auth_secret` bootstraps Access Tokens; Admins may explicitly disable it after creating an Admin token.
 *   **PaaS** or shared hosting with cgroup isolation (`isolation`, **Linux hosts only**).
-*   **Webhook notifications** for on-call (`notify`).
+*   **Production alerting** (`notify` plugin) — IM/webhook channels and [storm suppression](/docs/05-advanced-management/event-notifications#storm-suppression); complements (does not replace) `[[event_hooks]]`.
 *   **Visual dashboard** (`ui`) — requires `security` for licensed startup.
 *   Regulated environments needing **audit logs** (`security`).
 *   Exposing API/Dashboard beyond localhost — **`security` is always loaded** when licensed; configure bind and tokens accordingly.

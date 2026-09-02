@@ -63,9 +63,9 @@ params:
   # localStorage; message supports Markdown links. Bump key on each release
   # so the banner shows again for returning visitors.
   banner:
-    key: "super-release-banner-v1-4-0"
+    key: "super-release-banner-v1-5-0"
     message: |
-      🎉 **Super 1.4.0 is here** — cron concurrency & bounded queue, health-check auto-restart, unix-socket transport and more. [See what's new →](/docs/08-changelog/)
+      **Super 1.5.0 is here** — SQLite event history, filtering & stats, cron lifecycle events, and more. [See what's new →](/docs/08-changelog/)
   contact:
     api_url: "https://open.schiplat.com/api/v1/demands"
   externalLinkDecoration: true

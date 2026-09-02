@@ -9,7 +9,7 @@ Super is a modern replacement for tools like [Supervisor](https://supervisord.or
 > Super `1.x` is feature-complete and in active hardening. The core process-management paths (start/stop/restart, auto-recovery, health checks, OTA rollback) are covered by integration tests and run in the maintainers' own deployments. We recommend it for staging and non-critical workloads today; see [below](#toward-ga) for what we require before calling it production-ready (GA).
 >
 > - **OSS core** (`superd` + `super`) is free under MIT — install and try anytime.
-> - **Super Pro plugins** (Dashboard UI, API auth/RBAC/audit, notifications, Linux cgroup isolation) are available with a **free 1-month license** during the beta. No payment required.
+> - **Super Pro plugins** (Dashboard UI, API auth/RBAC/audit, notifications with storm suppression, Linux cgroup isolation) are available with a **free 1-month license** during the beta. No payment required.
 >
 > **Request a free Pro trial:** open a [GitHub Issue](https://github.com/schiplat/super/issues/new?template=pro-trial.yml) (use the **Pro trial request** template). Include a contact email — we will send the license key and plugin package to that address.
 
@@ -23,7 +23,7 @@ Super is a modern replacement for tools like [Supervisor](https://supervisord.or
 * **Observability** — WebSocket logs, historical logs API, system metrics
 * **Auto-recovery** — Supervisor-compatible `autorestart`, `exitcodes`, `startsecs`
 
-Licensed under the **[MIT License](LICENSE)**. Optional **licensed plugins** (`.so` / `.dylib` under `$SUPER_ROOT/plugins/`) add API auth, RBAC, notifications, and cgroup limits — same `superd` binary, no separate commercial build. Compare editions in the [feature matrix](https://super.docs.sconts.com/docs/07-editions/feature-matrix/).
+Licensed under the **[MIT License](LICENSE)**. Optional **licensed plugins** (`.so` / `.dylib` under `$SUPER_ROOT/plugins/`) add API auth, RBAC, notifications ([storm suppression](https://super.docs.sconts.com/docs/05-advanced-management/event-notifications/#storm-suppression)), and cgroup limits — same `superd` binary, no separate commercial build. Compare editions in the [feature matrix](https://super.docs.sconts.com/docs/07-editions/feature-matrix/).
 
 ## Quick Start
 

@@ -23,4 +23,4 @@ This section covers advanced capabilities enabled by licensed plugins.
 *   [**Access Control (RBAC)**](./access-control): Fine-grained permissions (Viewer/Operator/Admin).
 *   [**Resource Isolation**](./resource-isolation): CPU and memory limits via cgroups (`isolation`, Linux).
 *   [**Operation Audit**](./operation-audit): Compliance logging for API mutations (`security`).
-*   [**Event Notifications**](./event-notifications): Webhook integration (`notify`).
+*   [**Event Notifications**](./event-notifications): IM/webhook alerts with **storm suppression** — cooldown, batch summaries, and cross-event inhibition (`notify`).

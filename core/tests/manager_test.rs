@@ -382,7 +382,7 @@ async fn test_update_resource_limits_persisted_immediately() {
         .await
         .unwrap();
 
-    let snapshot = tmp.path().join("snapshot.json");
+    let snapshot = tmp.path().join("data/snapshot.json");
     let content = tokio::fs::read_to_string(&snapshot).await.unwrap();
     assert!(
         content.contains("resource_limits"),

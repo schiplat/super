@@ -1,0 +1,10 @@
+# cargo-audit scans every package listed in Cargo.lock, including optional sqlx
+# backends that are not enabled in our build (we use SQLite only).
+#
+# rsa is pulled in only by the unused sqlx-mysql optional dependency entry;
+# `cargo tree -i rsa` is empty with default-features = false on sqlx.
+
+[advisories]
+ignore = [
+    "RUSTSEC-2023-0071", # rsa / Marvin timing side-channel — not in our compile graph
+]

@@ -1,15 +1,18 @@
 ---
 title: "Event Notifications"
 weight: 5
-description: "Real-time alerts via Webhooks, Slack, DingTalk, Lark, and Teams."
+description: "Real-time alerts via Webhooks and IM, with storm suppression (cooldown, batch, cross-event inhibition)."
 ---
 
 > [!IMPORTANT] Licensed feature — `notify` plugin
-> This page covers a **licensed feature** provided by the **`notify` plugin**. It requires a valid subscription `[license].key` and the plugin library in `$SUPER_ROOT/plugins/`. OSS builds without the plugin ignore `conf/notify.toml` and expose no `/api/v1/system/notify` routes.
+> This page covers a **licensed alerting plugin** — not the same as OSS [`[[event_hooks]]`](/docs/03-orchestration/events/hooks) in `super.toml`. Hooks (script or basic webhook POST) remain available in OSS and can run **alongside** `notify`. This plugin requires a valid subscription `[license].key` and the library in `$SUPER_ROOT/plugins/`. OSS builds without the plugin ignore `conf/notify.toml` and expose no `/api/v1/system/notify` routes.
 
 ### Webhook System 💎
 
 Super acts as an intelligent observer. Instead of just logging errors, it can actively push events to external systems like Slack, Microsoft Teams, or your company's internal IM tools.
+
+> [!TIP] Production alerting without notification storms
+> A flapping process can generate dozens of alerts per minute. The licensed **`notify`** plugin includes **[Storm Suppression](#storm-suppression)** — per-channel **delivery strategies** (`immediate`, `cooldown`, `batch`) plus global **inhibition rules** (When → Mute targets → For) so related events do not flood every webhook. Configure in `conf/notify.toml` or the [Notification Settings](/docs/05-advanced-management/web-ui) dashboard; changes apply on `super reload`.
 
 ## Configuration
 

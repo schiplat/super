@@ -6,7 +6,10 @@ aliases:
   - /docs/03-orchestration/event-hooks/
 ---
 
-Event hooks let you react to [events](/docs/03-orchestration/events/types) by running shell commands on the **same machine** as `superd`, or by POSTing the event JSON to an HTTP(S) **webhook** — no plugin or license required. This is the OSS equivalent of Supervisor's `[eventlistener]`; licensed [Event Notifications](/docs/05-advanced-management/event-notifications) (the `notify` plugin) additionally provide IM-specific templates and channel routing.
+Event hooks let you react to [events](/docs/03-orchestration/events/types) by running shell commands on the **same machine** as `superd`, or by POSTing the event JSON to an HTTP(S) **webhook** — no plugin or license required. Each `[[event_hooks]]` entry is **either** a `command` **or** a `url`; OSS does not have a separate “webhook notifications” config — webhook POST **is** an event hook.
+
+> [!NOTE] Not the same as the `notify` plugin
+> [Event Notifications](/docs/05-advanced-management/event-notifications) (`conf/notify.toml`, licensed) is an optional **alerting** product on the *same* events — IM templates, multi-channel routing, and [storm suppression](/docs/05-advanced-management/event-notifications#storm-suppression). You can use hooks and `notify` together. See [Events — React layer](/docs/03-orchestration/events#quick-orientation) and the [feature matrix](/docs/07-editions/feature-matrix/#event-hooks-vs-alerting).
 
 > [!NOTE]
 > Hooks fire on `SystemEvent`s (lifecycle, health, memory events). **Record-only** events (`cron_started`, `cron_exit`, `cron_spawn_failed`, `queue_full`) are persisted to the [event history](/docs/03-orchestration/events/history) but never trigger hooks.
@@ -114,11 +117,12 @@ In addition to stdin JSON, hooks receive:
 
 ## OSS vs licensed notifications
 
-| | Event hooks (OSS) | Notifications (Licensed 💎) |
+| | Event hooks (OSS) | Alerting — `notify` plugin (Licensed 💎) |
 | :--- | :--- | :--- |
-| Config | `super.toml` → `[[event_hooks]]` | `conf/notify.toml` (`notify` plugin) |
-| Execution | Local script **or** native webhook POST | HTTP to Slack / 钉钉 / etc. |
-| Data | JSON stdin / body + env | Rich envelope + IM templates |
+| Config | `super.toml` → `[[event_hooks]]` | `conf/notify.toml` |
+| Mechanism | One hook = `command` **or** `url` webhook POST | Multi-channel IM/webhook with templates |
+| Execution | Local script **or** generic JSON POST | Slack / 钉钉 / Teams presets + routing |
+| Storm suppression | ❌ | ✅ cooldown, batch, [inhibition](/docs/05-advanced-management/event-notifications#inhibition) |
 
 > [!TIP] You can use both
 > Licensed notify for on-call alerts with IM templates, event hooks for simple webhooks or local automation (archiving, systemd triggers, …). Start with OSS — `command` for local automation, `url` for a quick webhook; once alerting becomes a daily operational need, that's when `notify` pays off.
@@ -128,10 +132,10 @@ In addition to stdin JSON, hooks receive:
 >
 > - Ready-made **Slack / 钉钉 / Feishu** message templates
 > - Multiple **channels** with per-channel routing
-> - **Deduplication & batching** so a crash storm doesn't flood your phone
+> - **[Storm suppression](/docs/05-advanced-management/event-notifications#storm-suppression)** — per-channel **cooldown** and **batch** summaries, plus global **inhibition rules** (When → Mute targets → For) so crash storms do not flood on-call
 > - Delivery retries and delivery metrics
 >
-> **→ [Event Notifications — the licensed alerting plugin](/docs/05-advanced-management/event-notifications/)**
+> **→ [Event Notifications — the licensed alerting plugin](/docs/05-advanced-management/event-notifications/)** · [Storm suppression details](/docs/05-advanced-management/event-notifications#storm-suppression)
 
 ## Related
 

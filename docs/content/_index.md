@@ -14,12 +14,12 @@ toc: false
 <div class="hp-container hero">
 <div>
 <div class="hero-badge">
-<span class="hero-badge-dot"></span>Rust · API-First · One Binary
+<span class="hero-badge-dot"></span>Rust · Cross-platform · API-First · Auditable
 </div>
 <h1 class="hero-title">
-  Run your services<br>with <em>confidence</em>
+  Process control you can<br><em>query, change,</em> and trust
 </h1>
-<p class="hero-desc">A lightweight process manager that handles restarts, startup order, health checks, and OTA updates — define programs in TOML or over REST.</p>
+<p class="hero-desc">Manage any executable from declarative TOML or REST — health checks, crash recovery, and dependency order in one Rust binary. Record every event in a queryable ledger, deploy with rollback, and add licensed plugins for governance, alerting, and cgroup limits.</p>
 <div class="hero-actions">
 <a href="/docs/01-getting-started/quick-start/" class="hp-btn hp-btn--primary">Get Started →</a>
 <a href="https://github.com/schiplat/super" class="hp-btn hp-btn--outline" target="_blank" rel="noopener">
@@ -53,45 +53,69 @@ toc: false
 <section class="hp-section hp-section--alt">
 <div class="hp-container">
 <div class="hp-label">Capabilities</div>
-<h2 class="hp-heading">One binary.<br>Zero dependencies.</h2>
-<p class="hp-lead" style="margin-top: 0.75rem;">Everything you need to run, watch, and recover services in production.</p>
+<h2 class="hp-heading">Everything a process manager<br>should do — and more.</h2>
+<p class="hp-lead" style="margin-top: 0.75rem;">Declarative config, health-aware orchestration, and crash recovery — plus a queryable event ledger, fail-safe delivery, and an API you can drive from CI.</p>
 
-<div class="feat-grid" style="margin-top: 2.5rem;">
+<div class="feat-grid feat-grid--caps">
 <div class="feat-card">
-<div class="feat-card-icon"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4"/></svg></div>
-<h3>Lifecycle Hooks</h3>
-<p>Shell scripts at <code>pre_start</code>, <code>post_start</code>, <code>post_stop</code> — prepare environments, notify services, or clean up.</p>
-<a href="/docs/03-orchestration/lifecycle-hooks" class="feat-card-link">Hooks →</a>
-</div>
-<div class="feat-card">
-<div class="feat-card-icon"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"/></svg></div>
-<h3>Event Hooks</h3>
-<p>React to <code>process_fatal</code> and system events with local scripts — Supervisor-style, API-driven.</p>
-<a href="/docs/03-orchestration/events" class="feat-card-link">Events →</a>
+<div class="feat-card-icon"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg></div>
+<h3>Declarative Stacks</h3>
+<p>Define programs in TOML (or JSON). <code>super apply</code> converges live state to the file — safe to run from CI on every deploy.</p>
+<a href="/docs/04-production-scenarios/delivery/declarative-stack" class="feat-card-link">Declarative stacks →</a>
 </div>
 <div class="feat-card">
 <div class="feat-card-icon"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"/></svg></div>
-<h3>Auto-Recovery</h3>
-<p>Supervisor-compatible <code>autorestart</code>, <code>exitcodes</code>, <code>startsecs</code> — seamless migration.</p>
-<a href="/docs/04-production-scenarios/migrations/vs-supervisor" class="feat-card-link">vs Supervisor →</a>
+<h3>Health &amp; Auto-Recovery</h3>
+<p>TCP, HTTP, and exec probes. <code>autorestart</code>, <code>exitcodes</code>, and exponential backoff recover crashed workers; probes also gate dependency startup.</p>
+<a href="/docs/03-orchestration/health-checks" class="feat-card-link">Health checks →</a>
+</div>
+<div class="feat-card">
+<div class="feat-card-icon"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg></div>
+<h3>Crash-Loop Protection</h3>
+<p><code>retry_limit</code> stops runaway restart storms; events land in the ledger so you can see backoff before a process gives up.</p>
+<a href="/docs/03-orchestration/events/types" class="feat-card-link">Event types →</a>
+</div>
+<div class="feat-card">
+<div class="feat-card-icon"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/></svg></div>
+<h3>Any Binary, One Daemon</h3>
+<p>Node, Python, Go, Rust, shell — if it runs in a terminal, Super can supervise it. Single static binary on Linux and macOS; no Python or JVM required.</p>
+<a href="/docs/02-essentials/configuration" class="feat-card-link">Configuration →</a>
+</div>
+<div class="feat-card">
+<div class="feat-card-icon"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01"/></svg></div>
+<h3>Event History</h3>
+<p>Every lifecycle event lands in a SQLite ledger — query crashes, cron runs, and recoveries via CLI or API instead of grepping logs.</p>
+<a href="/docs/03-orchestration/events/history" class="feat-card-link">Event history →</a>
+</div>
+<div class="feat-card">
+<div class="feat-card-icon"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/></svg></div>
+<h3>Fail-Safe Deployments</h3>
+<p>Atomic OTA with automatic rollback, plus <code>reload --wait</code> and <code>--wait-healthy</code> so config changes finish only when services are ready.</p>
+<a href="/docs/04-production-scenarios/delivery/fail-safe-ota" class="feat-card-link">Fail-safe OTA →</a>
+</div>
+<div class="feat-card">
+<div class="feat-card-icon"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg></div>
+<h3>Dependency Orchestration</h3>
+<p>Startup order, health gates, and staggered restarts — upstreams pass checks before dependents start.</p>
+<a href="/docs/03-orchestration/dependencies" class="feat-card-link">Dependencies →</a>
+</div>
+<div class="feat-card">
+<div class="feat-card-icon"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"/></svg></div>
+<h3>Event Reactions</h3>
+<p>Run local scripts on <code>process_fatal</code> and other system events — distinct from webhook notifications (licensed).</p>
+<a href="/docs/03-orchestration/events/hooks" class="feat-card-link">Event hooks →</a>
 </div>
 <div class="feat-card">
 <div class="feat-card-icon"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg></div>
-<h3>Cron Scheduling</h3>
-<p>Run programs on cron expressions. Periodic jobs without an external scheduler or crontab.</p>
+<h3>Cron &amp; Concurrency</h3>
+<p>Cron schedules with overlap policies — skip, queue, or kill — so periodic jobs do not pile up under load.</p>
 <a href="/docs/02-essentials/scheduled-tasks" class="feat-card-link">Scheduling →</a>
 </div>
 <div class="feat-card">
 <div class="feat-card-icon"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9"/></svg></div>
-<h3>HTTP Ops</h3>
-<p>One REST API for CLI, scripts, and remote control. Add Bearer auth via plugins.</p>
-<a href="/docs/04-production-scenarios/observability/programmatic-control" class="feat-card-link">API →</a>
-</div>
-<div class="feat-card">
-<div class="feat-card-icon"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"/></svg></div>
-<h3>Live Logs</h3>
-<p>Real-time log streams over WebSockets. Monitor processes from anywhere.</p>
-<a href="/docs/02-essentials/logging" class="feat-card-link">Logging →</a>
+<h3>API Control Plane</h3>
+<p>CLI and scripts share the same REST endpoints — stream logs over WebSockets, scrape Prometheus metrics, run <code>super apply</code> from CI.</p>
+<a href="/docs/04-production-scenarios/observability/programmatic-control" class="feat-card-link">Programmatic control →</a>
 </div>
 </div>
 </div>
@@ -113,6 +137,7 @@ toc: false
 <p class="hp-lead" style="margin-top: 0.75rem;">The CLI uses the same endpoints you do. Drive ops from scripts and CI. Stream logs via WebSockets. No custom SDK needed.</p>
 
 <ul class="api-list">
+<li>Declarative <code>super apply</code> — idempotent stack convergence from CI</li>
 <li>CRUD for programs, stacks, and system config</li>
 <li>Real-time WebSocket log streaming</li>
 <li>Prometheus metrics at <code>/metrics</code></li>
@@ -154,7 +179,7 @@ ws://127.0.0.1:9002/ws</code></pre>
 <section class="cta">
 <div class="hp-container">
 <h2 class="cta-title">Ready when you are.</h2>
-<p class="cta-desc">Download the binary, define your stack, and have services running in minutes.</p>
+<p class="cta-desc">Download the binary, define your stack, and have auditable process control in minutes.</p>
 <div class="hero-actions" style="justify-content: center;">
 <a href="/docs/01-getting-started/quick-start/" class="hp-btn hp-btn--primary">Start Building →</a>
 <a href="/docs/01-getting-started/installation/" class="hp-btn hp-btn--outline">Install</a>
