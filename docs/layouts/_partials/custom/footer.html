@@ -1,5 +1,39 @@
-{{- /* Use hx:ml-4 (in compiled CSS). gap-x-4 / flex gap alone are unreliable here. */ -}}
-<nav class="hx:text-xs" aria-label="Legal">
-  <a class="hx:hover:text-gray-800 hx:dark:hover:text-gray-200" href="{{ "legal/terms/" | relURL }}">Terms</a>
-  <a class="hx:ml-4 hx:hover:text-gray-800 hx:dark:hover:text-gray-200" href="{{ "legal/privacy/" | relURL }}">Privacy</a>
-</nav>
+{{- /*
+  Extra footer content (below copyright / legal).
+  Product Hunt review badge — params.footer.productHunt
+*/ -}}
+{{- with site.Params.footer.productHunt -}}
+  {{- if ne .enable false -}}
+    {{- $url := .reviewUrl | default "https://www.producthunt.com/products/super-6/reviews/new?utm_source=badge-product_review&utm_medium=badge&utm_campaign=badge-super-6" -}}
+    {{- $id := .productId | default "1308705" -}}
+    {{- $alt := .alt | default "Super - process-manager | Product Hunt" -}}
+    {{- $light := printf "https://api.producthunt.com/widgets/embed-image/v1/product_review.svg?product_id=%s&theme=light" $id -}}
+    {{- $dark := printf "https://api.producthunt.com/widgets/embed-image/v1/product_review.svg?product_id=%s&theme=dark" $id -}}
+    <a
+      class="hx:inline-block hx:shrink-0 hx:opacity-90 hx:transition-opacity hx:hover:opacity-100 hx:print:hidden"
+      href="{{ $url }}"
+      target="_blank"
+      rel="noopener noreferrer"
+      title="{{ $alt }}"
+    >
+      <img
+        class="hx:block hx:dark:hidden"
+        src="{{ $light }}"
+        alt="{{ $alt }}"
+        width="250"
+        height="54"
+        loading="lazy"
+        decoding="async"
+      />
+      <img
+        class="hx:hidden hx:dark:block"
+        src="{{ $dark }}"
+        alt="{{ $alt }}"
+        width="250"
+        height="54"
+        loading="lazy"
+        decoding="async"
+      />
+    </a>
+  {{- end -}}
+{{- end -}}

@@ -1,3 +1,4 @@
+{{- /* Site footer: copyright + legal on one row; Product Hunt badge below. */ -}}
 {{- $enableFooterSwitches := .Store.Get "enableFooterSwitches" | default false -}}
 {{- $displayThemeToggle := site.Params.theme.displayToggle | default true -}}
 {{- $footerSwitchesVisible := and $enableFooterSwitches (or hugo.IsMultilingual $displayThemeToggle) -}}
@@ -21,16 +22,18 @@
     <div
       class="hextra-max-footer-width hx:mx-auto hx:flex hx:justify-start hx:py-12 hx:pl-[max(env(safe-area-inset-left),1.5rem)] hx:pr-[max(env(safe-area-inset-right),1.5rem)] hx:text-gray-600 hx:dark:text-gray-400"
     >
-      <div class="hx:flex hx:w-full hx:flex-col hx:items-start">
+      <div class="hx:flex hx:w-full hx:flex-col hx:items-start hx:gap-4">
         {{- if (.Site.Params.footer.displayPoweredBy | default true) }}<div class="hx:font-semibold">{{ template "theme-credit" $poweredBy }}</div>{{- end -}}
-        <div class="hx:mt-6 hx:flex hx:flex-wrap hx:items-center hx:justify-start hx:text-xs">
+        <div class="hx:flex hx:flex-wrap hx:items-center hx:justify-start hx:text-xs">
           {{- if .Site.Params.footer.displayCopyright -}}
             <div>{{ $copyright | markdownify }}</div>
           {{- end -}}
-          <div class="hextra-custom-footer hx:ml-4">
-            {{- partial "custom/footer.html" (dict "context" . "switchesVisible" $footerSwitchesVisible "copyrightVisible" $copyrightSectionVisible) -}}
-          </div>
+          <nav class="hx:ml-4" aria-label="Legal">
+            <a class="hx:hover:text-gray-800 hx:dark:hover:text-gray-200" href="{{ "legal/terms/" | relURL }}">Terms</a>
+            <a class="hx:ml-4 hx:hover:text-gray-800 hx:dark:hover:text-gray-200" href="{{ "legal/privacy/" | relURL }}">Privacy</a>
+          </nav>
         </div>
+        {{- partial "custom/footer.html" (dict "context" . "switchesVisible" $footerSwitchesVisible "copyrightVisible" $copyrightSectionVisible) -}}
       </div>
     </div>
   {{- end -}}

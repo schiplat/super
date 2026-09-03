@@ -86,6 +86,8 @@ params:
     displayToggle: true
   navbar:
     displayTitle: true
+    # Keep in sync with params.page.width (Hextra defaults navbar/footer to "normal").
+    width: wide
     logo:
       text: Project Super
       fontWeight: "bold"
@@ -94,6 +96,13 @@ params:
     displayCopyright: true
     displayPoweredBy: false
     copyright: "© 2026 g1/DDL"
+    width: wide
+    # Product Hunt review badge in the site footer (layouts/.../custom/footer.html).
+    productHunt:
+      enable: true
+      productId: "1308705"
+      reviewUrl: "https://www.producthunt.com/products/super-6/reviews/new?utm_source=badge-product_review&utm_medium=badge&utm_campaign=badge-super-6"
+      alt: "Super - process-manager | Product Hunt"
   page:
     # full (100%), wide (90rem), normal (80rem)
     width: wide
