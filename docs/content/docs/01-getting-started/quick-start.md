@@ -187,39 +187,43 @@ Open **[http://127.0.0.1:9002](http://127.0.0.1:9002)**.
 
 ## Appendix: Licensed Plugins 💎
 
-Commercial features use the **same OSS `superd` and `super` binaries** — drop licensed `.so` / `.dylib` files under `$SUPER_ROOT/plugins/` and add `[license].key` to `conf/super.toml`.
+Licensed Super Pro capabilities (Dashboard, token authentication & RBAC, resource isolation, event notifications, operation audit) ship as **signed plugin libraries** — `.so` on Linux, `.dylib` on macOS. They run on the **same OSS `superd` and `super` binaries**; there is no separate "Pro daemon". Enabling licensed mode only adds three things from your subscription delivery:
 
-**Prerequisites:**
+| Piece | Where | Notes |
+| :--- | :--- | :--- |
+| **`[license].key`** | `conf/super.toml` | Signed license authorizing your plugins |
+| **`auth_secret`** | `conf/super.toml` | Root bootstrap credential for first sign-in |
+| **Plugin libraries** (`security`, `ui`, `notify`, `isolation`, …) | `$SUPER_ROOT/plugins/` | `security` is **required** — it provides API auth |
 
-```bash
+```text
 $SUPER_ROOT/
-  conf/super.toml           # [license].key + auth_secret (when subscribed)
-  plugins/                  # Authorized libraries from subscription package
-  run/                      # Optional: superd.pid when using --daemon
-  data/  
-  logs/
+├── conf/
+│   └── super.toml        # [license].key + auth_secret
+└── plugins/              # authorized .so / .dylib (filenames match the signed claims)
 ```
 
 > `$SUPER_ROOT` is resolved from the [`SUPER_ROOT` environment variable](/docs/06-internals/environment-variables#super_root) (then the binary layout, then the working directory).
 
-**Install licensed plugins** (from your subscription delivery package):
+**Install and restart:**
 
 ```bash
-# Copy official plugin libraries into the instance
+# 1. Copy the plugin libraries from your subscription delivery package
 cp /path/to/subscription/plugins/* "$SUPER_ROOT/plugins/"
+
+# 2. Add [license].key and auth_secret to conf/super.toml
+
+# 3. Restart superd — it verifies the license, then loads the authorized plugins
 ```
 
-Restart `superd` after updating plugins or the subscription key.
+> [!IMPORTANT]
+> Licensed startup **fails fast** instead of silently losing API auth: `security` must load (file present **and** listed in the license claims) and `auth_secret` must be set — see [Licensed deployments require security](/docs/05-advanced-management/authentication#licensed-deployments-require-security). Without a valid `[license].key`, `superd` runs in OSS mode and ignores `plugins/`.
 
-**API authentication** (requires `security` plugin + `auth_secret` for startup):
+**First sign-in** — with `security` active, bootstrap an **Admin** Access Token, then prefer `sk-…` tokens for day-to-day use:
 
 ```bash
-# First-time bootstrap (no Access Tokens yet):
-./target/release/super login <auth_secret>
-./target/release/super token create admin --role admin
-
-# Prefer sk-... for routine CLI use; optionally disable auth_secret from the Dashboard.
-./target/release/super token list
+super login <auth_secret>
+super token create admin --role admin
+super token list
 ```
 
-See [Authentication](/docs/05-advanced-management/authentication#optional-disable-auth_secret).
+**Next — Advanced Management.** Token lifecycle, RBAC roles, the Dashboard, isolation, audit, and notifications each have their own page: **[Advanced Management](/docs/05-advanced-management/)**. During the public beta you can request a **free 1-month Super Pro trial** ([request via GitHub Issue](https://github.com/schiplat/super/issues/new?template=pro-trial.yml)); compare editions in the [feature matrix](/docs/07-editions/feature-matrix/).
