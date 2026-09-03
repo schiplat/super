@@ -45,7 +45,7 @@ Global settings for the daemon.
 
 | Key | Type | Default | Description |
 | :--- | :--- | :--- | :--- |
-| `host` | string | `127.0.0.1` | Bind address for API/Web UI. |
+| `host` | string | `127.0.0.1` | Bind address for API and Dashboard. |
 | `port` | int | `9002` | Bind port. |
 | `allow_insecure_public_bind` | bool | `false` | Explicit opt-in to bind on a non-loopback address without the `security` plugin. OSS **refuses startup** when `host` is not loopback and this is `false`. **Licensed deployments always load `security`** — this flag applies to OSS only. |
 | `shutdown_timeout` | int | `10` | Seconds to wait for SIGTERM before SIGKILL during shutdown. |

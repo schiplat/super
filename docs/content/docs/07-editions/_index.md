@@ -15,7 +15,7 @@ The core is open-source under the [**MIT License**](https://opensource.org/licen
 | Binaries | `superd` + `super` (MIT) | **The same binaries** — drop-in enable, no reinstall |
 | What enables it | install & run | a valid `[license].key` in `conf/super.toml` **and** plugin libraries under `$SUPER_ROOT/plugins/` |
 | Plugins loaded | none | authorized ones only (verified against the key) |
-| Feature examples | process management, OTA, health checks, cron, event hooks, log rotation | + API auth / RBAC / audit (`security`), cgroup limits (`isolation`, Linux), notifications (`notify`), Web UI (`ui`) |
+| Feature examples | process management, OTA, health checks, cron, event hooks, log rotation | + API auth / RBAC / audit (`security`), cgroup limits (`isolation`, Linux), notifications (`notify`), Dashboard (`ui` plugin) |
 | License | MIT | Commercial plugin license (see [Get Super Pro](/go/pro/)) |
 
 Licensed plugins are optional `.so` / `.dylib` files loaded at runtime after license verification — same binaries, no separate “Premium daemon.” If `[license].key` is absent (or invalid without licensed intent), `superd` runs in OSS mode and ignores the plugin directory.

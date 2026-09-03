@@ -13,7 +13,7 @@ The `[server]` section controls the `superd` daemon itself. Example from `conf/s
 ```toml
 # conf/super.toml — [server]
 [server]
-# The IP and port for the API and Web UI
+# The IP and port for the API and Dashboard
 host = "127.0.0.1"
 port = 9002
 

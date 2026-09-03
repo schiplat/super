@@ -29,7 +29,7 @@ Source for the public documentation site:
 | `02-essentials/` | Core concepts: configuration, scheduling, processes, health |
 | `03-orchestration/` | Lifecycle, hooks, system events, readiness-aware reload |
 | `04-production-scenarios/` | Migrations, delivery, extensibility, observability, stability |
-| `05-advanced-management/` | Licensed plugin features (auth, RBAC, audit, isolation, web UI, notifications) |
+| `05-advanced-management/` | Licensed plugin features (auth, RBAC, audit, isolation, Dashboard/`ui`, notifications) |
 | `06-internals/` | CLI / API / config references, environment variables, changelog |
 | `07-editions/` | Edition feature matrix |
 | `08-changelog/` | Changelog |

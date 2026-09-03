@@ -78,7 +78,7 @@ auth_secret = "my-super-secure-root-password"
 Once the `security` plugin is active:
 
 1. All API requests require an `Authorization: Bearer <token>` header (except `/health`, `/metrics`, and docs whitelist).
-2. The Web UI prompts for an **Access Token** when `auth_required` is injected.
+2. The Dashboard prompts for an **Access Token** when `auth_required` is injected.
 
 ## Bootstrap with `auth_secret`
 

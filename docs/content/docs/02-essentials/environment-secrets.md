@@ -35,7 +35,7 @@ When the process is about to be spawned, Super dynamically reads the file, parse
 
 If you must pass secrets directly via the CLI or API (`-e KEY=VAL`), Super protects you from "shoulder surfing" and accidental screenshot leaks.
 
-When using `super info` or checking the Web UI, Super automatically masks the values of environment variables whose keys contain any of the following keywords:
+When using `super info` or checking the Dashboard, Super automatically masks the values of environment variables whose keys contain any of the following keywords:
 `SECRET`, `PASSWORD`, `TOKEN`, `KEY`, or `CREDENTIAL`.
 
 ```bash

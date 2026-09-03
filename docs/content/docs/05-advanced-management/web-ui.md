@@ -1,26 +1,28 @@
 ---
-title: "Web UI"
+title: "Dashboard"
 weight: 6
-description: "Dashboard via the optional ui plugin; OSS is API and CLI only."
+description: "Browser Dashboard via the optional ui plugin; OSS is API and CLI only."
 imageZoom: true
 aliases:
   - /docs/02-essentials/web-ui/
   - /docs/02-essentials/web-ui
+  - /docs/05-advanced-management/web-ui/
+  - /docs/05-advanced-management/web-ui
 ---
 
 > [!IMPORTANT] Licensed feature — `ui` plugin
-> This page covers a **licensed feature** provided by the **`ui` plugin**. It requires a valid subscription `[license].key` and the plugin library in `$SUPER_ROOT/plugins/`. OSS `superd` serves a short notice at `/` instead of a dashboard.
+> This page covers a **licensed feature** provided by the **`ui` plugin**. It requires a valid subscription `[license].key` and the plugin library in `$SUPER_ROOT/plugins/`. OSS `superd` serves a short notice at `/` instead of the Dashboard.
 
 ## OSS vs subscription
 
-| Edition | Web UI at `/` |
+| Edition | Dashboard at `/` |
 | :--- | :--- |
-| **OSS** (no plugins) | Static notice — **no dashboard**. Use `super` CLI or `/api/v1/*`. Links to [Get Super Pro](https://super.docs.sconts.com/go/pro/) and the [feature matrix](/docs/07-editions/feature-matrix). |
-| **Licensed** | Full dashboard served by the authorized UI plugin. |
+| **OSS** (no plugins) | Static notice — **no Dashboard**. Use `super` CLI or `/api/v1/*`. Links to [Get Super Pro](https://super.docs.sconts.com/go/pro/) and the [feature matrix](/docs/07-editions/feature-matrix). |
+| **Licensed** | Full Dashboard served by the authorized **`ui` plugin**. |
 
-OSS `superd` does **not** embed a dashboard. The optional **`ui`** plugin serves it at runtime via `super_plugin_ui_v1` after you add a license key and plugin libraries — see [Get Super Pro](https://super.docs.sconts.com/go/pro/).
+OSS `superd` does **not** embed a Dashboard. The optional **`ui`** plugin serves it at runtime via `super_plugin_ui_v1` after you add a license key and plugin libraries — see [Get Super Pro](https://super.docs.sconts.com/go/pro/).
 
-## Accessing the dashboard (licensed)
+## Accessing the Dashboard (licensed)
 
 With the `ui` plugin loaded and authorized in `[license].key`:
 
@@ -85,15 +87,15 @@ Restart `superd` after updating plugins.
 | **Program detail** | Config, hooks, health checks, live logs, start/stop/restart |
 | **Notifications** | Webhooks, Inhibition rules, and Delivery history (`notify` plugin) — `/settings/notify/*` |
 
-The dashboard also includes create/edit program forms, a [stack editor](/docs/04-production-scenarios/delivery/declarative-stack), API token management, and a license page — not shown above.
+The Dashboard also includes create/edit program forms, a [stack editor](/docs/04-production-scenarios/delivery/declarative-stack), API token management, and a license page — not shown above.
 
 ## Security
 
-**Without `security` plugin (OSS only):** The API and dashboard static assets are reachable without authentication on the bind address. OSS defaults to loopback-only startup (`allow_insecure_public_bind = false`).
+**Without `security` plugin (OSS only):** The API and Dashboard static assets are reachable without authentication on the bind address. OSS defaults to loopback-only startup (`allow_insecure_public_bind = false`).
 
 **Licensed:** `security` is bundled and **must load** — startup fails otherwise. Dashboard and API require token auth.
 
-**With `security` plugin loaded:** Token authentication and RBAC apply to the API and dashboard. Prefer generated Access Tokens for day-to-day login. `auth_secret` remains usable until an Admin explicitly disables it (after creating an Admin token). See [Access control](/docs/05-advanced-management/access-control) and [Authentication](/docs/05-advanced-management/authentication).
+**With `security` plugin loaded:** Token authentication and RBAC apply to the API and Dashboard. Prefer generated Access Tokens for day-to-day login. `auth_secret` remains usable until an Admin explicitly disables it (after creating an Admin token). See [Access control](/docs/05-advanced-management/access-control) and [Authentication](/docs/05-advanced-management/authentication).
 
 > [!WARNING]
 > OSS exposure beyond localhost requires explicit `allow_insecure_public_bind = true` or the **`security` plugin**. Licensed deployments always load `security`.

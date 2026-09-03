@@ -18,7 +18,7 @@ Project Super ships as **one open-source binary** (`superd` + `super`) — there
 | :--- | :--- | :--- |
 | Binary | `superd` + `super` (MIT, free) | Same binaries — nothing to reinstall |
 | Plugins | none | `[license].key` + `plugins/*` from your subscription (Super Pro) |
-| Adds | Core process management, OTA, health checks, cron, event hooks | API auth/RBAC/audit (`security`), cgroups limits (`isolation`, Linux), notifications (`notify`), Web UI (`ui`) |
+| Adds | Core process management, OTA, health checks, cron, event hooks | API auth/RBAC/audit (`security`), cgroups limits (`isolation`, Linux), notifications (`notify`), Dashboard (`ui` plugin) |
 | How to enable | install & run | add a license key and plugin libraries |
 
 Pages mark licensed capabilities with **💎** / "Licensed"; "Super Pro" is the brand name of the commercial plugin set ([Get Super Pro](/go/pro/)). The authoritative edition model, terminology, and switching guide live in [Editions](/docs/07-editions/).
@@ -42,7 +42,7 @@ Unlock the full potential of Super with advanced orchestration and dependency ma
 
 {{< cards >}}
   {{< card link="/docs/03-orchestration" title="Orchestration" subtitle="Manage dependencies, health checks, and Atomic OTA updates." >}}
-  {{< card link="/docs/05-advanced-management" title="Advanced Management" subtitle="Web UI, Security, Authentication, RBAC, and Audit Logging." >}}
+  {{< card link="/docs/05-advanced-management" title="Advanced Management" subtitle="Dashboard, Security, Authentication, RBAC, and Audit Logging." >}}
 {{< /cards >}}
 
 ---

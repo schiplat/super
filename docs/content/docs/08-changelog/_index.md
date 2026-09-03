@@ -18,6 +18,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **Out-of-box `install.sh`**: creates a minimal `SUPER_ROOT` (`/opt/super` or `~/.super`), wires login env (`SUPER_ROOT` + `PATH`), and enables an OS service with boot start — **systemd** (Linux), **launchd** (macOS), **rc.d** (FreeBSD). Flags: `--root`, `--user` / `--system`, `--no-service`, `--no-start`, `--no-init`, `--base-url` (local/CI smoke). Release tarballs ship `contrib/` templates (default `super.toml`, unit files). Prefer the release asset one-liner: `curl -fsSL https://github.com/schiplat/super/releases/latest/download/install.sh | sh`.
 
+### Changed
+
+- Docs terminology: the licensed browser UI is consistently called **Dashboard** (still provided by the **`ui` plugin**). Path `/docs/05-advanced-management/web-ui/` is unchanged (aliases retained).
+
 ### Fixed
 
 - **`super check` / `super doctor`** now resolve `$SUPER_ROOT/conf/super.toml` (and `$SUPER_ROOT/super.toml`) before cwd/`/etc` probes, matching `install.sh` layouts.
@@ -202,7 +206,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 - License docs/API wording: version span → **version scope**.
-- [Web UI](/docs/05-advanced-management/web-ui/): tour screenshots refreshed (notify/stack, program config).
+- [Dashboard](/docs/05-advanced-management/web-ui/): tour screenshots refreshed (notify/stack, program config).
 
 ### Notes
 - Pair OSS `1.2.4` with matching commercial plugin packages (`super-plugins-1.2.4-…`).
@@ -212,7 +216,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [1.2.3] - 2026-07-25
 
 ### Changed
-- [Web UI](/docs/05-advanced-management/web-ui/): dashboard tour screenshots refreshed (overview, program detail/logs, inhibition rules).
+- [Dashboard](/docs/05-advanced-management/web-ui/): dashboard tour screenshots refreshed (overview, program detail/logs, inhibition rules).
 
 ### Notes
 - Pair OSS `1.2.3` with matching commercial plugin packages (`super-plugins-1.2.3-…`).
@@ -277,7 +281,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Notes
 - Plugin libraries ship with subscription delivery; they are not built from this OSS repository.
-- **Web dashboard** ships as an optional UI plugin with embedded static assets; OSS `superd` has no built-in web UI.
+- **Web dashboard** ships as an optional UI plugin with embedded static assets; OSS `superd` has no built-in Dashboard.
 - Linux **cgroup isolation** signed off on aarch64 (2026-07-14).
 
 ---

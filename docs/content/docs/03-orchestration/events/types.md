@@ -35,7 +35,7 @@ The following events are written to the [event history](/docs/03-orchestration/e
 
 ### Notes
 
-* **`signal` field** (`process_fatal` / `process_backoff`): set when the process was terminated by a signal rather than an exit code (e.g. `9` = SIGKILL, including cgroup OOM kills). When present, `exit_code` is `null`. OSS `superd` captures SIGKILL/OOM termination this way; see the Web UI / `super events` for the recorded event.
+* **`signal` field** (`process_fatal` / `process_backoff`): set when the process was terminated by a signal rather than an exit code (e.g. `9` = SIGKILL, including cgroup OOM kills). When present, `exit_code` is `null`. OSS `superd` captures SIGKILL/OOM termination this way; see the Dashboard / `super events` for the recorded event.
 * **`memory_pressure` / `memory_oom_kill`**: emitted by the licensed `isolation` plugin on Linux for programs with `resource_limits.memory_limit`. `memory_pressure` is a **pre-kill warning** (Tier 1 / opt-in Tier 2 throttle); `memory_oom_kill` is a **post-kill confirmation** that makes an OOM kill distinguishable from a manual `kill -9`. See [Resource Isolation — Warning & visibility](/docs/05-advanced-management/resource-isolation#warning--visibility-three-tier).
 * **`process_fatal` + `log_tail`**: Licensed webhooks (`notify` plugin) can attach the last lines of stderr when `include_log_tail = true` on a channel. The tail is read at event time from the program log file.
 * **`process_recovered`**: Only emitted after a prior crash/backoff (`alert_pending_recovery`). A clean first start does not emit recovery.

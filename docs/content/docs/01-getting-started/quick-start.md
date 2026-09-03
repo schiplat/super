@@ -83,13 +83,13 @@ curl http://127.0.0.1:8080
 # Directory listing HTML from the managed Python server
 ```
 
-## 5. Web UI
+## 5. Dashboard
 
 Open **[http://127.0.0.1:9002](http://127.0.0.1:9002)**.
 
-**OSS only:** You will see a short HTML notice — there is **no built-in dashboard**. Manage processes with the `super` CLI or `/api/v1/*` (see [Web UI](/docs/05-advanced-management/web-ui)).
+**OSS only:** You will see a short HTML notice — there is **no built-in Dashboard**. Manage processes with the `super` CLI or `/api/v1/*` (see [Dashboard](/docs/05-advanced-management/web-ui)).
 
-**With the `ui` plugin:** The full dashboard (process list, logs, controls) is served from `plugins/ui.{so,dylib}`.
+**With the `ui` plugin:** The full Dashboard (process list, logs, controls) is served from `plugins/ui.{so,dylib}`.
 
 ---
 

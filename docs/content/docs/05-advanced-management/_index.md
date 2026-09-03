@@ -18,7 +18,7 @@ This section covers advanced capabilities enabled by licensed plugins.
 
 ### In this section
 
-*   [**Web UI**](./web-ui): Dashboard via the `ui` plugin (OSS is API/CLI only).
+*   [**Dashboard**](./web-ui): Browser Dashboard from the `ui` plugin (OSS is API/CLI only).
 *   [**Authentication**](./authentication): Securing the API with tokens (`security`).
 *   [**Access Control (RBAC)**](./access-control): Fine-grained permissions (Viewer/Operator/Admin).
 *   [**Resource Isolation**](./resource-isolation): CPU and memory limits via cgroups (`isolation`, Linux).
