@@ -1,0 +1,69 @@
+# Project Super — default conf/super.toml (install.sh / release contrib)
+# Docs: https://super.docs.sconts.com/docs/02-essentials/configuration/
+#
+# Place at: $SUPER_ROOT/conf/super.toml
+# Typical SUPER_ROOT: /opt/super (system) or ~/.super (user)
+
+[server]
+host = "127.0.0.1"
+port = 9002
+allow_insecure_public_bind = false
+shutdown_timeout = 10
+enable_docs = false
+# Local CLI prefers this socket when SUPER_ROOT is set.
+socket = "run/superd.sock"
+# Default 0600 (owner only). System installs run as root → non-root CLI needs either:
+#   sudo -E super …   or   super --server http://127.0.0.1:9002 …
+# For a shared group: set socket_mode = "0660", chgrp the run/ dir, restart superd.
+# socket_mode = "0600"   # "0600" | "0640" | "0660" — never world-writable
+# Keep false under systemd / launchd / Docker. Use `superd --daemon` only without an OS service.
+# daemon = false
+
+[logging]
+log_level = "info"
+log_max_mb = 50
+log_backups = 3
+
+[child_logging]
+max_size_mb = 10
+max_backups = 5
+max_line_size_kb = 64
+
+[storage]
+data_file = "data/snapshot.json"
+events_file = "data/events.db"
+events_keep_days = 30
+log_dir = "logs"
+
+[include]
+files = ["conf/conf.d/*.toml"]
+
+# =============================================================================
+# Subscription / Pro (optional) — COMMENTED ON PURPOSE (OSS default)
+# =============================================================================
+# Uncomment only after you have a subscription license key and plugin libraries
+# from your vendor. Docs:
+#   https://super.docs.sconts.com/docs/07-editions/
+#   https://super.docs.sconts.com/docs/05-advanced-management/authentication/
+#
+# Enable checklist:
+#   1. Drop plugin libs into $SUPER_ROOT/plugins/ (no "lib" prefix), e.g.:
+#        plugins/security.so|.dylib   — API auth / RBAC / audit (required)
+#        plugins/ui.so|.dylib         — web dashboard
+#        plugins/notify.so|.dylib     — IM / webhook notifications
+#        plugins/isolation.so|.dylib  — Linux cgroup CPU/memory limits
+#   2. Uncomment auth_secret and [license] below; fill in real values
+#   3. Restart superd — licensed mode hard-requires security + auth_secret
+#
+# Related files (also subscription; create when needed):
+#   conf/notify.toml     — notify plugin channels / templates
+#   conf/conf.d/*.toml   — per-program resource_limits (isolation plugin)
+# =============================================================================
+
+# Root Admin bootstrap secret for the security plugin. Use a long random string.
+# auth_secret = "CHANGE-ME-strong-random-secret"
+
+# [license]
+# # Prefer true in production so an invalid key refuses startup (no silent OSS fall-back).
+# strict = true
+# key = "PASTE-BASE64-LICENSE-KEY"

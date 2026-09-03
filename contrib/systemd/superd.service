@@ -1,0 +1,17 @@
+[Unit]
+Description=Project Super Process Manager
+Documentation=https://super.docs.sconts.com/docs/
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+# Must stay in the foreground. Do not set [server].daemon = true or pass --daemon.
+ExecStart=/usr/local/bin/superd --foreground
+Restart=on-failure
+RestartSec=2
+Environment="SUPER_ROOT=/opt/super"
+LimitNOFILE=65536
+
+[Install]
+WantedBy=multi-user.target

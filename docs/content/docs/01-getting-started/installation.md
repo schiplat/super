@@ -12,9 +12,9 @@ Super is **cross-platform** in the sense that the same `super.toml` and API work
 
 | Platform | Native binaries | Typical install |
 | :--- | :---: | :--- |
-| **Linux** (amd64, arm64) | ✅ [GitHub Releases](https://github.com/schiplat/super/releases) | Binary tarball, Docker, or systemd |
-| **macOS** (Intel, Apple Silicon) | ✅ Releases | Binary tarball or `install.sh` |
-| **FreeBSD** (amd64) | ✅ Releases | Binary tarball |
+| **Linux** (amd64, arm64) | ✅ [GitHub Releases](https://github.com/schiplat/super/releases) | `install.sh` (systemd), Docker, or tarball |
+| **macOS** (Intel, Apple Silicon) | ✅ Releases | `install.sh` (launchd) or tarball |
+| **FreeBSD** (amd64) | ✅ Releases | `install.sh` (rc.d) or tarball |
 | **Windows** | ❌ Not published | [Docker](#method-1-docker-recommended) on the host (Docker Desktop or WSL2) |
 
 > [!NOTE]
@@ -90,9 +90,60 @@ ENTRYPOINT ["/usr/bin/tini", "--", "/usr/local/bin/superd"]
 
 For container signal handling and `tini` guidance, see [Zombie reaping in containers](/docs/04-production-scenarios/stability/zombie-reaping-in-containers). For how Super compares to Supervisor or shell entrypoints, see [vs Supervisor](/docs/04-production-scenarios/migrations/vs-supervisor).
 
-## Method 2: GitHub Releases or build from source
+## Method 2: `install.sh` (recommended on Linux / macOS)
 
-Pre-built archives are published on [GitHub Releases](https://github.com/schiplat/super/releases). Extract and run `bin/superd`.
+One-liner from GitHub:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/schiplat/super/master/install.sh | sh
+```
+
+What it does by default:
+
+1. Downloads the matching release archive and verifies `SHA256SUMS`
+2. Installs `superd` + `super` into `/usr/local/bin` (or `~/.local/bin` if not writable)
+3. Creates a minimal instance root:
+   - **System install:** `/opt/super`
+   - **User install:** `~/.super`
+   - Layout: `conf/super.toml`, `conf/conf.d/`, `data/`, `logs/`, `run/`, `plugins/`, plus `env.sh`
+4. Wires **login environment** so `SUPER_ROOT` (and `bin` on `PATH` when needed) is set automatically:
+   - **Linux (system):** `/etc/profile.d/super.sh` + `SUPER_ROOT` in `/etc/environment`
+   - **macOS (system):** `/etc/paths.d/super` + hooks in `/etc/zprofile` (and bash/profile)
+   - **User install:** marked block in `~/.zprofile` / `~/.profile` (and `~/.bash_profile` when present)
+5. Enables and starts an OS service (boot-persistent):
+   - **Linux:** `superd.service` via systemd (`enable --now`)
+   - **macOS:** `com.schiplat.superd` via launchd (`RunAtLoad` + `KeepAlive`)
+   - **FreeBSD:** `/usr/local/etc/rc.d/superd` + `/etc/rc.conf.d/superd` (`superd_enable=YES`); `--user` uses `superd --daemon`
+
+Useful flags:
+
+| Flag | Effect |
+| :--- | :--- |
+| `--version X.Y.Z` | Pin a release |
+| `--prefix DIR` | Binary prefix (`DIR/bin`) |
+| `--root DIR` | Instance `SUPER_ROOT` |
+| `--user` / `--system` | Force per-user or system-wide service |
+| `--no-service` | Binaries + instance only (no systemd/launchd) |
+| `--no-start` | Install/enable service but do not start yet |
+| `--no-init` | Skip creating `SUPER_ROOT` |
+| `--no-sudo` | Never elevate |
+
+After install (open a **new** terminal so login env applies):
+
+```bash
+super doctor
+super add --name demo --autostart sleep 3600
+super list
+```
+
+In the same shell as the installer, run `source /opt/super/env.sh` (or `~/.super/env.sh`) once.
+
+> [!IMPORTANT]
+> `install.sh` sets `SUPER_ROOT` for login sessions (see above). Always keep the daemon’s service `Environment=SUPER_ROOT=…` in sync with `$SUPER_ROOT/env.sh`. Binaries under `/usr/local/bin` must not infer the instance root from the executable path — that would incorrectly pick `/usr/local`.
+
+## Method 3: GitHub Releases or build from source
+
+Pre-built archives are published on [GitHub Releases](https://github.com/schiplat/super/releases). Prefer [`install.sh`](#method-2-installsh-recommended-on-linux--macos) when you want systemd/launchd wired automatically. For a manual extract:
 
 | Archive | Platform |
 | :--- | :--- |
@@ -102,7 +153,7 @@ Pre-built archives are published on [GitHub Releases](https://github.com/schipla
 | `super-{version}-macos-arm64.tar.gz` | macOS Apple Silicon |
 | `super-{version}-freebsd-amd64.tar.gz` | FreeBSD x86_64 |
 
-Each archive contains `bin/superd`, `bin/super`, and a `README` with quick-start steps and source links. A `SHA256SUMS` file is attached to every release.
+Each archive contains `bin/superd`, `bin/super`, `contrib/` (default config + unit templates), and a `README`. A `SHA256SUMS` file is attached to every release.
 
 > [!WARNING]
 > Pre-built **Windows** binaries are **not published** at this time. On Windows hosts, use [Docker](#method-1-docker-recommended) (Docker Desktop or WSL2) — see [Supported platforms](#supported-platforms). You can also build from source on Linux, macOS, or FreeBSD.
@@ -118,30 +169,31 @@ make build
 ./target/release/super --version
 ```
 
-## Method 3: Systemd (VM / bare metal)
+## Method 4: Systemd / launchd / rc.d (manual)
 
-### 1. Create unit file
+### Linux — systemd
 
-`/etc/systemd/system/superd.service`:
+`/etc/systemd/system/superd.service` (also in `contrib/systemd/superd.service`):
 
 ```ini
 [Unit]
 Description=Project Super Process Manager
-After=network.target
+Documentation=https://super.docs.sconts.com/docs/
+After=network-online.target
+Wants=network-online.target
 
 [Service]
 Type=simple
 # Must stay in the foreground. Do not set [server].daemon = true or pass --daemon.
 ExecStart=/usr/local/bin/superd --foreground
-Restart=always
-User=root
+Restart=on-failure
+RestartSec=2
 Environment=SUPER_ROOT=/opt/super
+LimitNOFILE=65536
 
 [Install]
 WantedBy=multi-user.target
 ```
-
-### 2. Enable and start
 
 ```bash
 sudo systemctl daemon-reload
@@ -149,7 +201,41 @@ sudo systemctl enable --now superd
 sudo systemctl status superd
 ```
 
+Per-user units live under `~/.config/systemd/user/` (`systemctl --user …`). For boot without an interactive login: `loginctl enable-linger $USER`.
+
+### macOS — launchd
+
+macOS has no systemd. Use **launchd** (what `install.sh` installs) so `superd` stays up across reboots and crashes — same idea as a systemd unit: keep the process in the **foreground** (`--foreground`), let the OS restart it (`KeepAlive`).
+
+System-wide: `/Library/LaunchDaemons/com.schiplat.superd.plist`  
+Per-user: `~/Library/LaunchAgents/com.schiplat.superd.plist`
+
+Templates ship in `contrib/launchd/`. After copying and editing paths / `SUPER_ROOT`:
+
+```bash
+# system
+sudo launchctl bootstrap system /Library/LaunchDaemons/com.schiplat.superd.plist
+# user
+launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.schiplat.superd.plist
+```
+
+### FreeBSD — rc.d
+
+FreeBSD uses **rc.d** (what `install.sh` installs under `/usr/local/etc/rc.d/superd`). The script wraps `superd --foreground` with [`daemon(8)`](https://man.freebsd.org/cgi/man.cgi?daemon) (`-r` restarts on exit). Do **not** set `[server].daemon` or pass `--daemon` when using rc.d.
+
+```bash
+# enable + paths (install.sh writes /etc/rc.conf.d/superd)
+sysrc -f /etc/rc.conf.d/superd superd_enable=YES
+sysrc -f /etc/rc.conf.d/superd superd_root=/opt/super
+sysrc -f /etc/rc.conf.d/superd superd_bin=/usr/local/bin/superd
+
+service superd start
+service superd status
+```
+
+Template: `contrib/rc.d/superd`. Per-user installs (`--user`) have no rc.d — use `superd --daemon` instead.
+
 > [!NOTE]
 > Default layout is `$SUPER_ROOT/conf/super.toml`. Set `SUPER_ROOT` if your layout differs (see [Environment Variables](/docs/06-internals/environment-variables#super_root)).
 >
-> **Daemonize without systemd:** `superd --daemon` (or `[server] daemon = true`) writes `$SUPER_ROOT/run/superd.pid` by default. Do **not** combine that with this unit — `superd` refuses to start if both are detected. Stop with `super shutdown` as usual.
+> **Daemonize without systemd / launchd / rc.d:** `superd --daemon` (or `[server] daemon = true`) writes `$SUPER_ROOT/run/superd.pid` by default. Do **not** combine that with an OS service unit. Stop with `super shutdown` as usual.

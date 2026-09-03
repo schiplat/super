@@ -1,0 +1,59 @@
+#!/bin/sh
+#
+# Project Super — FreeBSD rc.d script
+#
+# install.sh installs this to /usr/local/etc/rc.d/superd and enables it via
+# /etc/rc.conf.d/superd. Manual:
+#   sysrc superd_enable=YES
+#   sysrc superd_root=/opt/super
+#   service superd start
+#
+# Keep superd in the foreground under daemon(8). Do not set [server].daemon
+# or pass --daemon — same rule as systemd/launchd.
+
+# PROVIDE: superd
+# REQUIRE: LOGIN FILESYSTEMS NETWORKING
+# KEYWORD: shutdown
+
+. /etc/rc.subr
+
+name="superd"
+desc="Project Super process manager"
+rcvar="superd_enable"
+
+load_rc_config ${name}
+
+: "${superd_enable:=NO}"
+: "${superd_root:=/opt/super}"
+: "${superd_bin:=/usr/local/bin/superd}"
+: "${superd_user:=root}"
+: "${superd_flags:=--foreground}"
+
+pidfile="${superd_pidfile:-${superd_root}/run/superd.rc.pid}"
+procname="${superd_bin}"
+
+start_precmd="superd_prestart"
+start_cmd="superd_start"
+
+superd_prestart()
+{
+	if [ ! -x "${superd_bin}" ]; then
+		err 1 "superd binary not found or not executable: ${superd_bin}"
+	fi
+	if [ ! -d "${superd_root}" ]; then
+		err 1 "SUPER_ROOT does not exist: ${superd_root}"
+	fi
+	install -d -o "${superd_user}" -g wheel -m 755 "${superd_root}/run" \
+		"${superd_root}/logs" "${superd_root}/data" 2>/dev/null || \
+		mkdir -p "${superd_root}/run" "${superd_root}/logs" "${superd_root}/data"
+}
+
+# Custom start so SUPER_ROOT / binary paths with spaces are not word-split.
+superd_start()
+{
+	/usr/sbin/daemon -f -P "${pidfile}" -r -u "${superd_user}" \
+		/usr/bin/env "SUPER_ROOT=${superd_root}" \
+		"${superd_bin}" ${superd_flags}
+}
+
+run_rc_command "$1"

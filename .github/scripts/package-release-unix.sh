@@ -15,12 +15,26 @@ else
 fi
 
 root="super-${version}-${platform}"
-mkdir -p "${root}/bin"
+mkdir -p "${root}/bin" \
+  "${root}/contrib/conf.d" \
+  "${root}/contrib/systemd" \
+  "${root}/contrib/launchd" \
+  "${root}/contrib/rc.d"
 cp "${bin_dir}/superd" "${bin_dir}/super" "${root}/bin/"
 chmod +x "${root}/bin/"*
 
 if [[ -f LICENSE ]]; then
   cp LICENSE "${root}/"
+fi
+
+if [[ -d contrib ]]; then
+  cp contrib/super.toml.default "${root}/contrib/" 2>/dev/null || true
+  cp contrib/README.md "${root}/contrib/" 2>/dev/null || true
+  cp contrib/conf.d/demo.toml.example "${root}/contrib/conf.d/" 2>/dev/null || true
+  cp contrib/systemd/superd.service "${root}/contrib/systemd/" 2>/dev/null || true
+  cp contrib/launchd/com.schiplat.superd.plist "${root}/contrib/launchd/" 2>/dev/null || true
+  cp contrib/rc.d/superd "${root}/contrib/rc.d/" 2>/dev/null || true
+  chmod 755 "${root}/contrib/rc.d/superd" 2>/dev/null || true
 fi
 
 bash .github/scripts/write-release-readme.sh "${version}" "${platform}" "${root}"

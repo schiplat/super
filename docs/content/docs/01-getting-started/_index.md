@@ -10,5 +10,5 @@ Super is designed to be **dependency-free** and **secure by default** in OSS: lo
 
 ### In this section
 
-*   [**Installation**](./installation): Cross-platform install — native binaries, Docker, or systemd.
+*   [**Installation**](./installation): Cross-platform install — `install.sh` (systemd/launchd), Docker, or tarball.
 *   [**Quick Start**](./quick-start): Write your first configuration and launch a service.

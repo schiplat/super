@@ -1,0 +1,13 @@
+# Example stack — copy to demo.toml (drop .example) to seed a program on start/reload.
+# Docs: https://super.docs.sconts.com/docs/04-production-scenarios/delivery/declarative-stack/
+prune = false
+
+[[services]]
+name = "demo"
+command = "/bin/sleep"
+args = ["3600"]
+autostart = true
+autorestart = "unexpected"
+exitcodes = [0]
+startsecs = 1
+retry_limit = 3

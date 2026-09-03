@@ -50,11 +50,24 @@ Contents
 --------
   ${bin_superd}   Daemon (default port 9002)
   ${bin_super}    Command-line client
+  contrib/        Default config + systemd / launchd / rc.d templates
   LICENSE         MIT license (if included)
 
-Quick start
------------
+Recommended install
+-------------------
+  curl -fsSL https://raw.githubusercontent.com/schiplat/super/master/install.sh | sh
+
+  Creates SUPER_ROOT (/opt/super or ~/.super), writes conf/super.toml, and
+  enables an OS service (systemd on Linux, launchd on macOS, rc.d on FreeBSD).
+
+Manual quick start
+------------------
 ${quick_start}
+
+  export SUPER_ROOT=\$PWD   # or copy contrib/ into /opt/super and set SUPER_ROOT
+  # Linux:    see contrib/systemd/superd.service
+  # macOS:    see contrib/launchd/com.schiplat.superd.plist
+  # FreeBSD:  see contrib/rc.d/superd
 
 Open http://127.0.0.1:9002/ — OSS edition shows an HTML notice (no built-in dashboard).
 Use the \`super\` CLI or /api/v1/* for process management. An optional UI plugin

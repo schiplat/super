@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  Project Super — launchd unit (macOS equivalent of systemd).
+
+  System-wide (needs root):
+    sudo cp contrib/launchd/com.schiplat.superd.plist /Library/LaunchDaemons/
+    sudo launchctl bootstrap system /Library/LaunchDaemons/com.schiplat.superd.plist
+
+  Per-user:
+    cp contrib/launchd/com.schiplat.superd.plist ~/Library/LaunchAgents/
+    # edit SUPER_ROOT to ~/.super and binary paths if needed
+    launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.schiplat.superd.plist
+
+  install.sh writes a filled-in copy automatically.
+-->
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.schiplat.superd</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/usr/local/bin/superd</string>
+    <string>--foreground</string>
+  </array>
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>SUPER_ROOT</key>
+    <string>/opt/super</string>
+  </dict>
+  <key>RunAtLoad</key>
+  <true/>
+  <key>KeepAlive</key>
+  <true/>
+  <key>StandardOutPath</key>
+  <string>/opt/super/logs/launchd.out.log</string>
+  <key>StandardErrorPath</key>
+  <string>/opt/super/logs/launchd.err.log</string>
+</dict>
+</plist>
