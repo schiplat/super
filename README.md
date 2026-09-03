@@ -41,7 +41,7 @@ Bleeding-edge (may differ from the latest tagged binaries): `curl -fsSL https://
 
 ### Docker
 
-Docker image (`linux/amd64`, `linux/arm64`). The OSS image has **no API authentication** — bind to loopback on the host unless you add the `security` plugin and a license:
+Docker image (`linux/amd64`, `linux/arm64`). **This is the supported path on Windows** (Docker Desktop or WSL2) — there is no native `superd.exe` release. The OSS image has **no API authentication** — bind to loopback on the host unless you add the `security` plugin and a license:
 
 ```bash
 docker pull containerpi/super:latest

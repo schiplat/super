@@ -3,7 +3,7 @@ name: Install smoke
 # Smoke-test install paths:
 # - Unix: install.sh against a locally built fake release (--base-url)
 # - macOS: native runner; FreeBSD: vmactions/freebsd-vm
-# - Windows: Docker (documented install path — no native superd.exe)
+# - Docker image: ubuntu-latest build+run (same image Windows users run via Docker Desktop)
 
 on:
   workflow_dispatch:
@@ -72,49 +72,37 @@ jobs:
             # FreeBSD has no systemd/launchd; --user path uses superd --daemon.
             bash scripts/install-smoke.sh --user
 
-  # Windows has no native release binary; docs recommend Docker Desktop / WSL2.
-  smoke-windows-docker:
-    name: Windows (Docker)
-    runs-on: windows-latest
-    timeout-minutes: 60
+  # Windows has no native superd.exe; the documented path is Docker Desktop / WSL2
+  # running the same Linux image. GitHub-hosted windows-latest cannot reliably run
+  # Linux containers, so we smoke that image on ubuntu-latest instead.
+  smoke-docker:
+    name: Docker image (Windows docs path)
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-
-      - name: Prefer Linux container engine
-        shell: pwsh
-        run: |
-          $cli = Join-Path $env:ProgramFiles "Docker\Docker\DockerCli.exe"
-          if (Test-Path $cli) {
-            & $cli -SwitchLinuxEngine 2>$null
-            Start-Sleep -Seconds 5
-          }
-          docker version
 
       - name: Build OSS image
         run: docker build -f dockerbuild/Dockerfile -t super-smoke:local .
 
       - name: Run container and hit /health
-        shell: pwsh
         run: |
-          docker rm -f super-smoke 2>$null
+          set -euo pipefail
+          docker rm -f super-smoke 2>/dev/null || true
           docker run -d --name super-smoke -p 127.0.0.1:9002:9002 super-smoke:local
-          $ok = $false
-          for ($i = 0; $i -lt 40; $i++) {
-            try {
-              $r = Invoke-WebRequest -Uri "http://127.0.0.1:9002/health" -UseBasicParsing -TimeoutSec 2
-              if ($r.StatusCode -eq 200) {
-                Write-Host "health OK: $($r.Content)"
-                $ok = $true
-                break
-              }
-            } catch {
-              Start-Sleep -Seconds 2
-            }
-          }
-          if (-not $ok) {
-            docker logs super-smoke
-            throw "Windows Docker smoke: /health did not return 200"
-          }
+          ok=0
+          for i in $(seq 1 40); do
+            if curl -fsS http://127.0.0.1:9002/health; then
+              echo
+              ok=1
+              break
+            fi
+            sleep 2
+          done
+          if [ "$ok" -ne 1 ]; then
+            docker logs super-smoke || true
+            exit 1
+          fi
           docker stop super-smoke
           docker rm super-smoke
