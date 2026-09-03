@@ -53,8 +53,20 @@ markup:
 
 enableInlineShortcodes: true
 
+# Public client IDs (safe to commit — they appear in page HTML).
+# Hextra loads GA only when hugo.IsProduction (CI deploy / `hugo --environment production`).
+services:
+  googleAnalytics:
+    ID: G-RTS2SD8GKS
+
 params:
   description: "Next-gen, High-performance Process Manager"
+  # Microsoft Clarity (session heatmaps). Empty projectId disables the snippet.
+  # Loaded from layouts/_partials/custom/head-end.html (production only; skipped on /legal/).
+  analytics:
+    clarity:
+      projectId: "ycf86ntw92"
+
   # Public purchase funnel: homepage → /go/pro/ → this URL.
   # Change checkout_url and redeploy docs only (no superd release).
   purchase:

@@ -5,7 +5,7 @@ description: "How Project Super handles data for the docs site and Super Pro ful
 toc: true
 ---
 
-**Last updated:** 2026-07-15  
+**Last updated:** 2026-09-03  
 **Contact:** support@ddl.sconts.com  
 **Operator:** Project Super Team  
 **Site:** https://super.docs.sconts.com/
@@ -21,7 +21,10 @@ We operate the public Project Super documentation site and fulfill and support S
 | Purchase via Afdian | Display name, email, OS + arch, order id, amount/time, optional notes | Deliver plugins and key; support; fulfillment records |
 | Our fulfillment ledger | Same, plus license metadata (e.g. license id, expiry, plugin list) | Delivery, renewals, anti-abuse, reconciliation |
 | Support email / messages | Whatever you send us | Reply and troubleshoot |
-| Docs site | Ordinary hosting/CDN access logs if any; **no** third-party site analytics configured today | Availability and abuse prevention |
+| Docs site (hosting) | Ordinary hosting/CDN access logs if any | Availability and abuse prevention |
+| Docs site (analytics) | Aggregate page views and referral data via **Google Analytics 4**; session heatmaps / interaction samples via **Microsoft Clarity** (cookies / similar identifiers as set by those products) | Understand which docs are useful, fix UX friction, plan content |
+
+Legal pages under `/legal/` do not load the Clarity snippet. Analytics scripts are intended for the **production** docs site only (not local `hugo server` by default).
 
 ## 3. What we do not collect
 
@@ -32,6 +35,8 @@ We operate the public Project Super documentation site and fulfill and support S
 ## 4. Third parties
 
 - **Afdian** — checkout and payment
+- **Google Analytics** — docs traffic measurement ([Google Privacy](https://policies.google.com/privacy))
+- **Microsoft Clarity** — docs UX / session analytics ([Clarity Privacy](https://clarity.microsoft.com/privacy))
 - Email / messaging you use for delivery and support
 - Docs hosting / GitHub — public documentation
 

@@ -1,0 +1,47 @@
+{{- /*
+  Site analytics extras (Hextra already injects Google Analytics from
+  services.googleAnalytics.ID when hugo.IsProduction).
+
+  Microsoft Clarity: params.analytics.clarity.projectId
+  Skipped on /legal/* so policy pages stay quieter.
+*/ -}}
+{{- if hugo.IsProduction -}}
+  {{- $path := .RelPermalink | default "/" -}}
+  {{- $isLegal := or (hasPrefix $path "/legal/") (eq $path "/legal") -}}
+  {{- $clarityId := "" -}}
+  {{- with site.Params.analytics -}}
+    {{- with .clarity -}}
+      {{- $clarityId = .projectId | default "" -}}
+    {{- end -}}
+  {{- end -}}
+  {{- if and (not $isLegal) $clarityId -}}
+    <link rel="preconnect" href="https://www.clarity.ms" crossorigin />
+    <script>
+      (function () {
+        var projectId = {{ $clarityId | jsonify | safeJS }};
+        function loadClarity() {
+          (function (c, l, a, r, i, t, y) {
+            c[a] =
+              c[a] ||
+              function () {
+                (c[a].q = c[a].q || []).push(arguments);
+              };
+            t = l.createElement(r);
+            t.async = 1;
+            t.src = "https://www.clarity.ms/tag/" + i;
+            y = l.getElementsByTagName(r)[0];
+            y.parentNode.insertBefore(t, y);
+          })(window, document, "clarity", "script", projectId);
+        }
+        // Defer past first paint / main docs JS so LCP stays clean.
+        if ("requestIdleCallback" in window) {
+          requestIdleCallback(loadClarity, { timeout: 4000 });
+        } else {
+          window.addEventListener("load", function () {
+            setTimeout(loadClarity, 1);
+          });
+        }
+      })();
+    </script>
+  {{- end -}}
+{{- end -}}
