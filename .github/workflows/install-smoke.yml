@@ -3,7 +3,8 @@ name: Install smoke
 # Smoke-test install paths:
 # - Unix: install.sh against a locally built fake release (--base-url)
 # - macOS: native runner; FreeBSD: vmactions/freebsd-vm
-# - Docker image: ubuntu-latest build+run (same image Windows users run via Docker Desktop)
+# - Docker: build+run OSS image on ubuntu-latest (no windows-latest — Linux
+#   containers are unreliable on hosted Windows runners)
 
 on:
   workflow_dispatch:
@@ -72,11 +73,9 @@ jobs:
             # FreeBSD has no systemd/launchd; --user path uses superd --daemon.
             bash scripts/install-smoke.sh --user
 
-  # Windows has no native superd.exe; the documented path is Docker Desktop / WSL2
-  # running the same Linux image. GitHub-hosted windows-latest cannot reliably run
-  # Linux containers, so we smoke that image on ubuntu-latest instead.
+  # OSS Docker image smoke (linux/amd64). Not run on windows-latest.
   smoke-docker:
-    name: Docker image (Windows docs path)
+    name: Docker image
     runs-on: ubuntu-latest
     timeout-minutes: 45
     steps:
