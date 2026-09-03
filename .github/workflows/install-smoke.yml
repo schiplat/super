@@ -3,8 +3,7 @@ name: Install smoke
 # Smoke-test install paths:
 # - Unix: install.sh against a locally built fake release (--base-url)
 # - macOS: native runner; FreeBSD: vmactions/freebsd-vm
-# - Docker: build+run OSS image on ubuntu-latest (no windows-latest — Linux
-#   containers are unreliable on hosted Windows runners)
+# Docker image build/publish is separate (tags only — see docker-publish.yml).
 
 on:
   workflow_dispatch:
@@ -13,7 +12,6 @@ on:
       - 'install.sh'
       - 'scripts/install-smoke.sh'
       - 'contrib/**'
-      - 'dockerbuild/**'
       - '.github/workflows/install-smoke.yml'
       - '.github/scripts/package-release-unix.sh'
       - '.github/scripts/write-release-readme.sh'
@@ -23,7 +21,6 @@ on:
       - 'install.sh'
       - 'scripts/install-smoke.sh'
       - 'contrib/**'
-      - 'dockerbuild/**'
       - '.github/workflows/install-smoke.yml'
 
 jobs:
@@ -72,36 +69,3 @@ jobs:
             export RUSTFLAGS=""
             # FreeBSD has no systemd/launchd; --user path uses superd --daemon.
             bash scripts/install-smoke.sh --user
-
-  # OSS Docker image smoke (linux/amd64). Not run on windows-latest.
-  smoke-docker:
-    name: Docker image
-    runs-on: ubuntu-latest
-    timeout-minutes: 45
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Build OSS image
-        run: docker build -f dockerbuild/Dockerfile -t super-smoke:local .
-
-      - name: Run container and hit /health
-        run: |
-          set -euo pipefail
-          docker rm -f super-smoke 2>/dev/null || true
-          docker run -d --name super-smoke -p 127.0.0.1:9002:9002 super-smoke:local
-          ok=0
-          for i in $(seq 1 40); do
-            if curl -fsS http://127.0.0.1:9002/health; then
-              echo
-              ok=1
-              break
-            fi
-            sleep 2
-          done
-          if [ "$ok" -ne 1 ]; then
-            docker logs super-smoke || true
-            exit 1
-          fi
-          docker stop super-smoke
-          docker rm super-smoke
