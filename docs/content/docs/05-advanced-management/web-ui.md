@@ -68,7 +68,7 @@ Live stdout/stderr streaming from the process detail drawer, plus file log histo
 
 See [Event notifications](/docs/05-advanced-management/event-notifications#storm-suppression) and [Delivery history](/docs/05-advanced-management/event-notifications#delivery-history).
 
-{{< ui-screenshot src="/images/notify_mute.png" alt="Notification settings — Inhibition rules" caption="Notifications — Inhibition rules" >}}
+{{< ui-screenshot src="/images/notify_rules.png" alt="Notification settings — Inhibition rules" caption="Notifications — Inhibition rules" >}}
   {{< /tab >}}
 
 {{< /tabs >}}
