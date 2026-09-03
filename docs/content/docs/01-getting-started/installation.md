@@ -24,7 +24,7 @@ On any supported host, set `SUPER_ROOT`, place config under `conf/super.toml`, a
 
 ## Method 1: Docker (Recommended)
 
-The official OSS image ships `superd` and `super` (API + CLI). There is no embedded web dashboard — install the optional UI plugin from your subscription package for the full control plane.
+The official OSS image ships `superd` and `super` (API + CLI) on a **distroless** runtime — no shell, no Python, no package manager. A static **`busybox`** binary is included at `/usr/local/bin/busybox` so the [Quick Start](/docs/01-getting-started/quick-start/) demo can run a tiny HTTP server inside the container. **Production workloads** should use your own app binaries (multi-stage `FROM` + copy `superd`, or mount `conf/` with stack files pointing at binaries you ship).
 
 ### Pull and run
 
@@ -33,12 +33,46 @@ The image ships with a default config at `/app/super/conf/super.toml` (`host = "
 ```bash
 docker pull containerpi/super:latest
 
-docker run --rm -p 127.0.0.1:9002:9002 containerpi/super:latest
+docker run --rm -p 127.0.0.1:9002:9002 -p 127.0.0.1:8080:8080 containerpi/super:latest
 ```
 
-Open **http://127.0.0.1:9002** for the OSS HTML notice and HTTP API. Add programs via the CLI or API (or load the `ui` plugin for the dashboard).
+Open **http://127.0.0.1:9002** for the OSS HTML notice and HTTP API. Follow [Quick Start — Docker tabs](/docs/01-getting-started/quick-start/#3-create-program-via-api) to register the demo `busybox httpd` program (do **not** use the Python example inside this image).
 
 Images are published for **linux/amd64** and **linux/arm64**. Docker picks the matching manifest for your host (`docker buildx imagetools inspect containerpi/super:latest`).
+
+### CLI on the host (containerized superd)
+
+The image runs **`superd` in the foreground**; you control it over **HTTP on port 9002**. After `-p 127.0.0.1:9002:9002`, you do **not** need a shell inside the container for routine ops.
+
+**Option A — install the CLI on the host** (recommended):
+
+```bash
+# From GitHub Releases tarball or install.sh — you only need the `super` binary on PATH.
+super --server http://127.0.0.1:9002 list
+super --server http://127.0.0.1:9002 add --name my-app --autostart /path/to/app
+```
+
+If the host has **no** local `$SUPER_ROOT/run/superd.sock`, the CLI already defaults to `http://127.0.0.1:9002` — after `-p 127.0.0.1:9002:9002`, plain `super list` works once the binary is on `PATH`. Use `--server` when you publish a different host/port, or when a local socket would otherwise take precedence.
+
+**Option B — copy `super` out of the image** (no full install):
+
+```bash
+CID=$(docker create containerpi/super:latest)
+docker cp "$CID:/usr/local/bin/super" ./super && docker rm "$CID"
+chmod +x ./super
+./super --server http://127.0.0.1:9002 list
+```
+
+**Option C — `docker exec`** (quick try; name your container, e.g. `docker run --name super …`):
+
+```bash
+docker exec super /usr/local/bin/super list
+```
+
+**Option D — REST only:** `curl http://127.0.0.1:9002/api/v1/…` (no CLI binary).
+
+> [!NOTE]
+> Host `super` will **not** auto-discover the container's Unix socket (`run/superd.sock` lives inside the container). Always pass **`--server http://127.0.0.1:9002`** (or the host/port you published) when `superd` runs in Docker.
 
 ### Custom configuration
 

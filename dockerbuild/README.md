@@ -6,6 +6,8 @@ Build context is the **repository root** (not this folder).
 
 The final stage uses **`gcr.io/distroless/cc-debian13:nonroot`** (Debian 13 / trixie stable). Distroless ships only glibc, OpenSSL, and CA certificates — no `apt`, no Perl — for a minimal runtime attack surface.
 
+Runtime binaries: `superd`, `super`, `tini`, and a static **`busybox`** at `/usr/local/bin/busybox` (Quick Start / example-stack demos only — not a general-purpose shell).
+
 Build stages use **`rust:1-trixie`** and **`debian:13-slim`** so compiler and helper stages match the same Debian release family.
 
 The container runs as UID **65532**. When bind-mounting host directories, ensure they are readable/writable by that user (e.g. `chown -R 65532:65532 ./my-super-data`).

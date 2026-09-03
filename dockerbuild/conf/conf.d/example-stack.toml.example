@@ -5,12 +5,13 @@ prune = false
 [[services]]
 name = "demo-worker"
 group = "demo"
-command = "/bin/sleep"
-args = ["infinity"]
+# Distroless containerpi/super ships busybox-static at /usr/local/bin/busybox.
+command = "/usr/local/bin/busybox"
+args = ["httpd", "-f", "-p", "8080"]
 autostart = true
 autorestart = "unexpected"
 exitcodes = [0]
 startsecs = 5
 retry_limit = 3
 env = { DEMO = "true" }
-health_check = { type = "exec", command = "true" }
+health_check = { type = "tcp", port = 8080 }

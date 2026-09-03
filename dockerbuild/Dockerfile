@@ -37,6 +37,12 @@ COPY dockerbuild/conf/ /app/super/conf/
 RUN mkdir -p /app/super/data /app/super/logs \
     && chown -R 65532:65532 /app/super
 
+# Static busybox for docs/quick-start demos inside the distroless runtime (httpd, etc.).
+FROM debian:13-slim AS busybox
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends busybox-static \
+    && rm -rf /var/lib/apt/lists/*
+
 # Runtime: distroless Debian 13 — minimal glibc/OpenSSL, no apt/Perl.
 FROM gcr.io/distroless/cc-debian13:nonroot
 
@@ -48,6 +54,7 @@ LABEL org.opencontainers.image.vendor="623"
 COPY --from=tini /usr/bin/tini /usr/bin/tini
 COPY --from=backend /build/target/release/superd /usr/local/bin/superd
 COPY --from=backend /build/target/release/super /usr/local/bin/super
+COPY --from=busybox /bin/busybox /usr/local/bin/busybox
 COPY --from=layout --chown=65532:65532 /app/super /app/super
 
 ENV SUPER_ROOT=/app/super
