@@ -52,11 +52,17 @@ pub fn split_server(server: &str) -> (String, Option<PathBuf>) {
 /// redirect the CLI to a different transport.
 #[cfg(unix)]
 pub fn discover_default_socket() -> Option<PathBuf> {
-    use std::os::unix::fs::FileTypeExt;
-    let candidate = std::env::var("SUPER_ROOT")
+    let root = std::env::var_os("SUPER_ROOT")
         .map(PathBuf::from)
-        .unwrap_or_default()
-        .join("run/superd.sock");
+        .unwrap_or_default();
+    discover_socket_at(&root)
+}
+
+/// Resolve `$root/run/superd.sock` when it is a real socket inode.
+#[cfg(unix)]
+fn discover_socket_at(root: &Path) -> Option<PathBuf> {
+    use std::os::unix::fs::FileTypeExt;
+    let candidate = root.join("run/superd.sock");
     let meta = std::fs::symlink_metadata(&candidate).ok()?;
     meta.file_type().is_socket().then_some(candidate)
 }
@@ -552,18 +558,12 @@ mod tests {
         dir
     }
 
-    fn with_super_root(dir: &Path, f: impl FnOnce()) {
-        // SAFETY: edition-2024 marks env mutation unsafe; these tests only
-        // touch SUPER_ROOT and no other test in this crate reads it.
-        unsafe { std::env::set_var("SUPER_ROOT", dir) };
-        f();
-        unsafe { std::env::remove_var("SUPER_ROOT") };
-    }
-
     #[test]
     fn discover_ignores_missing_path() {
         let dir = temp_dir("missing");
-        with_super_root(&dir, || assert_eq!(discover_default_socket(), None));
+        // Call the path helper directly — do not mutate SUPER_ROOT. Other
+        // modules in this binary (e.g. check::tests) also touch that env var.
+        assert_eq!(discover_socket_at(&dir), None);
         let _ = std::fs::remove_dir_all(&dir);
     }
 
@@ -572,11 +572,11 @@ mod tests {
         let dir = temp_dir("plain");
         std::fs::create_dir_all(dir.join("run")).unwrap();
         std::fs::write(dir.join("run/superd.sock"), b"not a socket").unwrap();
-        with_super_root(&dir, || assert_eq!(discover_default_socket(), None));
+        assert_eq!(discover_socket_at(&dir), None);
 
         std::fs::remove_file(dir.join("run/superd.sock")).unwrap();
         std::os::unix::fs::symlink("/tmp/nonexistent-target", dir.join("run/superd.sock")).unwrap();
-        with_super_root(&dir, || assert_eq!(discover_default_socket(), None));
+        assert_eq!(discover_socket_at(&dir), None);
         let _ = std::fs::remove_dir_all(&dir);
     }
 
@@ -598,9 +598,7 @@ mod tests {
             }
             Err(e) => panic!("bind unix socket: {e}"),
         };
-        with_super_root(&dir, || {
-            assert_eq!(discover_default_socket(), Some(sock_path.clone()));
-        });
+        assert_eq!(discover_socket_at(&dir), Some(sock_path));
         drop(listener);
         let _ = std::fs::remove_dir_all(&dir);
     }
