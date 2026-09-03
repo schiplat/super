@@ -63,9 +63,9 @@ params:
   # localStorage; message supports Markdown links. Bump key on each release
   # so the banner shows again for returning visitors.
   banner:
-    key: "super-release-banner-v1-5-0"
+    key: "super-release-banner-v1-5-2"
     message: |
-      **Super 1.5.1 is here** — `SUPER_HOSTNAME`, host disk stats, and notify delivery APIs. [See what's new →](/docs/08-changelog/)
+      **Super 1.5.2 is here** — out-of-box `install.sh` (systemd / launchd / rc.d) and doctor/`SUPER_ROOT` alignment. [See what's new →](/docs/08-changelog/)
   contact:
     api_url: "https://open.schiplat.com/api/v1/demands"
   externalLinkDecoration: true
