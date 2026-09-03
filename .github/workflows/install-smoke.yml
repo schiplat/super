@@ -1,0 +1,68 @@
+name: Install smoke
+
+# Smoke-test install.sh against a locally built fake release.
+# macOS: native GitHub-hosted runner.
+# FreeBSD: vmactions/freebsd-vm (same approach as release.yml).
+#
+# Does not hit GitHub Releases — uses --base-url + python http.server.
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - 'install.sh'
+      - 'scripts/install-smoke.sh'
+      - 'contrib/**'
+      - '.github/workflows/install-smoke.yml'
+      - '.github/scripts/package-release-unix.sh'
+      - '.github/scripts/write-release-readme.sh'
+  push:
+    branches: [master, main]
+    paths:
+      - 'install.sh'
+      - 'scripts/install-smoke.sh'
+      - 'contrib/**'
+      - '.github/workflows/install-smoke.yml'
+
+jobs:
+  smoke-unix:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo
+        uses: swatinem/rust-cache@v2
+        with:
+          key: install-smoke-${{ matrix.os }}
+
+      - name: Install smoke (--user)
+        run: bash scripts/install-smoke.sh --user
+
+  smoke-freebsd:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: FreeBSD install smoke
+        uses: vmactions/freebsd-vm@v1
+        with:
+          usesh: true
+          prepare: |
+            pkg update
+            pkg install -y curl git openssl pkgconf python3
+          run: |
+            set -e
+            curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain stable
+            . "$HOME/.cargo/env"
+            export RUSTFLAGS=""
+            # FreeBSD has no systemd/launchd; --user path uses superd --daemon.
+            bash scripts/install-smoke.sh --user

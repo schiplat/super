@@ -30,12 +30,14 @@ Licensed under the **[MIT License](LICENSE)**. Optional **licensed plugins** (`.
 ### Install script (Linux / macOS / FreeBSD)
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/schiplat/super/master/install.sh | sh
+curl -fsSL https://github.com/schiplat/super/releases/latest/download/install.sh | sh
 ```
 
-Installs `superd` and `super`, creates a minimal instance root (`/opt/super` or `~/.super`), and enables an OS service (**systemd** on Linux, **launchd** on macOS) with boot start. Verifies the SHA-256 of the release archive.
+Installs `superd` and `super`, creates a minimal instance root (`/opt/super` or `~/.super`), and enables an OS service (**systemd** on Linux, **launchd** on macOS, **rc.d** on FreeBSD) with boot start. Verifies the SHA-256 of the release archive.
 
 Options: `--version`, `--prefix`, `--root`, `--user` / `--system`, `--no-service`, `--no-start`, `--no-init`, `--no-sudo`.
+
+Bleeding-edge (may differ from the latest tagged binaries): `curl -fsSL https://raw.githubusercontent.com/schiplat/super/master/install.sh | sh`.
 
 ### Docker
 
@@ -78,7 +80,7 @@ Diagnose a setup (config, daemon connectivity, license, daemon/pidfile hints) in
 super doctor
 ```
 
-See [Installation](https://super.docs.sconts.com/docs/01-getting-started/installation/) for `install.sh` (systemd / launchd), manual units (`superd --foreground`), and optional `--daemon`.
+See [Installation](https://super.docs.sconts.com/docs/01-getting-started/installation/) for `install.sh` (systemd / launchd / rc.d), manual units (`superd --foreground`), and optional `--daemon`.
 
 ## Toward GA
 

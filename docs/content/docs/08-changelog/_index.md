@@ -14,6 +14,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Out-of-box `install.sh`**: creates a minimal `SUPER_ROOT` (`/opt/super` or `~/.super`), wires login env (`SUPER_ROOT` + `PATH`), and enables an OS service with boot start — **systemd** (Linux), **launchd** (macOS), **rc.d** (FreeBSD). Flags: `--root`, `--user` / `--system`, `--no-service`, `--no-start`, `--no-init`, `--base-url` (local/CI smoke). Release tarballs ship `contrib/` templates (default `super.toml`, unit files). Prefer the release asset one-liner: `curl -fsSL https://github.com/schiplat/super/releases/latest/download/install.sh | sh`.
+
+### Fixed
+
+- **`super check` / `super doctor`** now resolve `$SUPER_ROOT/conf/super.toml` (and `$SUPER_ROOT/super.toml`) before cwd/`/etc` probes, matching `install.sh` layouts.
+
 ---
 
 ## [1.5.1] - 2026-09-02

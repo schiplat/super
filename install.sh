@@ -2,8 +2,8 @@
 # Install Project Super (superd + super CLI) from GitHub Releases.
 #
 # Usage:
-#   curl -fsSL https://raw.githubusercontent.com/schiplat/super/master/install.sh | sh
-#   curl -fsSL ... | sh -s -- --version 1.4.0 --prefix /usr/local
+#   curl -fsSL https://github.com/schiplat/super/releases/latest/download/install.sh | sh
+#   curl -fsSL ... | sh -s -- --version 1.5.1 --prefix /usr/local
 #
 # Options:
 #   --version X.Y.Z   Install a specific release (default: latest)
@@ -15,6 +15,8 @@
 #   --no-start        Install service but do not start it yet
 #   --no-init         Do not create SUPER_ROOT layout / default config
 #   --no-sudo         Do not use sudo even if the prefix is not writable
+#   --base-url URL    Download base (default: GitHub Releases). For local smoke:
+#                     URL/vX.Y.Z/ARCHIVE and URL/latest.json
 #   -h, --help        Show this help
 #
 # After install (default):
@@ -35,6 +37,7 @@ INSTALL_MODE=""   # system | user | "" (auto)
 DO_SERVICE=1
 DO_START=1
 DO_INIT=1
+BASE_URL_OPT=""
 
 log()  { printf '%s\n' "$*"; }
 info() { printf '  %s\n' "$*"; }
@@ -43,7 +46,26 @@ have() { command -v "$1" >/dev/null 2>&1; }
 need() { have "$1" || die "required tool not found: $1"; }
 
 usage() {
-  sed -n '2,28p' "$0" | sed 's/^# \{0,1\}//'
+  cat <<'EOF'
+Install Project Super (superd + super CLI) from GitHub Releases.
+
+Usage:
+  curl -fsSL https://github.com/schiplat/super/releases/latest/download/install.sh | sh
+  curl -fsSL ... | sh -s -- --version 1.5.1 --prefix /usr/local
+
+Options:
+  --version X.Y.Z   Install a specific release (default: latest)
+  --prefix DIR      Install base dir; binaries go to DIR/bin (default: auto)
+  --root DIR        Instance root SUPER_ROOT (default: /opt/super or ~/.super)
+  --user            Force a per-user install (user systemd / LaunchAgent)
+  --system          Force a system-wide install (needs root/sudo)
+  --no-service      Skip systemd / launchd setup
+  --no-start        Install service but do not start it yet
+  --no-init         Do not create SUPER_ROOT layout / default config
+  --no-sudo         Do not use sudo even if the prefix is not writable
+  --base-url URL    Download base for local/CI smoke (see script header)
+  -h, --help        Show this help
+EOF
 }
 
 # --- Parse args ---------------------------------------------------------------
@@ -61,6 +83,8 @@ while [ $# -gt 0 ]; do
     --no-start) DO_START=0; shift ;;
     --no-init) DO_INIT=0; shift ;;
     --no-sudo) USE_SUDO="no"; shift ;;
+    --base-url) BASE_URL_OPT="${2:?--base-url needs a value}"; shift 2 ;;
+    --base-url=*) BASE_URL_OPT="${1#*=}"; shift ;;
     -h|--help) usage; exit 0 ;;
     *) die "unknown option: $1 (try --help)" ;;
   esac
@@ -96,8 +120,13 @@ info "Detected platform: $PLATFORM"
 # --- Resolve version ----------------------------------------------------------
 if [ -z "$VERSION" ]; then
   log "Resolving latest release..."
-  VERSION="$(curl -fsSL "https://api.github.com/repos/$REPO/releases/latest" \
-    | grep '"tag_name"' | head -1 | sed -E 's/.*"v?([^"]+)".*/\1/')"
+  if [ -n "$BASE_URL_OPT" ]; then
+    VERSION="$(curl -fsSL "${BASE_URL_OPT%/}/latest.json" \
+      | grep '"tag_name"' | head -1 | sed -E 's/.*"v?([^"]+)".*/\1/')"
+  else
+    VERSION="$(curl -fsSL "https://api.github.com/repos/$REPO/releases/latest" \
+      | grep '"tag_name"' | head -1 | sed -E 's/.*"v?([^"]+)".*/\1/')"
+  fi
   [ -n "$VERSION" ] || die "could not determine latest release; pass --version X.Y.Z"
 fi
 # Strip a leading v if the user passed one.
@@ -105,7 +134,11 @@ VERSION="${VERSION#v}"
 info "Version: $VERSION"
 
 ARCHIVE="super-${VERSION}-${PLATFORM}.tar.gz"
-BASE_URL="https://github.com/$REPO/releases/download/v${VERSION}"
+if [ -n "$BASE_URL_OPT" ]; then
+  BASE_URL="${BASE_URL_OPT%/}/v${VERSION}"
+else
+  BASE_URL="https://github.com/$REPO/releases/download/v${VERSION}"
+fi
 ARCHIVE_URL="${BASE_URL}/${ARCHIVE}"
 SUMS_URL="${BASE_URL}/SHA256SUMS"
 
@@ -263,6 +296,10 @@ init_super_root() {
     "$SUPER_ROOT/logs" \
     "$SUPER_ROOT/run" \
     "$SUPER_ROOT/plugins"
+  # Socket parent must not be group/world-writable (superd refuses).
+  run_for "$SUPER_ROOT/run" chmod 755 "$SUPER_ROOT/run" 2>/dev/null || true
+  run_for "$SUPER_ROOT/logs" chmod 755 "$SUPER_ROOT/logs" 2>/dev/null || true
+  run_for "$SUPER_ROOT/data" chmod 755 "$SUPER_ROOT/data" 2>/dev/null || true
 
   CONF="$SUPER_ROOT/conf/super.toml"
   if [ -f "$CONF" ]; then

@@ -55,7 +55,7 @@ Contents
 
 Recommended install
 -------------------
-  curl -fsSL https://raw.githubusercontent.com/schiplat/super/master/install.sh | sh
+  curl -fsSL https://github.com/schiplat/super/releases/latest/download/install.sh | sh
 
   Creates SUPER_ROOT (/opt/super or ~/.super), writes conf/super.toml, and
   enables an OS service (systemd on Linux, launchd on macOS, rc.d on FreeBSD).

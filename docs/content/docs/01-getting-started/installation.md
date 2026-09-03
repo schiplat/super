@@ -18,7 +18,7 @@ Super is **cross-platform** in the sense that the same `super.toml` and API work
 | **Windows** | ❌ Not published | [Docker](#method-1-docker-recommended) on the host (Docker Desktop or WSL2) |
 
 > [!NOTE]
-> **Windows:** there is no native `superd.exe` release today. Run the official Linux container image locally, or develop on WSL2/Linux/macOS. See the warning under [Method 2](#method-2-github-releases-or-build-from-source) for details.
+> **Windows:** there is no native `superd.exe` release today. Run the official Linux container image locally, or develop on WSL2/Linux/macOS. See the warning under [Method 3](#method-3-github-releases-or-build-from-source) for details.
 
 On any supported host, set `SUPER_ROOT`, place config under `conf/super.toml`, and use the same CLI/API — whether you extracted a tarball or started a container.
 
@@ -90,13 +90,16 @@ ENTRYPOINT ["/usr/bin/tini", "--", "/usr/local/bin/superd"]
 
 For container signal handling and `tini` guidance, see [Zombie reaping in containers](/docs/04-production-scenarios/stability/zombie-reaping-in-containers). For how Super compares to Supervisor or shell entrypoints, see [vs Supervisor](/docs/04-production-scenarios/migrations/vs-supervisor).
 
-## Method 2: `install.sh` (recommended on Linux / macOS)
+## Method 2: `install.sh` (recommended on Linux / macOS / FreeBSD)
 
-One-liner from GitHub:
+One-liner from the **latest GitHub Release** asset (pinned to the tagged binaries):
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/schiplat/super/master/install.sh | sh
+curl -fsSL https://github.com/schiplat/super/releases/latest/download/install.sh | sh
 ```
+
+Bleeding-edge script from `master` (may download a different release than the script revision):  
+`curl -fsSL https://raw.githubusercontent.com/schiplat/super/master/install.sh | sh`
 
 What it does by default:
 
@@ -109,7 +112,7 @@ What it does by default:
 4. Wires **login environment** so `SUPER_ROOT` (and `bin` on `PATH` when needed) is set automatically:
    - **Linux (system):** `/etc/profile.d/super.sh` + `SUPER_ROOT` in `/etc/environment`
    - **macOS (system):** `/etc/paths.d/super` + hooks in `/etc/zprofile` (and bash/profile)
-   - **User install:** marked block in `~/.zprofile` / `~/.profile` (and `~/.bash_profile` when present)
+   - **User install:** marked block in `~/.zprofile` / `~/.profile` (and existing `~/.bash_profile` when present)
 5. Enables and starts an OS service (boot-persistent):
    - **Linux:** `superd.service` via systemd (`enable --now`)
    - **macOS:** `com.schiplat.superd` via launchd (`RunAtLoad` + `KeepAlive`)
@@ -123,10 +126,11 @@ Useful flags:
 | `--prefix DIR` | Binary prefix (`DIR/bin`) |
 | `--root DIR` | Instance `SUPER_ROOT` |
 | `--user` / `--system` | Force per-user or system-wide service |
-| `--no-service` | Binaries + instance only (no systemd/launchd) |
+| `--no-service` | Binaries + instance only (no systemd/launchd/rc.d) |
 | `--no-start` | Install/enable service but do not start yet |
 | `--no-init` | Skip creating `SUPER_ROOT` |
 | `--no-sudo` | Never elevate |
+| `--base-url URL` | Local/CI fake release server (see `scripts/install-smoke.sh`) |
 
 After install (open a **new** terminal so login env applies):
 
@@ -138,12 +142,49 @@ super list
 
 In the same shell as the installer, run `source /opt/super/env.sh` (or `~/.super/env.sh`) once.
 
+### Upgrade / reinstall
+
+Re-running `install.sh` is safe as an upgrade path:
+
+- Overwrites `superd` / `super` binaries and refreshes the OS unit / plist / rc.d script
+- **Keeps** an existing `$SUPER_ROOT/conf/super.toml` (does not clobber local edits)
+- Rewrites `$SUPER_ROOT/env.sh` and login hooks; restarts the service when start is enabled
+
+Pin with `--version X.Y.Z` when you need a specific release.
+
+### Uninstall (manual)
+
+There is no `--uninstall` yet. Typical cleanup:
+
+```bash
+# Linux (system)
+sudo systemctl disable --now superd
+sudo rm -f /etc/systemd/system/superd.service /etc/profile.d/super.sh
+sudo systemctl daemon-reload
+# optional: remove SUPER_ROOT= from /etc/environment
+# optional: sudo rm -rf /opt/super /usr/local/bin/superd /usr/local/bin/super
+
+# macOS (system)
+sudo launchctl bootout system/com.schiplat.superd
+sudo rm -f /Library/LaunchDaemons/com.schiplat.superd.plist /etc/paths.d/super
+# remove Project Super marker blocks from /etc/zprofile (and bash/profile) if present
+
+# FreeBSD (system)
+sudo service superd stop
+sudo sysrc -f /etc/rc.conf.d/superd superd_enable=NO
+sudo rm -f /usr/local/etc/rc.d/superd /etc/rc.conf.d/superd
+```
+
+User installs: `systemctl --user disable --now superd` or `launchctl bootout gui/$(id -u)/com.schiplat.superd`, then remove `~/.super` and `~/.local/bin/super{,d}` as needed.
+
 > [!IMPORTANT]
 > `install.sh` sets `SUPER_ROOT` for login sessions (see above). Always keep the daemon’s service `Environment=SUPER_ROOT=…` in sync with `$SUPER_ROOT/env.sh`. Binaries under `/usr/local/bin` must not infer the instance root from the executable path — that would incorrectly pick `/usr/local`.
+>
+> **System install + Unix socket:** default `socket = "run/superd.sock"` is mode `0600` owned by the service user (often root). Non-root CLI either uses `sudo -E super …`, `super --server http://127.0.0.1:9002 …` (loopback TCP still listens), or set `socket_mode = "0660"` and share a group on `$SUPER_ROOT/run`.
 
 ## Method 3: GitHub Releases or build from source
 
-Pre-built archives are published on [GitHub Releases](https://github.com/schiplat/super/releases). Prefer [`install.sh`](#method-2-installsh-recommended-on-linux--macos) when you want systemd/launchd wired automatically. For a manual extract:
+Pre-built archives are published on [GitHub Releases](https://github.com/schiplat/super/releases). Prefer [`install.sh`](#method-2-installsh-recommended-on-linux--macos--freebsd) when you want systemd/launchd/rc.d wired automatically. For a manual extract:
 
 | Archive | Platform |
 | :--- | :--- |
@@ -188,7 +229,7 @@ Type=simple
 ExecStart=/usr/local/bin/superd --foreground
 Restart=on-failure
 RestartSec=2
-Environment=SUPER_ROOT=/opt/super
+Environment="SUPER_ROOT=/opt/super"
 LimitNOFILE=65536
 
 [Install]

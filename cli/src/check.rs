@@ -4,6 +4,7 @@ use common::config::{
 };
 use common::is_loopback_bind_host;
 use common::parse_socket_mode;
+use common::resolve_super_root;
 use common::resolve_super_root_for_config;
 use common::{
     licensed_deployment_intent, resolve_license_strict, scan_plugin_stems,
@@ -416,17 +417,26 @@ fn resolve_config_path(user_path: Option<PathBuf>) -> anyhow::Result<PathBuf> {
         return Ok(p);
     }
 
-    let candidates = ["super.toml", "conf/super.toml", "/etc/super/super.toml"];
+    // Prefer the instance root (SUPER_ROOT / exe layout) — matches install.sh defaults.
+    let root = resolve_super_root();
+    for rel in ["conf/super.toml", "super.toml"] {
+        let p = root.join(rel);
+        if p.is_file() {
+            return Ok(p);
+        }
+    }
 
+    let candidates = ["super.toml", "conf/super.toml", "/etc/super/super.toml"];
     for c in candidates {
         let p = PathBuf::from(c);
-        if p.exists() {
+        if p.is_file() {
             return Ok(p);
         }
     }
 
     Err(anyhow::anyhow!(
-        "Config file not found. Please specify with --file"
+        "Config file not found under {} (or ./conf/super.toml). Set SUPER_ROOT or pass --file",
+        root.display()
     ))
 }
 
@@ -517,6 +527,38 @@ fn licensed_requirement_errors(
 mod tests {
     use super::*;
     use std::fs;
+    use std::sync::{Mutex, OnceLock};
+
+    fn env_lock() -> &'static Mutex<()> {
+        static LOCK: OnceLock<Mutex<()>> = OnceLock::new();
+        LOCK.get_or_init(|| Mutex::new(()))
+    }
+
+    #[test]
+    fn resolve_config_prefers_super_root_conf() {
+        let _guard = env_lock().lock().unwrap();
+        let dir = std::env::temp_dir().join(format!(
+            "super-check-root-{}",
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        fs::create_dir_all(dir.join("conf")).unwrap();
+        let conf = dir.join("conf/super.toml");
+        fs::write(&conf, "[server]\nhost = \"127.0.0.1\"\nport = 9002\n").unwrap();
+
+        // SAFETY: serialized by env_lock; restored before unlock.
+        unsafe {
+            std::env::set_var("SUPER_ROOT", &dir);
+        }
+        let got = resolve_config_path(None).unwrap();
+        unsafe {
+            std::env::remove_var("SUPER_ROOT");
+        }
+        let _ = fs::remove_dir_all(&dir);
+        assert_eq!(got, conf);
+    }
 
     #[test]
     fn licensed_ok_when_security_plugin_and_auth_present() {
