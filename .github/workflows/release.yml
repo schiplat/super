@@ -112,9 +112,11 @@ jobs:
           usesh: true
           prepare: |
             pkg update
-            pkg install -y curl git openssl pkgconf
+            # bash required for write-release-readme.sh ([[ … ]]).
+            pkg install -y bash curl git openssl pkgconf
           run: |
             set -e
+            export PATH="/usr/local/bin:$PATH"
             curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain stable
             . "$HOME/.cargo/env"
             export RUSTFLAGS=""
@@ -138,7 +140,7 @@ jobs:
               cp contrib/rc.d/superd "${root}/contrib/rc.d/" 2>/dev/null || true
               chmod 755 "${root}/contrib/rc.d/superd" 2>/dev/null || true
             fi
-            sh .github/scripts/write-release-readme.sh "${ver}" "freebsd-amd64" "${root}"
+            bash .github/scripts/write-release-readme.sh "${ver}" "freebsd-amd64" "${root}"
             tar -czf "${root}.tar.gz" "${root}"
             echo "Created ${root}.tar.gz"
 

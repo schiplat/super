@@ -60,9 +60,12 @@ jobs:
           usesh: true
           prepare: |
             pkg update
-            pkg install -y curl git openssl pkgconf python3 bash
+            # bash is not in FreeBSD base; install-smoke.sh needs it (arrays).
+            pkg install -y bash curl git openssl pkgconf python3
           run: |
             set -e
+            export PATH="/usr/local/bin:$PATH"
+            command -v bash
             curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain stable
             . "$HOME/.cargo/env"
             export RUSTFLAGS=""
