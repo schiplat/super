@@ -40,7 +40,7 @@ Four arms on the **same host**, interleaved, lets prior runs pollute page cache 
 ## Build / run
 
 ```bash
-cd benchmark && cargo build --release
+cd tools/benchmark && cargo build --release
 
 # On each of 4 like-for-like hosts, one arm:
 BENCH_ARM=super-oss   PHASE=B ./benchmark_all.sh

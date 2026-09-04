@@ -860,7 +860,7 @@ command = "/bin/echo"
 
     #[test]
     fn example_stack_all_toml_parses() {
-        let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("../example/resource/stack_all.toml");
+        let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("../examples/demo/resource/stack_all.toml");
         let content = std::fs::read_to_string(&path).unwrap();
         let stack = parse_stack_from_str(&content, &path).unwrap();
         assert_eq!(stack.services.len(), 4, "{stack:?}");

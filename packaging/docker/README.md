@@ -1,6 +1,6 @@
 # Docker image (`containerpi/super`)
 
-Build context is the **repository root** (not this folder).
+Build context is the **repository root** (not this folder). Formerly `dockerbuild/` — paths elsewhere should use `packaging/docker/`.
 
 ## Runtime base image
 
@@ -26,7 +26,7 @@ docker buildx imagetools inspect containerpi/super:latest
 
 | Stage | Mount (`-v`)? | Config source |
 | :--- | :---: | :--- |
-| **`docker build`** | No | `COPY dockerbuild/conf/` bakes `super.toml` into the image at `/app/super/conf/` |
+| **`docker build`** | No | `COPY packaging/docker/conf/` bakes `super.toml` into the image at `/app/super/conf/` |
 | **`docker run`** (default) | No | Uses the config **inside the image** — ready to use |
 | **`docker run`** (custom) | Optional | `-v ./my-conf:/app/super/conf` replaces the baked-in config |
 
@@ -44,7 +44,7 @@ Native arch (local testing):
 
 ```bash
 cd /path/to/super
-docker build -f dockerbuild/Dockerfile -t containerpi/super:latest .
+docker build -f packaging/docker/Dockerfile -t containerpi/super:latest .
 ```
 
 Or: `make docker`
@@ -55,7 +55,7 @@ Multi-arch publish (requires `docker login`):
 make docker-multi
 # or:
 docker buildx build --platform linux/amd64,linux/arm64 \
-  -f dockerbuild/Dockerfile -t containerpi/super:latest --push .
+  -f packaging/docker/Dockerfile -t containerpi/super:latest --push .
 ```
 
 ## Run
@@ -70,7 +70,7 @@ HTTP API / OSS notice: http://127.0.0.1:9002 (no embedded dashboard in the OSS i
 
 ## Configuration
 
-Two reference profiles ship under `dockerbuild/conf/`:
+Two reference profiles ship under `packaging/docker/conf/`:
 
 | File | Profile | Baked into image? |
 | :--- | :--- | :---: |
@@ -87,14 +87,14 @@ Two reference profiles ship under `dockerbuild/conf/`:
 
 > Containers must run `superd` in the **foreground** (image `ENTRYPOINT` already does). Do not set `daemon = true` or pass `--daemon` — `superd` refuses to daemonize as PID 1.
 
-Copy and edit defaults from `dockerbuild/conf/`:
+Copy and edit defaults from `packaging/docker/conf/`:
 
 ```bash
 # OSS — tweak baked-in settings
-cp -r dockerbuild/conf ./my-super-conf
+cp -r packaging/docker/conf ./my-super-conf
 
 # Subscription — start from the licensed example, add plugins/ + license key
-cp dockerbuild/conf/super.subscription.example.toml ./my-super-conf/super.toml
+cp packaging/docker/conf/super.subscription.example.toml ./my-super-conf/super.toml
 # copy plugins/*.so into ./my-super-plugins/ and mount as /app/super/plugins
 docker run --rm -p 127.0.0.1:9002:9002 \
   -v ./my-super-conf:/app/super/conf \
@@ -106,7 +106,7 @@ docker run --rm -p 127.0.0.1:9002:9002 \
 Minimal OSS mount (config only):
 
 ```bash
-cp -r dockerbuild/conf ./my-super-conf
+cp -r packaging/docker/conf ./my-super-conf
 docker run --rm -p 127.0.0.1:9002:9002 \
   -v ./my-super-conf:/app/super/conf \
   -v ./my-super-data:/app/super/data \
@@ -145,7 +145,7 @@ git push origin v1.1.9
 
 ```bash
 docker buildx build --platform linux/amd64,linux/arm64 \
-  -f dockerbuild/Dockerfile \
+  -f packaging/docker/Dockerfile \
   -t containerpi/super:latest \
   -t containerpi/super:1.1.9 \
   --push .

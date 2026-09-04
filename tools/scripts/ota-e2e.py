@@ -5,8 +5,8 @@ Uses an isolated SUPER_ROOT and a non-default API port so it does not touch a
 local demo instance on :9002.
 
 Usage (from repo root `super/`):
-  python3 scripts/ota-e2e.py
-  python3 scripts/ota-e2e.py --build   # cargo build --release first
+  python3 tools/scripts/ota-e2e.py
+  python3 tools/scripts/ota-e2e.py --build   # cargo build --release first
 
 Env:
   SUPER_BIN          Override path to release dir (default: <repo>/target/release)
@@ -31,7 +31,7 @@ from io import BytesIO
 from pathlib import Path
 from threading import Thread
 
-REPO = Path(__file__).resolve().parents[1]
+REPO = Path(__file__).resolve().parents[2]  # tools/scripts → repo root
 DEFAULT_BIN = REPO / "target" / "release"
 ROOT = Path(os.environ.get("SUPER_OTA_E2E_ROOT", "/tmp/super-ota-e2e"))
 API_PORT = int(os.environ.get("SUPER_OTA_E2E_PORT", "19002"))

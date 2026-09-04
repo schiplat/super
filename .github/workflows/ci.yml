@@ -53,18 +53,18 @@ jobs:
       - name: Cache cargo
         uses: swatinem/rust-cache@v2
         with:
-          workspaces: benchmark
+          workspaces: tools/benchmark
 
       - name: Format check
-        working-directory: benchmark
+        working-directory: tools/benchmark
         run: cargo fmt --all -- --check
 
       - name: Clippy
-        working-directory: benchmark
+        working-directory: tools/benchmark
         run: cargo clippy --all-targets -- -D warnings
 
       - name: Build
-        working-directory: benchmark
+        working-directory: tools/benchmark
         run: cargo build --release
 
   audit:
@@ -84,6 +84,32 @@ jobs:
         uses: rustsec/audit-check@v2
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
+
+  # Fast guard after packaging/docker move — full image build is tag-only
+  # (docker-publish.yml). Fail early if Dockerfile / workflow / Makefile drift.
+  docker-layout:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Assert Docker packaging paths
+        run: |
+          set -euo pipefail
+          test -f packaging/docker/Dockerfile
+          test -f packaging/docker/conf/super.toml
+          test -f packaging/docker/conf/super.subscription.example.toml
+          grep -q 'DOCKERFILE[[:space:]]*:=[[:space:]]*packaging/docker/Dockerfile' Makefile
+          grep -q 'file: packaging/docker/Dockerfile' .github/workflows/docker-publish.yml
+          grep -q 'COPY packaging/docker/conf/' packaging/docker/Dockerfile
+          stale=0
+          for f in Makefile .github/workflows/docker-publish.yml packaging/docker/Dockerfile; do
+            if grep -n 'dockerbuild/' "$f"; then
+              echo "::error file=$f::stale docker image path"
+              stale=1
+            fi
+          done
+          exit "$stale"
 
   docs:
     runs-on: ubuntu-latest

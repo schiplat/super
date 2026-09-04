@@ -1,5 +1,8 @@
 # Contrib templates for packaging and manual installs
 #
+# Repo path: `packaging/contrib/`. Release tarballs still place these files under
+# top-level `contrib/` for `install.sh` and extract-and-configure workflows.
+#
 # | Path | Purpose |
 # |---|---|
 # | `super.toml.default` | Minimal `$SUPER_ROOT/conf/super.toml` |

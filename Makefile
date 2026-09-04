@@ -73,7 +73,7 @@ docs-serve:
 
 # Docker image (build context = repo root)
 DOCKER_IMAGE := containerpi/super:latest
-DOCKERFILE   := dockerbuild/Dockerfile
+DOCKERFILE   := packaging/docker/Dockerfile
 DOCKER_PLATFORMS := linux/amd64
 
 .PHONY: docker

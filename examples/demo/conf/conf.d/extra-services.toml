@@ -1,5 +1,5 @@
 # Example stack file (TOML). Loaded by [include] in conf/super.toml.
-# Legacy .json stacks are still supported — see example/resource/stack_*.json.
+# Legacy .json stacks are still supported — see examples/demo/resource/stack_*.json.
 
 [[services]]
 name = "included-redis"

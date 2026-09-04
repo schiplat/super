@@ -3,5 +3,5 @@ target/
 dashboard/node_modules/
 docs/public/
 **/.DS_Store
-example/logs/
-example/data/
+examples/demo/logs/
+examples/demo/data/

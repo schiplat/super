@@ -13,7 +13,7 @@
 #   logs/                 — superd + child process logs (auto-created)
 #   run/                  — runtime (pidfile only if you enable daemonize; keep off in Docker)
 #
-# Override: copy dockerbuild/conf/ and mount, e.g.
+# Override: copy packaging/docker/conf/ and mount, e.g.
 #   -v ./my-conf:/app/super/conf -v ./my-data:/app/super/data
 # =============================================================================
 

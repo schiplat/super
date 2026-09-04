@@ -2,7 +2,7 @@
 
 > **文档版本：** 6.0（2026-08-29）  
 > **状态：** 正式拓扑 = **4 台同规格主机并行 · 一机一臂 · 每臂 3 轮**；方法学定案，Lab 待跑  
-> **执行入口：** `benchmark/benchmark_all.sh`（每台机设 `BENCH_ARM`）+ `scripts/`  
+> **执行入口：** `tools/benchmark/benchmark_all.sh`（每台机设 `BENCH_ARM`）+ `tools/benchmark/scripts/`  
 > **公开 docs：** [vs PM2](../docs/content/docs/04-production-scenarios/migrations/vs-pm2.md) **不得再写死 RSS 数字**；cgroup 强制不是 OSS 内置
 
 ---
@@ -196,7 +196,7 @@ K8s / 多机编排产品对比；PM2 cluster；ui/notify；OSS cgroup 强制；�
 ## 附录 — 命令
 
 ```bash
-cd benchmark && cargo build --release
+cd tools/benchmark && cargo build --release
 
 # 四台机分别：
 BENCH_ARM=super-oss   PHASE=B ./benchmark_all.sh

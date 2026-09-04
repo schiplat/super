@@ -58,9 +58,10 @@ manifest = {
         "sysinfo": "0.30",
     },
     "git": {
-        "super_sha": run(["git", "-C", str(bench.parent), "rev-parse", "HEAD"]),
-        "super_describe": run(["git", "-C", str(bench.parent), "describe", "--tags", "--always"]),
-        "benchmark_sha": run(["git", "-C", str(bench.parent), "log", "-1", "--format=%H", "--", "benchmark"]),
+        # tools/benchmark → repo root
+        "super_sha": run(["git", "-C", str(bench.parent.parent), "rev-parse", "HEAD"]),
+        "super_describe": run(["git", "-C", str(bench.parent.parent), "describe", "--tags", "--always"]),
+        "benchmark_sha": run(["git", "-C", str(bench.parent.parent), "log", "-1", "--format=%H", "--", "tools/benchmark"]),
     },
     "methodology": {
         "latest_stable_snapshot": True,

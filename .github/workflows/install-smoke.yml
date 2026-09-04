@@ -10,8 +10,8 @@ on:
   pull_request:
     paths:
       - 'install.sh'
-      - 'scripts/install-smoke.sh'
-      - 'contrib/**'
+      - 'tools/scripts/install-smoke.sh'
+      - 'packaging/contrib/**'
       - '.github/workflows/install-smoke.yml'
       - '.github/scripts/package-release-unix.sh'
       - '.github/scripts/write-release-readme.sh'
@@ -19,8 +19,8 @@ on:
     branches: [master, main]
     paths:
       - 'install.sh'
-      - 'scripts/install-smoke.sh'
-      - 'contrib/**'
+      - 'tools/scripts/install-smoke.sh'
+      - 'packaging/contrib/**'
       - '.github/workflows/install-smoke.yml'
 
 jobs:
@@ -42,9 +42,9 @@ jobs:
         with:
           key: install-smoke-${{ matrix.os }}
 
-      # scripts/install-smoke.sh is bash (arrays); do not invoke with dash/sh.
+      # tools/scripts/install-smoke.sh is bash (arrays); do not invoke with dash/sh.
       - name: Install smoke (--user)
-        run: bash scripts/install-smoke.sh --user
+        run: bash tools/scripts/install-smoke.sh --user
 
   smoke-freebsd:
     runs-on: ubuntu-latest
@@ -68,4 +68,4 @@ jobs:
             . "$HOME/.cargo/env"
             export RUSTFLAGS=""
             # FreeBSD has no systemd/launchd; --user path uses superd --daemon.
-            bash scripts/install-smoke.sh --user
+            bash tools/scripts/install-smoke.sh --user

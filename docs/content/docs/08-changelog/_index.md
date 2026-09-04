@@ -23,7 +23,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **OTA `artifact.restart_policy`**: `immediate` (default), `manual` (commit without restart), and `signal` / `signal:<hup|int|term|quit|usr1|usr2>` (in-place notify; bare `signal` ≡ `signal:hup`). Dashboard hot-reload option defaults to `signal:hup`. CLI: `--artifact-restart-policy`.
 - **OTA `signal*` requires health probe**: `restart_policy=signal*` is rejected unless the program has an enabled `health_check` (create/update/stack). Dashboard Create/Edit auto-enables Health Check and blocks submit without it. Startup and `super check` warn on legacy snapshot configs that still lack a probe; `exec true` / `:` / `/bin/true` / `/usr/bin/true` is accepted but warned as ineffective for hot-reload verify.
 - **OTA verify without health probe**: when no live `health_check` is configured (non-signal policies), commit waits for `startsecs` (min 1s) so crash-on-start cannot race the synthetic Healthy signal; `ota_verify_timeout` is auto-extended if shorter than that dwell.
-- **`scripts/ota-e2e.py`**: repeatable OTA end-to-end harness (isolated `SUPER_ROOT`, covers commit/rollback/extract/policies/WAL recovery).
+- **`tools/scripts/ota-e2e.py`**: repeatable OTA end-to-end harness (isolated `SUPER_ROOT`, covers commit/rollback/extract/policies/WAL recovery).
+
+### Changed
+
+- **Repo layout**: packaging assets live under `packaging/docker/` (was `dockerbuild/`) and `packaging/contrib/` (was `contrib/`); demo instance under `examples/demo/` (was `example/`); `tools/benchmark/` and `tools/scripts/` hold the peer bench suite and install/OTA smoke helpers. Docs site `CNAME` is under `docs/static/`. Release tarballs still ship `contrib/` at the package root for `install.sh`.
 
 ---
 
@@ -328,13 +332,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [1.1.8] - 2026-07-07
 
 ### Added
-- Official Docker image **`containerpi/super`** with default config under `dockerbuild/conf/`.
+- Official Docker image **`containerpi/super`** with default config under `packaging/docker/conf/` (historically `dockerbuild/conf/`).
 - GitHub Actions workflow to build and push the Docker image.
 - Documentation homepage with OSS capabilities, licensed plugin features, and API example.
 
 ### Changed
 - Docker image namespace from `schiplat/super` to `containerpi/super`.
-- Installation docs, README, and `make docker` target for `dockerbuild/Dockerfile`.
+- Installation docs, README, and `make docker` target for `packaging/docker/Dockerfile` (historically `dockerbuild/Dockerfile`).
 
 ### Fixed
 - Dashboard `ProcessList.vue` syntax error breaking `vue-tsc` build.

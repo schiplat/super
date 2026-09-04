@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 # Build a local fake release tree and smoke-test install.sh against it.
-# Usage: scripts/install-smoke.sh [--user|--system-skip-service]
+# Usage: tools/scripts/install-smoke.sh [--user|--system-skip-service]
 set -euo pipefail
 
-ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 cd "$ROOT"
 
 MODE="${1:---user}"
@@ -40,13 +40,13 @@ mkdir -p "$SRV/v${VER}" "$STAGE/$NAME/bin" \
 cp target/release/superd target/release/super "$STAGE/$NAME/bin/"
 chmod +x "$STAGE/$NAME/bin/"*
 if [[ -f LICENSE ]]; then cp LICENSE "$STAGE/$NAME/"; fi
-if [[ -d contrib ]]; then
-  cp contrib/super.toml.default "$STAGE/$NAME/contrib/" 2>/dev/null || true
-  cp contrib/README.md "$STAGE/$NAME/contrib/" 2>/dev/null || true
-  cp contrib/conf.d/demo.toml.example "$STAGE/$NAME/contrib/conf.d/" 2>/dev/null || true
-  cp contrib/systemd/superd.service "$STAGE/$NAME/contrib/systemd/" 2>/dev/null || true
-  cp contrib/launchd/com.schiplat.superd.plist "$STAGE/$NAME/contrib/launchd/" 2>/dev/null || true
-  cp contrib/rc.d/superd "$STAGE/$NAME/contrib/rc.d/" 2>/dev/null || true
+if [[ -d packaging/contrib ]]; then
+  cp packaging/contrib/super.toml.default "$STAGE/$NAME/contrib/" 2>/dev/null || true
+  cp packaging/contrib/README.md "$STAGE/$NAME/contrib/" 2>/dev/null || true
+  cp packaging/contrib/conf.d/demo.toml.example "$STAGE/$NAME/contrib/conf.d/" 2>/dev/null || true
+  cp packaging/contrib/systemd/superd.service "$STAGE/$NAME/contrib/systemd/" 2>/dev/null || true
+  cp packaging/contrib/launchd/com.schiplat.superd.plist "$STAGE/$NAME/contrib/launchd/" 2>/dev/null || true
+  cp packaging/contrib/rc.d/superd "$STAGE/$NAME/contrib/rc.d/" 2>/dev/null || true
 fi
 bash .github/scripts/write-release-readme.sh "$VER" "$PLATFORM" "$STAGE/$NAME"
 

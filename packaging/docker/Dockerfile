@@ -1,10 +1,10 @@
 # Project Super OSS — containerpi/super
 #
 # Build (from repository root):
-#   docker build -f dockerbuild/Dockerfile -t containerpi/super:latest .
+#   docker build -f packaging/docker/Dockerfile -t containerpi/super:latest .
 # Multi-arch (CI / publish):
-#   docker buildx build --platform linux/amd64,linux/arm64 -f dockerbuild/Dockerfile -t containerpi/super:latest --push .
-# Config is COPY'd from dockerbuild/conf/ into the image — no -v at build time.
+#   docker buildx build --platform linux/amd64,linux/arm64 -f packaging/docker/Dockerfile -t containerpi/super:latest --push .
+# Config is COPY'd from packaging/docker/conf/ into the image — no -v at build time.
 #
 # Run (default config already inside the image):
 #   docker run --rm -p 127.0.0.1:9002:9002 containerpi/super:latest
@@ -33,7 +33,7 @@ RUN apt-get update \
 
 # Pre-create writable dirs for the nonroot distroless user (uid 65532).
 FROM debian:13-slim AS layout
-COPY dockerbuild/conf/ /app/super/conf/
+COPY packaging/docker/conf/ /app/super/conf/
 RUN mkdir -p /app/super/data /app/super/logs \
     && chown -R 65532:65532 /app/super
 

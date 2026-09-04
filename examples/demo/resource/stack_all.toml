@@ -1,5 +1,5 @@
 # Full-featured stack example in TOML (default stack format).
-# Apply with:  super apply example/resource/stack_all.toml
+# Apply with:  super apply examples/demo/resource/stack_all.toml
 # The same programs in legacy JSON: see stack_all.json
 
 prune = false

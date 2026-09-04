@@ -51,7 +51,7 @@ docker run --rm -p 127.0.0.1:9002:9002 containerpi/super:latest
 With a custom config directory:
 
 ```bash
-docker run --rm -p 127.0.0.1:9002:9002 -v ./dockerbuild/conf:/app/super/conf containerpi/super:latest
+docker run --rm -p 127.0.0.1:9002:9002 -v ./packaging/docker/conf:/app/super/conf containerpi/super:latest
 ```
 
 ### From source
@@ -107,6 +107,19 @@ Track progress in the [changelog](https://super.docs.sconts.com/docs/08-changelo
 ### AI skills
 
 Want your AI assistant (Cursor, Claude, Copilot, …) to configure and troubleshoot Super correctly? Point it at [`docs/SKILL.md`](docs/SKILL.md) (e.g. from `CLAUDE.md`, `.cursor/rules`, or pasted into the prompt). It covers everyday commands, the `super.toml` / stack JSON schema, cron & health semantics, and common failure modes — and helps avoid the usual supervisor/PM2 semantic mix-ups.
+
+## Repository layout
+
+| Path | Role |
+|------|------|
+| `common/` `core/` `cli/` `superd/` | Cargo workspace crates (`superd` + `super` CLI) |
+| `packaging/docker/` | Official image Dockerfile + baked-in conf (was `dockerbuild/`) |
+| `packaging/contrib/` | Default `super.toml` + systemd / launchd / rc.d templates (copied into release tarballs as `contrib/`) |
+| `examples/demo/` | Sample `SUPER_ROOT`-style conf and stack files |
+| `tools/benchmark/` | Peer benchmark suite |
+| `tools/scripts/` | Install smoke + OTA e2e helpers |
+| `docs/` | Public Hugo documentation site |
+| `install.sh` | Release install script (kept at repo root for stable download URLs) |
 
 ## Contributing
 
