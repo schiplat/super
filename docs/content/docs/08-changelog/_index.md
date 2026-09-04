@@ -28,6 +28,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - **Repo layout**: packaging assets live under `packaging/docker/` (was `dockerbuild/`) and `packaging/contrib/` (was `contrib/`); demo instance under `examples/demo/` (was `example/`); `tools/benchmark/` and `tools/scripts/` hold the peer bench suite and install/OTA smoke helpers. Docs site `CNAME` is under `docs/static/`. Release tarballs still ship `contrib/` at the package root for `install.sh`.
+- **Docker Hub image**: official image namespace is **`schiplat/super`** (was briefly published as `containerpi/super`).
 
 ---
 
@@ -332,12 +333,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [1.1.8] - 2026-07-07
 
 ### Added
-- Official Docker image **`containerpi/super`** with default config under `packaging/docker/conf/` (historically `dockerbuild/conf/`).
+- Official Docker image **`schiplat/super`** with default config under `packaging/docker/conf/` (historically `dockerbuild/conf/`).
 - GitHub Actions workflow to build and push the Docker image.
 - Documentation homepage with OSS capabilities, licensed plugin features, and API example.
 
 ### Changed
-- Docker image namespace from `schiplat/super` to `containerpi/super`.
+- Docker image published on Docker Hub as `schiplat/super`.
 - Installation docs, README, and `make docker` target for `packaging/docker/Dockerfile` (historically `dockerbuild/Dockerfile`).
 
 ### Fixed

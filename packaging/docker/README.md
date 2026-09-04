@@ -1,4 +1,4 @@
-# Docker image (`containerpi/super`)
+# Docker image (`schiplat/super`)
 
 Build context is the **repository root** (not this folder). Formerly `dockerbuild/` — paths elsewhere should use `packaging/docker/`.
 
@@ -19,7 +19,7 @@ Published CI images target **`linux/amd64`** and **`linux/arm64`**. Native `dock
 Verify a published image:
 
 ```bash
-docker buildx imagetools inspect containerpi/super:latest
+docker buildx imagetools inspect schiplat/super:latest
 ```
 
 ## Build vs run
@@ -33,7 +33,7 @@ docker buildx imagetools inspect containerpi/super:latest
 Verify the image starts (distroless has no shell — use the HTTP port or healthcheck). **OSS image has no API authentication** — bind to loopback on the host:
 
 ```bash
-docker run --rm -d -p 127.0.0.1:9002:9002 --name super-test containerpi/super:latest
+docker run --rm -d -p 127.0.0.1:9002:9002 --name super-test schiplat/super:latest
 curl -sf http://127.0.0.1:9002/ >/dev/null && echo OK
 docker stop super-test
 ```
@@ -44,7 +44,7 @@ Native arch (local testing):
 
 ```bash
 cd /path/to/super
-docker build -f packaging/docker/Dockerfile -t containerpi/super:latest .
+docker build -f packaging/docker/Dockerfile -t schiplat/super:latest .
 ```
 
 Or: `make docker`
@@ -55,7 +55,7 @@ Multi-arch publish (requires `docker login`):
 make docker-multi
 # or:
 docker buildx build --platform linux/amd64,linux/arm64 \
-  -f packaging/docker/Dockerfile -t containerpi/super:latest --push .
+  -f packaging/docker/Dockerfile -t schiplat/super:latest --push .
 ```
 
 ## Run
@@ -63,7 +63,7 @@ docker buildx build --platform linux/amd64,linux/arm64 \
 The baked-in OSS config listens on `0.0.0.0` inside the container. On the host, map **loopback only** unless you deploy the `security` plugin and a valid license:
 
 ```bash
-docker run --rm -p 127.0.0.1:9002:9002 containerpi/super:latest
+docker run --rm -p 127.0.0.1:9002:9002 schiplat/super:latest
 ```
 
 HTTP API / OSS notice: http://127.0.0.1:9002 (no embedded dashboard in the OSS image)
@@ -100,7 +100,7 @@ docker run --rm -p 127.0.0.1:9002:9002 \
   -v ./my-super-conf:/app/super/conf \
   -v ./my-super-plugins:/app/super/plugins \
   -v ./my-super-data:/app/super/data \
-  containerpi/super:latest
+  schiplat/super:latest
 ```
 
 Minimal OSS mount (config only):
@@ -110,7 +110,7 @@ cp -r packaging/docker/conf ./my-super-conf
 docker run --rm -p 127.0.0.1:9002:9002 \
   -v ./my-super-conf:/app/super/conf \
   -v ./my-super-data:/app/super/data \
-  containerpi/super:latest
+  schiplat/super:latest
 ```
 
 To enable the sample stack, rename `conf.d/example-stack.toml.example` to `conf.d/example-stack.toml`.
@@ -123,7 +123,7 @@ Workflow: [`.github/workflows/docker-publish.yml`](../.github/workflows/docker-p
 
 | Trigger | Tags pushed |
 | :--- | :--- |
-| Push to `master` (relevant paths) | `containerpi/super:latest` (`linux/amd64`, `linux/arm64`) |
+| Push to `master` (relevant paths) | `schiplat/super:latest` (`linux/amd64`, `linux/arm64`) |
 | Push tag `v*` | semver tags + `latest` (`linux/amd64`, `linux/arm64`) |
 | Manual **workflow_dispatch** | Same rules as above |
 
@@ -131,7 +131,7 @@ Add repository secrets (**Settings → Secrets → Actions**):
 
 | Secret | Value |
 | :--- | :--- |
-| `DOCKERHUB_USERNAME` | Docker Hub username (e.g. `containerpi`) — GitHub Actions **variable**, not a secret |
+| `DOCKERHUB_USERNAME` | Docker Hub username (e.g. `schiplat`) — GitHub Actions **variable**, not a secret |
 | `DOCKERHUB_TOKEN` | [Access token](https://hub.docker.com/settings/security) with **Read & Write** |
 
 Release example:
@@ -146,7 +146,7 @@ git push origin v1.1.9
 ```bash
 docker buildx build --platform linux/amd64,linux/arm64 \
   -f packaging/docker/Dockerfile \
-  -t containerpi/super:latest \
-  -t containerpi/super:1.1.9 \
+  -t schiplat/super:latest \
+  -t schiplat/super:1.1.9 \
   --push .
 ```

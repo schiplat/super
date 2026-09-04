@@ -44,14 +44,14 @@ Bleeding-edge (may differ from the latest tagged binaries): `curl -fsSL https://
 Docker image (`linux/amd64`, `linux/arm64`). **This is the supported path on Windows** (Docker Desktop or WSL2) — there is no native `superd.exe` release. The OSS image has **no API authentication** — bind to loopback on the host unless you add the `security` plugin and a license:
 
 ```bash
-docker pull containerpi/super:latest
-docker run --rm -p 127.0.0.1:9002:9002 containerpi/super:latest
+docker pull schiplat/super:latest
+docker run --rm -p 127.0.0.1:9002:9002 schiplat/super:latest
 ```
 
 With a custom config directory:
 
 ```bash
-docker run --rm -p 127.0.0.1:9002:9002 -v ./packaging/docker/conf:/app/super/conf containerpi/super:latest
+docker run --rm -p 127.0.0.1:9002:9002 -v ./packaging/docker/conf:/app/super/conf schiplat/super:latest
 ```
 
 ### From source

@@ -1,18 +1,18 @@
-# Project Super OSS — containerpi/super
+# Project Super OSS — schiplat/super
 #
 # Build (from repository root):
-#   docker build -f packaging/docker/Dockerfile -t containerpi/super:latest .
+#   docker build -f packaging/docker/Dockerfile -t schiplat/super:latest .
 # Multi-arch (CI / publish):
-#   docker buildx build --platform linux/amd64,linux/arm64 -f packaging/docker/Dockerfile -t containerpi/super:latest --push .
+#   docker buildx build --platform linux/amd64,linux/arm64 -f packaging/docker/Dockerfile -t schiplat/super:latest --push .
 # Config is COPY'd from packaging/docker/conf/ into the image — no -v at build time.
 #
 # Run (default config already inside the image):
-#   docker run --rm -p 127.0.0.1:9002:9002 containerpi/super:latest
+#   docker run --rm -p 127.0.0.1:9002:9002 schiplat/super:latest
 #
 # Run with your own conf/data (optional override):
 #   docker run --rm -p 127.0.0.1:9002:9002 \
 #     -v ./my-conf:/app/super/conf -v ./my-data:/app/super/data \
-#     containerpi/super:latest
+#     schiplat/super:latest
 #
 # OSS image: no embedded dashboard. Install the UI plugin from a subscription package for the web control plane.
 

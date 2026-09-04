@@ -1,5 +1,5 @@
 # =============================================================================
-# Project Super — OSS default for containerpi/super Docker image
+# Project Super — OSS default for schiplat/super Docker image
 # =============================================================================
 # Profile: OSS (no license). API has no authentication — allow_insecure_public_bind
 # is required for 0.0.0.0 inside the container.

@@ -26,7 +26,7 @@ help:
 	@echo "  fetch-keys  Local/debug: fetch Manager keyring into common/keys/ (do not commit by default)"
 	@echo "  clean       Clean up build artifacts (target/)"
 	@echo "  check       Run cargo check"
-	@echo "  docker      Build containerpi/super image (native arch, local load)"
+	@echo "  docker      Build schiplat/super image (native arch, local load)"
 	@echo "  docker-multi  Build and push linux/amd64 image"
 	@echo ""
 	@echo "Daily: make build uses hand-curated common/keys/*.public.key (no Manager)."
@@ -72,7 +72,7 @@ docs-serve:
 	cd docs && hugo server -D --disableFastRender
 
 # Docker image (build context = repo root)
-DOCKER_IMAGE := containerpi/super:latest
+DOCKER_IMAGE := schiplat/super:latest
 DOCKERFILE   := packaging/docker/Dockerfile
 DOCKER_PLATFORMS := linux/amd64
 

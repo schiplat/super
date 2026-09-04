@@ -30,7 +30,7 @@ allow_insecure_public_bind = false
 If you use the repo's [example config](https://github.com/schiplat/super/blob/master/examples/demo/conf/super.toml), it also binds to port **9002** — keep CLI/API URLs in sync with your `super.toml`.
 
 > [!NOTE]
-> **Docker:** the official [`containerpi/super`](https://hub.docker.com/r/containerpi/super) image already ships a default `super.toml` under `/app/super/conf/` — skip to step 2 and use the **Docker** tabs below for the demo program.
+> **Docker:** the official [`schiplat/super`](https://hub.docker.com/r/schiplat/super) image already ships a default `super.toml` under `/app/super/conf/` — skip to step 2 and use the **Docker** tabs below for the demo program.
 
 ## 2. Start the Daemon (OSS)
 
@@ -49,11 +49,11 @@ Expected output includes `Super Core starting...` and the listen address.
   The OSS image is **distroless** — it runs `superd` + `super` only (no shell, no Python). Map the API port and the demo HTTP port. Give the container a name so you can run CLI commands later:
 
   ```bash
-  docker pull containerpi/super:latest
+  docker pull schiplat/super:latest
 
   docker run --rm --name super \
     -p 127.0.0.1:9002:9002 -p 127.0.0.1:8080:8080 \
-    containerpi/super:latest
+    schiplat/super:latest
   ```
 
   **`superd` runs inside the container; the CLI does not have to.** With `-p 127.0.0.1:9002:9002`, the HTTP API is on your host — use any option below for steps 3–4:
@@ -83,7 +83,7 @@ curl http://127.0.0.1:9002/health
 Open a new terminal. Pick the example that matches how you run `superd`:
 
 > [!IMPORTANT]
-> The **`containerpi/super` image does not include Python 3**. If you start Super with Docker, use the **Docker** tabs — not the Python example.
+> The **`schiplat/super` image does not include Python 3**. If you start Super with Docker, use the **Docker** tabs — not the Python example.
 
 {{< tabs >}}
   {{< tab name="CLI" >}}
@@ -113,7 +113,7 @@ Open a new terminal. Pick the example that matches how you run `superd`:
   ```
   {{< /tab >}}
   {{< tab name="Docker (CLI)" >}}
-  Uses the static **`busybox`** binary baked into `containerpi/super`.
+  Uses the static **`busybox`** binary baked into `schiplat/super`.
 
   **Host CLI** (recommended — install `super` once, talk to the mapped port):
 
@@ -130,7 +130,7 @@ Open a new terminal. Pick the example that matches how you run `superd`:
   ```
   {{< /tab >}}
   {{< tab name="Docker (REST API)" >}}
-  Uses the static **`busybox`** binary baked into `containerpi/super`:
+  Uses the static **`busybox`** binary baked into `schiplat/super`:
 
   ```bash
   curl -X POST http://127.0.0.1:9002/api/v1/programs \

@@ -31,14 +31,14 @@ The official OSS image ships `superd` and `super` (API + CLI) on a **distroless*
 The image ships with a default config at `/app/super/conf/super.toml` (`host = "0.0.0.0"`, port `9002`, and `allow_insecure_public_bind = true` so the container can listen on all interfaces). **The OSS image has no API authentication** — on the host, bind to loopback unless you deploy the `security` plugin and a valid license.
 
 ```bash
-docker pull containerpi/super:latest
+docker pull schiplat/super:latest
 
-docker run --rm -p 127.0.0.1:9002:9002 -p 127.0.0.1:8080:8080 containerpi/super:latest
+docker run --rm -p 127.0.0.1:9002:9002 -p 127.0.0.1:8080:8080 schiplat/super:latest
 ```
 
 Open **http://127.0.0.1:9002** for the OSS HTML notice and HTTP API. Follow [Quick Start — Docker tabs](/docs/01-getting-started/quick-start/#3-create-program-via-api) to register the demo `busybox httpd` program (do **not** use the Python example inside this image).
 
-Images are published for **linux/amd64** and **linux/arm64**. Docker picks the matching manifest for your host (`docker buildx imagetools inspect containerpi/super:latest`).
+Images are published for **linux/amd64** and **linux/arm64**. Docker picks the matching manifest for your host (`docker buildx imagetools inspect schiplat/super:latest`).
 
 ### CLI on the host (containerized superd)
 
@@ -57,7 +57,7 @@ If the host has **no** local `$SUPER_ROOT/run/superd.sock`, the CLI already defa
 **Option B — copy `super` out of the image** (no full install):
 
 ```bash
-CID=$(docker create containerpi/super:latest)
+CID=$(docker create schiplat/super:latest)
 docker cp "$CID:/usr/local/bin/super" ./super && docker rm "$CID"
 chmod +x ./super
 ./super --server http://127.0.0.1:9002 list
@@ -82,7 +82,7 @@ Mount your own `conf/` (and optionally `data/` for persistence):
 docker run --rm -p 127.0.0.1:9002:9002 \
   -v /path/to/conf:/app/super/conf \
   -v /path/to/data:/app/super/data \
-  containerpi/super:latest
+  schiplat/super:latest
 ```
 
 Place `super.toml` under `/path/to/conf/`. Reference profiles in `packaging/docker/conf/`:
@@ -101,7 +101,7 @@ If you add licensed plugins, **`security.so` and `auth_secret` are required** fo
 ```bash
 git clone https://github.com/schiplat/super.git
 cd super
-docker build -f packaging/docker/Dockerfile -t containerpi/super:latest .
+docker build -f packaging/docker/Dockerfile -t schiplat/super:latest .
 ```
 
 Or: `make docker`. See [packaging/docker/README.md](https://github.com/schiplat/super/blob/master/packaging/docker/README.md) for publish notes.
@@ -111,8 +111,8 @@ Or: `make docker`. See [packaging/docker/README.md](https://github.com/schiplat/
 ```dockerfile
 FROM ubuntu:22.04
 
-COPY --from=containerpi/super:latest /usr/local/bin/superd /usr/local/bin/superd
-COPY --from=containerpi/super:latest /usr/local/bin/super /usr/local/bin/super
+COPY --from=schiplat/super:latest /usr/local/bin/superd /usr/local/bin/superd
+COPY --from=schiplat/super:latest /usr/local/bin/super /usr/local/bin/super
 
 COPY conf/ /app/super/conf/
 

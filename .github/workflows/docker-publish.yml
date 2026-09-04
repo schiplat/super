@@ -1,6 +1,6 @@
 name: Publish Docker Image
 
-# Build/push containerpi/super only on version tags (and manual dispatch).
+# Build/push schiplat/super only on version tags (and manual dispatch).
 # Branch pushes do not publish images.
 
 on:
@@ -10,7 +10,7 @@ on:
   workflow_dispatch:
 
 env:
-  IMAGE: containerpi/super
+  IMAGE: schiplat/super
 
 jobs:
   build-and-push:
