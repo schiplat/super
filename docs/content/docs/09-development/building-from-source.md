@@ -27,7 +27,7 @@ The workspace (`Cargo.toml`) has four crates:
 | `superd` | `superd/` | bin `superd` | The daemon entry point: CLI args, plugin discovery and license checks, then `bootstrap()` of `super-core`, serving HTTP / WS / metrics |
 | `super-cli` | `cli/` | bin `super` | Command-line client for the daemon's HTTP API |
 
-`superd` is intentionally thin: nearly all logic lives in `super-core`, and embedding `super-core` in your own binary is a supported pattern (see [Writing Extensions](./writing-extensions)).
+`superd` is intentionally thin: nearly all logic lives in `super-core`, and embedding `super-core` in your own binary is a supported pattern (see [Writing Extensions](/docs/09-development/writing-extensions)).
 
 ## Build the binaries
 
@@ -97,6 +97,6 @@ make docs-serve          # → http://localhost:1313/
 
 ## Next steps
 
-*   [Writing Extensions](./writing-extensions) — hook custom logic into the process lifecycle.
+*   [Writing Extensions](/docs/09-development/writing-extensions) — hook custom logic into the process lifecycle.
 *   [Design Philosophy](/docs/06-internals/design-philosophy) — how the core is architected.
 *   [API Reference](/docs/06-internals/api-reference) and [Config Reference](/docs/06-internals/config-reference) — what a running instance exposes.
