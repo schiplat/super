@@ -123,9 +123,8 @@ Workflow: [`.github/workflows/docker-publish.yml`](../.github/workflows/docker-p
 
 | Trigger | Tags pushed |
 | :--- | :--- |
-| Push to `master` (relevant paths) | `schiplat/super:latest` (`linux/amd64`, `linux/arm64`) |
 | Push tag `v*` | semver tags + `latest` (`linux/amd64`, `linux/arm64`) |
-| Manual **workflow_dispatch** | Same rules as above |
+| Manual **workflow_dispatch** | Same as tag publish (`latest` + metadata tags) |
 
 Add repository secrets (**Settings → Secrets → Actions**):
 
@@ -137,8 +136,8 @@ Add repository secrets (**Settings → Secrets → Actions**):
 Release example:
 
 ```bash
-git tag v1.1.9
-git push origin v1.1.9
+git tag v1.5.3
+git push origin v1.5.3
 ```
 
 ### Manual push
@@ -147,6 +146,6 @@ git push origin v1.1.9
 docker buildx build --platform linux/amd64,linux/arm64 \
   -f packaging/docker/Dockerfile \
   -t schiplat/super:latest \
-  -t schiplat/super:1.1.9 \
+  -t schiplat/super:1.5.3 \
   --push .
 ```

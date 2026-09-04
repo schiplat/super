@@ -17,6 +17,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+---
+
+## [1.5.3] - 2026-09-04
+
 ### Added
 
 - **OTA `artifact.extract`**: download `.tar.gz` / `.tgz` / `.tar` / `.zip`, verify SHA256 of the archive, safely unpack, and stage a single payload binary to `destination`.
@@ -29,6 +33,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **Repo layout**: packaging assets live under `packaging/docker/` (was `dockerbuild/`) and `packaging/contrib/` (was `contrib/`); demo instance under `examples/demo/` (was `example/`); `tools/benchmark/` and `tools/scripts/` hold the peer bench suite and install/OTA smoke helpers. Docs site `CNAME` is under `docs/static/`. Release tarballs still ship `contrib/` at the package root for `install.sh`.
 - **Docker Hub image**: official image namespace is **`schiplat/super`** (was briefly published as `containerpi/super`).
+
+### Notes
+
+- Workspace **1.5.3**; pair with commercial plugin packages `super-plugins-1.5.3-…`.
 
 ---
 
