@@ -26,6 +26,8 @@ help:
 	@echo "  fetch-keys  Local/debug: fetch Manager keyring into common/keys/ (do not commit by default)"
 	@echo "  clean       Clean up build artifacts (target/)"
 	@echo "  check       Run cargo check"
+	@echo "  set-version Sync VERSION into this repo + ../super-pro (delegates)"
+	@echo "              make set-version VERSION=1.5.5"
 	@echo "  docker      Build schiplat/super image (native arch, local load)"
 	@echo "  docker-multi  Build and push linux/amd64 image"
 	@echo ""
@@ -64,6 +66,13 @@ clean:
 .PHONY: check
 check:
 	@cargo check
+
+# Bump workspace version in lockstep with ../super-pro (Cargo + OSS banner/docker examples).
+VERSION ?=
+.PHONY: set-version
+set-version:
+	@test -n "$(VERSION)" || (echo "usage: make set-version VERSION=X.Y.Z" >&2; exit 1)
+	@$(MAKE) -C ../super-pro set-version VERSION="$(VERSION)"
 
 # Local docs preview (Hugo adjusts paths for localhost — do not open public/ as files)
 .PHONY: docs-serve
