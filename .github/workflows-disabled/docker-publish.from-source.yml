@@ -1,0 +1,59 @@
+# ARCHIVED — not loaded by GitHub Actions (lives outside .github/workflows/).
+# Previous Publish Docker Image: compile Rust inside the image on one runner
+# with QEMU multi-arch (linux/amd64 + linux/arm64). Replaced by
+# .github/workflows/docker-publish.yml (pack Release binaries on native runners).
+#
+# To resurrect temporarily: copy to .github/workflows/ and adjust triggers.
+#
+# Original triggers: push tags v*, workflow_dispatch.
+
+name: Publish Docker Image (from-source, archived)
+
+on:
+  # Intentionally empty / never enabled while this file stays outside workflows/.
+  workflow_dispatch:
+
+env:
+  IMAGE: schiplat/super
+
+jobs:
+  build-and-push:
+    if: false # hard-disable even if someone copies this under workflows/
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Docker meta
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.IMAGE }}
+          tags: |
+            type=raw,value=latest,enable=${{ startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch' }}
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ vars.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: packaging/docker/Dockerfile
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max

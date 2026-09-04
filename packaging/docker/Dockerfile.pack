@@ -1,33 +1,13 @@
-# Project Super OSS — schiplat/super (from-source / local builds)
+# Project Super OSS — pack prebuilt binaries into schiplat/super (CI).
 #
-# Compiles Rust inside the image. Prefer this for local `make docker`.
-# CI publish uses packaging/docker/Dockerfile.pack with Release tarball
-# binaries (native amd64/arm64 runners — no QEMU, no cargo in the image).
+# Expects build context (repo root) to already contain:
+#   bin/superd
+#   bin/super
+# (typically extracted from a GitHub Release linux-* tarball).
 #
-# Build (from repository root):
-#   docker build -f packaging/docker/Dockerfile -t schiplat/super:latest .
-# Multi-arch (slow under QEMU — prefer CI Dockerfile.pack path):
-#   docker buildx build --platform linux/amd64,linux/arm64 -f packaging/docker/Dockerfile -t schiplat/super:latest --push .
-# Config is COPY'd from packaging/docker/conf/ into the image — no -v at build time.
+#   docker build -f packaging/docker/Dockerfile.pack -t schiplat/super:latest .
 #
-# Run (default config already inside the image):
-#   docker run --rm -p 127.0.0.1:9002:9002 schiplat/super:latest
-#
-# Run with your own conf/data (optional override):
-#   docker run --rm -p 127.0.0.1:9002:9002 \
-#     -v ./my-conf:/app/super/conf -v ./my-data:/app/super/data \
-#     schiplat/super:latest
-#
-# OSS image: no embedded dashboard. Install the UI plugin from a subscription package for the web control plane.
-
-FROM rust:1-trixie AS backend
-WORKDIR /build
-COPY Cargo.toml Cargo.lock ./
-COPY common/ common/
-COPY core/ core/
-COPY cli/ cli/
-COPY superd/ superd/
-RUN cargo build --release -p superd -p super-cli
+# Local from-source builds still use packaging/docker/Dockerfile (compiles Rust).
 
 # tini is not included in distroless; copy from a minimal Debian stage (build-only).
 FROM debian:13-slim AS tini
@@ -56,8 +36,8 @@ LABEL org.opencontainers.image.source="https://github.com/schiplat/super"
 LABEL org.opencontainers.image.vendor="623"
 
 COPY --from=tini /usr/bin/tini /usr/bin/tini
-COPY --from=backend /build/target/release/superd /usr/local/bin/superd
-COPY --from=backend /build/target/release/super /usr/local/bin/super
+COPY bin/superd /usr/local/bin/superd
+COPY bin/super /usr/local/bin/super
 COPY --from=busybox /bin/busybox /usr/local/bin/busybox
 COPY --from=layout --chown=65532:65532 /app/super /app/super
 

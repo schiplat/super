@@ -97,13 +97,16 @@ jobs:
         run: |
           set -euo pipefail
           test -f packaging/docker/Dockerfile
+          test -f packaging/docker/Dockerfile.pack
           test -f packaging/docker/conf/super.toml
           test -f packaging/docker/conf/super.subscription.example.toml
           grep -q 'DOCKERFILE[[:space:]]*:=[[:space:]]*packaging/docker/Dockerfile' Makefile
-          grep -q 'file: packaging/docker/Dockerfile' .github/workflows/docker-publish.yml
+          grep -q 'DOCKERFILE_PACK: packaging/docker/Dockerfile.pack' .github/workflows/docker-publish.yml
           grep -q 'COPY packaging/docker/conf/' packaging/docker/Dockerfile
+          grep -q 'COPY packaging/docker/conf/' packaging/docker/Dockerfile.pack
+          grep -q 'COPY bin/superd' packaging/docker/Dockerfile.pack
           stale=0
-          for f in Makefile .github/workflows/docker-publish.yml packaging/docker/Dockerfile; do
+          for f in Makefile .github/workflows/docker-publish.yml packaging/docker/Dockerfile packaging/docker/Dockerfile.pack; do
             if grep -n 'dockerbuild/' "$f"; then
               echo "::error file=$f::stale docker image path"
               stale=1

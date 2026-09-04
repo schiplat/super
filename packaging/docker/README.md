@@ -8,13 +8,13 @@ The final stage uses **`gcr.io/distroless/cc-debian13:nonroot`** (Debian 13 / tr
 
 Runtime binaries: `superd`, `super`, `tini`, and a static **`busybox`** at `/usr/local/bin/busybox` (Quick Start / example-stack demos only — not a general-purpose shell).
 
-Build stages use **`rust:1-trixie`** and **`debian:13-slim`** so compiler and helper stages match the same Debian release family.
+Helper stages use **`debian:13-slim`**. Local from-source builds also use **`rust:1-trixie`**. CI publish does **not** compile in Docker — it packs `superd` / `super` from the Release workflow’s `linux-amd64` / `linux-arm64` tarballs via [`Dockerfile.pack`](Dockerfile.pack).
 
 The container runs as UID **65532**. When bind-mounting host directories, ensure they are readable/writable by that user (e.g. `chown -R 65532:65532 ./my-super-data`).
 
 ## Platforms
 
-Published CI images target **`linux/amd64`** and **`linux/arm64`**. Native `docker build` on your machine uses your host architecture for local testing.
+Published CI images target **`linux/amd64`** and **`linux/arm64`**, each built on a **native** runner (no QEMU), then merged into one multi-arch manifest. Native `docker build` / `make docker` on your machine uses your host architecture and compiles from source.
 
 Verify a published image:
 
@@ -40,16 +40,27 @@ docker stop super-test
 
 ## Build
 
-Native arch (local testing):
+### Local (from source)
 
 ```bash
 cd /path/to/super
 docker build -f packaging/docker/Dockerfile -t schiplat/super:latest .
+# or: make docker
 ```
 
-Or: `make docker`
+### CI publish (pack Release binaries)
 
-Multi-arch publish (requires `docker login`):
+Workflow [`.github/workflows/docker-publish.yml`](../../.github/workflows/docker-publish.yml) runs after a successful **Release** on a `v*` tag (or **workflow_dispatch** with a version):
+
+1. Download `super-{ver}-linux-amd64.tar.gz` / `linux-arm64` (Release workflow artifacts or GitHub Release assets).
+2. On native `ubuntu-latest` / `ubuntu-24.04-arm`, build with [`Dockerfile.pack`](Dockerfile.pack) (COPY `bin/superd` + `bin/super` only — no Rust compile).
+3. `docker buildx imagetools create` merges digests into `schiplat/super:{ver}`, `:latest`, and `:major.minor`.
+
+Archived in-image compile + QEMU workflow (not run by Actions): [`.github/workflows-disabled/docker-publish.from-source.yml`](../../.github/workflows-disabled/docker-publish.from-source.yml).
+
+### Local multi-arch from source (slow)
+
+Uses QEMU for the non-native arch — prefer CI for Hub publishes:
 
 ```bash
 make docker-multi
@@ -119,12 +130,12 @@ To enable the sample stack, rename `conf.d/example-stack.toml.example` to `conf.
 
 ### GitHub Actions (recommended)
 
-Workflow: [`.github/workflows/docker-publish.yml`](../.github/workflows/docker-publish.yml)
+Workflow: [`.github/workflows/docker-publish.yml`](../../.github/workflows/docker-publish.yml)
 
-| Trigger | Tags pushed |
+| Trigger | Result |
 | :--- | :--- |
-| Push tag `v*` | semver tags + `latest` (`linux/amd64`, `linux/arm64`) |
-| Manual **workflow_dispatch** | Same as tag publish (`latest` + metadata tags) |
+| Successful **Release** on tag `v*` | Packs Release linux binaries → multi-arch `schiplat/super` (`:ver`, `:latest`, `:major.minor`) |
+| Manual **workflow_dispatch** | Same, downloading assets from the given (or latest) GitHub Release |
 
 Add repository secrets (**Settings → Secrets → Actions**):
 
@@ -133,14 +144,14 @@ Add repository secrets (**Settings → Secrets → Actions**):
 | `DOCKERHUB_USERNAME` | Docker Hub username (e.g. `schiplat`) — GitHub Actions **variable**, not a secret |
 | `DOCKERHUB_TOKEN` | [Access token](https://hub.docker.com/settings/security) with **Read & Write** |
 
-Release example:
+Release example (Docker publish follows Release automatically):
 
 ```bash
 git tag v1.5.4
 git push origin v1.5.4
 ```
 
-### Manual push
+### Manual push (from-source, slow)
 
 ```bash
 docker buildx build --platform linux/amd64,linux/arm64 \

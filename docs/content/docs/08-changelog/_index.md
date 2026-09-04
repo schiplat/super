@@ -17,6 +17,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **Docker Hub publish**: after a successful Release, native `linux/amd64` + `linux/arm64` runners pack prebuilt Release binaries via `Dockerfile.pack` (no in-image `cargo build`, no QEMU) and merge a multi-arch manifest. Local `make docker` still builds from source.
+
 ---
 
 ## [1.5.4] - 2026-09-04

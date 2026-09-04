@@ -87,12 +87,14 @@ DOCKER_PLATFORMS := linux/amd64
 
 .PHONY: docker
 docker:
-	@echo "$(BLUE)🐳 Building $(DOCKER_IMAGE) (native arch)...$(NC)"
+	@echo "$(BLUE)🐳 Building $(DOCKER_IMAGE) from source (native arch)...$(NC)"
 	docker buildx build --load -f $(DOCKERFILE) -t $(DOCKER_IMAGE) .
 	@echo "$(GREEN)✅ Docker image ready: $(DOCKER_IMAGE)$(NC)"
 
+# Local multi-arch from source uses QEMU and is slow. CI publish packs Release
+# binaries via packaging/docker/Dockerfile.pack on native runners instead.
 .PHONY: docker-multi
 docker-multi:
-	@echo "$(BLUE)🐳 Building $(DOCKER_IMAGE) for $(DOCKER_PLATFORMS)...$(NC)"
+	@echo "$(BLUE)🐳 Building $(DOCKER_IMAGE) for $(DOCKER_PLATFORMS) from source (QEMU if needed)...$(NC)"
 	docker buildx build --platform $(DOCKER_PLATFORMS) -f $(DOCKERFILE) -t $(DOCKER_IMAGE) --push .
 	@echo "$(GREEN)✅ Image pushed: $(DOCKER_IMAGE) ($(DOCKER_PLATFORMS))$(NC)"
