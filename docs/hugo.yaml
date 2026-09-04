@@ -75,9 +75,9 @@ params:
   # localStorage; message supports Markdown links. Bump key on each release
   # so the banner shows again for returning visitors.
   banner:
-    key: "super-release-banner-v1-5-3"
+    key: "super-release-banner-v1-5-4"
     message: |
-      **Super 1.5.3 is here** — OTA extract / restart policies, safer verify, and Docker image `schiplat/super`. [See what's new →](/docs/08-changelog/)
+      **Super 1.5.4 is here** — per-program OTA download/verify timeouts on `artifact`. [See what's new →](/docs/08-changelog/)
   contact:
     api_url: "https://open.schiplat.com/api/v1/demands"
   externalLinkDecoration: true

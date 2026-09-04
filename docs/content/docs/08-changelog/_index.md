@@ -17,9 +17,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+---
+
+## [1.5.4] - 2026-09-04
+
 ### Changed
 
 - **OTA timeouts are per-program `artifact` fields**: `artifact.download_timeout` (default **60**s; was `[server].download_timeout` / briefly `[ota]`) and `artifact.verify_timeout` (default **60**s; was `[server].ota_verify_timeout` / briefly `[ota]`). Configure them on the program stack entry, update payload, dashboard, or CLI (`--artifact-download-timeout` / `--artifact-verify-timeout`) — not in `super.toml`. No compatibility shim. `0` disables each timeout (`download_timeout` still keeps a 10s connect timeout).
+
+### Notes
+
+- Workspace **1.5.4**; pair with commercial plugin packages `super-plugins-1.5.4-…`.
 
 ---
 
