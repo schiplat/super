@@ -168,8 +168,6 @@ def setup() -> None:
 [server]
 host = "127.0.0.1"
 port = {API_PORT}
-ota_verify_timeout = 15
-download_timeout = 30
 
 [logging]
 log_level = "info"
@@ -254,16 +252,17 @@ def artifact_url(name: str) -> str:
 
 
 def put_artifact(pid: str, source: str, checksum: str, destination: str, **extra) -> None:
-    body = {
-        "artifact": {
-            "source": source,
-            "checksum": checksum,
-            "destination": destination,
-            "extract": extra.get("extract", False),
-            "restart_policy": extra.get("restart_policy", "immediate"),
-        }
+    artifact = {
+        "source": source,
+        "checksum": checksum,
+        "destination": destination,
+        "extract": extra.get("extract", False),
+        "restart_policy": extra.get("restart_policy", "immediate"),
     }
-    http_json("PUT", f"{API}/api/v1/programs/{pid}", body)
+    for key, value in extra.items():
+        if key not in ("extract", "restart_policy"):
+            artifact[key] = value
+    http_json("PUT", f"{API}/api/v1/programs/{pid}", {"artifact": artifact})
 
 
 def case_commit() -> None:
@@ -426,7 +425,7 @@ def case_rollback() -> None:
 
 
 def case_verify_timeout() -> None:
-    """Process stays up but never Healthy → ota_verify_timeout force-kill + rollback."""
+    """Process stays up but never Healthy → artifact.verify_timeout force-kill + rollback."""
     app = ROOT / "apps/running-timeout"
     pid = create_program("ota-timeout", str(app), health_check=FAILING_HC)
     put_artifact(
@@ -434,6 +433,7 @@ def case_verify_timeout() -> None:
         artifact_url("app-v2-good.sh"),
         sha256_file(ROOT / "artifacts/app-v2-good.sh"),
         str(app),
+        verify_timeout=15,
     )
     saw_pending = wait_until(
         lambda: (

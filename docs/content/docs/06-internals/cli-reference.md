@@ -253,13 +253,15 @@ Every flag is optional — omitted flags keep the program's current value.
 | `--artifact-destination <PATH>` | path | keep | **Absolute path** where the binary lives (e.g. `/usr/local/bin/my-app`); required on first OTA setup, omit if unchanged |
 | `--artifact-extract` | bool | `false` | Unpack `.tar.gz` / `.tgz` / `.tar` / `.zip` before swap |
 | `--artifact-restart-policy <POLICY>` | string | `immediate` | `immediate`, `manual`, `signal`, or `signal:<hup\|int\|term\|quit\|usr1\|usr2>`. **`signal*` requires the program to already have an enabled `health_check`.** |
+| `--artifact-download-timeout <SECS>` | int | `60` | Max seconds for this OTA HTTP download. `0` disables the overall transfer deadline (connect still times out at 10s). |
+| `--artifact-verify-timeout <SECS>` | int | `60` | Post-swap health window before auto-rollback. `0` disables. |
 | `--cpu <CORES>` 💎 | float | keep | CPU quota in cores (`isolation` plugin, Linux only) |
 | `--memory <MB>` 💎 | int | keep | Memory hard limit in MB (`isolation` plugin, Linux only) |
 | `--memory-warn-percent <PCT>` 💎 | int | keep | Pre-kill warning threshold as % of limit (`0` off) |
 | `--memory-warn-headroom <MB>` 💎 | int | keep | Warn within this many MB of the limit (`0` off) |
 | `--memory-high <MB>` 💎 | int | keep | Kernel soft limit in MB (`0` off, opt-in) |
 
-Full flow: [Atomic OTA Updates](/docs/03-orchestration/ota-updates). Scheduled-task and licensed (`isolation` plugin) flags behave as in [`super add`](#add); licensed flags warn if the plugin is not loaded.
+Full flow: [Atomic OTA Updates](/docs/03-orchestration/ota-updates). Artifact schema (same fields on API / stack / dashboard): [Config reference — `artifact`](/docs/06-internals/config-reference#artifact). Scheduled-task and licensed (`isolation` plugin) flags behave as in [`super add`](#add); licensed flags warn if the plugin is not loaded.
 
 ### `start`
 Start a stopped process.

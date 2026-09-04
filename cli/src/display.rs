@@ -295,6 +295,10 @@ pub fn print_info(info: ProgramInfo) {
         println!("Artifact:");
         println!("  Source:  {}", art.source);
         println!("  Dest:    {}", art.destination);
+        println!("  Extract: {}", art.extract);
+        println!("  Restart: {}", art.restart_policy);
+        println!("  Download timeout: {}s", art.download_timeout);
+        println!("  Verify timeout:   {}s", art.verify_timeout);
     }
 }
 

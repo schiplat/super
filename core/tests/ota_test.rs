@@ -134,6 +134,7 @@ async fn test_ota_transaction_rollback() {
             extract: false,
             destination: target_bin.to_string_lossy().to_string(),
             restart_policy: "immediate".to_string(),
+            ..Default::default()
         }),
         ..Default::default()
     };
@@ -265,6 +266,7 @@ async fn test_ota_transaction_commit() {
             extract: false,
             destination: target_bin.to_string_lossy().to_string(),
             restart_policy: "immediate".to_string(),
+            ..Default::default()
         }),
         ..Default::default()
     };
@@ -408,6 +410,7 @@ async fn test_ota_extract_tar_gz_commit() {
                     extract: true,
                     destination: dest.to_string_lossy().to_string(),
                     restart_policy: "immediate".to_string(),
+                    ..Default::default()
                 }),
                 ..Default::default()
             },
@@ -465,6 +468,7 @@ async fn test_ota_restart_policy_manual_no_pid_change() {
                     extract: false,
                     destination: target_bin.to_string_lossy().to_string(),
                     restart_policy: "manual".to_string(),
+                    ..Default::default()
                 }),
                 ..Default::default()
             },
@@ -553,6 +557,7 @@ async fn test_ota_restart_policy_signal_hup() {
                     extract: false,
                     destination: script.to_string_lossy().to_string(),
                     restart_policy: "signal:hup".to_string(),
+                    ..Default::default()
                 }),
                 ..Default::default()
             },
@@ -628,6 +633,7 @@ async fn test_ota_no_health_check_instant_crash_rolls_back() {
                     extract: false,
                     destination: app.to_string_lossy().to_string(),
                     restart_policy: "immediate".to_string(),
+                    ..Default::default()
                 }),
                 ..Default::default()
             },
@@ -658,5 +664,349 @@ async fn test_ota_no_health_check_instant_crash_rolls_back() {
     assert!(
         ok,
         "no-health-check instant crash must roll back before startsecs commit"
+    );
+}
+
+/// Slow/hung OTA HTTP responses must fail within `artifact.download_timeout`
+/// (reqwest overall request timeout), not hang until the mock eventually replies.
+#[tokio::test]
+async fn test_ota_download_times_out() {
+    let mock_server = MockServer::start().await;
+    Mock::given(method("GET"))
+        .and(path("/slow"))
+        .respond_with(
+            ResponseTemplate::new(200)
+                .set_body_string("VERSION_2")
+                .set_delay(Duration::from_secs(10)),
+        )
+        .expect(1..)
+        .mount(&mock_server)
+        .await;
+
+    let dir = tempfile::tempdir().unwrap();
+    let dest = dir.path().join("app.bin");
+    let cfg = ArtifactConfig {
+        source: format!("{}/slow", mock_server.uri()),
+        checksum: calculate_hash("VERSION_2"),
+        extract: false,
+        destination: dest.to_string_lossy().into_owned(),
+        restart_policy: "immediate".into(),
+        download_timeout: 1,
+        ..Default::default()
+    };
+
+    let started = std::time::Instant::now();
+    let err = super_core::artifact::download_to_staging(&cfg, cfg.download_timeout)
+        .await
+        .expect_err("download must time out");
+    let elapsed = started.elapsed();
+
+    // Downloader retries transient failures (timeout) up to 3 times with backoff
+    // (1s + 2s + 4s). Each attempt must abort at the 1s client timeout — far
+    // sooner than waiting out the 10s mock delay per try (~40s+ without timeout).
+    assert!(
+        elapsed >= Duration::from_millis(800),
+        "expected at least one timeout attempt, elapsed {elapsed:?}: {err}"
+    );
+    assert!(
+        elapsed < Duration::from_secs(20),
+        "timed out download should abort well before waiting out mock delays (elapsed {elapsed:?}): {err}"
+    );
+    let download_path = dest.with_file_name(format!(
+        "{}.download",
+        dest.file_name().unwrap().to_string_lossy()
+    ));
+    let staging_path = dest.with_file_name(format!(
+        "{}.new",
+        dest.file_name().unwrap().to_string_lossy()
+    ));
+    assert!(
+        !dest.exists() && !download_path.exists() && !staging_path.exists(),
+        "failed download must not leave a usable staging/target artifact"
+    );
+    let timed_out = err.chain().any(|cause| {
+        cause
+            .downcast_ref::<reqwest::Error>()
+            .is_some_and(|re| re.is_timeout())
+            || {
+                let s = cause.to_string().to_ascii_lowercase();
+                s.contains("timeout") || s.contains("timed out") || s.contains("deadline")
+            }
+    });
+    assert!(
+        timed_out,
+        "error chain should include a timeout cause, got: {err:#}"
+    );
+}
+
+/// A fast artifact within the timeout window still stages successfully.
+#[tokio::test]
+async fn test_ota_download_succeeds_within_timeout() {
+    let mock_server = MockServer::start().await;
+    let body = "VERSION_FAST";
+    Mock::given(method("GET"))
+        .and(path("/fast"))
+        .respond_with(ResponseTemplate::new(200).set_body_string(body))
+        .mount(&mock_server)
+        .await;
+
+    let dir = tempfile::tempdir().unwrap();
+    let dest = dir.path().join("app.bin");
+    let cfg = ArtifactConfig {
+        source: format!("{}/fast", mock_server.uri()),
+        checksum: calculate_hash(body),
+        extract: false,
+        destination: dest.to_string_lossy().into_owned(),
+        restart_policy: "immediate".into(),
+        ..Default::default()
+    };
+
+    let staging = super_core::artifact::download_to_staging(&cfg, 5)
+        .await
+        .expect("download within timeout");
+    let expected = dest.with_file_name(format!(
+        "{}.new",
+        dest.file_name().unwrap().to_string_lossy()
+    ));
+    assert_eq!(staging, expected);
+    assert_eq!(std::fs::read_to_string(&staging).unwrap(), body);
+}
+
+/// Manager path: hung download with `artifact.download_timeout` must abort and
+/// leave the running binary / WAL untouched.
+#[tokio::test]
+async fn test_ota_manager_respects_artifact_download_timeout() {
+    let (handle, _tmp, target_bin, data_file) = setup_system().await;
+    let mock_server = MockServer::start().await;
+
+    Mock::given(method("GET"))
+        .and(path("/slow"))
+        .respond_with(
+            ResponseTemplate::new(200)
+                .set_body_string("VERSION_2")
+                .set_delay(Duration::from_secs(30)),
+        )
+        .expect(1..)
+        .mount(&mock_server)
+        .await;
+
+    let req = CreateProgramRequest {
+        name: Some("app-dl-timeout".to_string()),
+        command: "sleep".to_string(),
+        args: vec!["100".to_string()],
+        autostart: true,
+        ..Default::default()
+    };
+    let id = handle.create_program(req).await.unwrap()[0];
+    tokio::time::sleep(Duration::from_millis(300)).await;
+
+    handle
+        .update_program(
+            id,
+            UpdateProgramRequest {
+                artifact: Some(ArtifactConfig {
+                    source: format!("{}/slow", mock_server.uri()),
+                    checksum: calculate_hash("VERSION_2"),
+                    extract: false,
+                    destination: target_bin.to_string_lossy().to_string(),
+                    restart_policy: "immediate".to_string(),
+                    download_timeout: 1,
+                    ..Default::default()
+                }),
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap();
+
+    // Retries + backoff with 1s per attempt; wait past a few attempts.
+    tokio::time::sleep(Duration::from_secs(8)).await;
+
+    assert_eq!(
+        std::fs::read_to_string(&target_bin).unwrap(),
+        "VERSION_1",
+        "timed-out download must not replace the live binary"
+    );
+    assert!(
+        !target_bin.with_extension("bak").exists(),
+        "no backup after failed download"
+    );
+    let snap: HashMap<uuid::Uuid, ProgramConfig> =
+        serde_json::from_str(&std::fs::read_to_string(&data_file).unwrap_or_default())
+            .unwrap_or_default();
+    assert!(
+        snap.get(&id)
+            .and_then(|c| c.restore_path.as_ref())
+            .is_none(),
+        "WAL must not be opened when download never completes"
+    );
+}
+
+/// Manager path: process stays up but never Healthy → `artifact.verify_timeout`
+/// force-kills and rolls back using this program's artifact window (not a global).
+#[tokio::test]
+async fn test_ota_artifact_verify_timeout_rolls_back() {
+    let (handle, _tmp, target_bin, data_file) = setup_system().await;
+    let mock_server = MockServer::start().await;
+
+    let v2 = "VERSION_2_NEVER_HEALTHY";
+    let v2_hash = calculate_hash(v2);
+    Mock::given(method("GET"))
+        .and(path("/download/v2"))
+        .respond_with(ResponseTemplate::new(200).set_body_string(v2))
+        .mount(&mock_server)
+        .await;
+
+    let req = CreateProgramRequest {
+        name: Some("app-verify-timeout".to_string()),
+        command: "sleep".to_string(),
+        args: vec!["100".to_string()],
+        autostart: true,
+        startsecs: 60,
+        health_check: Some(common::HealthCheck::Exec {
+            command: "false".to_string(),
+            interval_secs: 1,
+            timeout_secs: 1,
+            start_period_secs: 0,
+            max_failures: 0, // stay unhealthy; do not health-restart into commit
+        }),
+        ..Default::default()
+    };
+    let id = handle.create_program(req).await.unwrap()[0];
+    tokio::time::sleep(Duration::from_millis(400)).await;
+
+    handle
+        .update_program(
+            id,
+            UpdateProgramRequest {
+                artifact: Some(ArtifactConfig {
+                    source: format!("{}/download/v2", mock_server.uri()),
+                    checksum: v2_hash,
+                    extract: false,
+                    destination: target_bin.to_string_lossy().to_string(),
+                    restart_policy: "immediate".to_string(),
+                    verify_timeout: 2,
+                    ..Default::default()
+                }),
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap();
+
+    // Enter verify phase briefly, then roll back after ~2s.
+    let mut saw_pending = false;
+    let mut rolled = false;
+    for _ in 0..40 {
+        tokio::time::sleep(Duration::from_millis(250)).await;
+        let content = std::fs::read_to_string(&target_bin).unwrap_or_default();
+        let info = handle.get_program(id).await.unwrap();
+        if info.config.restore_path.is_some() || content == v2 {
+            saw_pending = true;
+        }
+        let snap: HashMap<uuid::Uuid, ProgramConfig> =
+            serde_json::from_str(&std::fs::read_to_string(&data_file).unwrap_or_default())
+                .unwrap_or_default();
+        let wal_clear = snap
+            .get(&id)
+            .map(|c| c.restore_path.is_none())
+            .unwrap_or(false);
+        if content == "VERSION_1"
+            && wal_clear
+            && !target_bin.with_extension("bak").exists()
+            && info.pid.is_some()
+        {
+            // Only count as success after we actually entered verify.
+            if saw_pending {
+                rolled = true;
+                break;
+            }
+        }
+    }
+    assert!(
+        saw_pending,
+        "OTA must enter verification (v2 on disk and/or restore_path)"
+    );
+    assert!(
+        rolled,
+        "artifact.verify_timeout=2 must force-kill unhealthy new version and roll back"
+    );
+}
+
+/// `verify_timeout = 0` disables the timer — unhealthy new version keeps WAL
+/// past what a short timeout would have fired.
+#[tokio::test]
+async fn test_ota_verify_timeout_zero_disables_timer() {
+    let (handle, _tmp, target_bin, _data_file) = setup_system().await;
+    let mock_server = MockServer::start().await;
+
+    let v2 = "VERSION_2_NO_TIMER";
+    let v2_hash = calculate_hash(v2);
+    Mock::given(method("GET"))
+        .and(path("/download/v2"))
+        .respond_with(ResponseTemplate::new(200).set_body_string(v2))
+        .mount(&mock_server)
+        .await;
+
+    let req = CreateProgramRequest {
+        name: Some("app-verify-zero".to_string()),
+        command: "sleep".to_string(),
+        args: vec!["100".to_string()],
+        autostart: true,
+        startsecs: 60,
+        health_check: Some(common::HealthCheck::Exec {
+            command: "false".to_string(),
+            interval_secs: 1,
+            timeout_secs: 1,
+            start_period_secs: 0,
+            max_failures: 0,
+        }),
+        ..Default::default()
+    };
+    let id = handle.create_program(req).await.unwrap()[0];
+    tokio::time::sleep(Duration::from_millis(400)).await;
+
+    handle
+        .update_program(
+            id,
+            UpdateProgramRequest {
+                artifact: Some(ArtifactConfig {
+                    source: format!("{}/download/v2", mock_server.uri()),
+                    checksum: v2_hash,
+                    extract: false,
+                    destination: target_bin.to_string_lossy().to_string(),
+                    restart_policy: "immediate".to_string(),
+                    verify_timeout: 0,
+                    ..Default::default()
+                }),
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap();
+
+    let mut pending = false;
+    for _ in 0..30 {
+        tokio::time::sleep(Duration::from_millis(200)).await;
+        let info = handle.get_program(id).await.unwrap();
+        let content = std::fs::read_to_string(&target_bin).unwrap_or_default();
+        if info.config.restore_path.is_some() && content == v2 {
+            pending = true;
+            break;
+        }
+    }
+    assert!(pending, "must reach pending verify with WAL + v2");
+
+    // Longer than the 2s window used in the sibling test — must NOT auto-rollback.
+    tokio::time::sleep(Duration::from_secs(4)).await;
+    let info = handle.get_program(id).await.unwrap();
+    let content = std::fs::read_to_string(&target_bin).unwrap_or_default();
+    assert_eq!(
+        content, v2,
+        "verify_timeout=0 must not force-rollback the file"
+    );
+    assert!(
+        info.config.restore_path.is_some(),
+        "verify_timeout=0 must leave WAL pending"
     );
 }

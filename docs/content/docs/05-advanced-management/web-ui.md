@@ -46,7 +46,7 @@ Process list with host CPU/memory metrics (from the machine running **superd**),
   {{< /tab >}}
 
   {{< tab name="Program detail" icon="cog" >}}
-Process detail drawer: actions, configuration (command, hooks, health checks, resource limits, environment).
+Process detail drawer: actions, configuration (command, hooks, health checks, resource limits, environment). **Create / Edit Program** also exposes an **OTA Artifact** section (source, checksum, destination, extract, restart policy, download/verify timeouts). Saving with a **new checksum** triggers transactional OTA — same rule as the API/CLI; see [Atomic OTA Updates — When OTA runs](/docs/03-orchestration/ota-updates#when-ota-runs).
 
 {{< ui-screenshot src="/images/program_config.png" alt="Program configuration in the detail drawer" caption="Program detail — Configuration" >}}
   {{< /tab >}}

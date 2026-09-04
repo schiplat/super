@@ -538,6 +538,7 @@ mod tests {
             extract: false,
             destination: "/tmp/x".into(),
             restart_policy: "immediate".into(),
+            ..Default::default()
         });
         let err = validate_create_program_request(&req, dir.path()).unwrap_err();
         assert!(err.to_string().contains("artifact.checksum"), "{err}");
@@ -553,6 +554,7 @@ mod tests {
             extract: false,
             destination: "/tmp/x".into(),
             restart_policy: "always".into(),
+            ..Default::default()
         });
         let err = validate_create_program_request(&req, dir.path()).unwrap_err();
         assert!(err.to_string().contains("artifact.restart_policy"), "{err}");
@@ -590,6 +592,7 @@ mod tests {
             extract: false,
             destination: "/tmp/x".into(),
             restart_policy: "signal:hup".into(),
+            ..Default::default()
         });
         let err = validate_create_program_request(&req, dir.path()).unwrap_err();
         assert!(
@@ -615,6 +618,7 @@ mod tests {
             extract: false,
             destination: "/tmp/x".into(),
             restart_policy: "signal".into(),
+            ..Default::default()
         });
         validate_create_program_request(&req, dir.path()).unwrap();
     }
@@ -627,6 +631,7 @@ mod tests {
             extract: false,
             destination: "/tmp/x".into(),
             restart_policy: "signal:hup".into(),
+            ..Default::default()
         };
         assert!(signal_restart_missing_health_probe(Some(&art), None));
         assert!(signal_restart_missing_health_probe(
@@ -767,6 +772,45 @@ mod tests {
         };
         assert_eq!(capped.max_concurrent_eff(), crate::MAX_CONCURRENT_CAP);
         assert_eq!(capped.max_queued_eff(), crate::MAX_QUEUED_CAP);
+    }
+
+    #[test]
+    fn parse_toml_stack_artifact_timeouts() {
+        let toml = r#"
+[[services]]
+name = "api"
+command = "/usr/local/bin/api"
+
+[services.artifact]
+source = "https://example.com/api"
+checksum = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+destination = "/usr/local/bin/api"
+extract = false
+restart_policy = "immediate"
+download_timeout = 120
+verify_timeout = 45
+"#;
+        let stack = parse_stack_from_str(toml, Path::new("conf/conf.d/api.toml")).unwrap();
+        let art = stack.services[0].artifact.as_ref().expect("artifact block");
+        assert_eq!(art.download_timeout, 120);
+        assert_eq!(art.verify_timeout, 45);
+        assert_eq!(art.restart_policy, "immediate");
+        assert!(!art.extract);
+    }
+
+    #[test]
+    fn parse_toml_stack_artifact_timeouts_default_when_omitted() {
+        let toml = r#"
+[[services]]
+name = "api"
+command = "/usr/local/bin/api"
+artifact = { source = "https://example.com/api", checksum = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", destination = "/usr/local/bin/api" }
+"#;
+        let stack = parse_stack_from_str(toml, Path::new("api.toml")).unwrap();
+        let art = stack.services[0].artifact.as_ref().unwrap();
+        assert_eq!(art.download_timeout, 60);
+        assert_eq!(art.verify_timeout, 60);
+        assert_eq!(art.restart_policy, "immediate");
     }
 
     #[test]

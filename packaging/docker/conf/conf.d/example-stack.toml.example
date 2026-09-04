@@ -15,3 +15,13 @@ startsecs = 5
 retry_limit = 3
 env = { DEMO = "true" }
 health_check = { type = "tcp", port = 8080 }
+
+# Optional OTA block (timeouts default to 60s when omitted):
+# [services.artifact]
+# source = "https://example.com/builds/demo-worker"
+# checksum = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+# destination = "/usr/local/bin/busybox"
+# extract = false
+# restart_policy = "immediate"
+# download_timeout = 60
+# verify_timeout = 60

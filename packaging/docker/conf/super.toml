@@ -31,9 +31,6 @@ allow_insecure_public_bind = true
 # Graceful shutdown: seconds to wait after SIGTERM before SIGKILL.
 shutdown_timeout = 10
 
-# Max seconds for artifact/OTA downloads.
-download_timeout = 86400
-
 # Flapping detection: too many restarts within a window → Fatal.
 flapping_window = 60
 flapping_threshold = 5

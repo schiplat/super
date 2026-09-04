@@ -17,7 +17,7 @@ When you run `super apply stack.toml`, Super will:
 2.  **Update** existing services if their configuration (args, env, etc.) has changed.
 3.  **Prune (Remove)** services that are running in the system but missing from the file (if `prune = true`).
 
-> One TOML note: structured values such as `health_check` can be written either as an **inline table** — `health_check = { type = "tcp", port = 8080 }` — or as a **nested table** (`[services.health_check]` with `type = "tcp"` below). Only `[[array.of.tables]]` syntax is rejected for tagged values. The `type` field selects the probe kind (`tcp` / `http` / `exec`).
+> One TOML note: structured values such as `health_check` or `artifact` can be written either as an **inline table** — `health_check = { type = "tcp", port = 8080 }` — or as a **nested table** (`[services.health_check]` / `[services.artifact]`). Only `[[array.of.tables]]` syntax is rejected for tagged values. The `type` field selects the probe kind (`tcp` / `http` / `exec`). Per-program OTA fields (`source`, `checksum`, `destination`, `extract`, `restart_policy`, `download_timeout`, `verify_timeout`): [Config reference — `artifact`](/docs/06-internals/config-reference#artifact) and [Atomic OTA Updates](/docs/03-orchestration/ota-updates).
 
 ## Workflow Example
 

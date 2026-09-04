@@ -17,6 +17,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **OTA timeouts are per-program `artifact` fields**: `artifact.download_timeout` (default **60**s; was `[server].download_timeout` / briefly `[ota]`) and `artifact.verify_timeout` (default **60**s; was `[server].ota_verify_timeout` / briefly `[ota]`). Configure them on the program stack entry, update payload, dashboard, or CLI (`--artifact-download-timeout` / `--artifact-verify-timeout`) — not in `super.toml`. No compatibility shim. `0` disables each timeout (`download_timeout` still keeps a 10s connect timeout).
+
 ---
 
 ## [1.5.3] - 2026-09-04
@@ -26,7 +30,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **OTA `artifact.extract`**: download `.tar.gz` / `.tgz` / `.tar` / `.zip`, verify SHA256 of the archive, safely unpack, and stage a single payload binary to `destination`.
 - **OTA `artifact.restart_policy`**: `immediate` (default), `manual` (commit without restart), and `signal` / `signal:<hup|int|term|quit|usr1|usr2>` (in-place notify; bare `signal` ≡ `signal:hup`). Dashboard hot-reload option defaults to `signal:hup`. CLI: `--artifact-restart-policy`.
 - **OTA `signal*` requires health probe**: `restart_policy=signal*` is rejected unless the program has an enabled `health_check` (create/update/stack). Dashboard Create/Edit auto-enables Health Check and blocks submit without it. Startup and `super check` warn on legacy snapshot configs that still lack a probe; `exec true` / `:` / `/bin/true` / `/usr/bin/true` is accepted but warned as ineffective for hot-reload verify.
-- **OTA verify without health probe**: when no live `health_check` is configured (non-signal policies), commit waits for `startsecs` (min 1s) so crash-on-start cannot race the synthetic Healthy signal; `ota_verify_timeout` is auto-extended if shorter than that dwell.
+- **OTA verify without health probe**: when no live `health_check` is configured (non-signal policies), commit waits for `startsecs` (min 1s) so crash-on-start cannot race the synthetic Healthy signal; the verify timeout is auto-extended if shorter than that dwell.
 - **`tools/scripts/ota-e2e.py`**: repeatable OTA end-to-end harness (isolated `SUPER_ROOT`, covers commit/rollback/extract/policies/WAL recovery).
 
 ### Changed

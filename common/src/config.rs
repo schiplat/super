@@ -103,15 +103,6 @@ pub struct ServerSection {
     #[serde(default = "default_shutdown_timeout")]
     pub shutdown_timeout: u64,
 
-    #[serde(default = "default_download_timeout")]
-    pub download_timeout: u64,
-
-    /// OTA verification window (seconds): if the new version is not Healthy within
-    /// this window, superd force-kills it and rolls back to the previous binary.
-    /// `0` disables the timeout rollback.
-    #[serde(default = "default_ota_verify_timeout")]
-    pub ota_verify_timeout: u64,
-
     // Flapping detection
     // Window length in seconds (default 60)
     #[serde(default = "default_flapping_window")]
@@ -171,8 +162,6 @@ impl Default for ServerSection {
             host: default_host(),
             port: default_port(),
             shutdown_timeout: default_shutdown_timeout(),
-            download_timeout: default_download_timeout(),
-            ota_verify_timeout: default_ota_verify_timeout(),
             flapping_window: default_flapping_window(),
             flapping_threshold: default_flapping_threshold(),
             enable_docs: default_enable_docs(),
@@ -310,12 +299,6 @@ fn default_port() -> u16 {
 fn default_shutdown_timeout() -> u64 {
     10
 }
-fn default_download_timeout() -> u64 {
-    86400
-} // default download timeout: 24 hours
-fn default_ota_verify_timeout() -> u64 {
-    60
-}
 fn default_data_file() -> PathBuf {
     "./data/snapshot.json".into()
 }
@@ -411,5 +394,25 @@ mod tests {
         assert!(!legacy_webhook_section_present(
             "# [webhook] legacy example\n"
         ));
+    }
+
+    #[test]
+    fn stale_ota_section_in_super_toml_is_ignored() {
+        // No compatibility: leftover `[ota]` is not part of ServerConfig and
+        // must not affect parsing (serde ignores unknown tables by default).
+        let cfg: ServerConfig = toml::from_str(
+            r#"
+            [server]
+            host = "127.0.0.1"
+            port = 9002
+
+            [ota]
+            download_timeout = 1
+            verify_timeout = 1
+            "#,
+        )
+        .unwrap();
+        assert_eq!(cfg.server.host, "127.0.0.1");
+        assert_eq!(cfg.server.port, 9002);
     }
 }

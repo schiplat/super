@@ -23,15 +23,15 @@ Super treats updates like a database transaction. It follows a strict **WAL (Wri
 
 When you submit an update request:
 
-1.  **Staging**: Super downloads the new binary to a temporary path (e.g., `app.new`). The current running service is untouched.
+1.  **Staging**: Super downloads the new binary to a temporary path (e.g., `app.new`). The current running service is untouched. The HTTP transfer is bounded by `artifact.download_timeout` (default **60** seconds); raise it for large/slow links, or set `0` to disable the overall transfer deadline (a 10s connect timeout still applies).
 2.  **Verification**: It calculates the SHA256 checksum. If it doesn't match, the update aborts immediately. Zero downtime.
 3.  **Backup**: Super creates a hard link of the *current* binary to `app.bak`.
 4.  **WAL**: The "Upgrade In-Progress" state is written to disk (Write-Ahead Log).
 5.  **Swap**: It uses `rename(2)` to atomically replace the binary.
 6.  **Restart**: The process is restarted according to the **Restart Policy**.
 7.  **Validate**: Super waits for verification to succeed.
-    *   With a live `health_check`: commit when Healthy; roll back on crash or `ota_verify_timeout`.
-    *   Without a probe: require `startsecs` (min 1s) of uptime before commit (and auto-extend `ota_verify_timeout` if it would fire earlier).
+    *   With a live `health_check`: commit when Healthy; roll back on crash or `artifact.verify_timeout`.
+    *   Without a probe: require `startsecs` (min 1s) of uptime before commit (and auto-extend `artifact.verify_timeout` if it would fire earlier).
     *   ✅ **Success**: The backup is removed. Transaction committed.
     *   ❌ **Failure**: The process crashes or fails health checks. **Rollback** is triggered. The backup is restored, and the old version is restarted.
 
@@ -66,10 +66,14 @@ Define the artifact details in a JSON object.
     "checksum": "a1b2c3d4e5f6...",
     "destination": "/usr/local/bin/edge-agent",
     "extract": false,
-    "restart_policy": "immediate"
+    "restart_policy": "immediate",
+    "download_timeout": 60,
+    "verify_timeout": 60
   }
 }
 ```
+
+`download_timeout` / `verify_timeout` are optional (default **60**). They belong on this per-program `artifact` object — not in `conf/super.toml`. Full schema: [Config reference — `artifact`](/docs/06-internals/config-reference#artifact).
 
 ### 2. Trigger via API
 

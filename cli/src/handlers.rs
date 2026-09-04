@@ -615,6 +615,8 @@ pub async fn handle_update(ctx: &Context, cmd: &args::Commands) -> anyhow::Resul
         artifact_destination,
         artifact_extract,
         artifact_restart_policy,
+        artifact_download_timeout,
+        artifact_verify_timeout,
         ..
     } = cmd
     {
@@ -667,6 +669,8 @@ pub async fn handle_update(ctx: &Context, cmd: &args::Commands) -> anyhow::Resul
             || artifact_destination.is_some()
             || artifact_extract.is_some()
             || artifact_restart_policy.is_some()
+            || artifact_download_timeout.is_some()
+            || artifact_verify_timeout.is_some()
         {
             let source = artifact_url.clone().ok_or_else(|| {
                 anyhow::anyhow!("--artifact-url is required when updating artifact")
@@ -709,6 +713,8 @@ pub async fn handle_update(ctx: &Context, cmd: &args::Commands) -> anyhow::Resul
                 destination,
                 extract: artifact_extract.unwrap_or(false),
                 restart_policy,
+                download_timeout: artifact_download_timeout.unwrap_or(60),
+                verify_timeout: artifact_verify_timeout.unwrap_or(60),
             })
         } else {
             None

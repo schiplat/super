@@ -136,7 +136,9 @@ curl -X PUT "http://127.0.0.1:9002/api/v1/programs/${PROGRAM_ID}" \
       "checksum": "a1b2c3d4e5f6789abcdef0123456789abcdef0123456789abcdef0123456789",
       "destination": "/usr/local/bin/my-app",
       "extract": false,
-      "restart_policy": "immediate"
+      "restart_policy": "immediate",
+      "download_timeout": 60,
+      "verify_timeout": 60
     }
   }'
 ```
@@ -146,8 +148,12 @@ curl -X PUT "http://127.0.0.1:9002/api/v1/programs/${PROGRAM_ID}" \
 | `source` | Download URL (HTTPS; HTTP only on loopback) |
 | `checksum` | Expected SHA256 hex of the **downloaded bytes** |
 | `destination` | Absolute path of the final binary on disk |
-| `extract` | `true` to unpack `.tar.gz` / `.tgz` / `.tar` / `.zip` and stage one payload file |
+| `extract` | `true` to unpack `.tar.gz` / `.tgz` / `.tar` / `.zip` and stage one payload file (default `false`) |
 | `restart_policy` | `immediate` (default), `manual`, `signal`, or `signal:<hup\|int\|term\|quit\|usr1\|usr2>`. **`signal*` requires an enabled `health_check`.** |
+| `download_timeout` | Max seconds for this download (default `60`). `0` disables the overall transfer deadline (connect still times out at 10s). |
+| `verify_timeout` | Post-swap health window before auto-rollback (default `60`). `0` disables. Per-program — not a `super.toml` / `[server]` setting. |
+
+Full schema: [Config reference — `artifact`](/docs/06-internals/config-reference#artifact). Flow: [Atomic OTA Updates](/docs/03-orchestration/ota-updates).
 
 **With `security` plugin**: add `-H "Authorization: Bearer <token>"`.
 

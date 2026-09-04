@@ -49,7 +49,6 @@ Global settings for the daemon.
 | `port` | int | `9002` | Bind port. |
 | `allow_insecure_public_bind` | bool | `false` | Explicit opt-in to bind on a non-loopback address without the `security` plugin. OSS **refuses startup** when `host` is not loopback and this is `false`. **Licensed deployments always load `security`** — this flag applies to OSS only. |
 | `shutdown_timeout` | int | `10` | Seconds to wait for SIGTERM before SIGKILL during shutdown. |
-| `ota_verify_timeout` | int | `60` | OTA verification window (seconds). After an OTA update restarts a program, the new version must become Healthy within this window; on timeout the daemon rolls back. `0` disables the timeout. Without a live `health_check`, commit waits for `startsecs` (min 1s); if this timeout is shorter than that dwell, Super extends it automatically. |
 | `flapping_window` | int | `60` | Time window (seconds) to detect restart loops. |
 | `flapping_threshold` | int | `5` | Max restarts allowed within the window. |
 | `enable_docs` | bool | `false` | Enable Swagger UI (`/api/docs`) when the binary is built with the docs feature. |
@@ -171,7 +170,7 @@ A stack file is a TOML (default) or JSON document with `services = [...]` and an
 The keys below describe a **single program entry** — one item in a stack file's `services[]` array, or a create/update API payload. Multiple `services[]` entries are allowed per stack.
 
 > [!NOTE]
-> Keys such as `autostart`, `autorestart`, `exitcodes`, `startsecs`, and `stopsecs` align with [Supervisor](/docs/04-production-scenarios/migrations/vs-supervisor) for migration. Newer keys (`retry_limit`, `health_check`, `depends_on`, …) use snake_case. In stack JSON / API payloads, `stopwaitsecs` is accepted as an alias for `stopsecs`.
+> Keys such as `autostart`, `autorestart`, `exitcodes`, `startsecs`, and `stopsecs` align with [Supervisor](/docs/04-production-scenarios/migrations/vs-supervisor) for migration. Newer keys (`retry_limit`, `health_check`, `depends_on`, `artifact`, …) use snake_case. In stack JSON / API payloads, `stopwaitsecs` is accepted as an alias for `stopsecs`. OTA settings live under per-program `artifact` (including `download_timeout` / `verify_timeout`) — not under `[server]` or a global `[ota]` section.
 
 ### Identity & execution
 
@@ -225,6 +224,36 @@ Example: `autostart = false` with `autorestart = "true"` gives a manually starte
 | `jitter_sec` | int | `0` | Max random delay in **seconds** added to each cron trigger to spread load. `0` disables jitter. |
 | `max_concurrent` | int | `1` | Max overlapping cron runs allowed at once (1–64; `0` means the default). See [Scheduled Tasks](/docs/02-essentials/scheduled-tasks). |
 | `max_queued` | int | `100` | Cap on queued cron firings when `max_concurrent` is reached and `on_overlap` is `queue`/`kill` (0–10000; `0` means the default). Firings beyond the cap are dropped and recorded as `queue_full` events. |
+
+### `artifact`
+
+Per-program OTA / binary update settings (stack entry, create/update API, dashboard, or CLI `super update --artifact-*`). Storing an `artifact` does not download by itself — OTA starts when an **update** changes `checksum`. See [OTA Updates — When OTA runs](/docs/03-orchestration/ota-updates#when-ota-runs). Full flow: [OTA Updates](/docs/03-orchestration/ota-updates).
+
+| Key | Type | Default | Description |
+| :--- | :--- | :--- | :--- |
+| `source` | string | — | **Required** when triggering OTA. Download URL. Remote hosts must use HTTPS (HTTP allowed on loopback for dev). |
+| `checksum` | string | — | **Required** when triggering OTA. SHA256 hex of the downloaded bytes (the archive when `extract` is true). |
+| `destination` | string | — | **Required** when triggering OTA. Absolute path of the final binary on disk. |
+| `extract` | bool | `false` | Unpack `.tar.gz` / `.tgz` / `.tar` / `.zip` and stage one payload file to `destination`. |
+| `restart_policy` | string | `immediate` | `immediate`, `manual`, or `signal` / `signal:<name>`. See [OTA Updates](/docs/03-orchestration/ota-updates#restart_policy). |
+| `download_timeout` | int | `60` | Max seconds for this artifact's HTTP download (connect + body). Raise for large/slow links. `0` disables the overall transfer timeout (a 10s connect timeout still applies). CLI: `--artifact-download-timeout`. |
+| `verify_timeout` | int | `60` | Post-swap verification window (seconds). The new version must become Healthy within this window; on timeout the daemon rolls back. `0` disables. Without a live `health_check`, commit waits for `startsecs` (min 1s); if this timeout is shorter than that dwell, Super extends it automatically. CLI: `--artifact-verify-timeout`. |
+
+```toml
+# conf/conf.d/api.toml — optional artifact block on a service
+[[services]]
+name = "api"
+command = "/usr/local/bin/api"
+# …
+[services.artifact]
+source = "https://example.com/builds/api"
+checksum = "a1b2c3d4e5f6789abcdef0123456789abcdef0123456789abcdef0123456789"
+destination = "/usr/local/bin/api"
+extract = false
+restart_policy = "immediate"
+# download_timeout = 60
+# verify_timeout = 60
+```
 
 ### `hooks`
 

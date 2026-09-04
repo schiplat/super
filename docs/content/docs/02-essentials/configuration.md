@@ -204,6 +204,17 @@ Cron scheduling is built into OSS `superd`. See [Scheduled Tasks](/docs/02-essen
 
 See [Resource Isolation](/docs/05-advanced-management/resource-isolation) and [Scheduled Tasks](/docs/02-essentials/scheduled-tasks).
 
+### OTA `artifact`
+
+Per-program binary updates use an `artifact` block on the stack entry / API payload — **not** keys under `[server]` in `super.toml`. Optional timeouts default to **60** seconds:
+
+| Field | Default | Role |
+| :--- | :--- | :--- |
+| `download_timeout` | `60` | HTTP download deadline (`0` = no overall transfer timeout) |
+| `verify_timeout` | `60` | Post-swap health window before auto-rollback (`0` = disable) |
+
+Full field list and examples: [Config reference — `artifact`](/docs/06-internals/config-reference#artifact) · [Atomic OTA Updates](/docs/03-orchestration/ota-updates).
+
 ### Restart & stop behaviour
 
 Supervisor-compatible restart and stop settings. Example: `services[]` entry in a stack file:

@@ -142,7 +142,7 @@ pub enum Command {
         path: PathBuf,
     },
     // Fired by the OTA verification timer: the new version did not become
-    // Healthy within `server.ota_verify_timeout`; force rollback.
+    // Healthy within `artifact.verify_timeout`; force rollback.
     OtaVerifyTimeout {
         id: Uuid,
     },

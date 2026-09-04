@@ -24,7 +24,6 @@ allow_insecure_public_bind = false
 # daemon = false
 # pidfile = "run/superd.pid"
 shutdown_timeout = 10
-download_timeout = 86400
 flapping_window = 60
 flapping_threshold = 5
 enable_docs = false

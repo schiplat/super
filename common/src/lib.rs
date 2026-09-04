@@ -540,14 +540,107 @@ pub struct ProgramHooks {
     pub post_stop: Option<String>,
 }
 
-/// OTA artifact configuration
+/// OTA artifact configuration (per-program).
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct ArtifactConfig {
     pub source: String,
     pub checksum: String,
+    #[serde(default)]
     pub extract: bool,
     pub destination: String,
+    #[serde(default = "default_artifact_restart_policy")]
     pub restart_policy: String,
+    /// Max seconds for this artifact's HTTP download (connect + body). `0` disables
+    /// the overall transfer timeout (connect timeout in the downloader still applies).
+    #[serde(default = "default_artifact_download_timeout")]
+    pub download_timeout: u64,
+    /// Post-swap verification window (seconds) for this program. On timeout the
+    /// daemon rolls back. `0` disables the timeout rollback.
+    #[serde(default = "default_artifact_verify_timeout")]
+    pub verify_timeout: u64,
+}
+
+fn default_artifact_restart_policy() -> String {
+    "immediate".to_string()
+}
+
+fn default_artifact_download_timeout() -> u64 {
+    60
+}
+
+fn default_artifact_verify_timeout() -> u64 {
+    60
+}
+
+impl Default for ArtifactConfig {
+    fn default() -> Self {
+        Self {
+            source: String::new(),
+            checksum: String::new(),
+            extract: false,
+            destination: String::new(),
+            restart_policy: default_artifact_restart_policy(),
+            download_timeout: default_artifact_download_timeout(),
+            verify_timeout: default_artifact_verify_timeout(),
+        }
+    }
+}
+
+#[cfg(test)]
+mod artifact_config_tests {
+    use super::ArtifactConfig;
+
+    #[test]
+    fn artifact_timeouts_default_to_60() {
+        let art = ArtifactConfig::default();
+        assert_eq!(art.download_timeout, 60);
+        assert_eq!(art.verify_timeout, 60);
+    }
+
+    #[test]
+    fn artifact_timeouts_omitted_in_json_use_defaults() {
+        let art: ArtifactConfig = serde_json::from_str(
+            r#"{
+                "source": "https://example.com/a",
+                "checksum": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                "destination": "/tmp/a"
+            }"#,
+        )
+        .unwrap();
+        assert_eq!(art.download_timeout, 60);
+        assert_eq!(art.verify_timeout, 60);
+        assert_eq!(art.restart_policy, "immediate");
+        assert!(!art.extract);
+    }
+
+    #[test]
+    fn artifact_timeouts_explicit_zero_and_custom() {
+        let zero: ArtifactConfig = serde_json::from_str(
+            r#"{
+                "source": "https://example.com/a",
+                "checksum": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                "destination": "/tmp/a",
+                "download_timeout": 0,
+                "verify_timeout": 0
+            }"#,
+        )
+        .unwrap();
+        assert_eq!(zero.download_timeout, 0);
+        assert_eq!(zero.verify_timeout, 0);
+
+        let custom: ArtifactConfig = serde_json::from_str(
+            r#"{
+                "source": "https://example.com/a",
+                "checksum": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                "destination": "/tmp/a",
+                "download_timeout": 1200,
+                "verify_timeout": 90
+            }"#,
+        )
+        .unwrap();
+        assert_eq!(custom.download_timeout, 1200);
+        assert_eq!(custom.verify_timeout, 90);
+    }
 }
 
 /// API request: create program

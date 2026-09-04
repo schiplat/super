@@ -19,6 +19,9 @@ socket = "run/superd.sock"
 # Keep false under systemd / launchd / Docker. Use `superd --daemon` only without an OS service.
 # daemon = false
 
+# OTA timeouts live on per-program `artifact` (download_timeout / verify_timeout),
+# not in super.toml. See docs: OTA Updates / config-reference → artifact.
+
 [logging]
 log_level = "info"
 log_max_mb = 50

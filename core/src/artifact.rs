@@ -39,12 +39,20 @@ pub async fn download_to_staging(
     let download_path = target_path.with_file_name(format!("{}.download", file_name));
     let staging_path = target_path.with_file_name(format!("{}.new", file_name));
 
-    tracing::info!("Downloading OTA update to {:?}", download_path);
+    tracing::info!(
+        "Downloading OTA update to {:?} (timeout={}s)",
+        download_path,
+        timeout_secs
+    );
 
-    let client = reqwest::Client::builder()
-        .connect_timeout(Duration::from_secs(10))
-        .timeout(Duration::from_secs(timeout_secs))
-        .build()?;
+    // `timeout_secs == 0` → no overall transfer deadline (matches config docs).
+    // Connect still fails closed after 10s so a black-holed peer cannot hang forever
+    // before the first byte.
+    let mut builder = reqwest::Client::builder().connect_timeout(Duration::from_secs(10));
+    if timeout_secs > 0 {
+        builder = builder.timeout(Duration::from_secs(timeout_secs));
+    }
+    let client = builder.build()?;
 
     let max_retries = 3;
     let mut attempt = 0;

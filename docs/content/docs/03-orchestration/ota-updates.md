@@ -19,14 +19,33 @@ When you trigger an update, Super acts like a database transaction: **All or Not
 5.  **Swap**: The new binary replaces the old one atomically.
 6.  **Restart**: The process is restarted.
 7.  **Validate**: Super waits for verification to succeed.
-    *   With a live `health_check`: commit when the probe reports Healthy; roll back on crash or `ota_verify_timeout`.
-    *   Without a probe: wait at least `startsecs` (minimum 1s) of uptime before commit, so a crash-on-start cannot race the synthetic Healthy signal. If `ota_verify_timeout` is shorter than that dwell, Super extends the timeout automatically.
+    *   With a live `health_check`: commit when the probe reports Healthy; roll back on crash or `artifact.verify_timeout`.
+    *   Without a probe: wait at least `startsecs` (minimum 1s) of uptime before commit, so a crash-on-start cannot race the synthetic Healthy signal. If `artifact.verify_timeout` is shorter than that dwell, Super extends the timeout automatically.
     *   ✅ **Success**: The backup is removed. Transaction committed.
     *   ❌ **Failure**: The process crashes / fails health / times out. **Rollback** restores the backup and restarts the previous version.
+
+## When OTA runs
+
+OTA is **not** a background poller and does **not** run on daemon start / `super reload` merely because an `artifact` block exists. Download + swap start only when Super processes an **update** that changes `artifact.checksum`.
+
+| Action | Result |
+| :--- | :--- |
+| `PUT /api/v1/programs/{id}` (or `super update` / Dashboard Save) with a **new** `checksum` (including the first time `artifact` is set on an existing program) | **Triggers OTA** immediately (async download → verify → swap → restart/verify). |
+| Same paths with the **same** `checksum` as already stored | Config is saved; **no** download. Use this to change `source`, timeouts, `restart_policy`, etc. without re-fetching. |
+| Create program (`POST` / `super add` / Dashboard Create / stack **new** service) with an `artifact` block | Artifact is **stored only**. No download until a later update changes `checksum` (or stack re-apply updates an existing service with a new checksum). |
+| Stack apply / `super apply` / `super reload` on an **existing** service | Goes through the update path → OTA **only if** that service's `checksum` changed vs the live registry. |
+| Daemon restart | Does **not** re-download. Unfinished upgrades resume from the WAL (`restore_path`), not from a fresh OTA. |
+
+> [!TIP]
+> Treat `checksum` as the release identity. Point `source` at a new URL and bump the SHA256 when you want Super to fetch; keep the checksum stable when you only tune `download_timeout` / `verify_timeout` / `restart_policy`.
 
 ## Triggering an Update
 
 Provide a new `artifact` block with a **different `checksum`** than the one already stored. Super compares checksums; if unchanged, config is saved but **no OTA download** runs.
+
+### Via Dashboard 💎
+
+With the licensed **`ui`** plugin: **Create Program** or **Edit Program** → enable **OTA Artifact**. Fill source, checksum, destination, extract, restart policy, and optional download/verify timeouts, then Save. Same trigger rule: a changed checksum starts OTA. See [Dashboard](/docs/05-advanced-management/web-ui).
 
 ### Via API (recommended for CI/CD)
 
@@ -51,6 +70,8 @@ curl -X PUT "http://127.0.0.1:9002/api/v1/programs/${PROGRAM_ID}" \
   }'
 ```
 
+Optional on the same `artifact` object (defaults **60** if omitted): `download_timeout`, `verify_timeout`. See [Artifact schema](#artifact-schema).
+
 With the `security` plugin: add `-H "Authorization: Bearer <token>"`.
 
 ### Via Stack (declarative, multi-service)
@@ -74,15 +95,19 @@ curl -X PUT http://127.0.0.1:9002/api/v1/stack \
   }'
 ```
 
+Stack files may also use a nested TOML table (`[services.artifact]`) including optional `download_timeout` / `verify_timeout`. See [Config reference — `artifact`](/docs/06-internals/config-reference#artifact).
+
 ### Via CLI
 
 ```bash
 super update my-app \
   --artifact-url "https://example.com/builds/v2.0.0/app-linux-amd64" \
-  --artifact-sha256 "a1b2c3d4e5f6789abcdef0123456789abcdef0123456789abcdef0123456789"
+  --artifact-sha256 "a1b2c3d4e5f6789abcdef0123456789abcdef0123456789abcdef0123456789" \
+  --artifact-download-timeout 120 \
+  --artifact-verify-timeout 90
 ```
 
-If the program already has an `artifact.destination`, you can omit `--artifact-destination`. Otherwise pass it explicitly:
+`--artifact-download-timeout` / `--artifact-verify-timeout` default to **60** when omitted (`0` disables each). Same fields as API / stack / dashboard `artifact`.If the program already has an `artifact.destination`, you can omit `--artifact-destination`. Otherwise pass it explicitly:
 
 ```bash
 super update my-app \
@@ -105,21 +130,24 @@ super restart my-app    # required to run the new command
 | `source` | Yes | Download URL. **Remote hosts must use HTTPS** (HTTP allowed on loopback for dev). Cloud metadata endpoints are blocked. |
 | `checksum` | Yes | SHA256 hex of the **downloaded bytes** (the archive when `extract` is true, otherwise the bare binary) |
 | `destination` | Yes | Absolute path of the **final binary** on disk (not an extract root) |
-| `extract` | Yes | `false` for a single binary; `true` to unpack `.tar.gz` / `.tgz` / `.tar` / `.zip` and stage one payload file (member matching the destination basename, else the sole regular file) |
-| `restart_policy` | Yes | When the new binary becomes active (see below) |
+| `extract` | No (default `false`) | `false` for a single binary; `true` to unpack `.tar.gz` / `.tgz` / `.tar` / `.zip` and stage one payload file (member matching the destination basename, else the sole regular file) |
+| `restart_policy` | No (default `immediate`) | When the new binary becomes active (see below) |
+| `download_timeout` | No (default `60`) | Max seconds for this download (connect + body). `0` disables the overall transfer deadline (connect still times out at 10s). |
+| `verify_timeout` | No (default `60`) | Post-swap health window before auto-rollback. `0` disables. |
 
 ### `restart_policy`
 
 | Value | Behavior |
 | :--- | :--- |
-| `immediate` (default) | After swap: restart the process (`SIGTERM`, or spawn if stopped), then verify. Commit when Healthy (or after `startsecs` when no probe); roll back on crash or `ota_verify_timeout`. |
+| `immediate` (default) | After swap: restart the process (`SIGTERM`, or spawn if stopped), then verify. Commit when Healthy (or after `startsecs` when no probe); roll back on crash or `artifact.verify_timeout`. |
 | `manual` | After swap: **commit immediately** and do **not** restart. The running process keeps the old image in memory until the next natural restart. |
-| `signal:hup` (dashboard hot-reload default) / `signal` / `signal:<name>` | After swap: deliver a signal without restarting. Bare `signal` is equivalent to `signal:hup`. **Requires an enabled `health_check`** (tcp/http/exec); the API rejects `signal*` without one. Commit waits for the next Healthy probe (or `ota_verify_timeout`). |
+| `signal:hup` (dashboard hot-reload default) / `signal` / `signal:<name>` | After swap: deliver a signal without restarting. Bare `signal` is equivalent to `signal:hup`. **Requires an enabled `health_check`** (tcp/http/exec); the API rejects `signal*` without one. Commit waits for the next Healthy probe (or `artifact.verify_timeout`). |
 
 ## Verification tips
 
 * Prefer a real `health_check` for production OTA — it is the strongest signal that the new version works.
-* Keep `[server].ota_verify_timeout` greater than your probe `start_period` / interval (or greater than `startsecs` when you have no probe). Super auto-extends the timeout when no probe would otherwise commit after the deadline.
+* Keep `artifact.verify_timeout` greater than your probe `start_period` / interval (or greater than `startsecs` when you have no probe). Super auto-extends the timeout when no probe would otherwise commit after the deadline.
+* Keep `artifact.download_timeout` (default **60**s) large enough for the artifact size and link speed; raise it for large packages, or set `0` to disable the overall transfer deadline (connect still times out at 10s).
 * `restart_policy=manual` skips verification by design — only use it when you accept swapping the on-disk binary without proving the new process can run.
 * `restart_policy=signal*` **requires** an enabled `health_check`. Hot-reload does not exec a new process; without a probe, “still alive” is not proof the reload succeeded. Legacy configs that still have `signal*` without a probe are rejected on the next create/update; **startup** and **`super check`** also warn (or report an error for the snapshot) until you add a probe or change the policy.
 * An `exec` health command of `true` / `:` / `/bin/true` / `/usr/bin/true` is accepted structurally but **does not verify** a hot-reload — prefer a real TCP/HTTP/exec probe that exercises the new binary.

@@ -145,6 +145,9 @@ Key fields:
 - **Licensed only** 💎: `resource_limits.cpu_quota` (cores) / `memory_limit`
   (MB) / `memory_warn_percent` / `memory_warn_headroom` / `memory_high`
   (`isolation` plugin, Linux cgroups v2).
+- **OTA `artifact`**: `source`, `checksum`, `destination`, `extract`,
+  `restart_policy`, `download_timeout` (default 60s), `verify_timeout`
+  (default 60s). Per-program — not in `super.toml`.
 
 ### Cron scheduling
 
@@ -303,16 +306,26 @@ super reload nginx
 
 ### OTA (self-update a program)
 
+OTA runs when an **update** sets a **new** `artifact.checksum` (API / CLI / Dashboard /
+stack apply on an existing service). Create-only or unchanged checksum stores
+config without downloading. Details:
+[When OTA runs](https://super.docs.sconts.com/docs/03-orchestration/ota-updates/#when-ota-runs).
+
 ```bash
 super update api \
   --artifact-url https://example.com/api.tar.gz \
   --artifact-sha256 <hex> \
   --artifact-destination /usr/local/bin/api \
-  [--artifact-extract]
+  [--artifact-extract] \
+  [--artifact-download-timeout 60] \
+  [--artifact-verify-timeout 60]
 ```
 
-On a bad new version (fails health within `[server].ota_verify_timeout`),
-the daemon rolls back automatically.
+On a bad new version (fails health within `artifact.verify_timeout`),
+the daemon rolls back automatically. Artifact HTTP downloads themselves are
+bounded by `artifact.download_timeout` (default **60**s; `0` disables the
+overall transfer deadline — connect still times out at 10s). Same fields on
+API / stack / CLI / dashboard. Schema: [Config reference — artifact](https://super.docs.sconts.com/docs/06-internals/config-reference/#artifact).
 
 ---
 

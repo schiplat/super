@@ -1223,7 +1223,7 @@ impl Manager {
         if trigger_ota && let Some(ac) = artifact_cfg {
             let tx = self.tx_self.clone();
             let task_name = _task_name.clone();
-            let download_timeout = self.config.server.download_timeout;
+            let download_timeout = ac.download_timeout;
 
             tracing::info!(
                 "Triggering OTA update for {} (Timeout: {}s)",
@@ -1443,13 +1443,18 @@ impl Manager {
 
     fn schedule_ota_verify_timeout(&self, id: Uuid) {
         // OTA verification deadline: if the new version is not Healthy within
-        // `server.ota_verify_timeout`, force-kill it so the exit handler rolls
+        // `artifact.verify_timeout`, force-kill it so the exit handler rolls
         // back to the previous binary. Disabled when set to 0.
         //
         // Without a live health probe, commit waits for `startsecs` (min 1s). If
         // the configured timeout is shorter than that dwell, extend it so a good
         // binary is not force-rolled-back before it can commit.
-        let mut verify_timeout = self.config.server.ota_verify_timeout;
+        let mut verify_timeout = self
+            .registry
+            .get_config(&id)
+            .and_then(|c| c.artifact.as_ref())
+            .map(|a| a.verify_timeout)
+            .unwrap_or(60);
         if verify_timeout == 0 {
             return;
         }

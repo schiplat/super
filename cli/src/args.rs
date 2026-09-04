@@ -268,6 +268,14 @@ pub enum Commands {
         /// OTA restart policy after swap: immediate (default), manual, signal, or signal:<hup|int|term|quit|usr1|usr2> (signal* requires an enabled health_check)
         #[arg(long)]
         artifact_restart_policy: Option<String>,
+
+        /// Max seconds for this OTA HTTP download (default 60; 0 disables overall transfer timeout)
+        #[arg(long)]
+        artifact_download_timeout: Option<u64>,
+
+        /// Post-swap health window before auto-rollback (default 60; 0 disables)
+        #[arg(long)]
+        artifact_verify_timeout: Option<u64>,
     },
 
     /// Apply a stack configuration file (JSON)
