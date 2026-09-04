@@ -17,7 +17,9 @@ use self::registry::ProcessRegistry;
 use common::{
     BatchAction, BatchProgramRequest, BatchProgramResponse, CreateProgramRequest, HealthResponse,
     ProcessStatus, ProgramConfig, ProgramInfo, ProgramSummary, ResourceLimits, StackApplyRequest,
-    UpdateProgramRequest, WsMessage, resolve_confined_log_path, validate_create_program_request,
+    UpdateProgramRequest, WsMessage, resolve_confined_log_path,
+    signal_restart_missing_health_probe, trivial_exec_health_probe,
+    validate_create_program_request, validate_signal_restart_requires_health_probe,
     validate_update_program_request, with_program_location,
 };
 use glob::glob;
@@ -378,6 +380,27 @@ impl Manager {
                     "Found unfinished upgrade transaction for {}. Backup at: {}",
                     config.name,
                     bak
+                );
+            }
+            if signal_restart_missing_health_probe(
+                config.artifact.as_ref(),
+                config.health_check.as_ref(),
+            ) {
+                tracing::error!(
+                    "program '{}': artifact.restart_policy=signal* has no enabled health_check — \
+                     next OTA/update will fail until health_check is configured or restart_policy changed",
+                    config.name
+                );
+            } else if config.artifact.as_ref().is_some_and(|a| {
+                common::parse_artifact_restart_policy(&a.restart_policy)
+                    .ok()
+                    .is_some_and(|p| matches!(p, common::ArtifactRestartPolicy::Signal { .. }))
+            }) && trivial_exec_health_probe(config.health_check.as_ref())
+            {
+                tracing::warn!(
+                    "program '{}': health_check exec true (or equivalent) does not verify \
+                     hot-reload for signal* OTA — use a real TCP/HTTP/exec probe",
+                    config.name
                 );
             }
         }
@@ -999,6 +1022,26 @@ impl Manager {
             .ok_or_else(|| anyhow::anyhow!("Program not found"))?
             .clone();
 
+        // Effective post-merge artifact + health_check (before mutating) so
+        // signal* + disabled/missing probe is rejected even when only one field
+        // is present in this request.
+        {
+            let effective_artifact = match &req.artifact {
+                Some(a) if a.source.trim().is_empty() => None,
+                Some(a) => Some(a),
+                None => old_config.artifact.as_ref(),
+            };
+            let effective_hc = match &req.health_check {
+                Some(common::HealthCheck::Disabled) => None,
+                Some(h) => Some(h),
+                None => old_config.health_check.as_ref(),
+            };
+            validate_signal_restart_requires_health_probe(effective_artifact, effective_hc)
+                .map_err(|e| {
+                    with_program_location(e, req.name.as_deref().or(existing_name.as_deref()), None)
+                })?;
+        }
+
         if let Some(v) = &req.name
             && v != &old_config.name
         {
@@ -1228,6 +1271,22 @@ impl Manager {
                 return;
             }
         };
+        let restart_policy_raw = config
+            .artifact
+            .as_ref()
+            .map(|a| a.restart_policy.clone())
+            .unwrap_or_default();
+        let restart_policy = match common::parse_artifact_restart_policy(&restart_policy_raw) {
+            Ok(p) => p,
+            Err(e) => {
+                tracing::error!(
+                    "OTA apply aborted for {}: invalid restart_policy: {}",
+                    id,
+                    e
+                );
+                return;
+            }
+        };
 
         // 1. Create backup (hard link)
         use crate::artifact;
@@ -1263,33 +1322,159 @@ impl Manager {
             return;
         }
 
-        // 4. Restart process
-        tracing::info!("Restarting process to load new binary...");
-        // Mark intentional restart so handle_exited does not treat upgrade as failed
-        if let Some(state) = self.registry.get_running_mut(&id) {
-            state.restart_requested = true;
-            let _ = nix::sys::signal::kill(
-                nix::unistd::Pid::from_raw(state.pid as i32),
-                Signal::SIGTERM,
-            );
-        } else {
-            let _ = self
-                .controller
-                .spawn_program(&mut self.registry, id, 0)
-                .await;
+        // 4. Activate per restart_policy
+        match restart_policy {
+            common::ArtifactRestartPolicy::Manual => {
+                tracing::info!(
+                    "OTA restart_policy=manual for {}: committing swap without restart",
+                    id
+                );
+                let bak = backup_path.clone();
+                if let Some(cfg) = self.registry.get_config_mut(&id) {
+                    cfg.restore_path = None;
+                }
+                self.registry.mark_dirty();
+                let _ = self.flush_to_disk().await;
+                tokio::spawn(async move {
+                    artifact::commit(&bak).await;
+                });
+            }
+            common::ArtifactRestartPolicy::Immediate => {
+                tracing::info!(
+                    "Restarting process to load new binary (restart_policy=immediate)..."
+                );
+                if let Some(state) = self.registry.get_running_mut(&id) {
+                    state.restart_requested = true;
+                    let _ = nix::sys::signal::kill(
+                        nix::unistd::Pid::from_raw(state.pid as i32),
+                        Signal::SIGTERM,
+                    );
+                } else {
+                    let _ = self
+                        .controller
+                        .spawn_program(&mut self.registry, id, 0)
+                        .await;
+                }
+                self.schedule_ota_verify_timeout(id);
+            }
+            common::ArtifactRestartPolicy::Signal { signal } => {
+                let sig = match signal {
+                    "hup" => Signal::SIGHUP,
+                    "int" => Signal::SIGINT,
+                    "term" => Signal::SIGTERM,
+                    "quit" => Signal::SIGQUIT,
+                    "usr1" => Signal::SIGUSR1,
+                    "usr2" => Signal::SIGUSR2,
+                    _ => Signal::SIGHUP,
+                };
+                let already_healthy = self
+                    .registry
+                    .get_running(&id)
+                    .map(|s| s.is_healthy)
+                    .unwrap_or(false);
+                if self.registry.get_running(&id).is_some() {
+                    tracing::info!(
+                        "OTA restart_policy=signal:{} for {}: notifying running process",
+                        signal,
+                        id
+                    );
+                    if let Err(e) = self.apply_signal(id, sig) {
+                        tracing::error!("OTA signal delivery failed for {}: {}", id, e);
+                    }
+                    // No restart → no fresh HealthUpdate from spawn.
+                    // With a live probe, wait for the next Healthy report (and the
+                    // verify timer). Without a probe, defer commit to startsecs so
+                    // we do not treat a pre-swap Healthy as proof the new binary works.
+                    if already_healthy {
+                        let has_probe = self
+                            .registry
+                            .programs
+                            .get(&id)
+                            .and_then(|c| c.health_check.as_ref())
+                            .is_some_and(|h| h.is_enabled());
+                        if has_probe {
+                            tracing::info!(
+                                "OTA signal for {}: process Healthy pre-signal; waiting for post-signal health probe",
+                                id
+                            );
+                            self.schedule_ota_verify_timeout(id);
+                        } else {
+                            let dwell = self
+                                .registry
+                                .programs
+                                .get(&id)
+                                .map(|c| (c.startsecs as u64).max(1))
+                                .unwrap_or(1);
+                            tracing::info!(
+                                "OTA signal for {}: no health probe; deferring commit for {}s (startsecs)",
+                                id,
+                                dwell
+                            );
+                            self.schedule_ota_verify_timeout(id);
+                            let tx = self.tx_self.clone();
+                            tokio::spawn(async move {
+                                tokio::time::sleep(Duration::from_secs(dwell)).await;
+                                let _ = tx
+                                    .send(Command::InternalHealthUpdate {
+                                        id,
+                                        is_healthy: true,
+                                        failure_detail: None,
+                                    })
+                                    .await;
+                            });
+                        }
+                    } else {
+                        self.schedule_ota_verify_timeout(id);
+                    }
+                } else {
+                    tracing::info!(
+                        "OTA restart_policy=signal for {}: process not running, spawning",
+                        id
+                    );
+                    let _ = self
+                        .controller
+                        .spawn_program(&mut self.registry, id, 0)
+                        .await;
+                    self.schedule_ota_verify_timeout(id);
+                }
+            }
         }
+    }
 
-        // 5. OTA verification deadline: if the new version is not Healthy within
-        //    `server.ota_verify_timeout`, force-kill it so the exit handler rolls
-        //    back to the previous binary. Disabled when set to 0.
-        let verify_timeout = self.config.server.ota_verify_timeout;
-        if verify_timeout > 0 {
-            let tx = self.tx_self.clone();
-            tokio::spawn(async move {
-                tokio::time::sleep(Duration::from_secs(verify_timeout)).await;
-                let _ = tx.send(Command::OtaVerifyTimeout { id }).await;
-            });
+    fn schedule_ota_verify_timeout(&self, id: Uuid) {
+        // OTA verification deadline: if the new version is not Healthy within
+        // `server.ota_verify_timeout`, force-kill it so the exit handler rolls
+        // back to the previous binary. Disabled when set to 0.
+        //
+        // Without a live health probe, commit waits for `startsecs` (min 1s). If
+        // the configured timeout is shorter than that dwell, extend it so a good
+        // binary is not force-rolled-back before it can commit.
+        let mut verify_timeout = self.config.server.ota_verify_timeout;
+        if verify_timeout == 0 {
+            return;
         }
+        if let Some(cfg) = self.registry.get_config(&id) {
+            let has_probe = cfg.health_check.as_ref().is_some_and(|h| h.is_enabled());
+            if !has_probe {
+                let dwell = (cfg.startsecs as u64).max(1);
+                if verify_timeout <= dwell {
+                    let extended = dwell + 1;
+                    tracing::warn!(
+                        "OTA verify timeout {}s <= startsecs dwell {}s for {}; extending to {}s",
+                        verify_timeout,
+                        dwell,
+                        id,
+                        extended
+                    );
+                    verify_timeout = extended;
+                }
+            }
+        }
+        let tx = self.tx_self.clone();
+        tokio::spawn(async move {
+            tokio::time::sleep(Duration::from_secs(verify_timeout)).await;
+            let _ = tx.send(Command::OtaVerifyTimeout { id }).await;
+        });
     }
 
     /// Fired by the OTA verification timer when the new version did not reach
@@ -1465,6 +1650,24 @@ impl Manager {
                         self.registry.crashed.insert(id);
                     } else {
                         tracing::info!("File rolled back successfully.");
+
+                        // Best-effort: remove any leftover staging beside the target.
+                        let staging_new = target_path.with_file_name(format!(
+                            "{}.new",
+                            target_path
+                                .file_name()
+                                .and_then(|s| s.to_str())
+                                .unwrap_or("artifact")
+                        ));
+                        let staging_dl = target_path.with_file_name(format!(
+                            "{}.download",
+                            target_path
+                                .file_name()
+                                .and_then(|s| s.to_str())
+                                .unwrap_or("artifact")
+                        ));
+                        let _ = tokio::fs::remove_file(&staging_new).await;
+                        let _ = tokio::fs::remove_file(&staging_dl).await;
 
                         // B2. Clear WAL state and flush
                         if let Some(cfg) = self.registry.get_config_mut(&id) {
@@ -1902,17 +2105,62 @@ impl Manager {
 
         // Commit Upgrade Transaction
         // If program is healthy and has a pending restore path, commit the upgrade.
+        // Without a live health probe, require `startsecs` (min 1s) of uptime so the
+        // synthetic ~100ms Healthy cannot commit before a crash-on-start is observed.
         if is_healthy {
             // The program recovered; reset the health-restart counter so a
             // later failure cycle starts fresh against `retry_limit`.
             self.registry.health_restart_count.remove(&id);
 
+            let pending = self
+                .registry
+                .get_config(&id)
+                .and_then(|c| c.restore_path.clone());
             let mut backup_to_delete = None;
-            if let Some(cfg) = self.registry.get_config_mut(&id)
-                && let Some(backup) = cfg.restore_path.take()
-            {
-                backup_to_delete = Some(backup);
-                tracing::info!("Upgrade verified for {}. Committing changes.", id);
+            if let Some(backup) = pending {
+                let (has_probe, startsecs, start_time) = {
+                    let cfg = self.registry.programs.get(&id);
+                    let has_probe = cfg
+                        .and_then(|c| c.health_check.as_ref())
+                        .is_some_and(|h| h.is_enabled());
+                    let startsecs = cfg.map(|c| c.startsecs).unwrap_or(10);
+                    let start_time = self
+                        .registry
+                        .get_running(&id)
+                        .map(|s| s.start_time)
+                        .unwrap_or(0);
+                    (has_probe, startsecs, start_time)
+                };
+                let uptime = (chrono::Utc::now().timestamp() as u64).saturating_sub(start_time);
+                let min_uptime = if has_probe {
+                    0
+                } else {
+                    (startsecs as u64).max(1)
+                };
+                if uptime < min_uptime {
+                    let wait = min_uptime - uptime;
+                    tracing::info!(
+                        "OTA verify for {}: no health probe; deferring commit until startsecs ({}s uptime, need {}s)",
+                        id,
+                        uptime,
+                        min_uptime
+                    );
+                    let tx = self.tx_self.clone();
+                    tokio::spawn(async move {
+                        tokio::time::sleep(Duration::from_secs(wait)).await;
+                        let _ = tx
+                            .send(Command::InternalHealthUpdate {
+                                id,
+                                is_healthy: true,
+                                failure_detail: None,
+                            })
+                            .await;
+                    });
+                } else if let Some(cfg) = self.registry.get_config_mut(&id) {
+                    cfg.restore_path = None;
+                    backup_to_delete = Some(backup);
+                    tracing::info!("Upgrade verified for {}. Committing changes.", id);
+                }
             }
 
             if let Some(backup) = backup_to_delete {

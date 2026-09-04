@@ -33,6 +33,7 @@ Source for the public documentation site:
 | `06-internals/` | CLI / API / config references, environment variables, changelog |
 | `07-editions/` | Edition feature matrix |
 | `08-changelog/` | Changelog |
+| `09-development/` | Building from source and writing super-core extensions |
 
 ## Prerequisites
 

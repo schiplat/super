@@ -8,6 +8,7 @@ use common::resolve_super_root;
 use common::resolve_super_root_for_config;
 use common::{
     licensed_deployment_intent, resolve_license_strict, scan_plugin_stems,
+    signal_restart_missing_health_probe, trivial_exec_health_probe,
     validate_create_program_request, verify_license_for_superd, with_program_location,
 };
 use std::fs;
@@ -228,6 +229,7 @@ pub fn run(file_path: Option<PathBuf>) -> anyhow::Result<()> {
                     }
                 }
             }
+            scan_snapshot_ota_signal_warnings(data_file, &mut errors, &mut warnings);
         } else {
             println!("{}", "Error".red());
             errors.push(format!(
@@ -316,6 +318,56 @@ fn check_ancestor_writable(target_path: &Path) -> (bool, PathBuf) {
 
     // Found an existing directory; check writability
     (is_writable(&current), current)
+}
+
+/// Soft-scan `data/snapshot.json` for legacy `signal*` OTA configs.
+/// Parse failures become warnings only (snapshot may be empty/corrupt mid-write).
+fn scan_snapshot_ota_signal_warnings(
+    data_file: &Path,
+    errors: &mut Vec<String>,
+    warnings: &mut Vec<String>,
+) {
+    let Ok(body) = fs::read_to_string(data_file) else {
+        warnings.push(format!(
+            "Could not read data file {:?} for OTA signal* checks",
+            data_file
+        ));
+        return;
+    };
+    if body.trim().is_empty() {
+        return;
+    }
+    let programs: std::collections::HashMap<uuid::Uuid, common::ProgramConfig> =
+        match serde_json::from_str(&body) {
+            Ok(m) => m,
+            Err(e) => {
+                warnings.push(format!(
+                    "Could not parse data file {:?} as program snapshot ({e}) — skipping OTA signal* checks",
+                    data_file
+                ));
+                return;
+            }
+        };
+    for cfg in programs.values() {
+        if signal_restart_missing_health_probe(cfg.artifact.as_ref(), cfg.health_check.as_ref()) {
+            errors.push(format!(
+                "program '{}': artifact.restart_policy=signal* requires an enabled health_check \
+                 (next OTA/update will fail until health_check is configured or restart_policy changed)",
+                cfg.name
+            ));
+        } else if cfg.artifact.as_ref().is_some_and(|a| {
+            common::parse_artifact_restart_policy(&a.restart_policy)
+                .ok()
+                .is_some_and(|p| matches!(p, common::ArtifactRestartPolicy::Signal { .. }))
+        }) && trivial_exec_health_probe(cfg.health_check.as_ref())
+        {
+            warnings.push(format!(
+                "program '{}': health_check exec true (or equivalent) does not verify hot-reload \
+                 for signal* OTA — use a real TCP/HTTP/exec probe",
+                cfg.name
+            ));
+        }
+    }
 }
 
 /// `[[program]]` in super.toml is not part of `ServerConfig` and is silently ignored.

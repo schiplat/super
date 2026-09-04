@@ -41,6 +41,10 @@ libloading = "0.8"
 mime_guess = "2.0"
 libc = "0.2"
 rand = "0.8"
+# OTA archive extract (`artifact.extract = true`)
+flate2 = "1"
+tar = "0.4"
+zip = "3"
 
 dotenvy = "0.15"
 

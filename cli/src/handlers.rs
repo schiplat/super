@@ -614,6 +614,7 @@ pub async fn handle_update(ctx: &Context, cmd: &args::Commands) -> anyhow::Resul
         artifact_sha256,
         artifact_destination,
         artifact_extract,
+        artifact_restart_policy,
         ..
     } = cmd
     {
@@ -665,6 +666,7 @@ pub async fn handle_update(ctx: &Context, cmd: &args::Commands) -> anyhow::Resul
             || artifact_sha256.is_some()
             || artifact_destination.is_some()
             || artifact_extract.is_some()
+            || artifact_restart_policy.is_some()
         {
             let source = artifact_url.clone().ok_or_else(|| {
                 anyhow::anyhow!("--artifact-url is required when updating artifact")
@@ -695,12 +697,18 @@ pub async fn handle_update(ctx: &Context, cmd: &args::Commands) -> anyhow::Resul
                     })?
             };
 
+            let restart_policy = artifact_restart_policy
+                .clone()
+                .unwrap_or_else(|| "immediate".to_string());
+            // Fail fast with a clear CLI error (server also validates).
+            common::parse_artifact_restart_policy(&restart_policy)?;
+
             Some(ArtifactConfig {
                 source,
                 checksum,
                 destination,
                 extract: artifact_extract.unwrap_or(false),
-                restart_policy: "immediate".to_string(),
+                restart_policy,
             })
         } else {
             None

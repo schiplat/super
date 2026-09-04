@@ -52,6 +52,20 @@ impl LifecycleController {
         }
     }
 
+    /// Delay before the synthetic "Healthy" signal when no live probe is configured.
+    ///
+    /// During an OTA WAL (`restore_path` set), wait at least `startsecs` (floor 1s)
+    /// so a crash-on-start bad binary can exit before auto-commit. Normal starts
+    /// keep the historical ~100ms UI/deps delay.
+    fn no_probe_healthy_delay(config: &ProgramConfig) -> (bool, std::time::Duration) {
+        if config.restore_path.is_some() {
+            let secs = (config.startsecs as u64).max(1);
+            (false, std::time::Duration::from_secs(secs))
+        } else {
+            (true, std::time::Duration::from_millis(100))
+        }
+    }
+
     // Core spawn logic.
     // Registry is borrowed for state read/write with clear ownership.
     pub async fn spawn_program(
@@ -495,11 +509,12 @@ impl LifecycleController {
                     }
                 }));
             } else {
-                // Disabled health check; treat as healthy.
-                is_healthy = true;
+                // Disabled health check — same dwell rules as "no probe".
+                let (healthy_now, delay) = Self::no_probe_healthy_delay(&config);
+                is_healthy = healthy_now;
                 let tx = self.tx_self.clone();
                 tokio::spawn(async move {
-                    tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+                    tokio::time::sleep(delay).await;
                     let _ = tx
                         .send(Command::InternalHealthUpdate {
                             id,
@@ -510,14 +525,16 @@ impl LifecycleController {
                 });
             }
         } else {
-            // No health check configured; treat as healthy by default
-            is_healthy = true;
+            // No health check configured.
+            // Normal starts: mark Healthy quickly (~100ms) for UI/deps.
+            // During an OTA WAL (`restore_path` set): wait `startsecs` (min 1s)
+            // so an instant-crash bad binary can exit before we auto-commit.
+            let (healthy_now, delay) = Self::no_probe_healthy_delay(&config);
+            is_healthy = healthy_now;
 
-            // Send one health update explicitly to trigger OTA commit logic
             let tx = self.tx_self.clone();
             tokio::spawn(async move {
-                // Brief delay so registry state is inserted first
-                tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+                tokio::time::sleep(delay).await;
                 let _ = tx
                     .send(Command::InternalHealthUpdate {
                         id,

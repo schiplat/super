@@ -338,3 +338,325 @@ async fn test_ota_ready_without_artifact_does_not_panic() {
     assert_eq!(info.config.name, "app-no-artifact");
     assert!(info.config.restore_path.is_none());
 }
+
+#[tokio::test]
+async fn test_ota_extract_tar_gz_commit() {
+    let (handle, tmp, _target_bin, _data_file) = setup_system().await;
+    let mock_server = MockServer::start().await;
+
+    let dest = tmp.path().join("extracted-app");
+    std::fs::write(&dest, b"VERSION_1").unwrap();
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let mut perms = std::fs::metadata(&dest).unwrap().permissions();
+        perms.set_mode(0o755);
+        std::fs::set_permissions(&dest, perms).unwrap();
+    }
+
+    // Build a tar.gz whose only member is `extracted-app` with V2 contents.
+    let stage = tmp.path().join("pack");
+    std::fs::create_dir_all(&stage).unwrap();
+    let member = stage.join("extracted-app");
+    std::fs::write(&member, b"VERSION_2_EXTRACTED").unwrap();
+    let archive = tmp.path().join("app.tar.gz");
+    let status = std::process::Command::new("tar")
+        .args(["-czf"])
+        .arg(&archive)
+        .arg("-C")
+        .arg(&stage)
+        .arg("extracted-app")
+        .status()
+        .unwrap();
+    assert!(status.success());
+    let archive_bytes = std::fs::read(&archive).unwrap();
+    let archive_hash = {
+        use sha2::{Digest, Sha256};
+        hex::encode(Sha256::digest(&archive_bytes))
+    };
+
+    Mock::given(method("GET"))
+        .and(path("/download/app.tar.gz"))
+        .respond_with(ResponseTemplate::new(200).set_body_bytes(archive_bytes))
+        .mount(&mock_server)
+        .await;
+
+    let req = CreateProgramRequest {
+        name: Some("app-extract".to_string()),
+        command: "sleep".to_string(),
+        args: vec!["100".to_string()],
+        autostart: true,
+        health_check: Some(common::HealthCheck::Exec {
+            command: "true".to_string(),
+            interval_secs: 0,
+            timeout_secs: 0,
+            start_period_secs: 0,
+            max_failures: 0,
+        }),
+        ..Default::default()
+    };
+    let id = handle.create_program(req).await.unwrap()[0];
+    tokio::time::sleep(Duration::from_millis(400)).await;
+
+    handle
+        .update_program(
+            id,
+            UpdateProgramRequest {
+                artifact: Some(ArtifactConfig {
+                    source: format!("{}/download/app.tar.gz", mock_server.uri()),
+                    checksum: archive_hash,
+                    extract: true,
+                    destination: dest.to_string_lossy().to_string(),
+                    restart_policy: "immediate".to_string(),
+                }),
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap();
+
+    let mut ok = false;
+    for _ in 0..40 {
+        tokio::time::sleep(Duration::from_millis(250)).await;
+        let info = handle.get_program(id).await.unwrap();
+        let content = std::fs::read_to_string(&dest).unwrap_or_default();
+        if content.contains("VERSION_2_EXTRACTED")
+            && info.config.restore_path.is_none()
+            && !dest.with_extension("bak").exists()
+        {
+            ok = true;
+            break;
+        }
+    }
+    assert!(ok, "extract OTA did not commit with extracted payload");
+}
+
+#[tokio::test]
+async fn test_ota_restart_policy_manual_no_pid_change() {
+    let (handle, _tmp, target_bin, _data_file) = setup_system().await;
+    let mock_server = MockServer::start().await;
+
+    let v2 = "VERSION_2_MANUAL";
+    let v2_hash = calculate_hash(v2);
+    Mock::given(method("GET"))
+        .and(path("/download/v2"))
+        .respond_with(ResponseTemplate::new(200).set_body_string(v2))
+        .mount(&mock_server)
+        .await;
+
+    let req = CreateProgramRequest {
+        name: Some("app-manual".to_string()),
+        command: "sleep".to_string(),
+        args: vec!["100".to_string()],
+        autostart: true,
+        ..Default::default()
+    };
+    let id = handle.create_program(req).await.unwrap()[0];
+    tokio::time::sleep(Duration::from_millis(400)).await;
+    let pid_before = handle.get_program(id).await.unwrap().pid.expect("pid");
+
+    handle
+        .update_program(
+            id,
+            UpdateProgramRequest {
+                artifact: Some(ArtifactConfig {
+                    source: format!("{}/download/v2", mock_server.uri()),
+                    checksum: v2_hash,
+                    extract: false,
+                    destination: target_bin.to_string_lossy().to_string(),
+                    restart_policy: "manual".to_string(),
+                }),
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap();
+
+    let mut ok = false;
+    for _ in 0..40 {
+        tokio::time::sleep(Duration::from_millis(200)).await;
+        let info = handle.get_program(id).await.unwrap();
+        let content = std::fs::read_to_string(&target_bin).unwrap_or_default();
+        if content == v2
+            && info.config.restore_path.is_none()
+            && info.pid == Some(pid_before)
+            && !target_bin.with_extension("bak").exists()
+        {
+            ok = true;
+            break;
+        }
+    }
+    assert!(
+        ok,
+        "manual OTA should swap file, clear WAL, and keep the same PID"
+    );
+}
+
+#[tokio::test]
+async fn test_ota_restart_policy_signal_hup() {
+    let (handle, tmp, _target_bin, _data_file) = setup_system().await;
+    let mock_server = MockServer::start().await;
+
+    let marker = tmp.path().join("hup.marker");
+    let script = tmp.path().join("hup-app.sh");
+    let script_body = format!(
+        "#!/bin/sh\nMARKER='{}'\ntrap 'touch \"$MARKER\"' HUP\nwhile true; do sleep 1; done\n",
+        marker.display()
+    );
+    std::fs::write(&script, &script_body).unwrap();
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let mut perms = std::fs::metadata(&script).unwrap().permissions();
+        perms.set_mode(0o755);
+        std::fs::set_permissions(&script, perms).unwrap();
+    }
+
+    // Destination content for OTA swap (distinct bytes; process keeps old inode until exec).
+    let v2 = format!(
+        "#!/bin/sh\nMARKER='{}'\ntrap 'touch \"$MARKER\"' HUP\necho V2\nwhile true; do sleep 1; done\n",
+        marker.display()
+    );
+    let v2_hash = calculate_hash(&v2);
+    Mock::given(method("GET"))
+        .and(path("/download/v2"))
+        .respond_with(ResponseTemplate::new(200).set_body_string(v2.clone()))
+        .mount(&mock_server)
+        .await;
+
+    let req = CreateProgramRequest {
+        name: Some("app-signal".to_string()),
+        command: script.to_string_lossy().to_string(),
+        args: vec![],
+        autostart: true,
+        startsecs: 2,
+        health_check: Some(common::HealthCheck::Exec {
+            command: "true".to_string(),
+            interval_secs: 1,
+            timeout_secs: 1,
+            start_period_secs: 0,
+            max_failures: 0,
+        }),
+        ..Default::default()
+    };
+    let id = handle.create_program(req).await.unwrap()[0];
+    tokio::time::sleep(Duration::from_millis(600)).await;
+    let pid_before = handle.get_program(id).await.unwrap().pid.expect("pid");
+
+    handle
+        .update_program(
+            id,
+            UpdateProgramRequest {
+                artifact: Some(ArtifactConfig {
+                    source: format!("{}/download/v2", mock_server.uri()),
+                    checksum: v2_hash,
+                    extract: false,
+                    destination: script.to_string_lossy().to_string(),
+                    restart_policy: "signal:hup".to_string(),
+                }),
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap();
+
+    let mut ok = false;
+    for _ in 0..100 {
+        tokio::time::sleep(Duration::from_millis(200)).await;
+        let info = handle.get_program(id).await.unwrap();
+        if marker.exists()
+            && info.pid == Some(pid_before)
+            && info.config.restore_path.is_none()
+            && std::fs::read_to_string(&script)
+                .unwrap_or_default()
+                .contains("V2")
+        {
+            ok = true;
+            break;
+        }
+    }
+    assert!(
+        ok,
+        "signal:hup should notify without PID change, swap file, and commit WAL"
+    );
+}
+
+#[tokio::test]
+async fn test_ota_no_health_check_instant_crash_rolls_back() {
+    // Regression: without a health probe, the synthetic Healthy (~100ms) used to
+    // commit OTA before an exit-1 binary crashed — leaving the bad file in place.
+    let (handle, tmp, _target_bin, data_file) = setup_system().await;
+    let mock_server = MockServer::start().await;
+
+    let app = tmp.path().join("crash-app.sh");
+    std::fs::write(&app, b"#!/bin/sh\necho VERSION_1\nexec sleep 3600\n").unwrap();
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let mut perms = std::fs::metadata(&app).unwrap().permissions();
+        perms.set_mode(0o755);
+        std::fs::set_permissions(&app, perms).unwrap();
+    }
+
+    let v2 = "#!/bin/sh\necho VERSION_2_CRASH\nexit 1\n";
+    let v2_hash = calculate_hash(v2);
+    Mock::given(method("GET"))
+        .and(path("/download/v2"))
+        .respond_with(ResponseTemplate::new(200).set_body_string(v2))
+        .mount(&mock_server)
+        .await;
+
+    let req = CreateProgramRequest {
+        name: Some("app-nohc-crash".to_string()),
+        command: app.to_string_lossy().to_string(),
+        args: vec![],
+        autostart: true,
+        startsecs: 3,
+        // intentionally no health_check
+        ..Default::default()
+    };
+    let id = handle.create_program(req).await.unwrap()[0];
+    tokio::time::sleep(Duration::from_millis(500)).await;
+
+    handle
+        .update_program(
+            id,
+            UpdateProgramRequest {
+                artifact: Some(ArtifactConfig {
+                    source: format!("{}/download/v2", mock_server.uri()),
+                    checksum: v2_hash,
+                    extract: false,
+                    destination: app.to_string_lossy().to_string(),
+                    restart_policy: "immediate".to_string(),
+                }),
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap();
+
+    let mut ok = false;
+    for _ in 0..60 {
+        tokio::time::sleep(Duration::from_millis(200)).await;
+        let content = std::fs::read_to_string(&app).unwrap_or_default();
+        let saved: HashMap<uuid::Uuid, ProgramConfig> =
+            serde_json::from_str(&std::fs::read_to_string(&data_file).unwrap_or_default())
+                .unwrap_or_default();
+        let wal_clear = saved
+            .get(&id)
+            .map(|c| c.restore_path.is_none())
+            .unwrap_or(false);
+        if content.contains("VERSION_1")
+            && !content.contains("VERSION_2")
+            && wal_clear
+            && !app.with_extension("bak").exists()
+        {
+            ok = true;
+            break;
+        }
+    }
+    assert!(
+        ok,
+        "no-health-check instant crash must roll back before startsecs commit"
+    );
+}

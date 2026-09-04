@@ -49,7 +49,7 @@ Global settings for the daemon.
 | `port` | int | `9002` | Bind port. |
 | `allow_insecure_public_bind` | bool | `false` | Explicit opt-in to bind on a non-loopback address without the `security` plugin. OSS **refuses startup** when `host` is not loopback and this is `false`. **Licensed deployments always load `security`** — this flag applies to OSS only. |
 | `shutdown_timeout` | int | `10` | Seconds to wait for SIGTERM before SIGKILL during shutdown. |
-| `ota_verify_timeout` | int | `60` | OTA verification window (seconds). After an OTA update restarts a program, the new version must pass its health checks within this window; on timeout the daemon rolls back to the previous version automatically. `0` disables the timeout (no automatic rollback). |
+| `ota_verify_timeout` | int | `60` | OTA verification window (seconds). After an OTA update restarts a program, the new version must become Healthy within this window; on timeout the daemon rolls back. `0` disables the timeout. Without a live `health_check`, commit waits for `startsecs` (min 1s); if this timeout is shorter than that dwell, Super extends it automatically. |
 | `flapping_window` | int | `60` | Time window (seconds) to detect restart loops. |
 | `flapping_threshold` | int | `5` | Max restarts allowed within the window. |
 | `enable_docs` | bool | `false` | Enable Swagger UI (`/api/docs`) when the binary is built with the docs feature. |

@@ -98,4 +98,4 @@ The managed **child process** also receives `SUPER_ID`, `SUPER_NAME`, `SUPER_HOS
 
 * [System Events](/docs/03-orchestration/events/types) — full event catalog
 * [Config Reference — `hooks`](/docs/06-internals/config-reference#hooks)
-* [Custom Extensions](/docs/04-production-scenarios/extensibility/custom-extensions) — Rust `Extension` trait and licensed plugins (cgroups, notify, audit)
+* [Custom Extensions](/docs/04-production-scenarios/extensibility/custom-extensions) — in-process Rust `Extension` trait and the licensed runtime-plugin model (see [Writing Extensions](/docs/09-development/writing-extensions))

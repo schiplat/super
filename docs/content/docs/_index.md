@@ -57,3 +57,14 @@ Best practices for running Super in mission-critical environments.
 {{< /cards >}}
 
 ---
+
+## Developer Guide
+
+Build Super from source, understand the codebase, or hook custom logic into the process lifecycle.
+
+{{< cards >}}
+  {{< card link="/docs/09-development" title="Developer Guide" subtitle="Repository layout and the in-process Extension trait." >}}
+  {{< card link="/docs/09-development/building-from-source" title="Building from Source" subtitle="Toolchain, workspace crates, test commands, and a local dev instance." >}}
+  {{< card link="/docs/09-development/writing-extensions" title="Writing Extensions" subtitle="Hook custom Rust logic into the super-core lifecycle." >}}
+{{< /cards >}}
+

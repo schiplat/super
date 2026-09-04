@@ -264,6 +264,10 @@ pub enum Commands {
         /// Extract downloaded archive before swap (default: false)
         #[arg(long, value_parser = clap::value_parser!(bool))]
         artifact_extract: Option<bool>,
+
+        /// OTA restart policy after swap: immediate (default), manual, signal, or signal:<hup|int|term|quit|usr1|usr2> (signal* requires an enabled health_check)
+        #[arg(long)]
+        artifact_restart_policy: Option<String>,
     },
 
     /// Apply a stack configuration file (JSON)

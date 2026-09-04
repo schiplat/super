@@ -29,22 +29,27 @@ When you submit an update request:
 4.  **WAL**: The "Upgrade In-Progress" state is written to disk (Write-Ahead Log).
 5.  **Swap**: It uses `rename(2)` to atomically replace the binary.
 6.  **Restart**: The process is restarted according to the **Restart Policy**.
-7.  **Validate**: Super waits for the `health_check` to pass.
+7.  **Validate**: Super waits for verification to succeed.
+    *   With a live `health_check`: commit when Healthy; roll back on crash or `ota_verify_timeout`.
+    *   Without a probe: require `startsecs` (min 1s) of uptime before commit (and auto-extend `ota_verify_timeout` if it would fire earlier).
     *   ✅ **Success**: The backup is removed. Transaction committed.
     *   ❌ **Failure**: The process crashes or fails health checks. **Rollback** is triggered. The backup is restored, and the old version is restarted.
 
 ## Restart Policies
 
-The `restart_policy` field controls *when* the new binary becomes active.
+The `restart_policy` field controls *when* the new binary becomes active after a successful swap.
 
 | Policy | Description | Use Case |
 | :--- | :--- | :--- |
-| **`immediate`** | **Default**. Sends `SIGTERM` to restart the process immediately after the binary swap. | Standard web services, critical patches. |
-| **`manual`** | Swaps the binary on disk but **does not** restart. The new version runs on the next natural restart (e.g., reboot). | Non-critical background agents. |
-| **`signal`** | Swaps the binary and sends a custom signal (e.g., `SIGHUP`) instead of restarting. | Applications that support internal **Hot Reloading** (like Nginx or some Go apps). |
+| **`immediate`** | **Default**. Sends `SIGTERM` to restart the process (or spawns if stopped), then verifies. | Standard services, critical patches. |
+| **`manual`** | Swaps the binary and **commits immediately** without restarting. The new file is used on the next natural restart. | Non-critical agents where a bounce can wait. |
+| **`signal:hup`** (dashboard hot-reload default) / **`signal`** / **`signal:<name>`** | Swaps the binary and signals the process group (default `hup`; also `int`, `term`, `quit`, `usr1`, `usr2`) for in-place reload. Bare `signal` ≡ `signal:hup`. **Requires an enabled `health_check`**. Keeps the WAL until the next Healthy probe (or verify timeout). | Apps that hot-reload on `SIGHUP`. |
 
-> [!WARNING]
-> As of v1.1.7, `immediate` is the primary supported policy. `manual` and `signal` are reserved for future implementation.
+Startup and `super check` warn on legacy `signal*` configs that lack an enabled probe (create/update already reject them). An `exec` probe of `true` / `:` / `/bin/true` / `/usr/bin/true` is accepted but ineffective for verifying hot-reload — use a real TCP/HTTP/exec check.
+
+### Archives (`extract: true`)
+
+Set `extract: true` when `source` points at a `.tar.gz` / `.tgz` / `.tar` / `.zip`. Super verifies the SHA256 of the **archive**, unpacks it safely (no `..` / absolute paths / symlinks; size and file-count caps), then stages a single payload file to `destination` (prefer a member whose basename matches `destination`, otherwise the only regular file in the archive).
 
 ## Triggering an Update
 

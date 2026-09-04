@@ -249,9 +249,10 @@ Every flag is optional — omitted flags keep the program's current value.
 | `--max-concurrent <N>` | int | keep | Max overlapping cron runs allowed at once |
 | `--max-queued <N>` | int | keep | Cap on queued cron firings |
 | `--artifact-url <URL>` | string | keep | OTA download URL (triggers transactional update when checksum changes) |
-| `--artifact-sha256 <HEX>` | string | keep | Expected SHA256 digest of the OTA artifact |
+| `--artifact-sha256 <HEX>` | string | keep | Expected SHA256 digest of the downloaded bytes |
 | `--artifact-destination <PATH>` | path | keep | **Absolute path** where the binary lives (e.g. `/usr/local/bin/my-app`); required on first OTA setup, omit if unchanged |
-| `--artifact-extract` | bool | `false` | Extract downloaded archive before swap |
+| `--artifact-extract` | bool | `false` | Unpack `.tar.gz` / `.tgz` / `.tar` / `.zip` before swap |
+| `--artifact-restart-policy <POLICY>` | string | `immediate` | `immediate`, `manual`, `signal`, or `signal:<hup\|int\|term\|quit\|usr1\|usr2>`. **`signal*` requires the program to already have an enabled `health_check`.** |
 | `--cpu <CORES>` 💎 | float | keep | CPU quota in cores (`isolation` plugin, Linux only) |
 | `--memory <MB>` 💎 | int | keep | Memory hard limit in MB (`isolation` plugin, Linux only) |
 | `--memory-warn-percent <PCT>` 💎 | int | keep | Pre-kill warning threshold as % of limit (`0` off) |

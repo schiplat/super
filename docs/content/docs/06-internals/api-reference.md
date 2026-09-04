@@ -143,11 +143,11 @@ curl -X PUT "http://127.0.0.1:9002/api/v1/programs/${PROGRAM_ID}" \
 
 | `artifact` field | Description |
 | :--- | :--- |
-| `source` | Download URL |
-| `checksum` | Expected SHA256 hex digest |
-| `destination` | Path of the binary on disk |
-| `extract` | `true` if the download is an archive to extract |
-| `restart_policy` | `"immediate"` (swap then restart) — primary supported policy |
+| `source` | Download URL (HTTPS; HTTP only on loopback) |
+| `checksum` | Expected SHA256 hex of the **downloaded bytes** |
+| `destination` | Absolute path of the final binary on disk |
+| `extract` | `true` to unpack `.tar.gz` / `.tgz` / `.tar` / `.zip` and stage one payload file |
+| `restart_policy` | `immediate` (default), `manual`, `signal`, or `signal:<hup\|int\|term\|quit\|usr1\|usr2>`. **`signal*` requires an enabled `health_check`.** |
 
 **With `security` plugin**: add `-H "Authorization: Bearer <token>"`.
 

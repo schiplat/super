@@ -93,6 +93,7 @@ pub fn validate_create_program_request(
     )?;
     if let Some(artifact) = &req.artifact {
         validate_artifact_config(artifact)?;
+        validate_signal_restart_requires_health_probe(Some(artifact), req.health_check.as_ref())?;
     }
     if let Some(limits) = &req.resource_limits {
         validate_resource_limits_create(limits)?;
@@ -127,9 +128,66 @@ pub fn validate_update_program_request(
         && !artifact.source.trim().is_empty()
     {
         validate_artifact_config(artifact)?;
+        // Full create-style check when both fields are in the same request.
+        // Updates that only touch one side are validated after merge in Manager.
+        if req.health_check.is_some() {
+            validate_signal_restart_requires_health_probe(
+                Some(artifact),
+                req.health_check.as_ref(),
+            )?;
+        }
     }
     validate_cron_concurrency(req.max_concurrent, req.max_queued)?;
     Ok(())
+}
+
+/// `restart_policy=signal*` does not exec a new process, so a live health probe is
+/// required to verify the hot-reload. Synthetic Healthy / `startsecs` alone is not enough.
+pub fn validate_signal_restart_requires_health_probe(
+    artifact: Option<&ArtifactConfig>,
+    health_check: Option<&HealthCheck>,
+) -> anyhow::Result<()> {
+    if signal_restart_missing_health_probe(artifact, health_check) {
+        bail!(
+            "artifact.restart_policy: signal* requires an enabled health_check \
+             (tcp/http/exec) so the hot-reload can be verified; configure health_check \
+             or use restart_policy=immediate|manual"
+        );
+    }
+    Ok(())
+}
+
+/// `true` when `restart_policy` is `signal*` and there is no enabled health probe.
+///
+/// Used by startup / `super check` warnings for legacy configs that predate the
+/// create-time rejection. Invalid `restart_policy` strings return `false`.
+pub fn signal_restart_missing_health_probe(
+    artifact: Option<&ArtifactConfig>,
+    health_check: Option<&HealthCheck>,
+) -> bool {
+    let Some(artifact) = artifact else {
+        return false;
+    };
+    let Ok(policy) = parse_artifact_restart_policy(&artifact.restart_policy) else {
+        return false;
+    };
+    if !matches!(policy, ArtifactRestartPolicy::Signal { .. }) {
+        return false;
+    }
+    !health_check.is_some_and(|h| h.is_enabled())
+}
+
+/// `true` for exec health commands that always succeed and never verify a hot-reload.
+///
+/// Recognized (trim + ASCII lowercase): `true`, `:`, `/bin/true`, `/usr/bin/true`.
+pub fn trivial_exec_health_probe(health_check: Option<&HealthCheck>) -> bool {
+    match health_check {
+        Some(HealthCheck::Exec { command, .. }) => matches!(
+            command.trim().to_ascii_lowercase().as_str(),
+            "true" | ":" | "/bin/true" | "/usr/bin/true"
+        ),
+        _ => false,
+    }
 }
 
 /// Shared bounds for cron concurrency fields (create and update).
@@ -185,7 +243,59 @@ pub fn validate_artifact_config(artifact: &ArtifactConfig) -> anyhow::Result<()>
             sum.len()
         );
     }
+    parse_artifact_restart_policy(&artifact.restart_policy)
+        .map_err(|e| anyhow::anyhow!("artifact.restart_policy: {e}"))?;
     Ok(())
+}
+
+/// Parsed OTA restart policy after a successful binary swap.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ArtifactRestartPolicy {
+    /// SIGTERM restart (or spawn if stopped) + verification timer.
+    Immediate,
+    /// Commit the swap immediately; do not restart or verify.
+    Manual,
+    /// Deliver `signal` without marking restart_requested; keep WAL + verify timer.
+    /// `signal` is a lowercase name: hup, int, term, quit, usr1, usr2.
+    Signal { signal: &'static str },
+}
+
+/// Parse and validate `artifact.restart_policy`.
+///
+/// Accepted values:
+/// - `""` / `immediate` → [`ArtifactRestartPolicy::Immediate`]
+/// - `manual`
+/// - `signal` (defaults to `hup`)
+/// - `signal:<name>` where name ∈ hup|int|term|quit|usr1|usr2
+pub fn parse_artifact_restart_policy(raw: &str) -> anyhow::Result<ArtifactRestartPolicy> {
+    let s = raw.trim().to_ascii_lowercase();
+    if s.is_empty() || s == "immediate" {
+        return Ok(ArtifactRestartPolicy::Immediate);
+    }
+    if s == "manual" {
+        return Ok(ArtifactRestartPolicy::Manual);
+    }
+    if s == "signal" {
+        return Ok(ArtifactRestartPolicy::Signal { signal: "hup" });
+    }
+    if let Some(rest) = s.strip_prefix("signal:") {
+        let name = rest.trim();
+        let signal = match name {
+            "hup" | "sighup" => "hup",
+            "int" | "sigint" => "int",
+            "term" | "sigterm" => "term",
+            "quit" | "sigquit" => "quit",
+            "usr1" | "sigusr1" => "usr1",
+            "usr2" | "sigusr2" => "usr2",
+            _ => bail!(
+                "unknown signal {name:?}; expected hup|int|term|quit|usr1|usr2 (or signal:<name>)"
+            ),
+        };
+        return Ok(ArtifactRestartPolicy::Signal { signal });
+    }
+    bail!(
+        "must be immediate, manual, signal, or signal:<hup|int|term|quit|usr1|usr2> (got {raw:?})"
+    );
 }
 
 fn validate_resource_limits_create(limits: &ResourceLimits) -> anyhow::Result<()> {
@@ -427,10 +537,143 @@ mod tests {
             checksum: "abc".into(),
             extract: false,
             destination: "/tmp/x".into(),
-            restart_policy: "always".into(),
+            restart_policy: "immediate".into(),
         });
         let err = validate_create_program_request(&req, dir.path()).unwrap_err();
         assert!(err.to_string().contains("artifact.checksum"), "{err}");
+    }
+
+    #[test]
+    fn create_rejects_bad_restart_policy() {
+        let dir = tmp_logs();
+        let mut req = minimal_create("/bin/true");
+        req.artifact = Some(ArtifactConfig {
+            source: "https://example.com/a".into(),
+            checksum: "a".repeat(64),
+            extract: false,
+            destination: "/tmp/x".into(),
+            restart_policy: "always".into(),
+        });
+        let err = validate_create_program_request(&req, dir.path()).unwrap_err();
+        assert!(err.to_string().contains("artifact.restart_policy"), "{err}");
+    }
+
+    #[test]
+    fn parse_restart_policy_variants() {
+        use super::{ArtifactRestartPolicy, parse_artifact_restart_policy};
+        assert_eq!(
+            parse_artifact_restart_policy("").unwrap(),
+            ArtifactRestartPolicy::Immediate
+        );
+        assert_eq!(
+            parse_artifact_restart_policy("manual").unwrap(),
+            ArtifactRestartPolicy::Manual
+        );
+        assert_eq!(
+            parse_artifact_restart_policy("signal").unwrap(),
+            ArtifactRestartPolicy::Signal { signal: "hup" }
+        );
+        assert_eq!(
+            parse_artifact_restart_policy("signal:USR1").unwrap(),
+            ArtifactRestartPolicy::Signal { signal: "usr1" }
+        );
+        assert!(parse_artifact_restart_policy("signal:kill").is_err());
+    }
+
+    #[test]
+    fn create_rejects_signal_restart_without_health_check() {
+        let dir = tmp_logs();
+        let mut req = minimal_create("/bin/true");
+        req.artifact = Some(ArtifactConfig {
+            source: "https://example.com/a".into(),
+            checksum: "a".repeat(64),
+            extract: false,
+            destination: "/tmp/x".into(),
+            restart_policy: "signal:hup".into(),
+        });
+        let err = validate_create_program_request(&req, dir.path()).unwrap_err();
+        assert!(
+            err.to_string().contains("signal") && err.to_string().contains("health_check"),
+            "{err}"
+        );
+    }
+
+    #[test]
+    fn create_allows_signal_restart_with_health_check() {
+        let dir = tmp_logs();
+        let mut req = minimal_create("/bin/true");
+        req.health_check = Some(HealthCheck::Exec {
+            command: "true".into(),
+            interval_secs: 5,
+            timeout_secs: 0,
+            start_period_secs: 0,
+            max_failures: 0,
+        });
+        req.artifact = Some(ArtifactConfig {
+            source: "https://example.com/a".into(),
+            checksum: "a".repeat(64),
+            extract: false,
+            destination: "/tmp/x".into(),
+            restart_policy: "signal".into(),
+        });
+        validate_create_program_request(&req, dir.path()).unwrap();
+    }
+
+    #[test]
+    fn signal_restart_missing_health_probe_detects_gap() {
+        let art = ArtifactConfig {
+            source: "https://example.com/a".into(),
+            checksum: "a".repeat(64),
+            extract: false,
+            destination: "/tmp/x".into(),
+            restart_policy: "signal:hup".into(),
+        };
+        assert!(signal_restart_missing_health_probe(Some(&art), None));
+        assert!(signal_restart_missing_health_probe(
+            Some(&art),
+            Some(&HealthCheck::Disabled)
+        ));
+        let hc = HealthCheck::Tcp {
+            host: "127.0.0.1".into(),
+            port: 8080,
+            interval_secs: 5,
+            timeout_secs: 0,
+            start_period_secs: 0,
+            max_failures: 0,
+        };
+        assert!(!signal_restart_missing_health_probe(Some(&art), Some(&hc)));
+        assert!(!signal_restart_missing_health_probe(None, None));
+    }
+
+    #[test]
+    fn trivial_exec_health_probe_recognizes_always_true() {
+        for cmd in ["true", "TRUE", " : ", "/bin/true", "/usr/bin/true"] {
+            let hc = HealthCheck::Exec {
+                command: cmd.into(),
+                interval_secs: 5,
+                timeout_secs: 0,
+                start_period_secs: 0,
+                max_failures: 0,
+            };
+            assert!(trivial_exec_health_probe(Some(&hc)), "cmd={cmd}");
+        }
+        let real = HealthCheck::Exec {
+            command: "curl -f http://127.0.0.1/health".into(),
+            interval_secs: 5,
+            timeout_secs: 0,
+            start_period_secs: 0,
+            max_failures: 0,
+        };
+        assert!(!trivial_exec_health_probe(Some(&real)));
+        assert!(!trivial_exec_health_probe(None));
+        assert!(!trivial_exec_health_probe(Some(&HealthCheck::Tcp {
+            host: "127.0.0.1".into(),
+            port: 1,
+            interval_secs: 5,
+            timeout_secs: 0,
+            start_period_secs: 0,
+            max_failures: 0,
+        })));
     }
 
     #[test]

@@ -18,9 +18,11 @@ When you trigger an update, Super acts like a database transaction: **All or Not
 4.  **WAL**: The "Upgrade In-Progress" state is written to disk (Write-Ahead Log).
 5.  **Swap**: The new binary replaces the old one atomically.
 6.  **Restart**: The process is restarted.
-7.  **Validate**: Super waits for the `health_check` to pass.
+7.  **Validate**: Super waits for verification to succeed.
+    *   With a live `health_check`: commit when the probe reports Healthy; roll back on crash or `ota_verify_timeout`.
+    *   Without a probe: wait at least `startsecs` (minimum 1s) of uptime before commit, so a crash-on-start cannot race the synthetic Healthy signal. If `ota_verify_timeout` is shorter than that dwell, Super extends the timeout automatically.
     *   ✅ **Success**: The backup is removed. Transaction committed.
-    *   ❌ **Failure**: The process crashes or fails health checks. **Rollback** is triggered. The backup is restored, and the old version is restarted.
+    *   ❌ **Failure**: The process crashes / fails health / times out. **Rollback** restores the backup and restarts the previous version.
 
 ## Triggering an Update
 
@@ -101,10 +103,27 @@ super restart my-app    # required to run the new command
 | Field | Required | Description |
 | :--- | :--- | :--- |
 | `source` | Yes | Download URL. **Remote hosts must use HTTPS** (HTTP allowed on loopback for dev). Cloud metadata endpoints are blocked. |
-| `checksum` | Yes | SHA256 hex of the artifact |
-| `destination` | Yes | Absolute path of the binary on disk |
-| `extract` | Yes | `false` for a single binary; `true` for archives |
-| `restart_policy` | Yes | `"immediate"` — swap then restart (primary supported policy) |
+| `checksum` | Yes | SHA256 hex of the **downloaded bytes** (the archive when `extract` is true, otherwise the bare binary) |
+| `destination` | Yes | Absolute path of the **final binary** on disk (not an extract root) |
+| `extract` | Yes | `false` for a single binary; `true` to unpack `.tar.gz` / `.tgz` / `.tar` / `.zip` and stage one payload file (member matching the destination basename, else the sole regular file) |
+| `restart_policy` | Yes | When the new binary becomes active (see below) |
+
+### `restart_policy`
+
+| Value | Behavior |
+| :--- | :--- |
+| `immediate` (default) | After swap: restart the process (`SIGTERM`, or spawn if stopped), then verify. Commit when Healthy (or after `startsecs` when no probe); roll back on crash or `ota_verify_timeout`. |
+| `manual` | After swap: **commit immediately** and do **not** restart. The running process keeps the old image in memory until the next natural restart. |
+| `signal:hup` (dashboard hot-reload default) / `signal` / `signal:<name>` | After swap: deliver a signal without restarting. Bare `signal` is equivalent to `signal:hup`. **Requires an enabled `health_check`** (tcp/http/exec); the API rejects `signal*` without one. Commit waits for the next Healthy probe (or `ota_verify_timeout`). |
+
+## Verification tips
+
+* Prefer a real `health_check` for production OTA — it is the strongest signal that the new version works.
+* Keep `[server].ota_verify_timeout` greater than your probe `start_period` / interval (or greater than `startsecs` when you have no probe). Super auto-extends the timeout when no probe would otherwise commit after the deadline.
+* `restart_policy=manual` skips verification by design — only use it when you accept swapping the on-disk binary without proving the new process can run.
+* `restart_policy=signal*` **requires** an enabled `health_check`. Hot-reload does not exec a new process; without a probe, “still alive” is not proof the reload succeeded. Legacy configs that still have `signal*` without a probe are rejected on the next create/update; **startup** and **`super check`** also warn (or report an error for the snapshot) until you add a probe or change the policy.
+* An `exec` health command of `true` / `:` / `/bin/true` / `/usr/bin/true` is accepted structurally but **does not verify** a hot-reload — prefer a real TCP/HTTP/exec probe that exercises the new binary.
+* An exit code `0` during the verify window commits the upgrade (one-shot / batch jobs). Non-zero exits and unexpected signals roll back.
 
 ## Why this matters
 
