@@ -470,7 +470,7 @@ dependencies = [
 
 [[package]]
 name = "common"
-version = "1.5.4"
+version = "1.5.5"
 dependencies = [
  "anyhow",
  "base64",
@@ -3463,7 +3463,7 @@ checksum = "13c2bddecc57b384dee18652358fb23172facb8a2c51ccc10d74c157bdea3292"
 
 [[package]]
 name = "super-cli"
-version = "1.5.4"
+version = "1.5.5"
 dependencies = [
  "anyhow",
  "bytes",
@@ -3495,7 +3495,7 @@ dependencies = [
 
 [[package]]
 name = "super-core"
-version = "1.5.4"
+version = "1.5.5"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -3538,7 +3538,7 @@ dependencies = [
 
 [[package]]
 name = "superd"
-version = "1.5.4"
+version = "1.5.5"
 dependencies = [
  "anyhow",
  "axum",

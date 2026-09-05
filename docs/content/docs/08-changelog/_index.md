@@ -17,13 +17,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+---
+
+## [1.5.5] - 2026-09-05
+
 ### Changed
 
-- **Pro beta trial** lengthened from 1 month to **90 days** (GitHub Issue template + public docs). Purchased annual keys keep the 365-day term.
+- **`/go/pro/`**: primary CTA is **Request a free 90-day trial** → [Portal claim](https://platform.ddl.sconts.com/portal/claim?product=super-pro&plan=first-trials-001); Afdian checkout is the optional **¥10 / month** open-source sponsorship only (no Pro plugins/key).
+- **Pro beta trial** lengthened from 1 month to **90 days** (Portal claim + public docs). Purchased annual keys keep the 365-day term.
 - **License upgrade / renew links** (`LICENSE_UPGRADE_URL`, Dashboard renew CTA fallback) now point to [Get Super Pro](https://super.docs.sconts.com/go/pro/) instead of the feature matrix (matrix remains for edition comparison).
 - **Feature matrix** docs link to [Get Super Pro](/go/pro/) for purchase / renew / trial.
 - **Docker Hub publish**: after a successful Release, native `linux/amd64` + `linux/arm64` runners pack prebuilt Release binaries via `Dockerfile.pack` (no in-image `cargo build`, no QEMU) and merge a multi-arch manifest. Local `make docker` still builds from source.
 - **Get Super Pro** documents the [Super Pro Portal](https://platform.ddl.sconts.com/portal/login) for existing subscribers.
+- CI path-filters jobs by changed paths; docs-only pushes skip OSS CI (deploy-docs only); install-smoke is manual; Release is tag-only.
+
+### Notes
+
+- Workspace **1.5.5**; pair with commercial plugin packages `super-plugins-1.5.5-…`.
 
 ---
 

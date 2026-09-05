@@ -8,7 +8,7 @@ description: "Security, governance, and observability with optional licensed plu
 > Pages in this section describe capabilities provided by optional plugins (`security`, `isolation`, `notify`, `ui`). OSS `superd` without those plugins does not register the related API routes. Each page states which plugin provides it at the top.
 
 > [!TIP] Free 90-day beta trial
-> Super Pro (the licensed plugin set) is available during the beta with a **free 90-day trial license** ([request via GitHub Issue](https://github.com/schiplat/super/issues/new?template=pro-trial.yml)). We recommend licensed deployments for staging and non-critical workloads today; see the [feature matrix](/docs/07-editions/feature-matrix/) and the [Toward GA checklist](https://github.com/schiplat/super#toward-ga) on GitHub.
+> Super Pro (the licensed plugin set) is available during the beta with a **free 90-day trial license** ([Portal claim](https://platform.ddl.sconts.com/portal/claim?product=super-pro&plan=first-trials-001)). We recommend licensed deployments for staging and non-critical workloads today; see the [feature matrix](/docs/07-editions/feature-matrix/) and the [Toward GA checklist](https://github.com/schiplat/super#toward-ga) on GitHub.
 
 As your infrastructure grows from a single server to a fleet of edge devices or a microservices cluster, **governance** becomes critical.
 

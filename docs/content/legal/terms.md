@@ -5,7 +5,7 @@ description: "Terms for Super Pro purchase, delivery, and support."
 toc: true
 ---
 
-**Last updated:** 2026-07-25  
+**Last updated:** 2026-09-05  
 **Contact:** support@ddl.sconts.com  
 **Operator:** Project Super Team
 
@@ -26,15 +26,15 @@ One Super Pro subscription unlocks official plugins on the same **`superd` / `su
 
 After purchase you receive: a plugin archive for your platform, a signed license key, and a short config snippet (e.g. `[license].key` and `auth_secret`).
 
-See the [feature matrix](/docs/07-editions/feature-matrix/); purchase guide: [Get Super Pro](/go/pro/).
+See the [feature matrix](/docs/07-editions/feature-matrix/); guide: [Get Super Pro](/go/pro/).
 
 ## 3. Checkout and payment
 
 Checkout and payment are completed on a **third-party platform** (currently **Afdian**). Super does not process card or wallet payments itself. **That platform’s terms apply to payment, settlement, and refunds initiated through their checkout.** We receive only the order details needed to fulfill (see [Privacy Policy](/legal/privacy/)).
 
-**Super Pro** is sold for **annual coverage**: one annual payment maps to a **365-day** license term. After that term, you may **continue using** Pro plugins on the Super version scope signed into your key; renewal is for following newer releases beyond that scope (see [Get Super Pro](/go/pro/#license-version-coverage)).
+The public Afdian checkout linked from [Get Super Pro](/go/pro/) is currently an **open-source supporter tip** (**¥10 / month**). **Tips do not include** official plugins or a license key.
 
-Open-source supporter tips **do not** include official plugins or a license key.
+**Super Pro** licenses (when sold) use **annual coverage**: one annual payment maps to a **365-day** license term. After that term, you may **continue using** Pro plugins on the Super version scope signed into your key; renewal is for following newer releases beyond that scope (see [Get Super Pro](/go/pro/#license-version-coverage)). During the public beta, free **90-day** trials are offered via the [Super Pro Portal claim](https://platform.ddl.sconts.com/portal/claim?product=super-pro&plan=first-trials-001) page.
 
 ## 4. Delivery
 
@@ -54,7 +54,7 @@ Payment and refund mechanics are governed first by **Afdian’s platform rules**
 
 - **Before** plugins and key are delivered: we will support a full refund via the platform where possible.
 - **After** delivery: generally no refund; material fulfillment errors may be handled case by case.
-- **Wrong monthly tip instead of annual:** we will help switch to annual payment or refund — we will **not** issue a 365-day key for a short monthly tip.
+- **Wrong monthly tip instead of a paid Super Pro order:** tips are sponsorship only and **do not** include a license key; contact **support@ddl.sconts.com** if you meant to purchase Pro when paid SKUs are offered.
 - A refunded or charged-back order voids any associated license key.
 
 ## 7. Support and changes

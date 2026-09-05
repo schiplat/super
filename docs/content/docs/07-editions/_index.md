@@ -44,7 +44,7 @@ Pages mark licensed capabilities with **💎** and a "Licensed feature" callout 
 
 ## Getting Super Pro
 
-**Get Super Pro:** [purchase guide](/go/pro/) (stable link; checkout provider can change without a Super release). A free **90-day** trial license is available during the beta ([request via GitHub Issue](https://github.com/schiplat/super/issues/new?template=pro-trial.yml)). Existing subscribers: [Super Pro Portal](https://platform.ddl.sconts.com/portal/login) (downloads, license details, renewals).
+**Get Super Pro:** [guide](/go/pro/) — **[free 90-day trial](https://platform.ddl.sconts.com/portal/claim?product=super-pro&plan=first-trials-001)** during beta; optional ¥10/mo OSS sponsorship on Afdian (no Pro). Existing subscribers: [Super Pro Portal](https://platform.ddl.sconts.com/portal/login).
 
 ### In this section
 

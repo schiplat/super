@@ -1,15 +1,19 @@
 name: Pro trial request
-description: Request a free 90-day Super Pro trial (plugins + key sent by email)
+description: Prefer the Portal claim page for free 90-day Super Pro trials
 title: "[Pro trial] "
 labels: ["pro-trial"]
 body:
   - type: markdown
     attributes:
       value: |
-        Super is in **public beta**. OSS core is MIT; Pro plugins are available with a
-        **free 90-day license** during the beta (no payment required).
+        **Preferred:** claim a free 90-day trial on the
+        [Super Pro Portal](https://platform.ddl.sconts.com/portal/claim?product=super-pro&plan=first-trials-001)
+        (no payment). Use this Issue only if the Portal claim form is unavailable.
+
+        Super is in **public beta**. OSS core is MIT; Pro plugins ship with a
+        **free 90-day license** during the beta.
         We recommend staging and non-critical workloads until GA.
-        Fill this out and we will email the license key and plugin package.
+        If you must use this Issue, fill it out and we will email the license key and plugin package.
   - type: input
     id: email
     attributes:

@@ -11,7 +11,7 @@ Super is a modern replacement for tools like [Supervisor](https://supervisord.or
 > - **OSS core** (`superd` + `super`) is free under MIT — install and try anytime.
 > - **Super Pro plugins** (Dashboard UI, API auth/RBAC/audit, notifications with storm suppression, Linux cgroup isolation) are available with a **free 90-day license** during the beta. No payment required.
 >
-> **Request a free Pro trial:** open a [GitHub Issue](https://github.com/schiplat/super/issues/new?template=pro-trial.yml) (use the **Pro trial request** template). Include a contact email — we will send the license key and plugin package to that address.
+> **Request a free Pro trial:** open the [Super Pro Portal claim page](https://platform.ddl.sconts.com/portal/claim?product=super-pro&plan=first-trials-001). Leave a contact email — we issue the license key and plugin package to that address.
 
 > **Documentation:** [https://super.docs.sconts.com/docs/](https://super.docs.sconts.com/docs/)
 

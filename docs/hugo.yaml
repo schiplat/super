@@ -75,9 +75,9 @@ params:
   # localStorage; message supports Markdown links. Bump key on each release
   # so the banner shows again for returning visitors.
   banner:
-    key: "super-release-banner-v1-5-4"
+    key: "super-release-banner-v1-5-5"
     message: |
-      **Super 1.5.4 is here** — per-program OTA download/verify timeouts on `artifact`. [See what's new →](/docs/08-changelog/)
+      **Super 1.5.5 is here** — free 90-day Pro trial via Portal; optional ¥10/mo OSS tip on Afdian. [See what's new →](/docs/08-changelog/)
   contact:
     api_url: "https://open.schiplat.com/api/v1/demands"
   externalLinkDecoration: true

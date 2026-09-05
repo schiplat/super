@@ -13,31 +13,30 @@ One subscription unlocks the official plugin set on the same **`superd`** / **`s
 | **notify** | Production alerting: Slack / DingTalk / Feishu / Teams / custom webhooks, channel routing, hot-reload via `conf/notify.toml`, and [storm suppression](/docs/05-advanced-management/event-notifications#storm-suppression) (rate limits + inhibition) so incident bursts do not flood your channels. Complements OSS `[[event_hooks]]`; does not replace them. |
 | **isolation** | Linux cgroups v2 CPU/memory limits per program (hot-update without restart). **Linux only.** |
 
-Compare editions in the [feature matrix](/docs/07-editions/feature-matrix/). During public beta you can also request a **[free 90-day Pro trial](https://github.com/schiplat/super/issues/new?template=pro-trial.yml)** (no payment). After purchase or trial fulfillment you receive the plugin archive for your platform, a license key, and a short config snippet (`[license].key` + `auth_secret`).
+Compare editions in the [feature matrix](/docs/07-editions/feature-matrix/).
 
 > [!NOTE] Event hooks vs notify
 > OSS already supports local scripts or a basic webhook POST via `[[event_hooks]]`. The **notify** plugin is for multi-channel IM templates, routing, and storm suppression on the *same* event stream — see [Event notifications](/docs/05-advanced-management/event-notifications/) and [Event hooks](/docs/03-orchestration/events/hooks/).
 
-## Checkout
+## Free 90-day trial
+
+During the public beta you can request a **free 90-day Super Pro trial** (no payment). We email the plugin archive for your platform, a license key, and a short config snippet (`[license].key` + `auth_secret`).
+
+<p><a class="super-purchase-cta" href="https://platform.ddl.sconts.com/portal/claim?product=super-pro&plan=first-trials-001" rel="noopener noreferrer" target="_blank">Request a free 90-day trial</a></p>
+
+Open the [Super Pro Portal claim page](https://platform.ddl.sconts.com/portal/claim?product=super-pro&plan=first-trials-001), leave a real email, and complete the form. Staging and non-critical workloads are recommended until GA.
+
+## Support the project (optional)
+
+Want to tip the OSS project? Checkout on **Afdian** offers a single **¥10 / month** open-source supporter plan. This is a **sponsorship only** — it does **not** include Super Pro plugins or a license key.
 
 {{< purchase-cta label="Continue to checkout" >}}
 
 By continuing to checkout you agree to the [Terms of Service](/legal/terms/) and [Privacy Policy](/legal/privacy/).
 
-**Payment is completed on Afdian, a third-party platform.** Super does not process your card or wallet directly. **Refunds and chargebacks follow Afdian’s platform rules**; see [Terms §6](/legal/terms/#6-refunds). Contact **support@ddl.sconts.com** if fulfillment is delayed after payment clears.
+**Payment is completed on Afdian, a third-party platform.** Super does not process your card or wallet directly. **Refunds and chargebacks follow Afdian’s platform rules**; see [Terms §6](/legal/terms/#6-refunds). Contact **support@ddl.sconts.com** if something looks wrong after payment.
 
 Checkout is hosted on a third-party page so we can change payment providers without republishing Super itself. This docs page (`/go/pro/`) stays the stable link from the homepage and docs.
-
-### How to buy
-
-On the checkout page:
-
-1. Choose the **Super Pro** plan (not the open-source supporter tier).
-2. Prefer **annual payment** — one annual payment maps to a **365-day** license term.
-3. Fill in: display name, OS + arch (e.g. Linux arm64), and email.
-4. Delivery is typically within **24 hours** after payment clears.
-
-Open-source supporter tips do **not** include plugins or a license key.
 
 ## Customer portal
 

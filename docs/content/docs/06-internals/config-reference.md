@@ -12,7 +12,7 @@ description: "Complete schema for super.toml."
 | *(no mark)* | Available in OSS (with or without plugins). |
 
 > [!TIP] Free 90-day beta trial
-> Licensed plugins (Super Pro) are available with a **free 90-day trial license** ([request via GitHub Issue](https://github.com/schiplat/super/issues/new?template=pro-trial.yml)). We recommend staging and non-critical workloads until GA; see the [feature matrix](/docs/07-editions/feature-matrix/). Plugins, licensing, and trial details are covered in [Advanced Management](/docs/05-advanced-management/).
+> Licensed plugins (Super Pro) are available with a **free 90-day trial license** ([Portal claim](https://platform.ddl.sconts.com/portal/claim?product=super-pro&plan=first-trials-001)). We recommend staging and non-critical workloads until GA; see the [feature matrix](/docs/07-editions/feature-matrix/). Plugins, licensing, and trial details are covered in [Advanced Management](/docs/05-advanced-management/).
 
 **Licensed-plugin fields in this reference** (quick index):
 
@@ -97,7 +97,7 @@ The `SUPER_LICENSE` and `SUPER_LICENSE_STRICT` overrides are documented in [Envi
 
 | Key | Type | Default | Description |
 | :--- | :--- | :--- | :--- |
-| `key` 💎 | string | — | Base64-encoded signed subscription key. Obtain from your subscription vendor. Override: `SUPER_LICENSE` env (same format). Every valid license includes a signing key id (`kid`, e.g. `k_0ac64a3f`) that must match a verifying key embedded in your `superd` build — see [Troubleshooting license verification](/docs/05-advanced-management/authentication#troubleshooting-license-verification). |
+| `key` 💎 | string | — | Base64-encoded signed subscription key. Obtain from your subscription vendor. Override: `SUPER_LICENSE` env (same format). Every valid license includes a signing key id (`kid`, e.g. `k_<8hex>`) that must match a verifying key embedded in your `superd` build — see [Troubleshooting license verification](/docs/05-advanced-management/authentication#troubleshooting-license-verification). |
 | `strict` 💎 | bool | `false` | When `true`, invalid or incompatible keys refuse startup instead of degrading to OSS. Recommended for production licensed deployments. Override: `SUPER_LICENSE_STRICT=1`. |
 
 ```toml
