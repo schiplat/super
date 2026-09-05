@@ -19,9 +19,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Pro beta trial** lengthened from 1 month to **90 days** (GitHub Issue template + public docs). Purchased annual keys keep the 365-day term.
 - **License upgrade / renew links** (`LICENSE_UPGRADE_URL`, Dashboard renew CTA fallback) now point to [Get Super Pro](https://super.docs.sconts.com/go/pro/) instead of the feature matrix (matrix remains for edition comparison).
 - **Feature matrix** docs link to [Get Super Pro](/go/pro/) for purchase / renew / trial.
 - **Docker Hub publish**: after a successful Release, native `linux/amd64` + `linux/arm64` runners pack prebuilt Release binaries via `Dockerfile.pack` (no in-image `cargo build`, no QEMU) and merge a multi-arch manifest. Local `make docker` still builds from source.
+- **Get Super Pro** documents the [Super Pro Portal](https://platform.ddl.sconts.com/portal/login) for existing subscribers.
 
 ---
 

@@ -26,7 +26,7 @@ pub fn kid_for_public_bytes(bytes: &[u8; 32]) -> String {
 /// Renewal / purchase page (Get Super Pro). Edition comparison: feature matrix.
 pub const LICENSE_UPGRADE_URL: &str = "https://super.docs.sconts.com/go/pro/";
 
-/// Free 1-month Pro trial during public beta (GitHub Issue template).
+/// Free 90-day Pro trial during public beta (GitHub Issue template).
 pub const LICENSE_TRIAL_URL: &str =
     "https://github.com/schiplat/super/issues/new?template=pro-trial.yml";
 

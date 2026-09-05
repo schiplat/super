@@ -226,4 +226,4 @@ super token create admin --role admin
 super token list
 ```
 
-**Next — Advanced Management.** Token lifecycle, RBAC roles, the Dashboard, isolation, audit, and notifications each have their own page: **[Advanced Management](/docs/05-advanced-management/)**. During the public beta you can request a **free 1-month Super Pro trial** ([request via GitHub Issue](https://github.com/schiplat/super/issues/new?template=pro-trial.yml)); compare editions in the [feature matrix](/docs/07-editions/feature-matrix/).
+**Next — Advanced Management.** Token lifecycle, RBAC roles, the Dashboard, isolation, audit, and notifications each have their own page: **[Advanced Management](/docs/05-advanced-management/)**. During the public beta you can request a **free 90-day Super Pro trial** ([request via GitHub Issue](https://github.com/schiplat/super/issues/new?template=pro-trial.yml)); compare editions in the [feature matrix](/docs/07-editions/feature-matrix/).

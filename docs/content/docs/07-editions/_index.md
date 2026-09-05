@@ -44,7 +44,7 @@ Pages mark licensed capabilities with **💎** and a "Licensed feature" callout 
 
 ## Getting Super Pro
 
-**Get Super Pro:** [purchase guide](/go/pro/) (stable link; checkout provider can change without a Super release). A free 1-month trial license is available during the beta ([request via GitHub Issue](https://github.com/schiplat/super/issues/new?template=pro-trial.yml)).
+**Get Super Pro:** [purchase guide](/go/pro/) (stable link; checkout provider can change without a Super release). A free **90-day** trial license is available during the beta ([request via GitHub Issue](https://github.com/schiplat/super/issues/new?template=pro-trial.yml)). Existing subscribers: [Super Pro Portal](https://platform.ddl.sconts.com/portal/login) (downloads, license details, renewals).
 
 ### In this section
 

@@ -13,7 +13,7 @@ One subscription unlocks the official plugin set on the same **`superd`** / **`s
 | **notify** | Production alerting: Slack / DingTalk / Feishu / Teams / custom webhooks, channel routing, hot-reload via `conf/notify.toml`, and [storm suppression](/docs/05-advanced-management/event-notifications#storm-suppression) (rate limits + inhibition) so incident bursts do not flood your channels. Complements OSS `[[event_hooks]]`; does not replace them. |
 | **isolation** | Linux cgroups v2 CPU/memory limits per program (hot-update without restart). **Linux only.** |
 
-Compare editions in the [feature matrix](/docs/07-editions/feature-matrix/). During public beta you can also request a **[free 1-month Pro trial](https://github.com/schiplat/super/issues/new?template=pro-trial.yml)** (no payment). After purchase or trial fulfillment you receive the plugin archive for your platform, a license key, and a short config snippet (`[license].key` + `auth_secret`).
+Compare editions in the [feature matrix](/docs/07-editions/feature-matrix/). During public beta you can also request a **[free 90-day Pro trial](https://github.com/schiplat/super/issues/new?template=pro-trial.yml)** (no payment). After purchase or trial fulfillment you receive the plugin archive for your platform, a license key, and a short config snippet (`[license].key` + `auth_secret`).
 
 > [!NOTE] Event hooks vs notify
 > OSS already supports local scripts or a basic webhook POST via `[[event_hooks]]`. The **notify** plugin is for multi-channel IM templates, routing, and storm suppression on the *same* event stream — see [Event notifications](/docs/05-advanced-management/event-notifications/) and [Event hooks](/docs/03-orchestration/events/hooks/).
@@ -38,6 +38,10 @@ On the checkout page:
 4. Delivery is typically within **24 hours** after payment clears.
 
 Open-source supporter tips do **not** include plugins or a license key.
+
+## Customer portal
+
+Existing subscribers: sign in at the **[Super Pro Portal](https://platform.ddl.sconts.com/portal/login)** to download plugin packages for your platform, view license details, and manage renewals.
 
 > [!TIP] Expiry does not disable your plugins
 > After the 365-day term ends, you can still use Super Pro plugins on the Super versions your key already authorizes (see below). Expiry does **not** turn plugins off. Renew when you want to follow **newer** Super releases beyond that version scope.
