@@ -4,7 +4,10 @@ Open, OSS-level planning. Items here are **not** GA blockers — they are priori
 improvements we track publicly. Anything that is an accepted security trade-off
 lives in [SECURITY.md](SECURITY.md); this file is for feature work.
 
-Priorities: **P0** (next in line) · **P1** (soon) · **P2** (backlog).
+This is the **single** public roadmap source. Docs and the changelog link here
+rather than duplicating a second page.
+
+Priorities: **P0** (next in line) · **P1** (soon) · **P2** (backlog) · **Directions** (multi-release horizons).
 
 ## P0 — Migration importers (`super import`)
 
@@ -35,6 +38,32 @@ involvement — it is pure config translation, so it must stay OSS and free).
 Rough estimate 0.5–1.5 dev-days for the CLI + literal parser, 2–3 with tests and
 docs. The PM2 JS-literal preprocessing is the main cost driver; do not escalate
 to a full JS engine.
+
+## P1 — AI edge gateway & container scenarios
+
+**Status:** direction agreed; design and sequencing open.
+
+Actively adapt Super for **AI edge gateway** and **container** deployments —
+single static binary, loopback-first defaults, declarative stacks, and lean
+daemon RSS on small / intermittently connected hosts.
+
+Themes (non-exhaustive): gateway/sidecar/edge defaults; container recipes
+(foreground PID 1, `SUPER_ROOT` layout, health probes, fail-closed bind);
+lifecycle fit for AI-adjacent edge workloads without a cluster control plane on
+the device. OSS core stays standalone; subscription plugins remain optional.
+
+## Directions — Cloud control hub (SaaS / Hub)
+
+**Status:** long-horizon product direction; not a near-term GA commitment.
+
+Evolve beyond **single-host subscription plugins** toward a **cloud-hosted
+control hub** (SaaS / Hub): multi-node inventory, central access lifecycle, and
+a shared operator portal — while each host still runs a lean local `superd`.
+
+Principles: the local daemon stays authoritative for process lifecycle; the hub
+coordinates and delivers policy/artifacts; OSS remains useful offline; public
+docs stay at product level (no signing-key / issuance internals). Packaging
+(hosted SaaS vs self-hosted Hub) and timeline are TBD.
 
 ## P2 — Credential-channel env injection (opt-in)
 

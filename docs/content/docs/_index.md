@@ -68,3 +68,12 @@ Build Super from source, understand the codebase, or hook custom logic into the 
   {{< card link="/docs/09-development/writing-extensions" title="Writing Extensions" subtitle="Hook custom Rust logic into the super-core lifecycle." >}}
 {{< /cards >}}
 
+---
+
+## Roadmap & releases
+
+{{< cards >}}
+  {{< card link="https://github.com/schiplat/super/blob/master/ROADMAP.md" title="Roadmap" subtitle="Near-term backlog and longer-term product directions (ROADMAP.md)." >}}
+  {{< card link="/docs/08-changelog" title="Changelog" subtitle="What shipped in each release." >}}
+{{< /cards >}}
+

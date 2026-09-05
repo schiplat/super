@@ -11,7 +11,7 @@ All notable changes to **Project Super** will be documented in this page.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-> Looking for what's planned next? See the public [Roadmap / Backlog](https://github.com/schiplat/super/blob/master/ROADMAP.md) (P0/P1/P2 priorities).
+> Looking for what's planned next? See the public [Roadmap / Backlog](https://github.com/schiplat/super/blob/master/ROADMAP.md) (P0/P1/P2 and longer-term directions).
 
 ---
 
