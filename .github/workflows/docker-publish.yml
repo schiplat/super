@@ -1,9 +1,10 @@
 name: Publish Docker Image
 
-# Pack Release linux-amd64 / linux-arm64 binaries into schiplat/super.
-# Native runners only (no QEMU). Triggered after a successful Release, or manually.
+# After Release publishes GitHub Release assets, pack linux-amd64 / linux-arm64
+# tarballs into schiplat/super (Dockerfile.pack) and merge a multi-arch manifest.
+# Never compiles Rust — binaries come only from the Release packages.
 #
-# Archived previous (in-image cargo + QEMU multi-arch) workflow:
+# Archived from-source + QEMU workflow:
 #   .github/workflows-disabled/docker-publish.from-source.yml
 
 on:
@@ -19,7 +20,6 @@ on:
 
 env:
   IMAGE: schiplat/super
-  # Temporary per-arch tags before imagetools merge (never leave these as product tags).
   DOCKERFILE_PACK: packaging/docker/Dockerfile.pack
 
 jobs:
@@ -31,17 +31,11 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      actions: read
     outputs:
       version: ${{ steps.ver.outputs.version }}
       tag: ${{ steps.ver.outputs.tag }}
-      release_run_id: ${{ steps.ver.outputs.release_run_id }}
-      source: ${{ steps.ver.outputs.source }}
     steps:
-      - name: Checkout (for gh / version helpers)
-        uses: actions/checkout@v4
-
-      - name: Resolve version
+      - name: Resolve version from GitHub Release
         id: ver
         env:
           GH_TOKEN: ${{ github.token }}
@@ -50,38 +44,27 @@ jobs:
           if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
             v="${{ inputs.version }}"
             if [[ -z "${v}" ]]; then
-              v="$(gh release view --json tagName -q .tagName)"
+              v="$(gh release view --repo "${{ github.repository }}" --json tagName -q .tagName)"
             fi
-            v="${v#v}"
-            echo "version=${v}" >> "$GITHUB_OUTPUT"
-            echo "tag=v${v}" >> "$GITHUB_OUTPUT"
-            echo "source=release" >> "$GITHUB_OUTPUT"
-            echo "release_run_id=" >> "$GITHUB_OUTPUT"
-            echo "Resolved version=${v} (GitHub Release assets)"
           else
-            run_id="${{ github.event.workflow_run.id }}"
+            # Release is tags-only (v*); head_branch is the tag name.
             ref="${{ github.event.workflow_run.head_branch }}"
-            v=""
-            if [[ "${ref}" == v* ]]; then
-              v="${ref#v}"
-            else
-              # Release via workflow_dispatch: infer version from artifact names.
-              name="$(gh api "repos/${{ github.repository }}/actions/runs/${run_id}/artifacts" \
-                --jq '.artifacts[].name | select(test("^super-[0-9].*-linux-amd64$"))' | head -1)"
-              if [[ -z "${name}" ]]; then
-                echo "::error::Could not resolve version from Release artifacts (run ${run_id}, head_branch=${ref})"
-                exit 1
-              fi
-              # super-1.5.4-linux-amd64 → 1.5.4
-              v="${name#super-}"
-              v="${v%-linux-amd64}"
+            if [[ "${ref}" != v* ]]; then
+              echo "::error::Expected Release tag ref (v*), got head_branch=${ref}"
+              exit 1
             fi
-            echo "version=${v}" >> "$GITHUB_OUTPUT"
-            echo "tag=v${v}" >> "$GITHUB_OUTPUT"
-            echo "source=artifact" >> "$GITHUB_OUTPUT"
-            echo "release_run_id=${run_id}" >> "$GITHUB_OUTPUT"
-            echo "Resolved version=${v} (Release run ${run_id})"
+            v="${ref}"
           fi
+          v="${v#v}"
+          tag="v${v}"
+          # Gate on published Release assets (not Actions artifacts / source rebuild).
+          gh release view "${tag}" --repo "${{ github.repository }}" \
+            --json assets -q '.assets[].name' | grep -qx "super-${v}-linux-amd64.tar.gz"
+          gh release view "${tag}" --repo "${{ github.repository }}" \
+            --json assets -q '.assets[].name' | grep -qx "super-${v}-linux-arm64.tar.gz"
+          echo "version=${v}" >> "$GITHUB_OUTPUT"
+          echo "tag=${tag}" >> "$GITHUB_OUTPUT"
+          echo "Resolved ${tag} (GitHub Release linux packages)"
 
   build:
     needs: prepare
@@ -98,39 +81,29 @@ jobs:
     runs-on: ${{ matrix.runner }}
     permissions:
       contents: read
-      actions: read
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Download Release workflow artifacts
-        if: needs.prepare.outputs.source == 'artifact'
-        uses: actions/download-artifact@v4
-        with:
-          github-token: ${{ github.token }}
-          run-id: ${{ needs.prepare.outputs.release_run_id }}
-          name: super-${{ needs.prepare.outputs.version }}-${{ matrix.release_plat }}
-          path: release-artifacts
-
-      - name: Download GitHub Release assets
-        if: needs.prepare.outputs.source == 'release'
+      - name: Download Release package
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
           mkdir -p release-artifacts
           gh release download "${{ needs.prepare.outputs.tag }}" \
+            --repo "${{ github.repository }}" \
             --pattern "super-${{ needs.prepare.outputs.version }}-${{ matrix.release_plat }}.tar.gz" \
             --dir release-artifacts
 
       - name: Extract binaries into bin/
         run: |
           set -euo pipefail
-          archive="$(find release-artifacts -name "super-*-${{ matrix.release_plat }}.tar.gz" -print -quit)"
-          test -n "${archive}" || { echo "missing archive for ${{ matrix.release_plat }}"; ls -laR release-artifacts; exit 1; }
+          archive="release-artifacts/super-${{ needs.prepare.outputs.version }}-${{ matrix.release_plat }}.tar.gz"
+          test -f "${archive}"
           tar -xzf "${archive}"
-          root="$(find . -maxdepth 1 -type d -name "super-*-${{ matrix.release_plat }}" -print -quit)"
-          test -n "${root}" && test -x "${root}/bin/superd" && test -x "${root}/bin/super"
+          root="super-${{ needs.prepare.outputs.version }}-${{ matrix.release_plat }}"
+          test -x "${root}/bin/superd" && test -x "${root}/bin/super"
           mkdir -p bin
           cp "${root}/bin/superd" "${root}/bin/super" bin/
           chmod +x bin/superd bin/super
@@ -155,7 +128,7 @@ jobs:
             type=raw,value=latest
             type=semver,pattern={{major}}.{{minor}},value=v${{ needs.prepare.outputs.version }}
 
-      - name: Build and push by digest
+      - name: Pack image and push by digest
         id: build
         uses: docker/build-push-action@v6
         with:
@@ -218,7 +191,7 @@ jobs:
             type=raw,value=latest
             type=semver,pattern={{major}}.{{minor}},value=v${{ needs.prepare.outputs.version }}
 
-      - name: Create multi-arch manifest
+      - name: Merge multi-arch manifest
         working-directory: /tmp/digests
         run: |
           set -euo pipefail

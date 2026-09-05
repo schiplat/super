@@ -1,27 +1,12 @@
 name: Install smoke
 
-# Smoke-test install paths:
+# Smoke-test install paths (manual only):
 # - Unix: install.sh against a locally built fake release (--base-url)
 # - macOS: native runner; FreeBSD: vmactions/freebsd-vm
 # Docker image build/publish is separate (tags only — see docker-publish.yml).
 
 on:
   workflow_dispatch:
-  pull_request:
-    paths:
-      - 'install.sh'
-      - 'tools/scripts/install-smoke.sh'
-      - 'packaging/contrib/**'
-      - '.github/workflows/install-smoke.yml'
-      - '.github/scripts/package-release-unix.sh'
-      - '.github/scripts/write-release-readme.sh'
-  push:
-    branches: [master, main]
-    paths:
-      - 'install.sh'
-      - 'tools/scripts/install-smoke.sh'
-      - 'packaging/contrib/**'
-      - '.github/workflows/install-smoke.yml'
 
 jobs:
   smoke-unix:

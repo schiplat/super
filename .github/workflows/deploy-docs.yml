@@ -1,5 +1,6 @@
 name: Deploy Documentation
 
+# Runs on docs changes only. OSS CI skips docs-only pushes (see ci.yml paths-ignore).
 on:
   push:
     branches:

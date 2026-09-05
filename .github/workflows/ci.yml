@@ -3,6 +3,10 @@ name: CI
 on:
   push:
     branches: [master, main]
+    # Docs-only pushes: Deploy Documentation only (deploy-docs.yml).
+    paths-ignore:
+      - 'docs/**'
+      - '.github/workflows/deploy-docs.yml'
   pull_request:
     branches: [master, main]
 
@@ -10,7 +14,50 @@ env:
   HUGO_VERSION: '0.163.3'
 
 jobs:
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      rust: ${{ steps.filter.outputs.rust }}
+      benchmark: ${{ steps.filter.outputs.benchmark }}
+      audit: ${{ steps.filter.outputs.audit }}
+      docker: ${{ steps.filter.outputs.docker }}
+      docs: ${{ steps.filter.outputs.docs }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            rust:
+              - 'common/**'
+              - 'core/**'
+              - 'cli/**'
+              - 'superd/**'
+              - 'Cargo.toml'
+              - 'Cargo.lock'
+              - 'rust-toolchain.toml'
+              - 'rustfmt.toml'
+              - 'clippy.toml'
+              - '.github/workflows/ci.yml'
+            benchmark:
+              - 'tools/benchmark/**'
+              - '.github/workflows/ci.yml'
+            audit:
+              - '**/Cargo.toml'
+              - '**/Cargo.lock'
+              - '.github/workflows/ci.yml'
+            docker:
+              - 'packaging/docker/**'
+              - 'Makefile'
+              - '.github/workflows/docker-publish.yml'
+              - '.github/workflows/ci.yml'
+            docs:
+              - 'docs/**'
+              - '.github/workflows/ci.yml'
+
   rust:
+    needs: changes
+    if: needs.changes.outputs.rust == 'true'
     strategy:
       fail-fast: false
       matrix:
@@ -40,6 +87,8 @@ jobs:
         run: cargo test --workspace
 
   benchmark:
+    needs: changes
+    if: needs.changes.outputs.benchmark == 'true'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -68,6 +117,8 @@ jobs:
         run: cargo build --release
 
   audit:
+    needs: changes
+    if: needs.changes.outputs.audit == 'true'
     runs-on: ubuntu-latest
     # rustsec/audit-check posts Checks API annotations (and may open/update
     # tracking issues). Without these, the job fails with
@@ -88,6 +139,8 @@ jobs:
   # Fast guard after packaging/docker move — full image build is tag-only
   # (docker-publish.yml). Fail early if Dockerfile / workflow / Makefile drift.
   docker-layout:
+    needs: changes
+    if: needs.changes.outputs.docker == 'true'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -114,7 +167,10 @@ jobs:
           done
           exit "$stale"
 
+  # PRs that touch docs (push docs-only is paths-ignored → deploy-docs.yml only).
   docs:
+    needs: changes
+    if: needs.changes.outputs.docs == 'true'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
