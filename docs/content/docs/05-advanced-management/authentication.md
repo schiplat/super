@@ -60,7 +60,7 @@ Typical messages and what to do:
 | Missing signing key id (`kid`) | License predates the current format | Ask your vendor to **re-issue** the license |
 | Unknown / unrecognized `kid` | License signed with a key this `superd` build does not embed yet (common after key rotation) | Run `super keyring` on the **same** `super` / `superd` version you deploy; upgrade to an official release that includes that `kid`, or keep your previous license file until you upgrade |
 | Signature mismatch for a listed `kid` | Wrong, truncated, or tampered key string | Restore the exact key from your vendor portal; avoid editing `[license].key` |
-| Expired or version out of range | Policy or Super version span | Renew or upgrade per your subscription terms — see [feature matrix](/docs/07-editions/feature-matrix/) |
+| Expired or version out of range | Policy or Super version span | Renew or upgrade per your subscription terms — see [Get Super Pro](/go/pro/) |
 
 Official release binaries may embed **more** verifying keys than a local `cargo build` from git alone. Compare against the release you actually run in production, not only a dev build.
 

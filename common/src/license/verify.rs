@@ -23,9 +23,8 @@ pub fn kid_for_public_bytes(bytes: &[u8; 32]) -> String {
     format!("k_{hex}")
 }
 
-/// Edition comparison and renewal options.
-pub const LICENSE_UPGRADE_URL: &str =
-    "https://super.docs.sconts.com/docs/07-editions/feature-matrix/";
+/// Renewal / purchase page (Get Super Pro). Edition comparison: feature matrix.
+pub const LICENSE_UPGRADE_URL: &str = "https://super.docs.sconts.com/go/pro/";
 
 /// Free 1-month Pro trial during public beta (GitHub Issue template).
 pub const LICENSE_TRIAL_URL: &str =

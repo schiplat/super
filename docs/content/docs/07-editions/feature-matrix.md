@@ -25,6 +25,8 @@ description: "OSS core vs optional licensed plugins."
 
 Same **`superd`** and **`super`** binaries for both columns — **Licensed** is OSS plus commercial plugins: drop `plugins/*.so` + `[license].key` in `conf/super.toml` to enable the right-hand column (see [Editions](/docs/07-editions/)).
 
+To purchase, renew, or request a trial for the commercial plugin set, see **[Get Super Pro](/go/pro/)** (checkout and license version coverage).
+
 > [!IMPORTANT]
 > `security` is included with every subscription and is **required for startup** when `[license].key` is valid. RBAC, audit logs, and API token auth come from the `security` plugin. See [Authentication](/docs/05-advanced-management/authentication#licensed-deployments-require-security).
 

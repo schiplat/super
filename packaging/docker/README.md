@@ -52,8 +52,8 @@ docker build -f packaging/docker/Dockerfile -t schiplat/super:latest .
 
 Workflow [`.github/workflows/docker-publish.yml`](../../.github/workflows/docker-publish.yml) runs after a successful **Release** on a `v*` tag (or **workflow_dispatch** with a version):
 
-1. Download `super-{ver}-linux-amd64.tar.gz` / `linux-arm64` (Release workflow artifacts or GitHub Release assets).
-2. On native `ubuntu-latest` / `ubuntu-24.04-arm`, build with [`Dockerfile.pack`](Dockerfile.pack) (COPY `bin/superd` + `bin/super` only — no Rust compile).
+1. Download `super-{ver}-linux-amd64.tar.gz` / `linux-arm64` from the **GitHub Release** assets (never rebuilds from source).
+2. On native `ubuntu-latest` / `ubuntu-24.04-arm`, pack with [`Dockerfile.pack`](Dockerfile.pack) (COPY `bin/superd` + `bin/super` only — no Rust compile).
 3. `docker buildx imagetools create` merges digests into `schiplat/super:{ver}`, `:latest`, and `:major.minor`.
 
 Archived in-image compile + QEMU workflow (not run by Actions): [`.github/workflows-disabled/docker-publish.from-source.yml`](../../.github/workflows-disabled/docker-publish.from-source.yml).
