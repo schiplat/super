@@ -98,78 +98,12 @@ impl LifecycleController {
 
         let program_name = config.name.clone();
 
-        // 2. Flapping detection — only for long-running services. Cron jobs are
-        // one-shot scheduled tasks: they exit and re-trigger on the next tick by
-        // design, so restart-loop detection does not apply (and would otherwise
-        // permanently disable short-interval schedules via `autostart = false`).
-        if config.cron.is_none() {
-            // Record start time
-            self.tracker
-                .record_start(id, self.config.server.flapping_threshold);
-
-            // Check for rapid restarts within the window
-            if self.tracker.is_flapping(
-                id,
-                self.config.server.flapping_window,
-                self.config.server.flapping_threshold,
-            ) {
-                tracing::error!(
-                    "FLAPPING DETECTED for {}! Restarted too frequently.",
-                    program_name
-                );
-
-                // Mark state as Fatal
-                registry.restarting.remove(&id);
-                registry.waiting.remove(&id);
-                registry.crashed.insert(id);
-
-                if let Some(cfg) = registry.programs.get_mut(&id) {
-                    cfg.autostart = false;
-                    cfg.updated_at = chrono::Utc::now().timestamp() as u64;
-                }
-
-                // Record flapping error so the UI shows a reason, not just Fatal
-                let err_msg = format!(
-                    "FLAPPING DETECTED: Restarted too frequently in {}s.",
-                    self.config.server.flapping_window
-                );
-                registry.startup_errors.insert(id, err_msg.clone());
-
-                registry.mark_dirty();
-
-                let _ = self.log_tx.send(WsMessage::StatusChange {
-                    id,
-                    status: ProcessStatus::Fatal,
-                    name: program_name.clone(),
-                });
-
-                // Extension Event
-                let event = SystemEvent::ProcessFatal {
-                    program_id: id,
-                    program_name: program_name.clone(),
-                    pid: None,
-                    uptime_secs: 0,
-                    exit_code: None,
-                    signal: None,
-                    msg: format!(
-                        "FLAPPING DETECTED: Restarted too frequently in {}s.",
-                        self.config.server.flapping_window
-                    ),
-                    log_tail: None,
-                };
-                crate::event_hooks::emit(&self.extension, &self.config.event_hooks, event);
-
-                return Err(anyhow::anyhow!("Program flapping detected"));
-            }
-        }
-
-        // 3. Prepare for start
-        registry.restarting.remove(&id);
-        registry.waiting.remove(&id);
-        registry.crashed.remove(&id);
-        registry.startup_errors.remove(&id);
-
-        // 4. Dependency check
+        // 2. Dependency check FIRST — a start denied because dependencies are not
+        //    ready is NOT a start attempt. The flapping tracker used to be fed
+        //    before this gate, so every Waiting→spawn retry (one per dependency
+        //    health transition) was recorded as a "start" and could Fatal a
+        //    perfectly healthy program seconds later once its dependencies
+        //    became ready.
         if !config.depends_on.is_empty() {
             let mut all_ready = true;
             let mut missing_deps = Vec::new();
@@ -245,6 +179,79 @@ impl LifecycleController {
                 return Ok(());
             }
         }
+
+        // 3. Flapping detection — only for long-running services, and only past
+        //    the dependency gate (see step 2): this point is reached exclusively
+        //    when a real spawn attempt is about to happen. Cron jobs are one-shot
+        //    scheduled tasks: they exit and re-trigger on the next tick by
+        //    design, so restart-loop detection does not apply (and would otherwise
+        //    permanently disable short-interval schedules via `autostart = false`).
+        if config.cron.is_none() {
+            // Record start time
+            self.tracker
+                .record_start(id, self.config.server.flapping_threshold);
+
+            // Check for rapid restarts within the window
+            if self.tracker.is_flapping(
+                id,
+                self.config.server.flapping_window,
+                self.config.server.flapping_threshold,
+            ) {
+                tracing::error!(
+                    "FLAPPING DETECTED for {}! Restarted too frequently.",
+                    program_name
+                );
+
+                // Mark state as Fatal
+                registry.restarting.remove(&id);
+                registry.waiting.remove(&id);
+                registry.crashed.insert(id);
+
+                if let Some(cfg) = registry.programs.get_mut(&id) {
+                    cfg.autostart = false;
+                    cfg.updated_at = chrono::Utc::now().timestamp() as u64;
+                }
+
+                // Record flapping error so the UI shows a reason, not just Fatal
+                let err_msg = format!(
+                    "FLAPPING DETECTED: Restarted too frequently in {}s.",
+                    self.config.server.flapping_window
+                );
+                registry.startup_errors.insert(id, err_msg.clone());
+
+                registry.mark_dirty();
+
+                let _ = self.log_tx.send(WsMessage::StatusChange {
+                    id,
+                    status: ProcessStatus::Fatal,
+                    name: program_name.clone(),
+                });
+
+                // Extension Event
+                let event = SystemEvent::ProcessFatal {
+                    program_id: id,
+                    program_name: program_name.clone(),
+                    pid: None,
+                    uptime_secs: 0,
+                    exit_code: None,
+                    signal: None,
+                    msg: format!(
+                        "FLAPPING DETECTED: Restarted too frequently in {}s.",
+                        self.config.server.flapping_window
+                    ),
+                    log_tail: None,
+                };
+                crate::event_hooks::emit(&self.extension, &self.config.event_hooks, event);
+
+                return Err(anyhow::anyhow!("Program flapping detected"));
+            }
+        }
+
+        // 4. Prepare for start
+        registry.restarting.remove(&id);
+        registry.waiting.remove(&id);
+        registry.crashed.remove(&id);
+        registry.startup_errors.remove(&id);
 
         // 5. [Hook] Before Start (Extension)
         let extra_envs_from_ext = match self.extension.before_start(id, &config) {
