@@ -1,0 +1,20 @@
+# Dedicated Super instance for the djangoapp example (OSS only).
+# Default paths on a lab host: SUPER_ROOT=/opt/super-django-demo
+
+[server]
+host = "127.0.0.1"
+port = 9012
+allow_insecure_public_bind = false
+socket = "run/superd.sock"
+enable_docs = false
+
+[logging]
+log_level = "info"
+
+[storage]
+data_file = "data/snapshot.json"
+events_file = "data/events.db"
+log_dir = "logs"
+
+[include]
+files = ["conf/conf.d/*.toml"]

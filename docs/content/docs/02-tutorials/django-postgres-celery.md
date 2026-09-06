@@ -68,6 +68,8 @@ You will use **declarative stacks**, **`depends_on`**, **health checks**, **grou
 
 > [!NOTE]
 > **Assumptions.** You already have [binaries + an instance root](/docs/01-getting-started/installation/#instance-layout-and-config), a Django project that runs under Gunicorn, **nginx** installed on the host, and **reachable** Postgres + Redis endpoints. Paths below use `/srv/myapp` and `$SUPER_ROOT=/opt/super`.
+>
+> **Runnable OSS example.** The repo ships a minimal companion stack under [`examples/djangoapp/`](https://github.com/schiplat/super/tree/master/examples/djangoapp) (Compose data plane + Gunicorn/Celery + declarative `@djangoapp` + optional VHS tapes). Lab defaults use API `:9012` and nginx `:8088` so they can coexist with another Super/nginx on the same host — see that README.
 
 > [!IMPORTANT]
 > Programs under Super must stay in the **foreground**: nginx with `daemon off`, Gunicorn without `--daemon`, Celery without `--detach`. See [Managed Program Requirements](/docs/02-essentials/process-management-contract).

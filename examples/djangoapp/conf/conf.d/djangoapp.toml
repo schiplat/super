@@ -1,0 +1,92 @@
+# conf/conf.d/djangoapp.toml — OSS stack mirroring the Django tutorial.
+#
+# Paths assume APP_ROOT=/srv/djangoapp (scripts/bootstrap.sh installs here).
+# CRITICAL: keep prune = false for day-to-day stacks.
+# health_check must be a single-line inline table (or [services.health_check]).
+prune = false
+
+[[services]]
+name = "web"
+group = "djangoapp"
+command = "/srv/djangoapp/.venv/bin/gunicorn"
+args = [
+  "myproject.wsgi:application",
+  "--bind", "127.0.0.1:8000",
+  "--workers", "1",
+  "--access-logfile", "-",
+  "--error-logfile", "-",
+]
+cwd = "/srv/djangoapp"
+env_file = "/srv/djangoapp/.env"
+autostart = true
+autorestart = "unexpected"
+priority = 40
+startsecs = 5
+# Fastest Super allows: interval/start_period 0 means "use default" (5s / 1s), so set 1 explicitly.
+health_check = { type = "http", url = "http://127.0.0.1:8000/health/", start_period_secs = 1, interval_secs = 1, timeout_secs = 2, max_failures = 3 }
+
+[[services]]
+name = "nginx"
+group = "djangoapp"
+command = "/usr/sbin/nginx"
+args = ["-c", "/srv/djangoapp/nginx/nginx.conf", "-g", "daemon off;"]
+autostart = true
+autorestart = "unexpected"
+priority = 45
+startsecs = 3
+stopsecs = 10
+depends_on = ["web"]
+health_check = { type = "tcp", port = 8088, host = "127.0.0.1", start_period_secs = 1, interval_secs = 1, timeout_secs = 1, max_failures = 3 }
+
+[[services]]
+name = "worker"
+group = "djangoapp"
+# Horizontal: two Super-managed worker processes (worker-0, worker-1).
+numprocs = 2
+process_name = "worker-{num}"
+command = "/srv/djangoapp/scripts/run-worker.sh"
+args = []
+cwd = "/srv/djangoapp"
+env_file = "/srv/djangoapp/.env"
+autostart = true
+autorestart = "unexpected"
+priority = 50
+startsecs = 10
+# Fastest cadence; max_failures=0 so early celery boot misses do not auto-restart the worker.
+health_check = { type = "exec", command = "set -a && . /srv/djangoapp/.env && set +a && cd /srv/djangoapp && .venv/bin/celery -A myproject inspect ping --timeout 2", interval_secs = 1, timeout_secs = 3, start_period_secs = 1, max_failures = 0 }
+
+[[services]]
+name = "beat"
+group = "djangoapp"
+command = "/srv/djangoapp/.venv/bin/celery"
+args = ["-A", "myproject", "beat", "--loglevel=INFO"]
+cwd = "/srv/djangoapp"
+env_file = "/srv/djangoapp/.env"
+autostart = true
+autorestart = "unexpected"
+priority = 60
+startsecs = 5
+health_check = { type = "exec", command = "set -a && . /srv/djangoapp/.env && set +a && redis-cli -u \"$CELERY_BROKER_URL\" PING | grep -q PONG", interval_secs = 1, timeout_secs = 2, start_period_secs = 1, max_failures = 0 }
+
+[[services]]
+name = "clearsessions"
+group = "djangoapp"
+command = "/srv/djangoapp/.venv/bin/python"
+args = ["manage.py", "clearsessions"]
+cwd = "/srv/djangoapp"
+env_file = "/srv/djangoapp/.env"
+cron = "0 0 3 * * *"
+on_overlap = "skip"
+autostart = true
+
+# Frequent Super-cron demo (every 5 minutes) — enqueue demoapp.ping via manage.py.
+[[services]]
+name = "demo-tick"
+group = "djangoapp"
+command = "/srv/djangoapp/.venv/bin/python"
+args = ["manage.py", "demo_tick"]
+cwd = "/srv/djangoapp"
+env_file = "/srv/djangoapp/.env"
+cron = "0 */5 * * * *"
+on_overlap = "skip"
+autostart = true

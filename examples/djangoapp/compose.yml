@@ -1,0 +1,31 @@
+# Data plane only — Postgres + Redis stay outside Super (tutorial pattern).
+# Host ports avoid clashing with other local/demo services on :5432 / :6379.
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: djangoapp
+      POSTGRES_PASSWORD: djangoapp
+      POSTGRES_DB: djangoapp
+    ports:
+      - "127.0.0.1:15432:5432"
+    volumes:
+      - djangoapp_pg:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U djangoapp -d djangoapp"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "127.0.0.1:16379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  djangoapp_pg:

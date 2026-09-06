@@ -8,4 +8,4 @@ Installation and Quick Start get the daemon running. These tutorials walk throug
 
 ### In this section
 
-*   [**A Django application under Super**](./django-postgres-celery): nginx → Gunicorn + Celery worker/Beat against external Postgres/Redis — from first boot through routine ops and releases.
+*   [**A Django application under Super**](./django-postgres-celery): nginx → Gunicorn + Celery worker/Beat against external Postgres/Redis — from first boot through routine ops and releases. Runnable OSS companion: [`examples/djangoapp/`](https://github.com/schiplat/super/tree/master/examples/djangoapp).
