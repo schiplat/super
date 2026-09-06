@@ -15,7 +15,10 @@ Instead of managing individual processes, you define a **Stack** (a list of all 
 When you run `super apply stack.toml`, Super will:
 1.  **Create** new services that are in the file but not in the system.
 2.  **Update** existing services if their configuration (args, env, etc.) has changed.
-3.  **Prune (Remove)** services that are running in the system but missing from the file (if `prune = true`).
+3.  **Prune (Remove)** services that are running in the system but missing from the file — **only if `prune = true`**.
+
+> [!CAUTION]
+> **`prune` defaults to `false`.** Omit it or set `prune = false` for normal day-to-day stacks. Pruning runs **only** when the stack file (or API body) explicitly sets `prune = true`. With prune enabled, any managed program **not listed** in that file is stopped and removed from Super — a typo or empty `services` list can wipe your entire fleet in one apply. Removals are **irreversible** from Super’s perspective. Both **`super apply`** and the Dashboard **Stack Editor** print a full apply diff (keep/update · create · every REMOVE) and require typing **`confirmed`** before removals run (`y`/`--yes`/a normal Confirm click are not enough; CLI automation uses `--force-prune` after `--dry-run`). On daemon start / `super reload` via `[include]`, the same prune runs **without** a prompt — keep `prune = false` in include files. `super check` warns when an include stack sets `prune = true`.
 
 > One TOML note: structured values such as `health_check` or `artifact` can be written either as an **inline table** — `health_check = { type = "tcp", port = 8080 }` — or as a **nested table** (`[services.health_check]` / `[services.artifact]`). Only `[[array.of.tables]]` syntax is rejected for tagged values. The `type` field selects the probe kind (`tcp` / `http` / `exec`). Per-program OTA fields (`source`, `checksum`, `destination`, `extract`, `restart_policy`, `download_timeout`, `verify_timeout`): [Config reference — `artifact`](/docs/06-internals/config-reference#artifact) and [Atomic OTA Updates](/docs/03-orchestration/ota-updates).
 

@@ -77,6 +77,136 @@ pub fn print_dry_run(action: &str, target: &str, names: &[String]) {
     }
 }
 
+/// Exact string the operator must type to confirm an irreversible prune.
+pub const PRUNE_CONFIRM_TOKEN: &str = "confirmed";
+
+/// Planned create / keep / remove sets for a stack apply (name-level diff).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ApplyPlan {
+    /// In the stack file, not currently managed — will be created.
+    pub create: Vec<String>,
+    /// In both the stack and the daemon — will be created-or-updated (upsert).
+    pub keep: Vec<String>,
+    /// Currently managed, missing from the stack — removed only when `prune = true`.
+    pub remove: Vec<String>,
+}
+
+/// Build a sorted name-level apply plan from stack inventory vs current programs.
+pub fn build_apply_plan(
+    stack_names: impl IntoIterator<Item = String>,
+    current_names: impl IntoIterator<Item = String>,
+    prune: bool,
+) -> ApplyPlan {
+    use std::collections::HashSet;
+    let stack: HashSet<String> = stack_names.into_iter().collect();
+    let current: HashSet<String> = current_names.into_iter().collect();
+
+    let mut create: Vec<String> = stack.difference(&current).cloned().collect();
+    let mut keep: Vec<String> = stack.intersection(&current).cloned().collect();
+    let mut remove: Vec<String> = if prune {
+        current.difference(&stack).cloned().collect()
+    } else {
+        Vec::new()
+    };
+    create.sort();
+    keep.sort();
+    remove.sort();
+    ApplyPlan {
+        create,
+        keep,
+        remove,
+    }
+}
+
+fn eprint_name_section(title: &str, names: &[String], truncate: bool) {
+    eprintln!("{} ({}):", title, names.len());
+    if names.is_empty() {
+        eprintln!("   (none)");
+        return;
+    }
+    if truncate {
+        let (lines, hidden) = preview_split(names);
+        for name in lines {
+            eprintln!("   - {}", name);
+        }
+        if hidden > 0 {
+            eprintln!("   ... and {} more", hidden);
+        }
+    } else {
+        // Removals are irreversible — never hide a victim name.
+        for name in names {
+            eprintln!("   - {}", name);
+        }
+    }
+}
+
+/// Print the apply diff to stderr. Removal names are listed in full (no truncation).
+pub fn print_apply_diff(file: &str, prune: bool, plan: &ApplyPlan) {
+    eprintln!();
+    eprintln!("Apply diff for {} (prune={}):", file, prune);
+    eprint_name_section("  keep/update", &plan.keep, true);
+    eprint_name_section("  create", &plan.create, true);
+    if prune {
+        eprint_name_section(
+            "  REMOVE (stop + unregister — irreversible)",
+            &plan.remove,
+            false,
+        );
+    } else {
+        eprintln!("  remove: skipped (prune=false)");
+    }
+    eprintln!();
+}
+
+/// Returns true if `input` (typically a read line) accepts prune confirmation.
+pub fn prune_confirmation_accepted(input: &str) -> bool {
+    input.trim() == PRUNE_CONFIRM_TOKEN
+}
+
+/// Confirm a stack apply that requested `prune=true` and would remove programs.
+///
+/// Prints the full apply diff first (create / keep / **every** removal), then
+/// requires typing **`confirmed`** exactly ([`PRUNE_CONFIRM_TOKEN`]).
+/// Unlike [`confirm_batch`] (`y`/`yes`), soft affirmatives are rejected.
+/// Returns `true` when there is nothing to prune.
+pub fn confirm_prune(file: &str, plan: &ApplyPlan) -> bool {
+    if plan.remove.is_empty() {
+        return true;
+    }
+
+    eprintln!();
+    eprintln!("╔══════════════════════════════════════════════════════════════════╗");
+    eprintln!("║  IRREVERSIBLE: prune = true                                      ║");
+    eprintln!("╚══════════════════════════════════════════════════════════════════╝");
+    eprintln!(
+        "Super will STOP and REMOVE {} managed program(s) that are NOT in this stack.",
+        plan.remove.len()
+    );
+    eprintln!(
+        "This cannot be undone from Super (you must recreate programs / re-apply a full stack)."
+    );
+    eprintln!("External DB/files are not deleted — but removed process definitions are gone.");
+    print_apply_diff(file, true, plan);
+    eprintln!("Anything other than the confirmation word aborts (y / yes / prune are NOT enough).");
+    eprintln!();
+    // Make the required token unmistakable: own line + brackets + bold/bright color.
+    {
+        use colored::Colorize;
+        eprintln!("Type this confirmation word exactly (lowercase, no quotes):");
+        eprintln!();
+        eprintln!("    >>> {} <<<", PRUNE_CONFIRM_TOKEN.bold().bright_yellow());
+        eprintln!();
+        eprint!("{} ", "Confirmation:".bold().bright_yellow());
+    }
+    let _ = std::io::stderr().flush();
+
+    let mut input = String::new();
+    if std::io::stdin().read_line(&mut input).is_ok() {
+        return prune_confirmation_accepted(&input);
+    }
+    false
+}
+
 pub fn print_list_table(mut programs: Vec<ProgramSummary>) {
     programs.sort_by(|a, b| {
         let group_a = a.group.as_deref().unwrap_or("");
@@ -406,6 +536,43 @@ mod tests {
 
     fn names(v: &[&str]) -> Vec<String> {
         v.iter().map(|s| s.to_string()).collect()
+    }
+
+    #[test]
+    fn confirm_prune_skips_prompt_when_empty() {
+        let plan = ApplyPlan {
+            create: vec![],
+            keep: names(&["web"]),
+            remove: vec![],
+        };
+        assert!(confirm_prune("stack.toml", &plan));
+    }
+
+    #[test]
+    fn build_apply_plan_classifies_create_keep_remove() {
+        let plan = build_apply_plan(
+            names(&["web", "worker", "beat"]),
+            names(&["web", "legacy", "old-nginx"]),
+            true,
+        );
+        assert_eq!(plan.create, names(&["beat", "worker"]));
+        assert_eq!(plan.keep, names(&["web"]));
+        assert_eq!(plan.remove, names(&["legacy", "old-nginx"]));
+
+        let no_prune = build_apply_plan(names(&["web"]), names(&["web", "legacy"]), false);
+        assert!(no_prune.remove.is_empty());
+        assert_eq!(no_prune.keep, names(&["web"]));
+    }
+
+    #[test]
+    fn prune_confirmation_requires_exact_token() {
+        assert!(prune_confirmation_accepted("confirmed"));
+        assert!(prune_confirmation_accepted("  confirmed\n"));
+        assert!(!prune_confirmation_accepted("y"));
+        assert!(!prune_confirmation_accepted("yes"));
+        assert!(!prune_confirmation_accepted("prune"));
+        assert!(!prune_confirmation_accepted("CONFIRMED"));
+        assert!(!prune_confirmation_accepted("confirmed please"));
     }
 
     #[test]

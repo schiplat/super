@@ -871,6 +871,9 @@ pub struct DiskPartitionStats {
 #[derive(Debug, Deserialize, Serialize, ToSchema)]
 pub struct StackApplyRequest {
     pub services: Vec<CreateProgramRequest>,
+    /// When `true`, remove every managed program whose name is **not** listed in
+    /// `services`. Defaults to **`false`** when omitted (serde default) — pruning
+    /// never runs unless the caller explicitly sets this flag.
     #[serde(default)]
     pub prune: bool,
 }

@@ -1,6 +1,6 @@
 ---
 title: "Internals & Reference"
-weight: 6
+weight: 7
 description: "Architecture design, technical FAQ, and complete API references."
 ---
 

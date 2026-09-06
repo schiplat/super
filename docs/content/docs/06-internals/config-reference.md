@@ -162,7 +162,7 @@ Stack file schema and per-program keys: the *Program stacks* section below.
 
 Programs are **not** declared in `super.toml` — `[[programs]]` / `[[program]]` tables there are ignored (`super check` reports them as an error). Programs load from **stack files** matched by `[include].files` (applied on daemon start and `super reload`), the API (`POST /api/v1/programs`), or the CLI (`super add`); all persist to `data/snapshot.json`.
 
-A stack file is a TOML (default) or JSON document with `services = [...]` and an optional `prune` flag. TOML uses one `[[services]]` table per program; JSON uses the legacy `{"services":[...]}` shape. See [Declarative Stacks](/docs/04-production-scenarios/delivery/declarative-stack) for a full example.
+A stack file is a TOML (default) or JSON document with `services = [...]` and an optional `prune` flag (**default `false`** when omitted — pruning never runs unless set to `true`). TOML uses one `[[services]]` table per program; JSON uses the legacy `{"services":[...]}` shape. See [Declarative Stacks](/docs/04-production-scenarios/delivery/declarative-stack) for a full example.
 
 > [!NOTE]
 > In TOML stacks, tagged values like `health_check` are written as an inline table — `health_check = { type = "tcp", port = 8080 }` — or a nested table (`[services.health_check]`); `[[array.of.tables]]` is rejected.

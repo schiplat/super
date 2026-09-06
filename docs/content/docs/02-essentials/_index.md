@@ -1,6 +1,6 @@
 ---
 title: "Essentials"
-weight: 2
+weight: 3
 description: "Master the core concepts: Configuration, Process Operations, and Logging."
 ---
 

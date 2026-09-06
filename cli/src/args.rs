@@ -278,10 +278,17 @@ pub enum Commands {
         artifact_verify_timeout: Option<u64>,
     },
 
-    /// Apply a stack configuration file (JSON)
+    /// Apply a declarative stack file (TOML default, JSON compatible).
+    /// With `prune = true` in the file, requires typing `confirmed` to acknowledge removals
+    /// (or `--force-prune` for non-interactive automation; global `--yes` alone is not enough).
     Apply {
         #[arg(short, long)]
         file: PathBuf,
+        /// Acknowledge irreversible prune removals without an interactive prompt.
+        /// Required for non-interactive applies when the stack sets `prune = true`
+        /// and programs would be deleted. Global `--yes` does **not** skip this.
+        #[arg(long = "force-prune")]
+        force_prune: bool,
     },
 
     // --- Operations ---

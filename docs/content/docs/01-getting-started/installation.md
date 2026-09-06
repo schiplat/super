@@ -22,6 +22,12 @@ Super is **cross-platform** in the sense that the same `super.toml` and API work
 
 On any supported host, set `SUPER_ROOT`, place config under `conf/super.toml`, and use the same CLI/API — whether you extracted a tarball or started a container.
 
+| Stage | Where |
+| :--- | :--- |
+| **Get binaries** | [Method 1](#method-1-docker-recommended) Docker · [Method 2](#method-2-installsh-recommended-on-linux--macos--freebsd) `install.sh` · [Method 3](#method-3-github-releases-or-build-from-source) tarball / source |
+| **Instance dirs + config** | [Instance layout and config](#instance-layout-and-config) (also done for you by `install.sh`) |
+| **Start `superd`** | [By hand](#manual-start-by-hand) or [OS service](#os-service-systemd-launchd-rcd) |
+
 ## Method 1: Docker (Recommended)
 
 The official OSS image ships `superd` and `super` (API + CLI) on a **distroless** runtime — no shell, no Python, no package manager. A static **`busybox`** binary is included at `/usr/local/bin/busybox` so the [Quick Start](/docs/01-getting-started/quick-start/) demo can run a tiny HTTP server inside the container. **Production workloads** should use your own app binaries (multi-stage `FROM` + copy `superd`, or mount `conf/` with stack files pointing at binaries you ship).
@@ -244,9 +250,138 @@ make build
 ./target/release/super --version
 ```
 
-## Method 4: Systemd / launchd / rc.d (manual)
+After you have binaries, continue with [Instance layout and config](#instance-layout-and-config), then [Start the daemon](#start-the-daemon).
 
-### Linux — systemd
+## Instance layout and config
+
+Needed for every **native** install (tarball, `make build`, or `install.sh --no-service`). Docker images already ship a layout under `/app/super/`; `install.sh` without `--no-init` creates the same tree under `/opt/super` or `~/.super`.
+
+### Directories
+
+Pick a directory you own and export it as `SUPER_ROOT`. Relative paths in config (`logs/`, `data/`, `run/…`) resolve under this root — do **not** leave `SUPER_ROOT` unset when starting from a random cwd (logs and data would land in the wrong place).
+
+```bash
+export SUPER_ROOT=/opt/super   # or ~/super-demo, /tmp/super-dev, …
+mkdir -p "$SUPER_ROOT/conf/conf.d" \
+  "$SUPER_ROOT/data" \
+  "$SUPER_ROOT/logs" \
+  "$SUPER_ROOT/run" \
+  "$SUPER_ROOT/plugins"
+# Socket parent must not be group/world-writable (superd refuses to bind).
+chmod 755 "$SUPER_ROOT/run" "$SUPER_ROOT/logs" "$SUPER_ROOT/data"
+```
+
+| Path | Role |
+| :--- | :--- |
+| `conf/super.toml` | Daemon config (create next) |
+| `conf/conf.d/` | Optional stack files (`*.toml`) matched by `[include].files` |
+| `data/` | Snapshot + event DB (`snapshot.json`, `events.db`) |
+| `logs/` | Daemon rolling log + child `{uuid}.out` / `.err` |
+| `run/` | Unix socket (`superd.sock`) and optional pidfile |
+| `plugins/` | Licensed plugin libraries (empty in OSS) |
+
+One-shot init without a service: `curl …/install.sh | sh -s -- --no-service` (or `--no-start` to install the unit but leave the daemon stopped).
+
+### Initialize `conf/super.toml`
+
+`superd` reads **`$SUPER_ROOT/conf/super.toml`**. Choose one path:
+
+**A — Copy the packaged default** (recommended after extracting a release tarball):
+
+```bash
+# From the extracted archive (top-level contrib/):
+cp contrib/super.toml.default "$SUPER_ROOT/conf/super.toml"
+# Optional sample stack (inactive until you drop the .example suffix):
+cp contrib/conf.d/demo.toml.example "$SUPER_ROOT/conf/conf.d/"
+```
+
+From a git checkout, the same files live under `packaging/contrib/`.
+
+**B — Write a minimal config by hand** (enough for local OSS):
+
+```bash
+cat > "$SUPER_ROOT/conf/super.toml" <<'EOF'
+[server]
+host = "127.0.0.1"
+port = 9002
+allow_insecure_public_bind = false
+socket = "run/superd.sock"
+
+[storage]
+data_file = "data/snapshot.json"
+events_file = "data/events.db"
+log_dir = "logs"
+
+[include]
+files = ["conf/conf.d/*.toml"]
+EOF
+```
+
+**C — Skip the file.** If `conf/super.toml` is missing, `superd` still starts with built-in defaults (loopback `127.0.0.1:9002`, `allow_insecure_public_bind = false`). Prefer A or B so bind address, socket, and storage paths are explicit and reviewable.
+
+Do **not** put programs in `super.toml` — declare them via `conf/conf.d/*.toml`, the CLI, or the API (see [Configuration](/docs/02-essentials/configuration) and [Quick Start](/docs/01-getting-started/quick-start/#1-minimal-configuration)). Full key list: [Config Reference](/docs/06-internals/config-reference).
+
+Optional shell helper (same idea as `install.sh`):
+
+```bash
+cat > "$SUPER_ROOT/env.sh" <<EOF
+export SUPER_ROOT="$SUPER_ROOT"
+EOF
+# later: source "$SUPER_ROOT/env.sh"
+```
+
+Validate before first start:
+
+```bash
+export SUPER_ROOT=/opt/super
+super check    # offline config / layout checks
+```
+
+## Start the daemon
+
+With binaries on `PATH` (or an absolute path) and `SUPER_ROOT` set, pick **one** start mode.
+
+### Start by hand {#manual-start-by-hand}
+
+No Docker, no `install.sh` service wiring, no systemd / launchd / rc.d — the most basic way to run `superd`.
+
+**Foreground** (default — leave this terminal open):
+
+```bash
+superd
+# From a source build: ./target/release/superd
+```
+
+Expected log lines include `Super Core starting...` and the listen address. Stop with **Ctrl+C**, or from another shell with `super shutdown`. Use foreground for interactive debugging, Docker / `Type=simple` units, and any supervisor that expects the main process to stay attached.
+
+**Detach without an OS service** (Unix only):
+
+```bash
+superd --daemon
+# equivalent: [server] daemon = true in super.toml
+```
+
+Writes `$SUPER_ROOT/run/superd.pid` by default (override with `--pidfile` / `[server] pidfile`). Do **not** combine `--daemon` with an OS service unit — those must keep `superd --foreground`. Stop with `super shutdown`.
+
+**Drive it with the CLI** (same `SUPER_ROOT` in another terminal):
+
+```bash
+export SUPER_ROOT=/opt/super
+super doctor
+super add --name demo --autostart sleep 3600
+super list
+super shutdown
+```
+
+If the daemon only exposes TCP (no Unix socket, or you are remote), pass `--server http://127.0.0.1:9002`.
+
+For a full walkthrough with a demo HTTP program, continue in [Quick Start](/docs/01-getting-started/quick-start/). For Gunicorn + Celery against external Postgres/Redis, see [A Django application under Super](/docs/02-tutorials/django-postgres-celery/).
+
+### OS service (systemd / launchd / rc.d) {#os-service-systemd-launchd-rcd}
+
+For boot-persistent installs, wire an OS service that keeps `superd` in the **foreground** and restarts it on failure. Prefer [`install.sh`](#method-2-installsh-recommended-on-linux--macos--freebsd) when you want this automated. Templates also ship in release `contrib/`.
+
+#### Linux — systemd
 
 `/etc/systemd/system/superd.service` (also in `contrib/systemd/superd.service`):
 
@@ -278,7 +413,7 @@ sudo systemctl status superd
 
 Per-user units live under `~/.config/systemd/user/` (`systemctl --user …`). For boot without an interactive login: `loginctl enable-linger $USER`.
 
-### macOS — launchd
+#### macOS — launchd
 
 macOS has no systemd. Use **launchd** (what `install.sh` installs) so `superd` stays up across reboots and crashes — same idea as a systemd unit: keep the process in the **foreground** (`--foreground`), let the OS restart it (`KeepAlive`).
 
@@ -294,7 +429,7 @@ sudo launchctl bootstrap system /Library/LaunchDaemons/com.schiplat.superd.plist
 launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.schiplat.superd.plist
 ```
 
-### FreeBSD — rc.d
+#### FreeBSD — rc.d
 
 FreeBSD uses **rc.d** (what `install.sh` installs under `/usr/local/etc/rc.d/superd`). The script wraps `superd --foreground` with [`daemon(8)`](https://man.freebsd.org/cgi/man.cgi?daemon) (`-r` restarts on exit). Do **not** set `[server].daemon` or pass `--daemon` when using rc.d.
 
@@ -308,9 +443,7 @@ service superd start
 service superd status
 ```
 
-Template: `contrib/rc.d/superd`. Per-user installs (`--user`) have no rc.d — use `superd --daemon` instead.
+Template: `contrib/rc.d/superd`. Per-user installs (`--user`) have no rc.d — use [`superd --daemon`](#manual-start-by-hand) instead.
 
 > [!NOTE]
-> Default layout is `$SUPER_ROOT/conf/super.toml`. Set `SUPER_ROOT` if your layout differs (see [Environment Variables](/docs/06-internals/environment-variables#super_root)).
->
-> **Daemonize without systemd / launchd / rc.d:** `superd --daemon` (or `[server] daemon = true`) writes `$SUPER_ROOT/run/superd.pid` by default. Do **not** combine that with an OS service unit. Stop with `super shutdown` as usual.
+> Default layout is `$SUPER_ROOT/conf/super.toml`. Set `SUPER_ROOT` if your layout differs (see [Environment Variables](/docs/06-internals/environment-variables#super_root)). For no-service starts, see [Start by hand](#manual-start-by-hand).

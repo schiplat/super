@@ -1,6 +1,6 @@
 ---
 title: "Advanced Management 🌟"
-weight: 5
+weight: 6
 description: "Security, governance, and observability with optional licensed plugins."
 ---
 

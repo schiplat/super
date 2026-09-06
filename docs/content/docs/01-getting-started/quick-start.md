@@ -34,7 +34,7 @@ If you use the repo's [example config](https://github.com/schiplat/super/blob/ma
 
 ## 2. Start the Daemon (OSS)
 
-Run the daemon in the foreground (default — required under systemd):
+Run the daemon in the foreground (default — required under systemd). Layout, config init, and `--daemon`: [Installation — Instance layout](/docs/01-getting-started/installation/#instance-layout-and-config) and [Start by hand](/docs/01-getting-started/installation/#manual-start-by-hand).
 
 ```bash
 superd
@@ -179,6 +179,7 @@ Open **[http://127.0.0.1:9002](http://127.0.0.1:9002)**.
 
 ## Next Steps
 
+*   [A Django application under Super](/docs/02-tutorials/django-postgres-celery/) — Gunicorn and Celery against external Postgres and Redis
 *   [API Reference](/docs/06-internals/api-reference) — stop, restart, historical logs
 *   [Configuration](/docs/02-essentials/configuration) — persistent `super.toml`
 *   [Dependency Orchestration](/docs/03-orchestration/dependencies)

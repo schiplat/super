@@ -1,6 +1,6 @@
 ---
 title: "Production Scenarios"
-weight: 4
+weight: 5
 description: "Real-world patterns: Migrations, Stability, and Automation."
 ---
 

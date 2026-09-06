@@ -934,9 +934,79 @@ pub async fn handle_reload(
     }
 }
 
-pub async fn handle_apply(ctx: &Context, file: &std::path::PathBuf) -> anyhow::Result<()> {
+pub async fn handle_apply(
+    ctx: &Context,
+    file: &std::path::PathBuf,
+    opts: BatchOptions,
+    force_prune: bool,
+) -> anyhow::Result<()> {
     let content = tokio::fs::read_to_string(file).await?;
     let request = common::parse_stack_from_str(&content, file)?;
+
+    let file_label = file.display().to_string();
+
+    // Name-level apply diff before prune confirmation / dry-run. Removals are
+    // only computed when prune=true (or for dry-run inventory preview).
+    if request.prune || opts.dry_run {
+        let stack_names: Vec<String> = request
+            .services
+            .iter()
+            .filter_map(|s| s.name.clone())
+            .collect();
+        let url_programs = format!("{}/api/v1/programs", ctx.base_url);
+        let current: Vec<ProgramSummary> =
+            ctx.client.get(&url_programs).send().await?.json().await?;
+        let current_names: Vec<String> = current.into_iter().map(|p| p.name).collect();
+        let plan = display::build_apply_plan(stack_names, current_names, request.prune);
+
+        if request.prune {
+            eprintln!("NOTE: stack file {:?} sets prune = true.", file);
+            if plan.remove.is_empty() {
+                display::print_apply_diff(&file_label, true, &plan);
+                eprintln!(
+                    "No managed programs are outside this stack right now (apply would not remove any)."
+                );
+                if opts.dry_run {
+                    return Ok(());
+                }
+            } else if opts.dry_run {
+                display::print_apply_diff(&file_label, true, &plan);
+                println!(
+                    "DRY RUN: would REMOVE {} program(s); apply not sent.",
+                    plan.remove.len()
+                );
+                return Ok(());
+            } else if force_prune {
+                display::print_apply_diff(&file_label, true, &plan);
+                eprintln!(
+                    "CRITICAL: --force-prune acknowledged — permanently removing {} program(s).",
+                    plan.remove.len()
+                );
+            } else if opts.assume_yes {
+                display::print_apply_diff(&file_label, true, &plan);
+                return Err(anyhow::anyhow!(
+                    "stack has prune = true and would remove {} program(s) ({}). \
+                     Global --yes / -y is not enough for this irreversible action. \
+                     Re-run interactively and type 'confirmed' to proceed, or pass --force-prune \
+                     (after reviewing --dry-run).",
+                    plan.remove.len(),
+                    plan.remove.join(", ")
+                ));
+            } else if !display::confirm_prune(&file_label, &plan) {
+                println!("Aborted — nothing was pruned.");
+                return Ok(());
+            }
+        } else {
+            // prune=false dry-run
+            display::print_apply_diff(&file_label, false, &plan);
+            println!(
+                "DRY RUN: would apply {:?} ({} service(s), prune=false — no removals).",
+                file,
+                request.services.len()
+            );
+            return Ok(());
+        }
+    }
 
     println!("Applying stack from {:?}...", file);
     let url = format!("{}/api/v1/stack", ctx.base_url);

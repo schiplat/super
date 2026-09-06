@@ -422,10 +422,21 @@ fn check_include_stacks(
                         }
                         Ok(body) => match common::parse_stack_from_str(&body, &entry) {
                             Ok(stack) => {
+                                if stack.prune {
+                                    warnings.push(format!(
+                                        "{} sets prune = true: on daemon start/reload, Super will DELETE every managed program not listed in this file. Keep prune = false unless the file is the complete desired inventory.",
+                                        entry.display()
+                                    ));
+                                }
                                 if stack.services.is_empty() {
                                     warnings.push(format!(
-                                        "{} has an empty services array",
-                                        entry.display()
+                                        "{} has an empty services array{}",
+                                        entry.display(),
+                                        if stack.prune {
+                                            " with prune = true (would remove all managed programs)"
+                                        } else {
+                                            ""
+                                        }
                                     ));
                                 } else {
                                     let mut invalid = false;

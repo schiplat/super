@@ -180,7 +180,9 @@ async fn main() -> anyhow::Result<()> {
             timeout,
         } => handlers::handle_reload(&ctx, target, *wait, *timeout, batch_opts).await?,
         Commands::Token { action } => handlers::handle_token(&ctx, action).await?,
-        Commands::Apply { file } => handlers::handle_apply(&ctx, file).await?,
+        Commands::Apply { file, force_prune } => {
+            handlers::handle_apply(&ctx, file, batch_opts, *force_prune).await?
+        }
         Commands::Export { format } => handlers::handle_export(&ctx, *format).await?,
         Commands::Shutdown => handlers::handle_shutdown(&ctx).await?,
         Commands::Info { target } => handlers::handle_info(&ctx, target).await?,

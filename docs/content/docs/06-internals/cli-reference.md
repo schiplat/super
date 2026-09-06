@@ -39,7 +39,7 @@ When the daemon listens on both TCP and a Unix socket, an unconfigured CLI there
 | Foreground (default) | `superd` or `superd --foreground` | systemd (`Type=simple`), Docker, debugging |
 | Self-daemonize (Unix) | `superd --daemon` or `[server] daemon = true` | Bare metal without systemd; writes `$SUPER_ROOT/run/superd.pid` by default |
 
-CLI overrides: `--daemon` / `--foreground` / `--pidfile <PATH>`. See [Config reference](/docs/06-internals/config-reference/#server) and [Installation — Systemd](/docs/01-getting-started/installation/#method-3-systemd-vm--bare-metal). Program control (`start` / `stop` / `shutdown`) is unchanged either way.
+CLI overrides: `--daemon` / `--foreground` / `--pidfile <PATH>`. See [Config reference](/docs/06-internals/config-reference/#server) and [Installation — Start by hand](/docs/01-getting-started/installation/#manual-start-by-hand). Program control (`start` / `stop` / `shutdown`) is unchanged either way.
 
 ## Command index
 
@@ -348,8 +348,15 @@ super reload <name|@group|id|all>         # SIGHUP to program(s) — e.g. nginx 
 Apply a declarative stack configuration. Stack files are **TOML by default** (`.toml` or no extension); legacy JSON (`.json`) stacks keep working.
 
 ```bash
-super apply <FILE>
+super apply <FILE> [--dry-run] [--force-prune]
 ```
+
+| Flag | Type | Default | Description |
+| :--- | :--- | :--- | :--- |
+| `--dry-run` | bool | `false` | Print the apply diff (keep/update · create · remove) and exit without calling the apply API |
+| `--force-prune` | bool | `false` | Skip the interactive prune gate when the file sets `prune = true` **and** programs would be removed. Use only in automation after reviewing `--dry-run` |
+
+**`prune` safety (irreversible):** omitted / `prune = false` never deletes programs. If the file sets `prune = true` and any managed program is missing from the stack, the CLI prints a full **apply diff** first — keep/update, create, and every program that would be **REMOVED** (removal names are never truncated) — then requires you to type **`confirmed`** exactly to continue (`y` / `yes` / `prune` / global `--yes` are **not** accepted). The Dashboard Stack Editor uses the same diff + typed-`confirmed` gate. Automation must pass `--force-prune` after reviewing `--dry-run`. Prefer `prune = false` except for deliberate full-inventory GitOps applies. Stacks loaded via `[include]` on daemon start / `super reload` have no prompt — keep `prune = false` there and use `super apply` (or the Dashboard) for intentional prunes.
 
 ### `export`
 Export current state as a stack file. **Defaults to TOML** (the default stack format, round-trips cleanly with `super apply` / `[include]`); `--format json` keeps the legacy JSON shape for tooling that expects it.

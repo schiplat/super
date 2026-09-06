@@ -1,6 +1,6 @@
 ---
 title: "Changelog"
-weight: 9
+weight: 10
 description: "All notable changes to Project Super will be documented in this file."
 # Old Internals "What's New in 1.4.0" page — keep bookmarks working.
 aliases:

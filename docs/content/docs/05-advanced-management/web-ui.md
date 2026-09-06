@@ -87,7 +87,7 @@ Restart `superd` after updating plugins.
 | **Program detail** | Config, hooks, health checks, live logs, start/stop/restart |
 | **Notifications** | Webhooks, Inhibition rules, and Delivery history (`notify` plugin) — `/settings/notify/*` |
 
-The Dashboard also includes create/edit program forms, a [stack editor](/docs/04-production-scenarios/delivery/declarative-stack), API token management, and a license page — not shown above.
+The Dashboard also includes create/edit program forms, a [stack editor](/docs/04-production-scenarios/delivery/declarative-stack) (apply with `prune: true` shows a keep/create/REMOVE diff and requires typing **`confirmed`** before removals), API token management, and a license page — not shown above.
 
 ## Security
 

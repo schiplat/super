@@ -1,6 +1,6 @@
 ---
 title: "Editions"
-weight: 7
+weight: 8
 description: "The OSS vs Licensed edition model: one binary, two run modes."
 ---
 

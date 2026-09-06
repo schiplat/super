@@ -2428,10 +2428,30 @@ impl Manager {
 
         if req.prune {
             let mut ids_to_remove = Vec::new();
+            let mut names_to_remove = Vec::new();
             for (id, cfg) in &self.registry.programs {
                 if !touched_programs.contains(&cfg.name) {
                     ids_to_remove.push(*id);
+                    names_to_remove.push(cfg.name.clone());
                 }
+            }
+            names_to_remove.sort();
+            if names_to_remove.is_empty() {
+                logs.push(
+                    "prune=true but no programs are outside this stack (nothing to remove)"
+                        .to_string(),
+                );
+            } else {
+                tracing::warn!(
+                    count = names_to_remove.len(),
+                    programs = %names_to_remove.join(", "),
+                    "Stack apply with prune=true will REMOVE managed programs not listed in the stack"
+                );
+                logs.push(format!(
+                    "WARNING: prune=true — removing {} program(s) not in this stack: {}",
+                    names_to_remove.len(),
+                    names_to_remove.join(", ")
+                ));
             }
             for id in ids_to_remove {
                 let name_str = self

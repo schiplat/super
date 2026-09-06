@@ -27,10 +27,11 @@ Pages mark licensed capabilities with **💎** / "Licensed"; "Super Pro" is the 
 
 ## Start Here
 
-If you are new to Project Super, start with the basics to get your daemon up and running.
+If you are new to Project Super, start with the basics to get your daemon up and running — then follow a worked example.
 
 {{< cards >}}
   {{< card link="/docs/01-getting-started" title="Getting Started" subtitle="Installation, Quick Start, and first-time setup." >}}
+  {{< card link="/docs/02-tutorials" title="Tutorials" subtitle="A Django application under Super — web and workers on external DB/broker." >}}
   {{< card link="/docs/02-essentials" title="Core Essentials" subtitle="Configuration (TOML), Logging, and Process Operations." >}}
 {{< /cards >}}
 

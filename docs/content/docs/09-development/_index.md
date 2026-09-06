@@ -1,6 +1,6 @@
 ---
 title: "Developer Guide"
-weight: 8
+weight: 9
 description: "Build Project Super from source and extend it with the in-process Extension trait."
 ---
 

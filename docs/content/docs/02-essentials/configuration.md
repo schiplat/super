@@ -114,7 +114,7 @@ cwd = "/tmp"
 autostart = true
 ```
 
-`prune: true` removes programs that are not listed in the stack.
+`prune = false` (the default when omitted) never removes programs. **`prune = true` removes every managed program that is not listed in the stack** — keep it false unless the file is the complete desired inventory. See [Declarative stacks](/docs/04-production-scenarios/delivery/declarative-stack).
 
 ### Environment Variables
 

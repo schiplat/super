@@ -1,6 +1,6 @@
 ---
 title: "Orchestration"
-weight: 3
+weight: 4
 description: "Manage complex systems with dependencies, health checks, and atomic updates."
 ---
 
