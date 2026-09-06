@@ -167,6 +167,8 @@ Dependency orchestration — the `depends_on` array names programs that must be 
 }
 ```
 
+Unknown names are rejected when the config is submitted (`depends_on: unknown service(s): …`). A dependency that exists but is not yet healthy keeps the dependent in `WAITING` until it turns Healthy — see [Health Checks](/docs/03-orchestration/health-checks).
+
 ### Plugin-only blocks 💎
 
 The following require **licensed plugins** (resource limits on Linux). OSS accepts `resource_limits` in the API schema but does not enforce them without the matching plugin. Example: `services[]` entry in a stack file:

@@ -42,7 +42,7 @@ A dependency that is already busy in its own lifecycle (waiting for *its* depend
 
 ## State: "Waiting"
 
-If a dependency is missing or unhealthy, the dependent process enters the `Waiting` state.
+If a dependency is unhealthy or not yet running, the dependent process enters the `Waiting` state.
 
 ```text
 $ super list
@@ -54,3 +54,19 @@ c3d4...   postgres-db   Starting  ...
 ```
 
 Once `postgres-db` turns `Healthy`, `backend-api` automatically transitions to `Starting`.
+
+## Invalid references
+
+`depends_on` names are validated when the configuration is submitted — via `super apply`, `super add`, or the create/update API. A name that matches no program (typo, or a service removed from the stack) is rejected up front:
+
+```text
+$ super apply deps.toml
+Error: services[1] (name=backend-api): depends_on: unknown service(s): postgres-db
+```
+
+Within a single stack file, forward references are allowed: a service may depend on another service defined later in the same file.
+
+Two runtime cases remain (legacy configs restored from a snapshot, or a dependency removed by another operator):
+
+- A **dangling name** keeps the dependent in `Waiting` (never `Fatal`) and the reason is surfaced in `super status backend-api` under `Last error` (for example, `Dependency 'postgres-db' not found (config error)`). The log carries a matching `warn` entry. As soon as a program with that name becomes Healthy, the dependent starts automatically.
+- **Removing** a program that a `Waiting` dependent references refreshes the dependent's `Last error` with a removal notice, so the cause is visible without reading logs.

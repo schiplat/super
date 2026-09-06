@@ -190,6 +190,26 @@ pub fn trivial_exec_health_probe(health_check: Option<&HealthCheck>) -> bool {
     }
 }
 
+/// Validate that `depends_on` entries reference known services.
+///
+/// `known` is the set of service names the reference may resolve against:
+/// for a stack apply this is (existing registry programs ∪ this batch's
+/// services); for single-program create/update it is just the registry.
+/// A dangling name means the dependent would sit in the WAITING queue
+/// forever, so it is rejected up front instead.
+pub fn validate_depends_on_refs(
+    known: &std::collections::HashSet<String>,
+    depends_on: &[String],
+) -> anyhow::Result<()> {
+    let unknown: Vec<&String> = depends_on.iter().filter(|d| !known.contains(*d)).collect();
+    if unknown.is_empty() {
+        return Ok(());
+    }
+    let mut sorted: Vec<&str> = unknown.iter().map(|s| s.as_str()).collect();
+    sorted.sort_unstable();
+    bail!("depends_on: unknown service(s): {}", sorted.join(", "))
+}
+
 /// Shared bounds for cron concurrency fields (create and update).
 fn validate_cron_concurrency(
     max_concurrent: Option<u32>,

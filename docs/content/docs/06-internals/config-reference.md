@@ -217,7 +217,7 @@ Example: `autostart = false` with `autorestart = "true"` gives a manually starte
 
 | Key | Type | Default | Description |
 | :--- | :--- | :--- | :--- |
-| `depends_on` | list | `[]` | Program names that must be **Healthy** before this one starts. |
+| `depends_on` | list | `[]` | Program names that must be **Healthy** before this one starts. References are validated on stack apply, create, and update: unknown names are rejected with `depends_on: unknown service(s): …` (include stacks applied during daemon start/reload only warn, for backward compatibility). |
 | `cron` | string | — | Cron expression (e.g. `0 0 * * * *`). See [Scheduled Tasks](/docs/02-essentials/scheduled-tasks). |
 | `on_overlap` | string | `skip` | Cron overlap policy: `skip` (drop tick while previous run is active), `queue` (run after the current instance exits), or `kill` (terminate the running instance, then run). |
 | `catchup` | string | `skip` | Cron catch-up policy for slots missed while the daemon was down: `skip` (drop), `latest` (backfill the most recent slot once), or `all` (backfill every missed slot, capped at 10). |

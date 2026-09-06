@@ -79,7 +79,7 @@ Runs a shell command. Succeeds if the command exits with code `0`. Ideal for che
 
 *   **Interval**: Checks are performed every `interval_secs` (default `5`).
 *   **Startup**: After the process starts, Super waits `start_period_secs` (default `1`) before the first probe, then waits for the first successful check before marking the process as `Healthy`.
-*   **Failure**: If a check fails while running, status stays `Running` (unhealthy) until the next check passes. Dependents that use `depends_on` wait for `Healthy`.
+*   **Failure**: If a check fails while running, status stays `Running` (unhealthy) until the next check passes. Dependents that use `depends_on` wait for `Healthy`. If a dependency is removed or its name never existed (dangling reference), the dependent stays `WAITING` with the reason shown in `super status` (`last_error`) until a program with that name becomes Healthy again.
 *   **Auto-restart**: After `max_failures` consecutive failures (default `3`), Super restarts the process automatically. The restart counter resets as soon as the process reports healthy again. Set `max_failures = 0` to disable auto-restart (mark unhealthy only).
 *   **Timeout**: A single probe that exceeds `timeout_secs` counts as a failure.
 

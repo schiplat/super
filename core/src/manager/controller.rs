@@ -144,6 +144,16 @@ impl LifecycleController {
                     None => {
                         all_ready = false;
                         missing_deps.push(format!("{} (Missing)", dep_name));
+                        // A dangling reference is a config error, not a timing
+                        // problem: nothing will ever bring it up. Keep WAITING
+                        // (recoverable — creating the missing service later
+                        // triggers CheckWaitingQueue), but surface it loudly
+                        // instead of the silent info used for Not Running.
+                        let msg = format!(
+                            "Dependency '{dep_name}' not found (config error) — staying WAITING until the service is created"
+                        );
+                        tracing::warn!("Program {}: {msg}", config.name);
+                        registry.startup_errors.insert(id, msg);
                     }
                 }
             }

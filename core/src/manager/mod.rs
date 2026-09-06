@@ -19,8 +19,9 @@ use common::{
     ProcessStatus, ProgramConfig, ProgramInfo, ProgramSummary, ResourceLimits, StackApplyRequest,
     UpdateProgramRequest, WsMessage, resolve_confined_log_path,
     signal_restart_missing_health_probe, trivial_exec_health_probe,
-    validate_create_program_request, validate_signal_restart_requires_health_probe,
-    validate_update_program_request, with_program_location,
+    validate_create_program_request, validate_depends_on_refs,
+    validate_signal_restart_requires_health_probe, validate_update_program_request,
+    with_program_location,
 };
 use glob::glob;
 use nix::sys::signal::Signal;
@@ -680,7 +681,7 @@ impl Manager {
                     self.handle_health_restart(id, failure_detail).await;
                 }
                 Command::ApplyStack { request, reply } => {
-                    let res = self.handle_apply_stack(request).await;
+                    let res = self.handle_apply_stack(request, true).await;
                     let _ = reply.send(res.map(|(logs, _ids)| logs));
                 }
                 Command::DumpPrograms { reply } => {
@@ -1047,6 +1048,17 @@ impl Manager {
         {
             self.ensure_program_name_available(v, Some(id))?;
         }
+
+        // Effective post-merge depends_on (request value wins when present).
+        // References must resolve against the registry; self-references are
+        // meaningless but harmless and therefore not special-cased.
+        let effective_depends_on = match &req.depends_on {
+            Some(v) => v,
+            None => &old_config.depends_on,
+        };
+        validate_depends_on_refs(&self.known_program_names(&[]), effective_depends_on).map_err(
+            |e| with_program_location(e, req.name.as_deref().or(existing_name.as_deref()), None),
+        )?;
 
         let mut trigger_ota = false;
         let mut artifact_cfg = None;
@@ -2324,12 +2336,38 @@ impl Manager {
     async fn handle_apply_stack(
         &mut self,
         req: StackApplyRequest,
+        strict_refs: bool,
     ) -> anyhow::Result<(Vec<String>, Vec<Uuid>)> {
         let mut logs = Vec::new();
         let mut touched_programs = HashSet::new();
         let mut affected_ids = Vec::new();
 
         self.validate_stack_service_names(&req.services)?;
+
+        // Stack-level depends_on resolution: references may target services
+        // defined in this same batch (forward references allowed) or existing
+        // programs; anything else is a config error — reject before persisting.
+        let batch_names: Vec<String> = req
+            .services
+            .iter()
+            .flat_map(|s| self.expand_request(s).into_iter().map(|c| c.name))
+            .collect();
+        let known_names = self.known_program_names(&batch_names);
+        for (i, service_req) in req.services.iter().enumerate() {
+            let res = validate_depends_on_refs(&known_names, &service_req.depends_on)
+                .map_err(|e| with_program_location(e, service_req.name.as_deref(), Some(i)));
+            match res {
+                Ok(()) => {}
+                Err(e) if strict_refs => return Err(e),
+                // Dangling refs in include stacks (startup/reload) only warn so
+                // an upgrade never fails to boot on legacy config; the runtime
+                // gate keeps the dependent WAITING with a visible last_error.
+                Err(e) => {
+                    logs.push(format!("WARNING: {}", e));
+                    tracing::warn!("Include stack with dangling depends_on: {}", e);
+                }
+            }
+        }
 
         for (i, service_req) in req.services.iter().enumerate() {
             validate_create_program_request(service_req, &self.config.storage.log_dir)
@@ -2634,6 +2672,14 @@ impl Manager {
             let _ = reply.send(Err(e));
             return;
         }
+        // Single-program create has no batch scope: depends_on must reference
+        // an already-registered program (create the dependency first).
+        if let Err(e) = validate_depends_on_refs(&self.known_program_names(&[]), &req.depends_on) {
+            let e = with_program_location(e, req.name.as_deref(), None);
+            tracing::warn!("CreateProgram validation failed: {}", e);
+            let _ = reply.send(Err(e));
+            return;
+        }
 
         let configs = self.expand_request(&req);
         for cfg in &configs {
@@ -2881,9 +2927,10 @@ impl Manager {
             return Err(anyhow::anyhow!("Cannot remove running program"));
         }
         let config_opt = self.registry.programs.remove(&id);
-        if config_opt.is_none() {
-            return Err(anyhow::anyhow!("Program not found"));
-        }
+        let removed = match config_opt {
+            Some(cfg) => cfg,
+            None => return Err(anyhow::anyhow!("Program not found")),
+        };
 
         self.registry.restarting.remove(&id);
         self.registry.waiting.remove(&id);
@@ -2894,13 +2941,45 @@ impl Manager {
         self.pending_cron.remove(&id);
         self.registry.mark_dirty();
 
+        // Reverse-dependency notice: anyone WAITING on this program now has a
+        // permanently dangling reference. Update their last_error so operators
+        // see the cause instead of an unexplained WAITING. The WAITING state
+        // itself is kept — recreating a program with the same name still
+        // recovers the dependent automatically.
+        let dependents: Vec<Uuid> = self
+            .registry
+            .programs
+            .iter()
+            .filter(|(_, cfg)| cfg.depends_on.iter().any(|d| d == &removed.name))
+            .map(|(id, _)| *id)
+            .collect();
+        for dep_id in dependents {
+            if !self.registry.waiting.contains(&dep_id) {
+                continue;
+            }
+            let msg = format!(
+                "Dependency '{}' was removed — staying WAITING until a service with this name is created",
+                removed.name
+            );
+            tracing::warn!("Program {}: {msg}", dep_id);
+            self.registry.startup_errors.insert(dep_id, msg.clone());
+            if let Some(cfg) = self.registry.get_config(&dep_id) {
+                let _ = self.log_tx.send(WsMessage::StatusChange {
+                    id: dep_id,
+                    status: ProcessStatus::Waiting,
+                    name: cfg.name.clone(),
+                });
+            }
+        }
+
         // Drop the program's persisted event history.
         if let Err(e) = self.event_db.delete_program(id).await {
             tracing::warn!("Failed to delete event history for {}: {}", id, e);
         }
 
-        if let Some(cfg) = config_opt {
+        {
             let extension = self.extension.clone();
+            let cfg = removed;
             tokio::task::spawn_blocking(move || {
                 if let Err(e) = extension.after_stop(id, &cfg) {
                     tracing::warn!("Extension cleanup failed for removed program {}: {}", id, e);
@@ -2934,7 +3013,7 @@ impl Manager {
                     if let Ok(content) = tokio::fs::read_to_string(&entry).await
                         && let Ok(stack) = common::parse_stack_from_str(&content, &entry)
                     {
-                        match self.handle_apply_stack(stack).await {
+                        match self.handle_apply_stack(stack, false).await {
                             Ok((_logs, ids)) => affected.extend(ids),
                             Err(e) => {
                                 tracing::error!("Failed to apply include stack {:?}: {}", entry, e)
@@ -3292,6 +3371,19 @@ impl Manager {
             }
         }
         Ok(())
+    }
+
+    /// Names a `depends_on` reference may resolve against: everything already
+    /// registered plus (for stack applies) the names this batch introduces.
+    fn known_program_names(&self, batch: &[String]) -> HashSet<String> {
+        let mut known: HashSet<String> = self
+            .registry
+            .programs
+            .values()
+            .map(|c| c.name.clone())
+            .collect();
+        known.extend(batch.iter().cloned());
+        known
     }
 }
 
