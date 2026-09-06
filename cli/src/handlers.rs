@@ -153,11 +153,18 @@ pub async fn handle_batch_action(
     //    (count is only a hint for the prompt; the batch request itself is the
     //    authority), but `--dry-run` must fail loudly instead of printing a
     //    misleading "0 program(s)" preview.
+    //    Also capture pre-action PIDs so `restart --wait/--wait-healthy` cannot
+    //    false-confirm on the still-Healthy old process.
     let mut resolve_err: Option<anyhow::Error> = None;
+    let mut old_pids: std::collections::HashMap<uuid::Uuid, Option<u32>> =
+        std::collections::HashMap::new();
     let (count_hint, preview_names) = if target == "all" {
         req.select_all = true;
         match client::resolve_target_details(&ctx.client, &ctx.base_url, &target).await {
             Ok(progs) => {
+                for p in &progs {
+                    old_pids.insert(p.id, p.pid);
+                }
                 let names: Vec<String> = progs.iter().map(|p| p.name.clone()).collect();
                 (progs.len(), names)
             }
@@ -170,6 +177,9 @@ pub async fn handle_batch_action(
         req.group_name = Some(group.to_string());
         match client::resolve_target_details(&ctx.client, &ctx.base_url, &target).await {
             Ok(progs) => {
+                for p in &progs {
+                    old_pids.insert(p.id, p.pid);
+                }
                 let names: Vec<String> = progs
                     .iter()
                     .map(|p| {
@@ -190,6 +200,9 @@ pub async fn handle_batch_action(
         }
     } else {
         let progs = client::resolve_target_details(&ctx.client, &ctx.base_url, &target).await?;
+        for p in &progs {
+            old_pids.insert(p.id, p.pid);
+        }
         let names: Vec<String> = progs.iter().map(|p| p.name.clone()).collect();
         req.target_ids = Some(progs.into_iter().map(|p| p.id).collect());
         (req.target_ids.as_ref().map_or(0, Vec::len), names)
@@ -253,12 +266,38 @@ pub async fn handle_batch_action(
         );
 
         for id in result.affected {
-            // Batch restart cannot know old PIDs; fall back to waiting for UP
-            let specific_wait_target = match wait_target {
-                Some(WaitTarget::Restarted(_)) => Some(WaitTarget::Up),
-                t => t,
-            };
+            // Require PID change first on restart, then optionally Healthy, so a
+            // wait cannot false-confirm on the still-Healthy old process.
+            if matches!(req.action, BatchAction::Restart) {
+                let old_pid = old_pids.get(&id).copied().flatten();
+                if let Err(e) = client::wait_for_status(
+                    &ctx.client,
+                    &ctx.base_url,
+                    id,
+                    WaitTarget::Restarted(old_pid),
+                    timeout_sec,
+                )
+                .await
+                {
+                    eprintln!("   Verification warning for {}: {}", id, e);
+                    continue;
+                }
+                if matches!(wait_target, Some(WaitTarget::Healthy))
+                    && let Err(e) = client::wait_for_status(
+                        &ctx.client,
+                        &ctx.base_url,
+                        id,
+                        WaitTarget::Healthy,
+                        timeout_sec,
+                    )
+                    .await
+                {
+                    eprintln!("   Verification warning for {}: {}", id, e);
+                }
+                continue;
+            }
 
+            let specific_wait_target = wait_target;
             if let Some(target_state) = specific_wait_target
                 && let Err(e) = client::wait_for_status(
                     &ctx.client,
