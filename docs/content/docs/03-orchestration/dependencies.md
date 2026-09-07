@@ -38,7 +38,7 @@ When you start `backend-api` (or when Super autostarts it):
 3.  **Crucially**, Super waits for `postgres-db` to become **Healthy** (pass its health check).
 4.  Only then does `backend-api` start.
 
-A dependency that is already busy in its own lifecycle (waiting for *its* dependencies, restarting, or crashed) is left alone — Super does not force-start it. This also breaks dependency cycles: if `A` depends on `B` and `B` depends on `A`, both simply stay in `Waiting` until you break the cycle manually.
+A dependency that is already busy in its own lifecycle (waiting for *its* dependencies, restarting, or crashed) is left alone — Super does not force-start it. A dependency you explicitly stopped with `super stop` is likewise left down: auto-start never pulls it back up, and the dependent waits (with the reason in `super status`) until you start the dependency yourself.
 
 ## State: "Waiting"
 

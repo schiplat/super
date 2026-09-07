@@ -17,10 +17,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+---
+
+## [1.5.6] - 2026-09-07
+
 ### Fixed
 
 - **Batch restart honors dependency order**: `super restart @group` / `restart all` (and any multi-target restart) now run as one coordinated two-phase cycle — all targets stop in reverse dependency order, the daemon waits for them to exit, then all targets start in dependency order. Previously each target restarted independently, so a dependent (e.g. an edge proxy) could come back before its dependency was healthy and park in `Waiting` mid-operation. Group `start`/`stop` follow the same ordering; `priority` breaks ties. Single-name `restart` keeps its stop-then-start semantics. See [Ordered group operations](/docs/03-orchestration/dependencies/#ordered-group-operations).
 - **Dependency cycles are rejected up front**: configurations that would close a `depends_on` cycle (including one formed incrementally across separate updates) are refused at submit time with the cycle members listed, instead of leaving both services stuck in `Waiting` at runtime.
+- **Flapping no longer fires on dependency waits**: start attempts that stop at the `depends_on` gate do not count toward flapping; only real spawn attempts do.
+- **Held-stopped dependencies stay stopped**: a program stopped with `super stop` is not revived by a dependent's auto-start path.
+- **`start_period_secs` is a grace window**: probes run immediately after start; failures inside the window do not count toward `max_failures`, and the first success ends the grace early.
+
+### Changed
+
+- Positioning and docs: edge / cloud-edge focus (no IoT claim); extension docs corrected for real hook call sites (`before_stop` reserved, `after_stop` on exit + remove, `after_start` fail-secure).
+- Roadmap: AI-agent infrastructure under P1; `delay_secs` and `before_stop` wire-or-remove under P2; P0 import work sequenced behind a `StackFormat` parser layer.
+
+### Notes
+
+- Workspace **1.5.6**; pair with commercial plugin packages `super-plugins-1.5.6-…`.
 
 ---
 

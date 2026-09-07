@@ -1,77 +1,79 @@
 ---
 title: "Custom Extensions"
 weight: 1
-description: "Inject custom logic: config fetching, audit logging, and hardware initialization."
+description: "Hook custom Rust logic into the process lifecycle: env injection, pre-flight start gates, auditing, metrics."
 ---
 
-Most process managers are closed systems. If you want them to do something they weren't designed for (like fetching secrets from a central store before starting a process), you usually have to write complex wrapper scripts.
+Super's process lifecycle is extensible at one point: the **`Extension` trait** — a middleware-style interface whose hooks run around every managed process. There are two ways to hook into it:
 
-Super takes a different approach. The core exposes an **`Extension` trait**: a middleware-style interface whose hooks run around every managed process. Licensed plugins (cgroups isolation, notifications, audit) and your own compiled-in logic all plug into this same interface — you can adapt Super to your needs without forking the core.
+* **In-process `Extension` (OSS)** — Rust code compiled into a binary that embeds `super-core`. This is the always-available path, and the one this page is about.
+* **Runtime plugins (licensed)** — signed native libraries that stock `superd` loads from `$SUPER_ROOT/plugins/` after license verification, bridged onto the same trait internally.
 
 > [!NOTE]
-> There are **two extension surfaces**:
->
-> * **In-process `Extension`** — Rust code compiled into a binary that embeds `super-core`. This is the OSS, always-available path.
-> * **Runtime plugins** — separate native libraries delivered with a licensed subscription. `superd` verifies the license, then loads authorized libraries from `$SUPER_ROOT/plugins/` and bridges them onto the same `Extension` interface internally.
->
-> For the full trait reference, a buildable example, and embedding instructions, see [Writing Extensions](/docs/09-development/writing-extensions).
+> Stock `superd` never loads arbitrary compiled-in extensions — it only bridges licensed plugins (an empty `NoOpExtension` when none are licensed). To run your own `Extension`, you embed `super-core` in your own binary — the same pattern `superd` itself uses. The full trait reference, embedding guide, and a buildable example live in [Writing Extensions](/docs/09-development/writing-extensions).
 
-## How it works
+## Hook reference
 
-The trait provides hooks with default implementations, so an extension only implements the moments it cares about:
+Every hook has a default implementation; implement only what you need. Behavior below matches the host's actual call sites:
 
-| Hook | When it runs | What it lets you do |
+| Hook | When it fires | Semantics |
 | :--- | :--- | :--- |
-| `before_start` | Before a process is spawned | Inject environment variables, or return an error to **abort** the start |
-| `after_start` | Right after the PID is assigned | Apply per-process setup (e.g. limits) |
-| `before_stop` / `after_stop` | Around process stop | Drain, deregister, clean up |
-| `on_event` | On system events | Observe start / stop / crash events for custom handling |
-| `on_reload` / `on_shutdown` / `on_update` | Host lifecycle moments | React to reload, graceful shutdown, and config updates |
+| `before_start` | Before the process is spawned | Returned vars are merged into the child environment. Returning `Err` **blocks the start** — the program is marked `Fatal` with your error message, visible in `super list` and the event ledger. |
+| `after_start` | Immediately after spawn, once the PID exists (runs on a blocking thread) | `Err` is **fail-secure**: the just-started child is killed immediately and the program marked `Fatal`. Return `Ok` unless setup genuinely failed. |
+| `after_stop` | Every process exit **and** program removal (fire-and-forget, blocking thread) | Cleanup of per-program resources (e.g. the licensed `isolation` plugin removes the cgroup here). |
+| `on_event` | On every system event, synchronously on the event path | No `Result` — cannot fail the operation. Keep the handler fast: record/enqueue and let a background thread do heavy work. |
+| `on_update` | A config update that changes a program's `resource_limits` | `Err` fails the update. `pid` is `Some` while the program is running, so limits can be re-applied live. |
+| `on_reload` | Host configuration reload | `Err` is logged, not fatal. |
+| `on_shutdown` | Graceful daemon shutdown, before the final `system_shutdown` event | `Err` is logged, not fatal. |
+| `collect_metrics` | Each `/metrics` scrape | Returned text (Prometheus format) is appended under `# --- Extension Metrics ---`. |
+| `supports_resource_limits` | Startup advertisement | Return `true` only if your extension actually enforces `resource_limits`; otherwise those values are stored but not enforced. |
+
+> [!NOTE]
+> The trait also declares `before_stop`. It is **reserved and currently not invoked** by the host — do not rely on it for drain/deregister logic. For stop-adjacent reactions, observe events in `on_event`, or use the per-program `pre_stop` [lifecycle hook](/docs/03-orchestration/lifecycle-hooks), which runs reliably before the stop signal.
 
 ## Use cases
 
-### 1. Configuration injection (e.g. Nacos/Consul)
+### 1. Configuration injection (`before_start`)
 
 **Scenario**: Your app needs database credentials, but they are stored in a central config server, not in static files.
 
-**Extension logic (`before_start`)**:
+**Extension logic**:
 
-1.  Intercept the start request.
-2.  Connect to the central config HTTP API using the program name.
-3.  Fetch the config JSON and return it as a `HashMap`.
-4.  Super merges the variables (e.g. `DB_PASSWORD=...`) into the process environment.
+1.  Intercept the start request (you get the program name and config).
+2.  Fetch the secrets from the central store (Nacos, Consul, Vault, …).
+3.  Return them as a `HashMap` — Super merges the variables (e.g. `DB_PASSWORD=...`) into the process environment.
 
 **Result**: The application starts with fresh credentials, with no wrapper scripts inside the container.
 
-### 2. Specialized auditing
+### 2. Specialized auditing (`on_event`)
 
 **Scenario**: You work in a regulated industry (Finance/Healthcare). A generic webhook isn't enough; you need audit records written to a local encrypted queue or hardware security module (HSM) whenever a process crashes.
 
-**Extension logic (`on_event`)**:
+**Extension logic**:
 
-1.  Listen for fatal process events.
-2.  Serialize the event details.
-3.  Push them to your audit sink from Rust.
+1.  In `on_event`, filter for fatal process events.
+2.  Serialize the event details and append to your audit sink.
 
-### 3. Hardware initialization (IoT)
+Because `on_event` runs synchronously on the event path, do the cheap part inline (append to a local queue) and flush/encrypt/upload from your own background thread.
 
-**Scenario**: You are running Super on an embedded Linux device. Before starting the `motor-control` binary, you must ensure the GPIO pins are exported and set to specific modes.
+### 3. Pre-flight start gate (`before_start`)
 
-**Extension logic (`before_start`)**:
+**Scenario**: Your service requires infrastructure that must be ready before the process launches — a migration tool must run only against a reachable primary, or a worker may start only when its license file is valid. A crash loop "discover and retry" wastes resources; you want the start refused outright.
 
-1.  Check whether the program name is `motor-control`.
-2.  Write to `/sys/class/gpio/...` to initialize hardware.
-3.  If initialization fails, return an `Err` — Super aborts the start, preventing the app from running in an undefined hardware state.
+**Extension logic**:
+
+1.  Check the program name (or its config) to decide whether a gate applies.
+2.  Verify the precondition — probe the database, check the license file, validate a certificate expiry.
+3.  If the check fails, return an `Err` — Super aborts the start and marks the program `Fatal` with your error message, so the failure is visible in `super list` and the event ledger instead of surfacing as a child crash.
 
 ## Building your own
 
-Extensions are compiled into a host binary that links `super-core` and passes the extension to `bootstrap()`. `superd` is itself a thin embedding of `super-core`, so this pattern is well-trodden.
+Link `super-core` and pass your extension to `bootstrap()` — the same call `superd` makes with its plugin stack:
 
 ```toml
-# Cargo.toml
 [dependencies]
-super-core = { git = "https://github.com/schiplat/super" }
-common = { git = "https://github.com/schiplat/super" }
+super-core = { git = "https://github.com/schiplat/super", rev = "main" }
+common     = { git = "https://github.com/schiplat/super", rev = "main" }
 ```
 
 ```rust
@@ -80,9 +82,14 @@ use super_core::extension::Extension;
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     let core = super_core::bootstrap(Box::new(MyExtension)).await?;
-    // ... drive core.manager_handle or serve an API, like superd does ...
+
+    // Ctrl-C → graceful shutdown: state flush + on_shutdown hooks run.
+    tokio::signal::ctrl_c().await?;
+    core.manager_handle.shutdown().await?;
     Ok(())
 }
 ```
 
-A complete, accurate walkthrough — full hook semantics, a working example, and the licensed-runtime boundary — is in [Writing Extensions](/docs/09-development/writing-extensions).
+To compose several extensions, chain them with `ExtensionStack` (hooks run in registration order; `before_start` env maps merge left-to-right, later layers win) — `superd` uses the same stack internally to bridge licensed plugins.
+
+A complete walkthrough — full hook signatures, a working example, `SUPER_ROOT` layout, and the licensed-runtime boundary — is in [Writing Extensions](/docs/09-development/writing-extensions).

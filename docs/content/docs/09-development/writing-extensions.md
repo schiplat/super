@@ -6,7 +6,7 @@ description: "The in-process Extension trait: hook custom Rust logic into the su
 
 `super-core` exposes one supported, in-process extension point: the **`Extension` trait**. It is middleware-style — hooks are invoked by the `Manager` at key points of the process lifecycle, and every method has a default implementation so you only override what you need.
 
-A typical use case is "do something special around every managed process": inject secrets fetched from a central store, block a start when the environment is not ready, apply per-process tuning right after spawn, or observe crash events for custom auditing.
+A typical use case is "do something special around every managed process": inject secrets fetched from a central store, block a start when the environment is not ready, apply per-process tuning right after spawn (with fail-secure semantics), or observe crash events for custom auditing.
 
 ## The trait
 
@@ -34,13 +34,16 @@ pub trait Extension: Send + Sync {
 
 (Signatures match `core/src/extension/mod.rs`; default bodies are omitted above.)
 
+> [!NOTE]
+> The trait declares `before_stop`, and the code block above mirrors it for accuracy, but the host **never invokes it today** (the plugin C-ABI has no slot for it either). It is shown here because this page documents the trait as it exists in the source; treat it as reserved. See the note in the hook table below.
+
 | Hook | Timing | Notes |
 | :--- | :--- | :--- |
 | `before_start` | Before a process is spawned | Returned vars are merged into the program environment. Returning `Err` **aborts the start** and marks the program `Fatal` with your error message. |
-| `after_start` | Immediately after the PID is assigned | Apply post-spawn work (e.g. cgroup limits, process tuning). |
-| `before_stop` | Before the stop signal is sent | Drain / deregister work. |
-| `after_stop` | After the process has exited | Cleanup and resource release. |
-| `on_event` | On any system event | Observe start / stop / crash events; the callback is synchronous (no `Result`). See [System Events](/docs/03-orchestration/events/types). |
+| `after_start` | Immediately after the PID is assigned (blocking thread) | Apply post-spawn work (e.g. cgroup limits, process tuning). **Fail-secure:** returning `Err` kills the just-started child immediately and marks the program `Fatal`. |
+| `before_stop` | — | **Reserved; not currently invoked by the host.** Do not rely on it. For stop-adjacent reactions, use the per-program `pre_stop` [lifecycle hook](/docs/03-orchestration/lifecycle-hooks) (runs before the stop signal), or observe related lifecycle events such as `process_fatal` / `process_backoff` in `on_event`. |
+| `after_stop` | Every process exit (`handle_exited`) **and** program removal from the registry; fire-and-forget on a blocking thread | Cleanup and resource release (e.g. the licensed `isolation` plugin removes the program's cgroup here). Errors are swallowed on the exit path, logged on removal. |
+| `on_event` | On any system event, synchronously on the event path | Observe start / stop / crash events; the callback is synchronous (no `Result`) — keep it fast, enqueue heavy work. See [System Events](/docs/03-orchestration/events/types). |
 | `on_reload` | When the host reloads configuration | Errors are logged, not fatal. |
 | `on_update` | When a config update changes a program's `resource_limits` | `pid` is `Some` while the program is running, so the extension can re-apply limits live. |
 | `on_shutdown` | During graceful host shutdown | Runs before the final shutdown event is emitted. |
@@ -76,7 +79,8 @@ impl Extension for SecretInjector {
     }
 
     fn on_event(&self, event: SystemEvent) {
-        // Observe lifecycle events as they happen.
+        // Observe lifecycle events as they happen. This runs synchronously on
+        // the event path — keep it fast; enqueue, don't block.
         println!("super event: {}", event.event_type());
     }
 }

@@ -167,7 +167,7 @@ Dependency orchestration — the `depends_on` array names programs that must be 
 }
 ```
 
-Unknown names are rejected when the config is submitted (`depends_on: unknown service(s): …`). A dependency that exists but is not yet healthy keeps the dependent in `WAITING` until it turns Healthy — see [Health Checks](/docs/03-orchestration/health-checks).
+Unknown names are rejected when the config is submitted (`depends_on: unknown service(s): …`), and so are configurations that would close a dependency cycle (`depends_on: dependency cycle detected involving: …`). A dependency that exists but is not yet healthy keeps the dependent in `WAITING` until it turns Healthy — see [Health Checks](/docs/03-orchestration/health-checks).
 
 ### Plugin-only blocks 💎
 

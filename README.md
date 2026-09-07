@@ -2,7 +2,7 @@
 
 **The API-First, Lightweight Process Orchestrator for the Edge.**
 
-Super is a modern replacement for tools like [Supervisor](https://supervisord.org/) or [PM2](https://pm2.keymetrics.io/), built with **Rust**. It is designed for edge computing, IoT devices, and high-performance servers.
+Super is a modern replacement for tools like [Supervisor](https://supervisord.org/) or [PM2](https://pm2.keymetrics.io/), built with **Rust**. It is designed for edge computing, cloud-edge collaboration, and high-performance servers.
 
 > **Public beta**
 >

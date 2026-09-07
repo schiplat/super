@@ -18,6 +18,37 @@ tooling to actually move a config over. Adding a CLI importer lowers the
 migration barrier and is a strong onboarding hook for users coming from other
 process managers.
 
+### Step 1 — Extract a stack-format parser layer
+
+The TOML/JSON stack parsing is already funneled through a single entry point,
+`common::parse_stack_from_str` (`common/src/program_validate.rs`), used by
+`super apply`, `super check`, `[include].files` loading, and the raw-body API
+path — parsing (text → `StackApplyRequest`) is not coupled to validation or the
+manager. Formalize this as a registry of format implementations so import
+translators plug in as just another format:
+
+```rust
+pub trait StackFormat: Send + Sync {
+    fn id(&self) -> &'static str; // "toml" | "json" | "supervisor" | ...
+    fn detect(&self, path: &Path, content: &str) -> bool;
+    fn parse(&self, path: &Path, content: &str) -> anyhow::Result<StackApplyRequest>;
+}
+```
+
+- Built-in `toml` / `json` implementations reproduce today's behavior exactly
+  (extension-based dispatch, `file:line:col` error formatting); the existing
+  `parse_stack_from_str` tests guard the refactor.
+- Third-party formats only translate text → `StackApplyRequest`; semantic
+  validation and any manager dependency stay out of the parser layer
+  (`common` remains tokio-free).
+- Formats carry a per-format policy for foreign concepts they cannot express
+  (e.g. supervisor `[include]`/`[group]`, PM2 `instances`): ignore-with-warning
+  or hard error, documented per format.
+- Stays inside `common` as a module; a separate crate is only warranted if the
+  parser is ever published for external toolchains.
+
+### Step 2 — Import subcommands as `StackFormat` implementations
+
 Planned scope (MVP):
 
 - `super import supervisor supervisord.conf` — INI `[program:x]` → `ProgramConfig`
@@ -50,7 +81,11 @@ daemon RSS on small / intermittently connected hosts.
 Themes (non-exhaustive): gateway/sidecar/edge defaults; container recipes
 (foreground PID 1, `SUPER_ROOT` layout, health probes, fail-closed bind);
 lifecycle fit for AI-adjacent edge workloads without a cluster control plane on
-the device. OSS core stays standalone; subscription plugins remain optional.
+the device; and AI-agent infrastructure — agents autonomously spawning helper
+processes, scheduling scripts via cron jobs, and querying process state through
+the REST/WebSocket API and event ledger, with the plugin system as the
+extension surface for agent-side tooling. OSS core stays standalone;
+subscription plugins remain optional.
 
 ## Directions — Cloud control hub (SaaS / Hub)
 
@@ -73,3 +108,44 @@ the accepted limitation and rationale. If implemented: per-program opt-in
 (`secrets = "fd" | "dir" | "env"`), Linux memfd/fd or a credentials directory,
 matching the existing key-based masking heuristics plus an explicit
 `sensitive_env` list, and the same handling for hooks.
+
+## P2 — Extension trait: wire or remove `before_stop`
+
+**Status:** documented as reserved; code decision pending.
+
+`Extension::before_stop` is declared in the trait (and forwarded by
+`ExtensionStack`), but the host never invokes it — `stop_program` runs only the
+per-program `pre_stop` lifecycle hook, and the plugin C-ABI vtable has no
+`before_stop` slot. Docs on both extension pages tell users it is reserved.
+Pick one:
+
+- **Wire it** — call it in `stop_program` after the stop request is accepted and
+  before the stop signal (mirroring where the `pre_stop` hook runs), log-only
+  error handling; expose it in the plugin ABI in a future `PLUGIN_API_VERSION`
+  bump. Migration value: parity with the start-side hooks for compiled-in
+  embedders.
+- **Remove it** — delete the trait method (breaking change for the
+  `Extension` trait; gate behind a minor version note). Keeps the surface
+  honest; `on_event` + `pre_stop` hooks already cover the use cases.
+
+Either way, update the two extension docs to drop the "reserved" caveat.
+
+## P2 — Health probe `delay_secs` (defer first probe)
+
+**Status:** specified, deferred until there is real demand.
+
+A per-probe `delay_secs` knob (default `0` = today's behavior: probes begin
+immediately) that waits N seconds after process start before the first probe.
+Unlike `start_period_secs` — a grace window whose failures don't count while
+probes still fire — `delay_secs` avoids firing probes at all during a known
+startup phase. Useful when probes are expensive or noisy: heavyweight `exec`
+checks (DB validation queries), HTTP endpoints that log errors while the app
+boots, TCP probes that burn a full `timeout_secs` against a not-yet-listening
+port. `start_period_secs` remains the tool for *unknown* startup duration
+(failure shield); `delay_secs` targets *known* startup duration (probe
+suppression). Semantics: counted from process start; before the first probe no
+failures exist, so grace is irrelevant; a crash during the delay is handled by
+normal exit handling (unrelated to the health task). Implementation is a single
+sleep before the probe loop plus one serde field per probe variant with a `0`
+default — fully backward compatible.
+

@@ -177,7 +177,7 @@ The `health_check` object inside one program entry (`stack.json` services[] or `
   "method": "GET",                   // http only
   "interval_secs": 5,
   "timeout_secs": 5,
-  "start_period_secs": 1,            // grace before first probe
+  "start_period_secs": 1,            // grace window: early failures skip the failure count
   "max_failures": 3                  // consecutive failures → auto-restart
 }
 ```

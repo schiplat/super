@@ -68,7 +68,7 @@ Register a new process dynamically.
 > [!NOTE]
 > `autostart` controls boot-time start only. To disable crash auto-restart, set `"autorestart": "false"`.
 
-**Response:** `201 Created` with the new UUID(s). Validation failures return `400` with `{ "status": "error", "message": "..." }`. The message names the field (`command: …`, `health_check.url: …`) and, when a name is set, `program '…':`. JSON syntax / unknown fields include `JSON line N column M`. Duplicate names return `409`.
+**Response:** `201 Created` with the new UUID(s). Validation failures return `400` with `{ "status": "error", "message": "..." }`. The message names the field (`command: …`, `health_check.url: …`, `depends_on: unknown service(s): …` or `depends_on: dependency cycle detected: …`) and, when a name is set, `program '…':`. JSON syntax / unknown fields include `JSON line N column M`. Duplicate names return `409`.
 
 CLI `super add` / `super update` and the dashboard use the same Manager checks. `super check` applies the create-body rules to `[include]` stacks (offline, no daemon) in TOML or legacy JSON.
 
