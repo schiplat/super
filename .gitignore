@@ -47,3 +47,8 @@ docs/.hugo_build.lock
 
 tools/benchmark/results/
 tools/benchmark/target/
+
+# VHS recording outputs — keep README gif; ignore mp4 / other lab artifacts
+examples/djangoapp/tapes/out/
+examples/demo/tapes/out/*
+!examples/demo/tapes/out/*.gif

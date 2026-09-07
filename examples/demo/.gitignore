@@ -1,0 +1,3 @@
+# VHS outputs: commit README gif; ignore mp4 and other lab artifacts
+tapes/out/*
+!tapes/out/*.gif

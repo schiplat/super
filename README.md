@@ -27,6 +27,12 @@ Licensed under the **[MIT License](LICENSE)**. Optional **licensed plugins** (`.
 
 ## Quick Start
 
+<p align="center">
+  <img src="examples/demo/tapes/out/quick-start.gif" alt="Deploy Super, create a program, and day-to-day CLI ops" width="900" />
+</p>
+
+<p align="center"><sub>OSS host CLI — deploy → create <code>demo-web</code> → list / info / logs / restart. Full walkthrough: <a href="https://super.docs.sconts.com/docs/01-getting-started/quick-start/">Quick Start docs</a>.</sub></p>
+
 ### Install script (Linux / macOS / FreeBSD)
 
 ```bash
