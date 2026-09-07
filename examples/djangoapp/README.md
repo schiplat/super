@@ -49,6 +49,8 @@ export VHS_NO_SANDBOX=true TMPDIR=/tmp
 ./scripts/record.sh
 ```
 
+Outputs land in `tapes/out/` (`.gif` / `.mp4`). That directory is **gitignored** — local lab artifacts only; do not commit recordings.
+
 > **Edge check ≤ 15s** for final nginx `:8088` probe. Other VHS/CLI wait ceilings are **30s**. Scratch under `/tmp`.
 
 Manual walkthrough:

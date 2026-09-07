@@ -66,10 +66,20 @@ flowchart LR
 
 You will use **declarative stacks**, **`depends_on`**, **health checks**, **groups**, logs, restarts, snapshots, and a release-directory upgrade path. Licensed plugins stay in a short 💎 appendix so the OSS path stands alone.
 
+> [!TIP]
+> **Runnable demo source (OSS).** Clone and follow the companion under
+> [`examples/djangoapp/`](https://github.com/schiplat/super/tree/master/examples/djangoapp)
+> ([README](https://github.com/schiplat/super/blob/master/examples/djangoapp/README.md)):
+> Compose for Postgres/Redis, Django `demoapp`, nginx edge, and a declarative
+> `@djangoapp` stack (`conf/conf.d/djangoapp.toml`). Lab defaults use Super API
+> `:9012` and nginx `:8088` so they can coexist with another Super/nginx on the
+> same host. The TOML samples **below** use production-shaped paths
+> (`/srv/myapp`, nginx `:80`, Super `:9002`) and more conservative health
+> intervals — same architecture as the demo, different ports and tuning for a
+> quiet lab.
+
 > [!NOTE]
 > **Assumptions.** You already have [binaries + an instance root](/docs/01-getting-started/installation/#instance-layout-and-config), a Django project that runs under Gunicorn, **nginx** installed on the host, and **reachable** Postgres + Redis endpoints. Paths below use `/srv/myapp` and `$SUPER_ROOT=/opt/super`.
->
-> **Runnable OSS example.** The repo ships a minimal companion stack under [`examples/djangoapp/`](https://github.com/schiplat/super/tree/master/examples/djangoapp) (Compose data plane + Gunicorn/Celery + declarative `@djangoapp` + optional VHS tapes). Lab defaults use API `:9012` and nginx `:8088` so they can coexist with another Super/nginx on the same host — see that README.
 
 > [!IMPORTANT]
 > Programs under Super must stay in the **foreground**: nginx with `daemon off`, Gunicorn without `--daemon`, Celery without `--detach`. See [Managed Program Requirements](/docs/02-essentials/process-management-contract).
@@ -207,6 +217,12 @@ nginx -t -c /srv/myapp/nginx/nginx.conf
 
 Create `$SUPER_ROOT/conf/conf.d/djangoapp.toml`. Edge + application processes — no Postgres/Redis binaries.
 
+The lab companion ships the same shape at
+[`examples/djangoapp/conf/conf.d/djangoapp.toml`](https://github.com/schiplat/super/blob/master/examples/djangoapp/conf/conf.d/djangoapp.toml)
+(paths under `/srv/djangoapp`, nginx TCP probe on `:8088`, faster health
+cadence, `numprocs = 2` workers + `demo-tick` cron). Use that file when
+following the [demo README](https://github.com/schiplat/super/blob/master/examples/djangoapp/README.md);
+use the production-shaped sample below when wiring a real host.
 ```toml
 # conf/conf.d/djangoapp.toml
 #
