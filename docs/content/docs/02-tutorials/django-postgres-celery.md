@@ -560,6 +560,7 @@ For a **throwaway laptop demo** you may run Postgres/Redis as Super programs (or
 
 ## Next reading
 
+*   [Getting Started](/docs/01-getting-started/) — [Installation](/docs/01-getting-started/installation/) · [Quick Start](/docs/01-getting-started/quick-start/)
 *   [Process operations](/docs/02-essentials/process-control) · [Configuration](/docs/02-essentials/configuration)
 *   [Dependencies](/docs/03-orchestration/dependencies) · [Health checks](/docs/03-orchestration/health-checks) · [Events](/docs/03-orchestration/events)
 *   [Declarative stacks](/docs/04-production-scenarios/delivery/declarative-stack) · [Snapshot & restore](/docs/04-production-scenarios/delivery/snapshot-and-restore)

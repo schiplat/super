@@ -447,3 +447,11 @@ Template: `contrib/rc.d/superd`. Per-user installs (`--user`) have no rc.d — u
 
 > [!NOTE]
 > Default layout is `$SUPER_ROOT/conf/super.toml`. Set `SUPER_ROOT` if your layout differs (see [Environment Variables](/docs/06-internals/environment-variables#super_root)). For no-service starts, see [Start by hand](#manual-start-by-hand).
+
+## Next steps
+
+*   [Getting Started](/docs/01-getting-started/) — section overview (Installation + Quick Start)
+*   [Quick Start](/docs/01-getting-started/quick-start/) — first managed demo program (CLI / REST / Docker tabs)
+*   [Configuration](/docs/02-essentials/configuration) — `super.toml`, includes, and stacks
+*   [A Django application under Super](/docs/02-tutorials/django-postgres-celery/) — Gunicorn + Celery against external Postgres/Redis
+*   [Environment Variables](/docs/06-internals/environment-variables) — `SUPER_ROOT` and related overrides

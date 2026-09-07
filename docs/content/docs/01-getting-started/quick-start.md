@@ -179,6 +179,8 @@ Open **[http://127.0.0.1:9002](http://127.0.0.1:9002)**.
 
 ## Next Steps
 
+*   [Installation](/docs/01-getting-started/installation/) — binaries, `install.sh`, instance layout, OS services
+*   [Getting Started](/docs/01-getting-started/) — section overview
 *   [A Django application under Super](/docs/02-tutorials/django-postgres-celery/) — Gunicorn and Celery against external Postgres and Redis
 *   [API Reference](/docs/06-internals/api-reference) — stop, restart, historical logs
 *   [Configuration](/docs/02-essentials/configuration) — persistent `super.toml`
