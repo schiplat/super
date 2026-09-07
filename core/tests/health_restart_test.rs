@@ -128,6 +128,25 @@ fn event_retry_counts(events: &[ProgramEventRecord], kind: &str) -> Vec<u32> {
         .collect()
 }
 
+async fn wait_state(handle: &ManagerHandle, id: Uuid, want: ProcessStatus, timeout: Duration) {
+    let deadline = tokio::time::Instant::now() + timeout;
+    loop {
+        let state = handle
+            .get_program(id)
+            .await
+            .map(|p| p.state)
+            .unwrap_or(ProcessStatus::Stopped);
+        if state == want {
+            return;
+        }
+        assert!(
+            tokio::time::Instant::now() < deadline,
+            "program {id} never reached {want:?} (currently {state:?})"
+        );
+        tokio::time::sleep(Duration::from_millis(100)).await;
+    }
+}
+
 // ---------------------------------------------------------------------------
 
 /// A persistently-failing health check restarts the process (honoring
@@ -290,20 +309,21 @@ async fn recovery_resets_health_restart_counter() {
     );
 }
 
-/// `start_period_secs` delays the first probe: no probe runs until the grace
-/// period has elapsed.
+/// `start_period_secs` is a failure grace window, not a probe delay: probes
+/// run immediately, and a success inside the window ends the grace early.
 #[tokio::test]
-async fn start_period_delays_first_probe() {
+async fn start_period_probes_run_immediately() {
     let logs = tempfile::tempdir().unwrap();
     let probes = logs.path().join("probes.log");
     let (handle, _temp) = manager_with_temp(logs.path().to_path_buf()).await;
 
     let health_cmd = format!("echo probe >> {}; exit 0", probes.display());
-    let id = spawn_with_health(&handle, "graceful", health_cmd, 1, 3, 0, 3).await;
+    let id = spawn_with_health(&handle, "graceful", health_cmd, 1, 30, 0, 3).await;
     wait_for_pid(&handle, id, |p| p.is_some(), Duration::from_secs(10)).await;
 
+    // With a 30s grace configured, the first probe must still land quickly.
     let t0 = Instant::now();
-    let deadline = tokio::time::Instant::now() + Duration::from_secs(15);
+    let deadline = tokio::time::Instant::now() + Duration::from_secs(10);
     loop {
         let lines = std::fs::read_to_string(&probes)
             .map(|c| c.lines().count())
@@ -315,9 +335,48 @@ async fn start_period_delays_first_probe() {
     }
     let elapsed = t0.elapsed();
     assert!(
-        elapsed >= Duration::from_secs(2),
-        "first probe must wait for start_period_secs=3 (took {elapsed:?})"
+        elapsed <= Duration::from_secs(5),
+        "first probe must run immediately despite start_period_secs=30 (took {elapsed:?})"
     );
+    // The successful probe makes the program Healthy inside the grace window.
+    wait_state(&handle, id, ProcessStatus::Healthy, Duration::from_secs(10)).await;
+}
+
+/// Failures inside the `start_period_secs` window do not trigger an
+/// auto-restart; the same failure rate after the window does.
+#[tokio::test]
+async fn start_period_absorbs_early_failures() {
+    let logs = tempfile::tempdir().unwrap();
+    let (handle, _temp) = manager_with_temp(logs.path().to_path_buf()).await;
+
+    // Always failing probe: 5s grace, interval 1s, restart after 2 failures.
+    let id = spawn_with_health(&handle, "graceful-failer", "exit 1".to_string(), 1, 5, 2, 3).await;
+    wait_for_pid(&handle, id, |p| p.is_some(), Duration::from_secs(10)).await;
+
+    // Grace is 5s and each failure takes ~1s (probe interval + timeout): the
+    // first two failures land inside the window and must NOT restart.
+    let deadline = tokio::time::Instant::now() + Duration::from_secs(5);
+    while tokio::time::Instant::now() < deadline {
+        assert!(
+            handle
+                .get_program_events(id)
+                .await
+                .unwrap_or_default()
+                .iter()
+                .all(|e| e.event != "health_restart"),
+            "no health restart may happen inside the grace window"
+        );
+        tokio::time::sleep(Duration::from_millis(250)).await;
+    }
+
+    // After the window the identical failures do trigger the restart.
+    wait_for_events(
+        &handle,
+        id,
+        |e| e.iter().any(|r| r.event == "health_restart"),
+        Duration::from_secs(15),
+    )
+    .await;
 }
 
 /// `interval_secs` controls probe cadence: with interval 1s several probes run

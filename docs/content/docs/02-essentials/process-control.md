@@ -58,6 +58,8 @@ super restart @backend
 
 Also supported: `super start all` and `super stop all`.
 
+Group operations are **order-aware**: starts run dependencies first, stops run dependents first, and a group restart is a two-phase bounce (everything stops, then everything starts in dependency order) — see [Ordered group operations](/docs/03-orchestration/dependencies/#ordered-group-operations).
+
 ## Sending Signals
 
 Sometimes you need to send a specific POSIX signal (e.g., to reload configuration without restarting).

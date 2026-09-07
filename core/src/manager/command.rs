@@ -43,6 +43,13 @@ pub enum Command {
         id: Uuid,
         reply: oneshot::Sender<anyhow::Result<()>>,
     },
+    /// Internal: start a dependency on behalf of a dependent program. Same
+    /// spawn path as `StartProgram`, but the target's `autostart` config is
+    /// left untouched (a dependency auto-start must not silently persist an
+    /// autostart flag the operator never set).
+    DependencyStart {
+        id: Uuid,
+    },
     // Includes force parameter
     StopProgram {
         id: Uuid,

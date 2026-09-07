@@ -399,7 +399,7 @@ super restart worker --wait-healthy --timeout 60
 super restart beat --wait-healthy --timeout 30
 ```
 
-Or bounce the whole group: `super restart @djangoapp -y` (Super still honors `depends_on` on start order).
+Or bounce the whole group: `super restart @djangoapp -y`. The restart runs as a two-phase cycle — everything stops in reverse dependency order, then everything starts in dependency order, so `web` is Healthy before `nginx` comes back ([ordered group operations](/docs/03-orchestration/dependencies/#ordered-group-operations)).
 
 ### Scale Celery workers
 

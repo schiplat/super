@@ -78,7 +78,7 @@ Runs a shell command. Succeeds if the command exits with code `0`. Ideal for che
 ## Behavior
 
 *   **Interval**: Checks are performed every `interval_secs` (default `5`).
-*   **Startup**: After the process starts, Super waits `start_period_secs` (default `1`) before the first probe, then waits for the first successful check before marking the process as `Healthy`.
+*   **Startup**: Probes begin immediately after the process starts. Failures during the first `start_period_secs` window (default `1`) do not count toward `max_failures`; the first successful probe marks the process `Healthy` and ends the grace window early.
 *   **Failure**: If a check fails while running, status stays `Running` (unhealthy) until the next check passes. Dependents that use `depends_on` wait for `Healthy`. If a dependency is removed or its name never existed (dangling reference), the dependent stays `WAITING` with the reason shown in `super status` (`last_error`) until a program with that name becomes Healthy again.
 *   **Auto-restart**: After `max_failures` consecutive failures (default `3`), Super restarts the process automatically. The restart counter resets as soon as the process reports healthy again. Set `max_failures = 0` to disable auto-restart (mark unhealthy only).
 *   **Timeout**: A single probe that exceeds `timeout_secs` counts as a failure.
@@ -121,5 +121,5 @@ Every probe type shares the same four knobs. All defaults apply when the key is 
 | :--- | :--- | :--- | :--- |
 | `interval_secs` | int | `5` | Seconds between probes. |
 | `timeout_secs` | int | `3` (tcp) · `5` (http) · `7` (exec) | Max seconds a single probe may take before it is counted as failed. |
-| `start_period_secs` | int | `1` | Grace period after process start before the first probe; probes during this window are skipped, so slow-starting applications are not penalized. |
+| `start_period_secs` | int | `1` | Grace window after process start during which probe failures do not count toward `max_failures`. Probes still run immediately — the window only shields early failures, and the first successful probe closes it early. |
 | `max_failures` | int | `3` | Consecutive failures before the daemon auto-restarts the program. `0` disables auto-restart. |

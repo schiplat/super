@@ -129,14 +129,17 @@ impl LifecycleController {
                             all_ready = false;
                             missing_deps.push(format!("{} (Not Running)", dep_name));
                             // A missing dependency is auto-started through the
-                            // normal start path, unless it is already busy in its
-                            // own lifecycle (waiting/restarting/crashed) — that
-                            // also breaks dependency cycles (A -> B, B -> A)
-                            // from re-triggering this program.
+                            // normal spawn path, unless it is already busy in
+                            // its own lifecycle (waiting/restarting/crashed) —
+                            // that also breaks dependency cycles (A -> B,
+                            // B -> A) from re-triggering this program — or the
+                            // operator explicitly stopped it (`super stop`).
+                            // Held-stopped dependencies are never pulled back
+                            // up behind the operator's back.
                             let idle = !registry.waiting.contains(&did)
                                 && !registry.restarting.contains(&did)
                                 && !registry.crashed.contains(&did);
-                            if idle {
+                            if idle && !registry.stopped_by_user.contains(&did) {
                                 auto_start_deps.push(did);
                             }
                         }
@@ -173,17 +176,17 @@ impl LifecycleController {
                     name: config.name.clone(),
                 });
 
-                // Kick off eligible dependencies. They go through the normal start
-                // path; once healthy, the waiting queue re-tries this program.
+                // Kick off eligible dependencies. They go through the normal
+                // spawn path via `DependencyStart` (autostart untouched); once
+                // healthy, the waiting queue re-tries this program.
                 for did in auto_start_deps {
                     if registry.is_running(&did) {
                         continue;
                     }
                     tracing::info!("Program {} auto-starting dependency {}", config.name, did);
-                    let (reply, _rx) = tokio::sync::oneshot::channel();
                     let _ = self
                         .tx_self
-                        .send(Command::StartProgram { id: did, reply })
+                        .send(Command::DependencyStart { id: did })
                         .await;
                 }
                 return Ok(());
@@ -482,13 +485,18 @@ impl LifecycleController {
 
                 // Start background health check task
                 health_task = Some(tokio::spawn(async move {
-                    // Grace period before the first probe (start_period_secs)
-                    tokio::time::sleep(tokio::time::Duration::from_secs(start_period)).await;
+                    // Grace semantics: probes start immediately, but failures
+                    // inside the `start_period_secs` window do not count
+                    // toward `max_failures`. The first success ends the grace
+                    // period early.
+                    let started = std::time::Instant::now();
                     let mut consecutive_failures = 0u32;
+                    let mut ever_healthy = start_period == 0;
                     loop {
                         let outcome = health::perform_check(&check).await;
                         if outcome.healthy {
                             consecutive_failures = 0;
+                            ever_healthy = true;
                         } else {
                             consecutive_failures += 1;
                         }
@@ -506,7 +514,9 @@ impl LifecycleController {
                         // Auto-restart after `max_failures` consecutive failures
                         // (0 disables). A fresh health task is spawned with the
                         // new process, so this task ends here.
-                        if max_failures > 0 && consecutive_failures >= max_failures {
+                        let in_grace = !ever_healthy
+                            && started.elapsed() < std::time::Duration::from_secs(start_period);
+                        if max_failures > 0 && consecutive_failures >= max_failures && !in_grace {
                             let detail = outcome
                                 .detail
                                 .unwrap_or_else(|| "health check failed".to_string());
@@ -737,6 +747,7 @@ impl LifecycleController {
         if let Some(conf) = registry.programs.get_mut(&id) {
             conf.autostart = false;
         }
+        registry.stopped_by_user.insert(id);
         registry.mark_dirty();
 
         // Collect every running instance (a scheduled task may have several

@@ -42,7 +42,7 @@ Record **in order** (`./scripts/record.sh`):
 | **2** | `02-check-status` | `list` / `info` / curl `/health/` |
 | **3** | `03-scale-workers` | `scale_workers.sh 3` then `2` (+ 10s settle before list) |
 | **4** | `04-view-logs` | `logs --tail` + `--follow` |
-| **5** | `05-maintenance` | dry-run / restart web\|nginx / stop+start / **wait_edge ≤15s** |
+| **5** | `05-maintenance` | dry-run / restart web\|nginx / **restart @djangoapp (two-phase)** / stop+start / **wait_edge ≤15s** |
 
 ```bash
 export VHS_NO_SANDBOX=true TMPDIR=/tmp
@@ -65,16 +65,12 @@ curl -sS "http://127.0.0.1:8088/api/work/enqueue/?seconds=1"; echo
 ./scripts/scale_workers.sh 2 && ./scripts/wait_workers_healthy.sh 25
 sleep 10
 
-# maintenance (avoid restart @djangoapp when nginx depends_on web)
-super --server "$SUPER_SERVER" restart web --wait-healthy --timeout 30
-super --server "$SUPER_SERVER" restart nginx --wait-healthy --timeout 30
-super --server "$SUPER_SERVER" stop @djangoapp -y
-sleep 10
-super --server "$SUPER_SERVER" start @djangoapp -y
+# maintenance — group ops are ordered (restart @djangoapp is a safe two-phase bounce)
+super --server "$SUPER_SERVER" restart @djangoapp -y
 ./scripts/wait_edge.sh http://127.0.0.1:8088/health/ 15
 ```
 
-> **Note:** Prefer ordered `restart web`/`nginx` or `stop` + settle + `start` over `restart @djangoapp`. See [`OPEN.md`](./OPEN.md) for known edge races (product CLI).
+> **Note:** Group operations follow `depends_on` order: a group restart stops everything in reverse dependency order, then starts everything in dependency order ([ordered group operations](../../docs/content/docs/03-orchestration/dependencies.md#ordered-group-operations)).
 
 ## Worker scaling
 

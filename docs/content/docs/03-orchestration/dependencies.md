@@ -70,3 +70,30 @@ Two runtime cases remain (legacy configs restored from a snapshot, or a dependen
 
 - A **dangling name** keeps the dependent in `Waiting` (never `Fatal`) and the reason is surfaced in `super status backend-api` under `Last error` (for example, `Dependency 'postgres-db' not found (config error)`). The log carries a matching `warn` entry. As soon as a program with that name becomes Healthy, the dependent starts automatically.
 - **Removing** a program that a `Waiting` dependent references refreshes the dependent's `Last error` with a removal notice, so the cause is visible without reading logs.
+
+## Ordered group operations
+
+The same ordering rules that gate a single program's start also drive **batch operations**. `super start @group`, `super stop @group`, `super restart @group` (and the `all` / multi-target equivalents) are executed as one coordinated plan, not as independent per-program actions:
+
+- **Start** runs in dependency order — a service is spawned only after the services it depends on are already running, so dependents do not have to detour through `Waiting`.
+- **Stop** runs in reverse dependency order — dependents shut down before the services they depend on.
+- **Restart over multiple targets** is a single two-phase cycle: every member stops (reverse order), Super waits for all of them to exit, then every member starts (dependency order). One clean bounce instead of a pile of independent restarts racing each other's dependencies.
+- `priority` (lower first) breaks ties between services whose dependency order is otherwise unconstrained.
+
+Example — a three-tier stack where `edge` depends on `app`, and `app` depends on `db`:
+
+```bash
+$ super restart @tiered
+Success: 3, Failed: 0
+```
+
+Unrolling what the daemon did:
+
+```text
+Phase 1 — stop (dependents first):  edge → app → db   (wait for all to exit)
+Phase 2 — start (dependencies first): db → app → edge
+```
+
+Because every service starts only after its dependencies are up, no member parks in `Waiting` mid-operation — the group comes back as a consistent set.
+
+Cycles (`A` → `B` → `A`) never reach the runtime: they are rejected up front when the configuration is submitted — via `super apply`, `super add`, or the create/update API — with the members of the cycle listed in the error.

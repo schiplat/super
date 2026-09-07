@@ -1,11 +1,13 @@
 # Part 5/5 — Common Super maintenance.
-# Avoid `restart @djangoapp` (nginx depends_on web → WAITING spam → flapping).
+# Group ops are ordered now: `restart @djangoapp` stops everything in reverse
+# dependency order, waits for exits, then starts in dependency order — no
+# WAITING spam, no flapping. Shown alongside per-member restart + wait_edge.
 #
 # Do NOT `Type 'cmd; echo MARK'` then Wait+Screen /MARK/ — the typed line is already
 # on screen, so Wait returns before the command finishes. Wait for prompt (Wait+Line)
 # or output that is not a substring of the Type text (e.g. "edge OK").
 #
-# Timeouts: edge wait_edge ≤15s; other CLI waits ≤30s; Sleep 10s after group stop.
+# Timeouts: edge wait_edge ≤15s; other CLI waits ≤30s.
 Output out/05-maintenance.mp4
 Output out/05-maintenance.gif
 
@@ -60,6 +62,21 @@ Enter
 Wait+Line@10s />$/
 Sleep 2s
 
+Type `echo "Group restart (ordered two-phase: stop all → start in dep order)…"`
+Enter
+Sleep 1s
+
+Type `super --server "$SUPER_SERVER" restart @djangoapp -y`
+Enter
+Wait+Line@45s />$/
+Sleep 2s
+
+Type `/srv/djangoapp/scripts/wait_edge.sh http://127.0.0.1:8088/health/ 15`
+Enter
+Wait+Screen@20s /edge OK/
+Wait+Line@10s />$/
+Sleep 2s
+
 Type `echo "Group stop/start (respects depends_on: web → nginx)…"`
 Enter
 Sleep 1s
@@ -67,7 +84,7 @@ Sleep 1s
 Type `super --server "$SUPER_SERVER" stop @djangoapp -y`
 Enter
 Wait+Line@30s />$/
-Sleep 10s
+Sleep 5s
 
 Type `super --server "$SUPER_SERVER" start @djangoapp -y`
 Enter

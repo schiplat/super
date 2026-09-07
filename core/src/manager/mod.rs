@@ -19,14 +19,16 @@ use common::{
     ProcessStatus, ProgramConfig, ProgramInfo, ProgramSummary, ResourceLimits, StackApplyRequest,
     UpdateProgramRequest, WsMessage, resolve_confined_log_path,
     signal_restart_missing_health_probe, trivial_exec_health_probe,
-    validate_create_program_request, validate_depends_on_refs,
-    validate_signal_restart_requires_health_probe, validate_update_program_request,
-    with_program_location,
+    validate_create_program_request, validate_dependency_cycles, validate_dependency_graph,
+    validate_depends_on_refs, validate_signal_restart_requires_health_probe,
+    validate_update_program_request, with_program_location,
 };
 use glob::glob;
 use nix::sys::signal::Signal;
 use std::collections::{HashMap, HashSet};
+use std::future::Future;
 use std::path::{Path, PathBuf};
+use std::pin::Pin;
 use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Duration;
@@ -442,501 +444,527 @@ impl Manager {
 
         // Main message loop
         while let Some(cmd) = self.rx.recv().await {
-            match cmd {
-                Command::Shutdown { reply } => {
-                    self.handle_shutdown().await;
-                    let _ = reply.send(());
-                    break;
-                }
-                Command::Reload { reply } => {
-                    let res = self.handle_reload().await;
-                    let _ = reply.send(res);
-                }
-                Command::BatchPrograms { request, reply } => {
-                    let res = self.handle_batch_programs(request).await;
-                    let _ = reply.send(res);
-                }
-                Command::CreateProgram { config: req, reply } => {
-                    self.handle_create_request(req, reply).await;
-                }
-                Command::UpdateProgram { id, request, reply } => {
-                    let res = self.handle_update(id, request).await;
-                    let _ = reply.send(res);
-                }
-                Command::StartProgram { id, reply } => {
-                    if let Some(conf) = self.registry.get_config_mut(&id) {
-                        conf.autostart = true;
-                        conf.updated_at = chrono::Utc::now().timestamp() as u64;
-                    }
-                    self.registry.mark_dirty();
-                    let res = self
-                        .controller
-                        .spawn_program(&mut self.registry, id, 0)
-                        .await;
-                    let _ = reply.send(res);
-                }
-                Command::StopProgram { id, force, reply } => {
-                    let res = self
-                        .controller
-                        .stop_program(&mut self.registry, id, force)
-                        .await;
-                    let _ = reply.send(res);
-                }
-                Command::RestartProgram { id, reply } => {
-                    let res = self.handle_restart_request(id).await;
-                    let _ = reply.send(res);
-                }
-                Command::RemoveProgram { id, reply } => {
-                    let res = self.handle_remove(id).await;
-                    let _ = reply.send(res);
-                }
-                Command::ListPrograms { reply } => {
-                    let summary = self.handle_list();
-                    let _ = reply.send(summary);
-                }
-                Command::GetProgram { id, reply } => {
-                    let res = self.handle_get(id);
-                    let _ = reply.send(res);
-                }
-                Command::GetProgramEvents { id, reply } => {
-                    let q = crate::event_db::EventQuery {
-                        program_id: Some(id),
-                        ..Default::default()
-                    };
-                    let _ = reply.send(self.event_db.query(&q).await.unwrap_or_default());
-                }
-                Command::QueryEvents { query, reply } => {
-                    let _ = reply.send(self.event_db.query(&query).await.unwrap_or_default());
-                }
-                Command::EventStats { program_id, reply } => {
-                    let stats = self.event_db.stats(program_id).await.unwrap_or_default();
-                    let _ = reply.send(stats);
-                }
-
-                Command::StartGroup { group, reply } => {
-                    // 1. Select target IDs
-                    let ids: Vec<Uuid> = self
-                        .registry
-                        .programs
-                        .iter()
-                        .filter(|(_, cfg)| cfg.group.as_deref() == Some(&group))
-                        .map(|(id, _)| *id)
-                        .collect();
-
-                    let mut affected = Vec::new();
-                    if ids.is_empty() {
-                        let _ = reply.send(Err(anyhow::anyhow!("Group not found")));
-                    } else {
-                        // 2. Batch execute
-                        for id in ids {
-                            // Enable autostart
-                            if let Some(conf) = self.registry.get_config_mut(&id) {
-                                conf.autostart = true;
-                                conf.updated_at = chrono::Utc::now().timestamp() as u64;
-                            }
-                            // Start; ignore individual failures
-                            if self
-                                .controller
-                                .spawn_program(&mut self.registry, id, 0)
-                                .await
-                                .is_ok()
-                            {
-                                affected.push(id);
-                            }
-                        }
-                        self.registry.mark_dirty();
-                        let _ = reply.send(Ok(affected));
-                    }
-                }
-                Command::StopGroup {
-                    group,
-                    force,
-                    reply,
-                } => {
-                    let ids: Vec<Uuid> = self
-                        .registry
-                        .programs
-                        .iter()
-                        .filter(|(_, cfg)| cfg.group.as_deref() == Some(&group))
-                        .map(|(id, _)| *id)
-                        .collect();
-
-                    let mut affected = Vec::new();
-                    if ids.is_empty() {
-                        let _ = reply.send(Err(anyhow::anyhow!("Group not found")));
-                    } else {
-                        for id in ids {
-                            // stop_program sets autostart = false internally
-                            if self
-                                .controller
-                                .stop_program(&mut self.registry, id, force)
-                                .await
-                                .is_ok()
-                            {
-                                affected.push(id);
-                            }
-                        }
-                        let _ = reply.send(Ok(affected));
-                    }
-                }
-                Command::RestartGroup { group, reply } => {
-                    let ids: Vec<Uuid> = self
-                        .registry
-                        .programs
-                        .iter()
-                        .filter(|(_, cfg)| cfg.group.as_deref() == Some(&group))
-                        .map(|(id, _)| *id)
-                        .collect();
-
-                    let mut affected = Vec::new();
-                    if ids.is_empty() {
-                        let _ = reply.send(Err(anyhow::anyhow!("Group not found")));
-                    } else {
-                        for id in ids {
-                            // Reuse handle_restart_request
-                            if self.handle_restart_request(id).await.is_ok() {
-                                affected.push(id);
-                            }
-                        }
-                        let _ = reply.send(Ok(affected));
-                    }
-                }
-
-                Command::ProcessExited {
-                    id,
-                    pid,
-                    code,
-                    signal,
-                } => {
-                    self.handle_exited(id, pid, code, signal).await;
-                }
-                Command::CheckTimeoutKill { id, target_pid } => {
-                    // 1. Check whether forced cleanup is needed
-                    let mut force_cleanup = false;
-
-                    // 2. Only if registry still considers process running
-                    let pid_match = self.registry.is_running(&id)
-                        && self
-                            .registry
-                            .get_running_all(&id)
-                            .iter()
-                            .any(|s| s.pid == target_pid);
-                    if pid_match {
-                        tracing::warn!("Stop timeout reached for {}. Sending SIGKILL.", id);
-
-                        // Send SIGKILL
-                        let kill_result = nix::sys::signal::kill(
-                            nix::unistd::Pid::from_raw(-(target_pid as i32)),
-                            Signal::SIGKILL,
-                        );
-
-                        match kill_result {
-                            Ok(_) => {
-                                // SIGKILL sent; wait for child.wait() -> ProcessExited
-                            }
-                            Err(nix::errno::Errno::ESRCH) => {
-                                // Process already gone
-                                // Force cleanup or state stays Stopping forever
-                                tracing::warn!(
-                                    "Process {} (PID {}) gone during timeout kill. Forcing cleanup.",
-                                    id,
-                                    target_pid
-                                );
-                                force_cleanup = true;
-                            }
-                            Err(e) => {
-                                tracing::error!("Failed to SIGKILL {}: {}", id, e);
-                            }
-                        }
-                    }
-
-                    // 3. Force cleanup (avoids borrow conflict above)
-                    if force_cleanup {
-                        self.handle_exited(id, target_pid, None, None).await;
-                    }
-                }
-                Command::ScheduledRestart { id, retry_count } => {
-                    if self.registry.restarting.remove(&id)
-                        && let Err(e) = self
-                            .controller
-                            .spawn_program(&mut self.registry, id, retry_count)
-                            .await
-                    {
-                        tracing::error!("Failed to restart program {}: {}", id, e);
-                    }
-                }
-                Command::HealthCheck { reply } => {
-                    let res = self.handle_health_check().await;
-                    let _ = reply.send(res);
-                }
-                Command::InternalHealthUpdate {
-                    id,
-                    is_healthy,
-                    failure_detail,
-                } => {
-                    self.handle_health_update(id, is_healthy, failure_detail)
-                        .await;
-                }
-                Command::HealthRestart { id, failure_detail } => {
-                    self.handle_health_restart(id, failure_detail).await;
-                }
-                Command::ApplyStack { request, reply } => {
-                    let res = self.handle_apply_stack(request, true).await;
-                    let _ = reply.send(res.map(|(logs, _ids)| logs));
-                }
-                Command::DumpPrograms { reply } => {
-                    let configs: Vec<ProgramConfig> =
-                        self.registry.programs.values().cloned().collect();
-                    let _ = reply.send(configs);
-                }
-                Command::InternalArtifactReady { id, path } => {
-                    self.handle_artifact_ready(id, path).await;
-                }
-                Command::OtaVerifyTimeout { id } => {
-                    self.handle_ota_verify_timeout(id).await;
-                }
-                Command::CheckWaitingQueue => {
-                    self.check_waiting_queue().await;
-                }
-                Command::SignalProgram { id, signal, reply } => {
-                    let res = self.apply_signal(id, signal);
-                    let _ = reply.send(res);
-                }
-                Command::InternalMetricsUpdate { metrics } => {
-                    for (id, (cpu, mem)) in metrics {
-                        if let Some(state) = self.registry.get_running_mut(&id) {
-                            state.cpu_usage = cpu;
-                            state.mem_usage = mem;
-                        }
-                    }
-                }
-                Command::CronTick => {
-                    let triggers = self.scheduler.tick();
-                    for t in triggers {
-                        let cfg = match self.registry.get_config(&t.id) {
-                            Some(c) => c.clone(),
-                            None => continue,
-                        };
-                        let name = cfg.name.clone();
-                        let overlap = cfg.on_overlap.unwrap_or_default();
-                        let catchup = cfg.catchup.unwrap_or_default();
-                        let max_concurrent = cfg.max_concurrent_eff() as usize;
-                        let max_queued = cfg.max_queued_eff();
-
-                        // Catchup: how many runs this tick represents. On-time
-                        // triggers (missed_slots == 1) always count as one run.
-                        let mut runs = 1u32;
-                        if t.missed_slots > 1 {
-                            runs = match catchup {
-                                common::CronCatchup::Skip => 0,
-                                common::CronCatchup::Latest => 1,
-                                common::CronCatchup::All => t.missed_slots.min(CRON_CATCHUP_CAP),
-                            };
-                            tracing::info!(
-                                "Cron job {} missed {} slot(s); catchup={:?} -> {} run(s)",
-                                name,
-                                t.missed_slots,
-                                catchup,
-                                runs
-                            );
-                        }
-                        if runs == 0 {
-                            continue;
-                        }
-
-                        // Concurrency gate: a firing is admitted whenever fewer
-                        // than `max_concurrent` instances are already running.
-                        // Only when every slot is taken does `on_overlap` decide
-                        // whether to skip, queue (bounded by `max_queued`), or
-                        // kill the oldest run for the new one.
-                        let active = self.registry.running_count(&t.id);
-                        if active >= max_concurrent {
-                            match overlap {
-                                common::CronOverlap::Skip => {
-                                    tracing::warn!(
-                                        "Cron job {} is running at max_concurrent={max_concurrent}, skipping this tick.",
-                                        name
-                                    );
-                                    continue;
-                                }
-                                common::CronOverlap::Queue => {
-                                    let queued = self.pending_cron.entry(t.id).or_insert(0);
-                                    let dropped = if *queued >= max_queued {
-                                        tracing::warn!(
-                                            "Cron job {} queue full ({} pending); dropping firing.",
-                                            name,
-                                            *queued
-                                        );
-                                        true
-                                    } else {
-                                        *queued = queued.saturating_add(runs);
-                                        tracing::info!(
-                                            "Cron job {} is at max_concurrent={max_concurrent}; queued {} run(s).",
-                                            name,
-                                            runs
-                                        );
-                                        false
-                                    };
-                                    if dropped {
-                                        self.record_event(
-                                            t.id,
-                                            &name,
-                                            "queue_full",
-                                            None,
-                                            None,
-                                            None,
-                                            None,
-                                            format!(
-                                                "Cron queue full ({max_queued}); firing dropped"
-                                            ),
-                                        );
-                                    }
-                                    continue;
-                                }
-                                common::CronOverlap::Kill => {
-                                    tracing::warn!(
-                                        "Cron job {} is running at max_concurrent={max_concurrent}; terminating oldest run for the new one.",
-                                        name
-                                    );
-                                    let _ = self.apply_signal_oldest(t.id, Signal::SIGTERM);
-                                    let queued = self.pending_cron.entry(t.id).or_insert(0);
-                                    let dropped = if *queued >= max_queued {
-                                        tracing::warn!(
-                                            "Cron job {} queue full ({} pending); dropping firing.",
-                                            name,
-                                            *queued
-                                        );
-                                        true
-                                    } else {
-                                        *queued = queued.saturating_add(runs);
-                                        false
-                                    };
-                                    if dropped {
-                                        self.record_event(
-                                            t.id,
-                                            &name,
-                                            "queue_full",
-                                            None,
-                                            None,
-                                            None,
-                                            None,
-                                            format!(
-                                                "Cron queue full ({max_queued}); firing dropped"
-                                            ),
-                                        );
-                                    }
-                                    continue;
-                                }
-                            }
-                        }
-
-                        // Admitted: enqueue for the drain pass below.
-                        let queued = self.pending_cron.entry(t.id).or_insert(0);
-                        let dropped = if *queued >= max_queued {
-                            tracing::warn!(
-                                "Cron job {} queue full ({} pending); dropping firing.",
-                                name,
-                                *queued
-                            );
-                            true
-                        } else {
-                            *queued = queued.saturating_add(runs);
-                            false
-                        };
-                        if dropped {
-                            self.record_event(
-                                t.id,
-                                &name,
-                                "queue_full",
-                                None,
-                                None,
-                                None,
-                                None,
-                                format!("Cron queue full ({max_queued}); firing dropped"),
-                            );
-                        }
-                    }
-
-                    // Drain the pending queue: spawn as many runs as free
-                    // `max_concurrent` slots allow, so admitted firings that
-                    // cannot overlap the current instance start as it exits.
-                    let due: Vec<(Uuid, u32)> =
-                        self.pending_cron.iter().map(|(id, n)| (*id, *n)).collect();
-                    for (id, count) in due {
-                        let mut remaining = count;
-                        while remaining > 0 {
-                            let cfg = match self.registry.get_config(&id) {
-                                Some(c) => c.clone(),
-                                None => {
-                                    remaining = 0;
-                                    break;
-                                }
-                            };
-                            let max_concurrent = cfg.max_concurrent_eff() as usize;
-                            if self.registry.running_count(&id) >= max_concurrent {
-                                break; // no free slot right now; wait for a later tick
-                            }
-                            tracing::info!("Cron job triggered: {}", cfg.name);
-                            let cron_start_ms = chrono::Utc::now().timestamp_millis() as u64;
-                            if let Err(e) = self
-                                .controller
-                                .spawn_program(&mut self.registry, id, 0)
-                                .await
-                            {
-                                tracing::error!("Failed to spawn cron job {}: {}", cfg.name, e);
-                                self.record_event(
-                                    id,
-                                    &cfg.name,
-                                    "cron_spawn_failed",
-                                    None,
-                                    None,
-                                    None,
-                                    None,
-                                    format!("Failed to spawn cron job: {}", e),
-                                );
-                                break;
-                            } else {
-                                // Record the trigger (run start). The matching
-                                // `cron_exit` is recorded when the instance exits.
-                                self.record_event(
-                                    id,
-                                    &cfg.name,
-                                    "cron_started",
-                                    None,
-                                    None,
-                                    None,
-                                    None,
-                                    format!("Cron triggered (started at ms {cron_start_ms})"),
-                                );
-                                if let Some(cfg) = self.registry.get_config_mut(&id) {
-                                    cfg.cron_last_run = Some(chrono::Utc::now().timestamp() as u64);
-                                }
-                            }
-                            remaining -= 1;
-                        }
-                        if remaining == 0 {
-                            self.pending_cron.remove(&id);
-                        } else {
-                            self.pending_cron.insert(id, remaining);
-                        }
-                    }
-                }
-                Command::PersistTick => {
-                    if let Err(e) = self.flush_to_disk().await {
-                        tracing::error!("Failed to auto-save state: {}", e);
-                    }
-                    self.maybe_prune_events().await;
-                }
-                Command::GenerateMetrics { reply } => {
-                    let metrics = self.handle_generate_metrics();
-                    let _ = reply.send(metrics);
-                }
-                Command::GetSystemStats { reply } => {
-                    let _ = reply.send(self.monitor.system_stats());
-                }
-            }
+            self.handle_command(cmd).await;
         }
         tracing::info!("Manager Loop exited.");
+    }
+
+    /// Dispatch one manager command, boxing the future to keep recursion
+    /// (`handle_command` → `restart_programs_two_phase` → `handle_command`)
+    /// representable.
+    fn handle_command(&mut self, cmd: Command) -> Pin<Box<dyn Future<Output = ()> + Send + '_>> {
+        Box::pin(self.handle_command_inner(cmd))
+    }
+
+    async fn handle_command_inner(&mut self, cmd: Command) {
+        match cmd {
+            Command::Shutdown { reply } => {
+                self.handle_shutdown().await;
+                let _ = reply.send(());
+            }
+            Command::Reload { reply } => {
+                let res = self.handle_reload().await;
+                let _ = reply.send(res);
+            }
+            Command::BatchPrograms { request, reply } => {
+                let res = self.handle_batch_programs(request).await;
+                let _ = reply.send(res);
+            }
+            Command::CreateProgram { config: req, reply } => {
+                self.handle_create_request(req, reply).await;
+            }
+            Command::UpdateProgram { id, request, reply } => {
+                let res = self.handle_update(id, request).await;
+                let _ = reply.send(res);
+            }
+            Command::StartProgram { id, reply } => {
+                if let Some(conf) = self.registry.get_config_mut(&id) {
+                    conf.autostart = true;
+                    conf.updated_at = chrono::Utc::now().timestamp() as u64;
+                }
+                // An explicit start releases a previously held-stopped
+                // program (dependency auto-start is allowed again).
+                self.registry.stopped_by_user.remove(&id);
+                self.registry.mark_dirty();
+                let res = self
+                    .controller
+                    .spawn_program(&mut self.registry, id, 0)
+                    .await;
+                let _ = reply.send(res);
+            }
+            Command::DependencyStart { id } => {
+                // Dependency-initiated: spawn without touching `autostart`
+                // and without releasing a held-stopped mark (the gate
+                // already skips held-stopped deps; this is belt-and-braces).
+                if !self.registry.stopped_by_user.contains(&id)
+                    && let Err(e) = self
+                        .controller
+                        .spawn_program(&mut self.registry, id, 0)
+                        .await
+                {
+                    tracing::debug!("Dependency auto-start for {} did not spawn: {}", id, e);
+                }
+            }
+            Command::StopProgram { id, force, reply } => {
+                let res = self
+                    .controller
+                    .stop_program(&mut self.registry, id, force)
+                    .await;
+                let _ = reply.send(res);
+            }
+            Command::RestartProgram { id, reply } => {
+                let res = self.handle_restart_request(id).await;
+                let _ = reply.send(res);
+            }
+            Command::RemoveProgram { id, reply } => {
+                let res = self.handle_remove(id).await;
+                let _ = reply.send(res);
+            }
+            Command::ListPrograms { reply } => {
+                let summary = self.handle_list();
+                let _ = reply.send(summary);
+            }
+            Command::GetProgram { id, reply } => {
+                let res = self.handle_get(id);
+                let _ = reply.send(res);
+            }
+            Command::GetProgramEvents { id, reply } => {
+                let q = crate::event_db::EventQuery {
+                    program_id: Some(id),
+                    ..Default::default()
+                };
+                let _ = reply.send(self.event_db.query(&q).await.unwrap_or_default());
+            }
+            Command::QueryEvents { query, reply } => {
+                let _ = reply.send(self.event_db.query(&query).await.unwrap_or_default());
+            }
+            Command::EventStats { program_id, reply } => {
+                let stats = self.event_db.stats(program_id).await.unwrap_or_default();
+                let _ = reply.send(stats);
+            }
+
+            Command::StartGroup { group, reply } => {
+                // 1. Select target IDs
+                let ids: Vec<Uuid> = self
+                    .registry
+                    .programs
+                    .iter()
+                    .filter(|(_, cfg)| cfg.group.as_deref() == Some(&group))
+                    .map(|(id, _)| *id)
+                    .collect();
+
+                let mut affected = Vec::new();
+                if ids.is_empty() {
+                    let _ = reply.send(Err(anyhow::anyhow!("Group not found")));
+                } else {
+                    // 2. Batch execute in dependency order (deps first,
+                    //    priority as tie-break) so dependents do not have to
+                    //    bounce through the WAITING queue to converge.
+                    let ids = self.dependency_start_order(&ids);
+                    for id in ids {
+                        // Enable autostart; an explicit group start also
+                        // releases a previously held-stopped program.
+                        if let Some(conf) = self.registry.get_config_mut(&id) {
+                            conf.autostart = true;
+                            conf.updated_at = chrono::Utc::now().timestamp() as u64;
+                        }
+                        self.registry.stopped_by_user.remove(&id);
+                        // Start; ignore individual failures
+                        if self
+                            .controller
+                            .spawn_program(&mut self.registry, id, 0)
+                            .await
+                            .is_ok()
+                        {
+                            affected.push(id);
+                        }
+                    }
+                    self.registry.mark_dirty();
+                    let _ = reply.send(Ok(affected));
+                }
+            }
+            Command::StopGroup {
+                group,
+                force,
+                reply,
+            } => {
+                let ids: Vec<Uuid> = self
+                    .registry
+                    .programs
+                    .iter()
+                    .filter(|(_, cfg)| cfg.group.as_deref() == Some(&group))
+                    .map(|(id, _)| *id)
+                    .collect();
+
+                let mut affected = Vec::new();
+                if ids.is_empty() {
+                    let _ = reply.send(Err(anyhow::anyhow!("Group not found")));
+                } else {
+                    // Reverse dependency order: dependents stop before the
+                    // services they depend on (same contract as shutdown).
+                    let mut ids = self.dependency_start_order(&ids);
+                    ids.reverse();
+                    for id in ids {
+                        // stop_program sets autostart = false internally
+                        if self
+                            .controller
+                            .stop_program(&mut self.registry, id, force)
+                            .await
+                            .is_ok()
+                        {
+                            affected.push(id);
+                        }
+                    }
+                    let _ = reply.send(Ok(affected));
+                }
+            }
+            Command::RestartGroup { group, reply } => {
+                let ids: Vec<Uuid> = self
+                    .registry
+                    .programs
+                    .iter()
+                    .filter(|(_, cfg)| cfg.group.as_deref() == Some(&group))
+                    .map(|(id, _)| *id)
+                    .collect();
+
+                if ids.is_empty() {
+                    let _ = reply.send(Err(anyhow::anyhow!("Group not found")));
+                } else {
+                    let affected = self.restart_programs_two_phase(&ids).await;
+                    self.registry.mark_dirty();
+                    let _ = reply.send(Ok(affected));
+                }
+            }
+
+            Command::ProcessExited {
+                id,
+                pid,
+                code,
+                signal,
+            } => {
+                self.handle_exited(id, pid, code, signal).await;
+            }
+            Command::CheckTimeoutKill { id, target_pid } => {
+                // 1. Check whether forced cleanup is needed
+                let mut force_cleanup = false;
+
+                // 2. Only if registry still considers process running
+                let pid_match = self.registry.is_running(&id)
+                    && self
+                        .registry
+                        .get_running_all(&id)
+                        .iter()
+                        .any(|s| s.pid == target_pid);
+                if pid_match {
+                    tracing::warn!("Stop timeout reached for {}. Sending SIGKILL.", id);
+
+                    // Send SIGKILL
+                    let kill_result = nix::sys::signal::kill(
+                        nix::unistd::Pid::from_raw(-(target_pid as i32)),
+                        Signal::SIGKILL,
+                    );
+
+                    match kill_result {
+                        Ok(_) => {
+                            // SIGKILL sent; wait for child.wait() -> ProcessExited
+                        }
+                        Err(nix::errno::Errno::ESRCH) => {
+                            // Process already gone
+                            // Force cleanup or state stays Stopping forever
+                            tracing::warn!(
+                                "Process {} (PID {}) gone during timeout kill. Forcing cleanup.",
+                                id,
+                                target_pid
+                            );
+                            force_cleanup = true;
+                        }
+                        Err(e) => {
+                            tracing::error!("Failed to SIGKILL {}: {}", id, e);
+                        }
+                    }
+                }
+
+                // 3. Force cleanup (avoids borrow conflict above)
+                if force_cleanup {
+                    self.handle_exited(id, target_pid, None, None).await;
+                }
+            }
+            Command::ScheduledRestart { id, retry_count } => {
+                if self.registry.restarting.remove(&id)
+                    && let Err(e) = self
+                        .controller
+                        .spawn_program(&mut self.registry, id, retry_count)
+                        .await
+                {
+                    tracing::error!("Failed to restart program {}: {}", id, e);
+                }
+            }
+            Command::HealthCheck { reply } => {
+                let res = self.handle_health_check().await;
+                let _ = reply.send(res);
+            }
+            Command::InternalHealthUpdate {
+                id,
+                is_healthy,
+                failure_detail,
+            } => {
+                self.handle_health_update(id, is_healthy, failure_detail)
+                    .await;
+            }
+            Command::HealthRestart { id, failure_detail } => {
+                self.handle_health_restart(id, failure_detail).await;
+            }
+            Command::ApplyStack { request, reply } => {
+                let res = self.handle_apply_stack(request, true).await;
+                let _ = reply.send(res.map(|(logs, _ids)| logs));
+            }
+            Command::DumpPrograms { reply } => {
+                let configs: Vec<ProgramConfig> =
+                    self.registry.programs.values().cloned().collect();
+                let _ = reply.send(configs);
+            }
+            Command::InternalArtifactReady { id, path } => {
+                self.handle_artifact_ready(id, path).await;
+            }
+            Command::OtaVerifyTimeout { id } => {
+                self.handle_ota_verify_timeout(id).await;
+            }
+            Command::CheckWaitingQueue => {
+                self.check_waiting_queue().await;
+            }
+            Command::SignalProgram { id, signal, reply } => {
+                let res = self.apply_signal(id, signal);
+                let _ = reply.send(res);
+            }
+            Command::InternalMetricsUpdate { metrics } => {
+                for (id, (cpu, mem)) in metrics {
+                    if let Some(state) = self.registry.get_running_mut(&id) {
+                        state.cpu_usage = cpu;
+                        state.mem_usage = mem;
+                    }
+                }
+            }
+            Command::CronTick => {
+                let triggers = self.scheduler.tick();
+                for t in triggers {
+                    let cfg = match self.registry.get_config(&t.id) {
+                        Some(c) => c.clone(),
+                        None => continue,
+                    };
+                    let name = cfg.name.clone();
+                    let overlap = cfg.on_overlap.unwrap_or_default();
+                    let catchup = cfg.catchup.unwrap_or_default();
+                    let max_concurrent = cfg.max_concurrent_eff() as usize;
+                    let max_queued = cfg.max_queued_eff();
+
+                    // Catchup: how many runs this tick represents. On-time
+                    // triggers (missed_slots == 1) always count as one run.
+                    let mut runs = 1u32;
+                    if t.missed_slots > 1 {
+                        runs = match catchup {
+                            common::CronCatchup::Skip => 0,
+                            common::CronCatchup::Latest => 1,
+                            common::CronCatchup::All => t.missed_slots.min(CRON_CATCHUP_CAP),
+                        };
+                        tracing::info!(
+                            "Cron job {} missed {} slot(s); catchup={:?} -> {} run(s)",
+                            name,
+                            t.missed_slots,
+                            catchup,
+                            runs
+                        );
+                    }
+                    if runs == 0 {
+                        continue;
+                    }
+
+                    // Concurrency gate: a firing is admitted whenever fewer
+                    // than `max_concurrent` instances are already running.
+                    // Only when every slot is taken does `on_overlap` decide
+                    // whether to skip, queue (bounded by `max_queued`), or
+                    // kill the oldest run for the new one.
+                    let active = self.registry.running_count(&t.id);
+                    if active >= max_concurrent {
+                        match overlap {
+                            common::CronOverlap::Skip => {
+                                tracing::warn!(
+                                    "Cron job {} is running at max_concurrent={max_concurrent}, skipping this tick.",
+                                    name
+                                );
+                                continue;
+                            }
+                            common::CronOverlap::Queue => {
+                                let queued = self.pending_cron.entry(t.id).or_insert(0);
+                                let dropped = if *queued >= max_queued {
+                                    tracing::warn!(
+                                        "Cron job {} queue full ({} pending); dropping firing.",
+                                        name,
+                                        *queued
+                                    );
+                                    true
+                                } else {
+                                    *queued = queued.saturating_add(runs);
+                                    tracing::info!(
+                                        "Cron job {} is at max_concurrent={max_concurrent}; queued {} run(s).",
+                                        name,
+                                        runs
+                                    );
+                                    false
+                                };
+                                if dropped {
+                                    self.record_event(
+                                        t.id,
+                                        &name,
+                                        "queue_full",
+                                        None,
+                                        None,
+                                        None,
+                                        None,
+                                        format!("Cron queue full ({max_queued}); firing dropped"),
+                                    );
+                                }
+                                continue;
+                            }
+                            common::CronOverlap::Kill => {
+                                tracing::warn!(
+                                    "Cron job {} is running at max_concurrent={max_concurrent}; terminating oldest run for the new one.",
+                                    name
+                                );
+                                let _ = self.apply_signal_oldest(t.id, Signal::SIGTERM);
+                                let queued = self.pending_cron.entry(t.id).or_insert(0);
+                                let dropped = if *queued >= max_queued {
+                                    tracing::warn!(
+                                        "Cron job {} queue full ({} pending); dropping firing.",
+                                        name,
+                                        *queued
+                                    );
+                                    true
+                                } else {
+                                    *queued = queued.saturating_add(runs);
+                                    false
+                                };
+                                if dropped {
+                                    self.record_event(
+                                        t.id,
+                                        &name,
+                                        "queue_full",
+                                        None,
+                                        None,
+                                        None,
+                                        None,
+                                        format!("Cron queue full ({max_queued}); firing dropped"),
+                                    );
+                                }
+                                continue;
+                            }
+                        }
+                    }
+
+                    // Admitted: enqueue for the drain pass below.
+                    let queued = self.pending_cron.entry(t.id).or_insert(0);
+                    let dropped = if *queued >= max_queued {
+                        tracing::warn!(
+                            "Cron job {} queue full ({} pending); dropping firing.",
+                            name,
+                            *queued
+                        );
+                        true
+                    } else {
+                        *queued = queued.saturating_add(runs);
+                        false
+                    };
+                    if dropped {
+                        self.record_event(
+                            t.id,
+                            &name,
+                            "queue_full",
+                            None,
+                            None,
+                            None,
+                            None,
+                            format!("Cron queue full ({max_queued}); firing dropped"),
+                        );
+                    }
+                }
+
+                // Drain the pending queue: spawn as many runs as free
+                // `max_concurrent` slots allow, so admitted firings that
+                // cannot overlap the current instance start as it exits.
+                let due: Vec<(Uuid, u32)> =
+                    self.pending_cron.iter().map(|(id, n)| (*id, *n)).collect();
+                for (id, count) in due {
+                    let mut remaining = count;
+                    while remaining > 0 {
+                        let cfg = match self.registry.get_config(&id) {
+                            Some(c) => c.clone(),
+                            None => {
+                                remaining = 0;
+                                break;
+                            }
+                        };
+                        let max_concurrent = cfg.max_concurrent_eff() as usize;
+                        if self.registry.running_count(&id) >= max_concurrent {
+                            break; // no free slot right now; wait for a later tick
+                        }
+                        tracing::info!("Cron job triggered: {}", cfg.name);
+                        let cron_start_ms = chrono::Utc::now().timestamp_millis() as u64;
+                        if let Err(e) = self
+                            .controller
+                            .spawn_program(&mut self.registry, id, 0)
+                            .await
+                        {
+                            tracing::error!("Failed to spawn cron job {}: {}", cfg.name, e);
+                            self.record_event(
+                                id,
+                                &cfg.name,
+                                "cron_spawn_failed",
+                                None,
+                                None,
+                                None,
+                                None,
+                                format!("Failed to spawn cron job: {}", e),
+                            );
+                            break;
+                        } else {
+                            // Record the trigger (run start). The matching
+                            // `cron_exit` is recorded when the instance exits.
+                            self.record_event(
+                                id,
+                                &cfg.name,
+                                "cron_started",
+                                None,
+                                None,
+                                None,
+                                None,
+                                format!("Cron triggered (started at ms {cron_start_ms})"),
+                            );
+                            if let Some(cfg) = self.registry.get_config_mut(&id) {
+                                cfg.cron_last_run = Some(chrono::Utc::now().timestamp() as u64);
+                            }
+                        }
+                        remaining -= 1;
+                    }
+                    if remaining == 0 {
+                        self.pending_cron.remove(&id);
+                    } else {
+                        self.pending_cron.insert(id, remaining);
+                    }
+                }
+            }
+            Command::PersistTick => {
+                if let Err(e) = self.flush_to_disk().await {
+                    tracing::error!("Failed to auto-save state: {}", e);
+                }
+                self.maybe_prune_events().await;
+            }
+            Command::GenerateMetrics { reply } => {
+                let metrics = self.handle_generate_metrics();
+                let _ = reply.send(metrics);
+            }
+            Command::GetSystemStats { reply } => {
+                let _ = reply.send(self.monitor.system_stats());
+            }
+        }
     }
 
     //
@@ -1059,6 +1087,12 @@ impl Manager {
         validate_depends_on_refs(&self.known_program_names(&[]), effective_depends_on).map_err(
             |e| with_program_location(e, req.name.as_deref().or(existing_name.as_deref()), None),
         )?;
+        // The merged edges must not close a dependency cycle with the rest of
+        // the registry (e.g. A -> B while B already depends on A).
+        self.validate_registry_graph_would_stay_acyclic(&old_config.name, effective_depends_on)
+            .map_err(|e| {
+                with_program_location(e, req.name.as_deref().or(existing_name.as_deref()), None)
+            })?;
 
         let mut trigger_ota = false;
         let mut artifact_cfg = None;
@@ -2353,6 +2387,30 @@ impl Manager {
             .flat_map(|s| self.expand_request(s).into_iter().map(|c| c.name))
             .collect();
         let known_names = self.known_program_names(&batch_names);
+        // Batch-wide dependency graph for cycle detection: every service's
+        // depends_on (names resolved within the batch or the registry).
+        let batch_graph: Vec<(String, Vec<String>)> = req
+            .services
+            .iter()
+            .map(|s| (s.name.clone().unwrap_or_default(), s.depends_on.clone()))
+            .collect();
+        let batch_graph_refs: Vec<(String, &[String])> = batch_graph
+            .iter()
+            .map(|(name, deps)| (name.clone(), deps.as_slice()))
+            .collect();
+        let res = validate_dependency_graph(&known_names, &batch_graph_refs);
+        match res {
+            Ok(()) => {}
+            Err(e) if strict_refs => return Err(e),
+            // Dangling refs / cycles in include stacks (startup/reload) only
+            // warn so an upgrade never fails to boot on legacy config; the
+            // runtime gate keeps cycle members WAITING with a visible
+            // last_error instead of a silent deadlock.
+            Err(e) => {
+                logs.push(format!("WARNING: {}", e));
+                tracing::warn!("Include stack with invalid depends_on graph: {}", e);
+            }
+        }
         for (i, service_req) in req.services.iter().enumerate() {
             let res = validate_depends_on_refs(&known_names, &service_req.depends_on)
                 .map_err(|e| with_program_location(e, service_req.name.as_deref(), Some(i)));
@@ -2595,6 +2653,85 @@ impl Manager {
         tracing::info!("Bye!");
     }
 
+    /// Topological order over `depends_on` edges (dep → dependent).
+    ///
+    /// Returns ids in "start order": dependencies first. Ties are broken by
+    /// `priority` (lower = earlier), then by id for determinism. Programs on a
+    /// dependency cycle (rejected at create/apply time, but possible via
+    /// legacy state or update races) are appended after the acyclic part so
+    /// they are never silently dropped from a batch.
+    /// Reverse the result for stop order (dependents stop before their deps).
+    fn dependency_start_order(&self, ids: &[Uuid]) -> Vec<Uuid> {
+        let id_set: HashSet<Uuid> = ids.iter().copied().collect();
+        let name_to_id: HashMap<&str, Uuid> = ids
+            .iter()
+            .filter_map(|id| {
+                self.registry
+                    .get_config(id)
+                    .map(|cfg| (cfg.name.as_str(), *id))
+            })
+            .collect();
+
+        // In-degree over `id -> dep` edges, restricted to the selected set.
+        let mut in_degree: HashMap<Uuid, usize> = ids.iter().map(|id| (*id, 0)).collect();
+        let mut dependents: HashMap<Uuid, Vec<Uuid>> = HashMap::new();
+        for id in ids {
+            let Some(cfg) = self.registry.get_config(id) else {
+                continue;
+            };
+            for dep in &cfg.depends_on {
+                if let Some(&dep_id) = name_to_id.get(dep.as_str())
+                    && dep_id != *id
+                    && in_degree.contains_key(&dep_id)
+                {
+                    *in_degree.entry(*id).or_insert(0) += 1;
+                    dependents.entry(dep_id).or_default().push(*id);
+                }
+            }
+        }
+
+        let priority_of = |id: &Uuid| {
+            self.registry
+                .get_config(id)
+                .map(|c| c.priority)
+                .unwrap_or(i32::MAX)
+        };
+        // Min-heap by (priority, id) so equal-degree programs follow `priority`.
+        let mut ready: std::collections::BinaryHeap<std::cmp::Reverse<(i32, Uuid)>> = in_degree
+            .iter()
+            .filter(|&(_, deg)| *deg == 0)
+            .map(|(&id, _)| std::cmp::Reverse((priority_of(&id), id)))
+            .collect();
+
+        let mut ordered = Vec::with_capacity(ids.len());
+        while let Some(std::cmp::Reverse((_, id))) = ready.pop() {
+            ordered.push(id);
+            if let Some(children) = dependents.get(&id) {
+                for child in children {
+                    let deg = in_degree.get_mut(child).expect("child in selected set");
+                    *deg -= 1;
+                    if *deg == 0 {
+                        ready.push(std::cmp::Reverse((priority_of(child), *child)));
+                    }
+                }
+            }
+        }
+        debug_assert_eq!(ordered.len(), id_set.len());
+
+        // Cycle members (should not happen — cycles are rejected at
+        // create/update/apply): append so they still take part in the batch.
+        if ordered.len() < ids.len() {
+            let mut rest: Vec<Uuid> = ids
+                .iter()
+                .filter(|id| !ordered.contains(id))
+                .copied()
+                .collect();
+            rest.sort_by_key(|id| (priority_of(id), *id));
+            ordered.extend(rest);
+        }
+        ordered
+    }
+
     fn get_shutdown_order(&self) -> Vec<Uuid> {
         let mut adj: HashMap<Uuid, Vec<Uuid>> = HashMap::new();
         let mut in_degree: HashMap<Uuid, usize> = HashMap::new();
@@ -2673,8 +2810,18 @@ impl Manager {
             return;
         }
         // Single-program create has no batch scope: depends_on must reference
-        // an already-registered program (create the dependency first).
+        // an already-registered program (create the dependency first), and the
+        // resulting graph (new edges + registry edges) must stay acyclic.
         if let Err(e) = validate_depends_on_refs(&self.known_program_names(&[]), &req.depends_on) {
+            let e = with_program_location(e, req.name.as_deref(), None);
+            tracing::warn!("CreateProgram validation failed: {}", e);
+            let _ = reply.send(Err(e));
+            return;
+        }
+        if let Err(e) = self.validate_registry_graph_would_stay_acyclic(
+            req.name.as_deref().unwrap_or_default(),
+            &req.depends_on,
+        ) {
             let e = with_program_location(e, req.name.as_deref(), None);
             tracing::warn!("CreateProgram validation failed: {}", e);
             let _ = reply.send(Err(e));
@@ -2877,6 +3024,61 @@ impl Manager {
         })
     }
 
+    /// Two-phase ordered restart for a set of programs (group restart, batch
+    /// restart over multiple targets): stop every member in reverse dependency
+    /// order, wait for all members to exit, then start in dependency order.
+    /// One clean cycle instead of N independent restarts racing each other's
+    /// dependencies.
+    async fn restart_programs_two_phase(&mut self, ids: &[Uuid]) -> Vec<Uuid> {
+        // Ordered stop (dependents first) then ordered start (dependencies
+        // first).
+        let start_order = self.dependency_start_order(ids);
+        let mut stop_order = start_order.clone();
+        stop_order.reverse();
+        for id in stop_order {
+            let _ = self
+                .controller
+                .stop_program(&mut self.registry, id, false)
+                .await;
+        }
+        // Wait for all members to exit (bounded) so starts begin from a clean
+        // slate. Exit events are dispatched through the shared command handler
+        // so no queued command (health updates, metrics, …) is dropped while
+        // the restart is in flight.
+        let deadline = tokio::time::Instant::now() + std::time::Duration::from_secs(30);
+        while !self.registry.running_empty() && tokio::time::Instant::now() < deadline {
+            if !start_order.iter().any(|id| self.registry.is_running(id)) {
+                break;
+            }
+            match self.rx.try_recv() {
+                Ok(cmd) => self.handle_command(cmd).await,
+                Err(mpsc::error::TryRecvError::Empty) => {
+                    tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+                }
+                Err(mpsc::error::TryRecvError::Disconnected) => break,
+            }
+        }
+        let mut affected = Vec::new();
+        for id in start_order {
+            // Enable autostart like group start does; explicit start releases
+            // held-stopped.
+            if let Some(conf) = self.registry.get_config_mut(&id) {
+                conf.autostart = true;
+                conf.updated_at = chrono::Utc::now().timestamp() as u64;
+            }
+            self.registry.stopped_by_user.remove(&id);
+            if self
+                .controller
+                .spawn_program(&mut self.registry, id, 0)
+                .await
+                .is_ok()
+            {
+                affected.push(id);
+            }
+        }
+        affected
+    }
+
     async fn handle_restart_request(&mut self, id: Uuid) -> anyhow::Result<()> {
         if self.registry.is_running(&id) {
             tracing::info!(
@@ -2916,6 +3118,7 @@ impl Manager {
             cfg.autostart = true;
             cfg.updated_at = chrono::Utc::now().timestamp() as u64;
         }
+        self.registry.stopped_by_user.remove(&id);
         self.registry.mark_dirty();
         self.controller
             .spawn_program(&mut self.registry, id, 0)
@@ -2936,6 +3139,7 @@ impl Manager {
         self.registry.waiting.remove(&id);
         self.registry.crashed.remove(&id);
         self.registry.startup_errors.remove(&id);
+        self.registry.stopped_by_user.remove(&id);
         self.registry.health_restart_count.remove(&id);
         self.scheduler.remove(&id);
         self.pending_cron.remove(&id);
@@ -3182,18 +3386,45 @@ impl Manager {
             });
         }
 
+        // Order the batch by dependency topology: starts run dependencies
+        // first; stops run dependents first (same contract as shutdown and
+        // group ops). Other actions are order-insensitive but keep one stable
+        // order for reproducible logs/events.
+        let target_ids = match &req.action {
+            BatchAction::Stop { .. } | BatchAction::Remove => {
+                let mut ids = self.dependency_start_order(&target_ids);
+                ids.reverse();
+                ids
+            }
+            _ => self.dependency_start_order(&target_ids),
+        };
+
         // 2. Batch execute
+        // Restart over multiple targets is a coordinated two-phase cycle
+        // (ordered stop → wait for exits → ordered start), matching group
+        // restart; a per-target independent restart would let a dependent
+        // bounce while its dependency is still down.
+        if matches!(req.action, BatchAction::Restart) && target_ids.len() > 1 {
+            let affected = self.restart_programs_two_phase(&target_ids).await;
+            self.registry.mark_dirty();
+            return Ok(BatchProgramResponse {
+                affected,
+                failed: HashMap::new(),
+            });
+        }
+
         let mut affected = Vec::new();
         let mut failed = HashMap::new();
 
-        for id in target_ids {
+        for id in target_ids.iter().copied() {
             let result = match &req.action {
                 BatchAction::Start => {
-                    // Enable autostart
+                    // Enable autostart; explicit start releases held-stopped.
                     if let Some(conf) = self.registry.get_config_mut(&id) {
                         conf.autostart = true;
                         conf.updated_at = chrono::Utc::now().timestamp() as u64;
                     }
+                    self.registry.stopped_by_user.remove(&id);
                     self.controller
                         .spawn_program(&mut self.registry, id, 0)
                         .await
@@ -3384,6 +3615,36 @@ impl Manager {
             .collect();
         known.extend(batch.iter().cloned());
         known
+    }
+
+    /// Cycle check for single-program create/update: pretend `subject` has
+    /// `depends_on` edges, overlay that on the whole registry graph, and
+    /// reject if any cycle appears. This catches incremental cycles that
+    /// per-request reference checks cannot see (A -> B, then B -> A).
+    fn validate_registry_graph_would_stay_acyclic(
+        &self,
+        subject: &str,
+        depends_on: &[String],
+    ) -> anyhow::Result<()> {
+        let mut graph: Vec<(String, Vec<String>)> = self
+            .registry
+            .programs
+            .values()
+            .map(|c| (c.name.clone(), c.depends_on.clone()))
+            .collect();
+        // Replace the subject's edges with the proposed ones (create: not yet
+        // registered; update: old edges overwritten).
+        graph.retain(|(name, _)| name != subject);
+        graph.push((subject.to_string(), depends_on.to_vec()));
+
+        let refs: Vec<(String, &[String])> = graph
+            .iter()
+            .map(|(name, deps)| (name.clone(), deps.as_slice()))
+            .collect();
+        // Cycle check only: dangling references elsewhere in the registry are
+        // legitimate (WAITING dependents recover when the missing service is
+        // recreated) and are surfaced by the runtime gate instead.
+        validate_dependency_cycles(&refs).map_err(|e| anyhow::anyhow!("{e}"))
     }
 }
 

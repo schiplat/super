@@ -51,9 +51,9 @@ pub use program_validate::{
     ArtifactRestartPolicy, format_serde_json_error, format_toml_error,
     parse_artifact_restart_policy, parse_stack_from_str, signal_restart_missing_health_probe,
     trivial_exec_health_probe, validate_artifact_config, validate_create_program_request,
-    validate_depends_on_refs, validate_program_log_paths,
-    validate_signal_restart_requires_health_probe, validate_update_program_request,
-    with_program_location,
+    validate_dependency_cycles, validate_dependency_graph, validate_depends_on_refs,
+    validate_program_log_paths, validate_signal_restart_requires_health_probe,
+    validate_update_program_request, with_program_location,
 };
 pub use resources::ResourceLimits;
 

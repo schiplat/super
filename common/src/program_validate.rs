@@ -190,24 +190,139 @@ pub fn trivial_exec_health_probe(health_check: Option<&HealthCheck>) -> bool {
     }
 }
 
-/// Validate that `depends_on` entries reference known services.
+/// Validate that `depends_on` entries reference known services, and that the
+/// dependency graph formed by `graph` is acyclic.
 ///
 /// `known` is the set of service names the reference may resolve against:
 /// for a stack apply this is (existing registry programs ∪ this batch's
 /// services); for single-program create/update it is just the registry.
 /// A dangling name means the dependent would sit in the WAITING queue
 /// forever, so it is rejected up front instead.
+///
+/// `graph` maps each service name to its `depends_on` list **for the whole
+/// entity being validated** — for a stack apply that is every service in the
+/// batch; for single-program create/update it is just the one program. A
+/// cycle among these edges is rejected up front: at runtime the cycle makes
+/// every member park in WAITING forever (each side sees the other as "busy",
+/// so neither is ever auto-started and nothing breaks the deadlock).
 pub fn validate_depends_on_refs(
     known: &std::collections::HashSet<String>,
     depends_on: &[String],
 ) -> anyhow::Result<()> {
-    let unknown: Vec<&String> = depends_on.iter().filter(|d| !known.contains(*d)).collect();
-    if unknown.is_empty() {
-        return Ok(());
+    validate_dependency_graph(known, &[(current_service_name(depends_on), depends_on)])
+}
+
+/// Service name for cycle-reporting when only a flat `depends_on` is given.
+fn current_service_name(depends_on: &[String]) -> String {
+    format!("<program with {} depends_on>", depends_on.len())
+}
+
+/// Reference + cycle validation over a name→depends_on graph.
+///
+/// `known`: all resolvable names (registry ∪ batch). Entries are
+/// `(service_name, depends_on)` pairs; the service name is only used for
+/// error messages. Kahn's algorithm: anything left with a non-zero in-degree
+/// after peeling is on (or downstream of) a cycle.
+pub fn validate_dependency_graph(
+    known: &std::collections::HashSet<String>,
+    graph: &[(String, &[String])],
+) -> anyhow::Result<()> {
+    // 1. Reference check (existing behavior, unchanged error text).
+    for (_, depends_on) in graph {
+        let unknown: Vec<&String> = depends_on.iter().filter(|d| !known.contains(*d)).collect();
+        if !unknown.is_empty() {
+            let mut sorted: Vec<&str> = unknown.iter().map(|s| s.as_str()).collect();
+            sorted.sort_unstable();
+            bail!("depends_on: unknown service(s): {}", sorted.join(", "));
+        }
     }
-    let mut sorted: Vec<&str> = unknown.iter().map(|s| s.as_str()).collect();
-    sorted.sort_unstable();
-    bail!("depends_on: unknown service(s): {}", sorted.join(", "))
+
+    // 2. Cycle check only — dangling references in the *registry* part of a
+    //    proposed graph are legitimate (a WAITING dependent recovers when the
+    //    missing service is recreated), so callers that overlay the request on
+    //    the live registry should use `validate_dependency_cycles` directly.
+    validate_dependency_cycles(graph)
+}
+
+/// Cycle-only check over a name→depends_on graph (no reference validation).
+pub fn validate_dependency_cycles(graph: &[(String, &[String])]) -> anyhow::Result<()> {
+    // 2. Cycle check via Kahn's algorithm over the batch-scoped graph.
+    //    Nodes are service names; edges dep -> dependent. Referenced services
+    //    that are not nodes of the validated batch (e.g. pre-existing registry
+    //    programs referenced by a single-program request) are registered as
+    //    zero-degree nodes: they cannot close a cycle, and leaving them out
+    //    would strand the referencing node at in-degree > 0 and false-positive
+    //    as a cycle.
+    let mut in_degree: std::collections::HashMap<&str, usize> = std::collections::HashMap::new();
+    let mut dependents: std::collections::HashMap<&str, Vec<&str>> =
+        std::collections::HashMap::new();
+    let mut self_cycles: Vec<&str> = Vec::new();
+
+    for (name, depends_on) in graph {
+        in_degree.entry(name.as_str()).or_insert(0);
+        for dep in *depends_on {
+            if dep == name {
+                self_cycles.push(name.as_str());
+                continue;
+            }
+            in_degree.entry(dep.as_str()).or_insert(0);
+            *in_degree
+                .get_mut(name.as_str())
+                .expect("name inserted above") += 1;
+            dependents
+                .entry(dep.as_str())
+                .or_default()
+                .push(name.as_str());
+        }
+    }
+
+    if !self_cycles.is_empty() {
+        let mut sorted: Vec<&str> = self_cycles.clone();
+        sorted.sort_unstable();
+        bail!(
+            "depends_on: service(s) depend on themselves: {}",
+            sorted.join(", ")
+        );
+    }
+
+    let mut queue: Vec<&str> = in_degree
+        .iter()
+        .filter(|&(_, deg)| *deg == 0)
+        .map(|(name, _)| *name)
+        .collect();
+    queue.sort_unstable();
+
+    let mut visited = 0usize;
+    let mut idx = 0usize;
+    while idx < queue.len() {
+        let node = queue[idx];
+        idx += 1;
+        visited += 1;
+        if let Some(children) = dependents.get(node) {
+            for child in children {
+                let deg = in_degree.get_mut(child).expect("edge source in graph");
+                *deg -= 1;
+                if *deg == 0 {
+                    queue.push(child);
+                }
+            }
+        }
+    }
+
+    if visited < in_degree.len() {
+        let mut cycle: Vec<&str> = in_degree
+            .iter()
+            .filter(|&(_, deg)| *deg > 0)
+            .map(|(name, _)| *name)
+            .collect();
+        cycle.sort_unstable();
+        bail!(
+            "depends_on: dependency cycle detected involving: {}",
+            cycle.join(" -> ")
+        );
+    }
+
+    Ok(())
 }
 
 /// Shared bounds for cron concurrency fields (create and update).
@@ -1024,5 +1139,77 @@ port = 5432
         let msg = err.to_string();
         assert!(msg.starts_with("conf/conf.d/stack.toml:"), "{msg}");
         assert!(msg.contains("expected"), "{msg}");
+    }
+
+    // --- dependency graph (references + cycles) ----------------------------
+
+    use std::collections::HashSet;
+
+    fn known(names: &[&str]) -> HashSet<String> {
+        names.iter().map(|s| s.to_string()).collect()
+    }
+
+    #[test]
+    fn graph_accepts_acyclic_and_self_forward_ok() {
+        let k = known(&["web", "nginx", "db"]);
+        // nginx -> web -> db (start order), plus db with no deps.
+        let graph = [
+            ("nginx".to_string(), vec!["web".to_string()]),
+            ("web".to_string(), vec!["db".to_string()]),
+            ("db".to_string(), vec![]),
+        ];
+        let refs: Vec<(String, &[String])> = graph
+            .iter()
+            .map(|(n, d)| (n.clone(), d.as_slice()))
+            .collect();
+        validate_dependency_graph(&k, &refs).unwrap();
+    }
+
+    #[test]
+    fn graph_rejects_two_node_cycle() {
+        let k = known(&["a", "b"]);
+        let graph = [
+            ("a".to_string(), vec!["b".to_string()]),
+            ("b".to_string(), vec!["a".to_string()]),
+        ];
+        let refs: Vec<(String, &[String])> = graph
+            .iter()
+            .map(|(n, d)| (n.clone(), d.as_slice()))
+            .collect();
+        let err = validate_dependency_graph(&k, &refs).unwrap_err();
+        assert!(err.to_string().contains("cycle"), "{err}");
+        assert!(
+            err.to_string().contains('a') && err.to_string().contains('b'),
+            "{err}"
+        );
+    }
+
+    #[test]
+    fn graph_rejects_self_dependency() {
+        let k = known(&["a"]);
+        let graph = [("a".to_string(), vec!["a".to_string()])];
+        let refs: Vec<(String, &[String])> = graph
+            .iter()
+            .map(|(n, d)| (n.clone(), d.as_slice()))
+            .collect();
+        let err = validate_dependency_graph(&k, &refs).unwrap_err();
+        assert!(err.to_string().contains("themselves"), "{err}");
+    }
+
+    #[test]
+    fn graph_reference_error_takes_precedence_and_lists_names() {
+        let k = known(&["a"]);
+        let graph = [("a".to_string(), vec!["ghost".to_string(), "zz".to_string()])];
+        // a -> ghost, a -> zz; nothing cyclical, but refs are dangling.
+        let refs: Vec<(String, &[String])> = graph
+            .iter()
+            .map(|(n, d)| (n.clone(), d.as_slice()))
+            .collect();
+        let err = validate_dependency_graph(&k, &refs).unwrap_err();
+        assert!(err.to_string().contains("unknown service"), "{err}");
+        assert!(
+            err.to_string().contains("ghost") && err.to_string().contains("zz"),
+            "{err}"
+        );
     }
 }

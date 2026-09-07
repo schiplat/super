@@ -44,6 +44,11 @@ pub struct ProcessRegistry {
     // Startup error cache
     pub startup_errors: HashMap<Uuid, String>,
 
+    /// Programs explicitly stopped by the operator (`super stop …`). Held
+    /// stopped means: dependency auto-start must not pull them back up, and a
+    /// daemon restart keeps them down. Cleared by an explicit user start.
+    pub stopped_by_user: HashSet<Uuid>,
+
     /// Consecutive health-triggered restarts per program (reset as soon as the
     /// program reports healthy again). Guards the `max_failures` auto-restart
     /// with `retry_limit`.
@@ -62,6 +67,7 @@ impl ProcessRegistry {
             waiting: HashSet::new(),
             crashed: HashSet::new(),
             startup_errors: HashMap::new(),
+            stopped_by_user: HashSet::new(),
             health_restart_count: HashMap::new(),
             dirty: false,
         }

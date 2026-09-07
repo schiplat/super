@@ -308,6 +308,8 @@ super restart <name|@group|id|all> [--wait] [--wait-healthy] [--timeout N]
 | `--yes` / `-y` | bool | `false` | Batch safety: skip confirmation (see above) |
 | `--dry-run` | bool | `false` | Batch safety: preview only (see above) |
 
+A multi-target restart (`@group`, `all`, or an ID list) is one coordinated two-phase cycle — all targets stop in reverse dependency order, Super waits for them to exit, then all targets start in dependency order (see [Dependencies](/docs/03-orchestration/dependencies/#ordered-group-operations)). A single-name restart keeps the simpler stop-then-start semantics on that one program.
+
 ### `signal`
 Send a specific POSIX signal.
 
