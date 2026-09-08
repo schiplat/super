@@ -4,6 +4,10 @@
 
 Super is a modern replacement for tools like [Supervisor](https://supervisord.org/) or [PM2](https://pm2.keymetrics.io/), built with **Rust**. It is designed for edge computing, cloud-edge collaboration, and high-performance servers.
 
+<p align="center">
+  <a href="https://www.producthunt.com/products/super-6?embed=true&amp;utm_source=badge-featured&amp;utm_medium=badge&amp;utm_campaign=badge-super-1676e3d2-6bd0-404e-a9a8-836eac3cb0dd" target="_blank" rel="noopener noreferrer"><img alt="Super - API-First, Rust-Powered Process Orchestration for the Edge. | Product Hunt" width="250" height="54" src="https://api.producthunt.com/widgets/embed-image/v1/featured.svg?post_id=1240340&amp;theme=light&amp;t=1788854702558"></a>
+</p>
+
 > **Public beta**
 >
 > Super `1.x` is feature-complete and in active hardening. The core process-management paths (start/stop/restart, auto-recovery, health checks, OTA rollback) are covered by integration tests and run in the maintainers' own deployments. We recommend it for staging and non-critical workloads today; see [below](#toward-ga) for what we require before calling it production-ready (GA).
