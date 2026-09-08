@@ -61,6 +61,12 @@ services:
 
 params:
   description: "Next-gen, High-performance Process Manager"
+  # Social card image (og:image / twitter:image) — 1200×630 PNG, <300 KB.
+  images:
+    - /images/og.png
+  # Used by og:site_name (layouts/_partials/opengraph.html). Keep the short
+  # brand here; per-page SEO titles live in content front matter (homeTitle).
+  title: "Project Super"
   # Microsoft Clarity (session heatmaps). Empty projectId disables the snippet.
   # Loaded from layouts/_partials/custom/head-end.html (production only; skipped on /legal/).
   analytics:

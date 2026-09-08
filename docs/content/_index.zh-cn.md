@@ -1,6 +1,7 @@
 ---
 title: ""
-description: "Project Super 是什么，以及如何安装与使用。"
+homeTitle: "Super – Rust 打造的 API 优先进程管理器"
+description: "Super 是一款开源、API 优先的 Rust 进程管理器：声明式 TOML/REST 配置、健康检查、崩溃自动恢复、依赖编排与可查询事件台账，并可通过授权插件扩展鉴权、告警与 cgroup 资源隔离。"
 width: full
 toc: false
 ---

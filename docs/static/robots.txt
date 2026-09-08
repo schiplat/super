@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://super.docs.sconts.com/sitemap.xml

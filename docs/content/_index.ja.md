@@ -1,6 +1,7 @@
 ---
 title: ""
-description: "Project Super とは何か、インストールと運用方法。"
+homeTitle: "Super – Rust製のAPIファースト型プロセスマネージャー"
+description: "Super はオープンソースの API ファースト型 Rust プロセスマネージャー。宣言的な TOML/REST 設定、ヘルスチェック、クラッシュ自動復旧、依存関係オーケストレーション、監査可能なイベント台帳を備え、認証・通知・cgroup 制限をライセンスプラグインで拡張できます。"
 width: full
 toc: false
 ---

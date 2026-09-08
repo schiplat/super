@@ -1,6 +1,7 @@
 ---
 title: ""
-description: "Qué es Project Super y cómo instalarlo y operarlo."
+homeTitle: "Super – Gestor de procesos API-first escrito en Rust"
+description: "Super es un gestor de procesos abierto y API-first escrito en Rust: configuración declarativa por TOML/REST, health checks, recuperación ante fallos, orquestación de dependencias y un libro de eventos auditable, ampliable con plugins con licencia para autenticación, alertas y límites de cgroup."
 width: full
 toc: false
 ---
