@@ -2,6 +2,7 @@
 
 use std::collections::HashMap;
 use std::future::Future;
+use std::panic::{self, AssertUnwindSafe};
 use std::sync::{Arc, Mutex, OnceLock};
 use std::thread;
 
@@ -25,7 +26,11 @@ impl WorkerPool {
                     .build()
                     .expect("plugin tokio runtime");
                 while let Ok(job) = rx.recv() {
-                    job(&rt);
+                    // A panicking future must not poison-kill the worker thread:
+                    // that would hang every subsequent `block_on` caller forever
+                    // (worse than a crash — the daemon stays up, dead API).
+                    // Swallow the panic and keep the loop alive.
+                    let _ = panic::catch_unwind(AssertUnwindSafe(|| job(&rt)));
                 }
             })
             .expect("spawn plugin worker thread");

@@ -447,3 +447,7 @@ async fn plugin_audit_middleware(
 
     Ok(response)
 }
+
+#[cfg(test)]
+#[path = "tests/http_host_tests.rs"]
+mod http_host_tests;

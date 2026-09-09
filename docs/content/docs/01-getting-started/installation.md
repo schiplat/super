@@ -445,6 +445,21 @@ service superd status
 
 Template: `contrib/rc.d/superd`. Per-user installs (`--user`) have no rc.d — use [`superd --daemon`](#manual-start-by-hand) instead.
 
+#### Crash recovery semantics
+
+If `superd` itself terminates unexpectedly (for example, a fault in a loaded
+subscription plugin), the OS service manager restarts it (`Restart=on-failure`
+with `RestartSec=2` in the shipped unit; launchd `KeepAlive` and rc.d
+`daemon -r` behave equivalently). During the restart window managed programs
+keep running as orphans but are unmonitored: no health checks, restarts,
+hooks, or events fire. After superd comes back it re-adopts the surviving
+processes from its persistent store and resumes supervision, so the gap is
+typically a few seconds.
+
+Keep superd under a service manager in production for exactly this reason,
+and treat a superd restart as a signal to check `logs/app.log.*` for the
+failing component.
+
 > [!NOTE]
 > Default layout is `$SUPER_ROOT/conf/super.toml`. Set `SUPER_ROOT` if your layout differs (see [Environment Variables](/docs/06-internals/environment-variables#super_root)). For no-service starts, see [Start by hand](#manual-start-by-hand).
 

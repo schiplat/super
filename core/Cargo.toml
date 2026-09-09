@@ -64,3 +64,4 @@ tempfile = "3.8"
 anyhow = "1.0"
 wiremock = "0.6"
 common = { path = "../common" }
+tower = { version = "0.5", features = ["util"] }
