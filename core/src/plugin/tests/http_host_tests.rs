@@ -227,3 +227,102 @@ async fn api_response_maps_invalid_status_to_500() {
     let resp = api_response(0, String::new());
     assert_eq!(resp.status(), StatusCode::INTERNAL_SERVER_ERROR);
 }
+
+// ---- bounded FFI (timeout) fail-closed tests ----
+
+/// RAII guard restoring the test-only timeout override, so a panicking
+/// assertion cannot leak a short timeout into other tests.
+struct TimeoutOverride;
+
+impl TimeoutOverride {
+    fn ms(ms: u64) -> Self {
+        FFI_TIMEOUT_MS_OVERRIDE.store(ms, Ordering::SeqCst);
+        Self
+    }
+}
+
+impl Drop for TimeoutOverride {
+    fn drop(&mut self) {
+        FFI_TIMEOUT_MS_OVERRIDE.store(0, Ordering::SeqCst);
+    }
+}
+
+/// An `authenticate` hook that sleeps well past the (overridden) timeout.
+unsafe extern "C" fn fake_auth_hangs(
+    _path: *const std::ffi::c_char,
+    _authorization: *const std::ffi::c_char,
+    _query: *const std::ffi::c_char,
+    _out_ctx_json: *mut std::ffi::c_char,
+    _out_len: usize,
+) -> i32 {
+    std::thread::sleep(std::time::Duration::from_secs(5));
+    0
+}
+
+/// A hung authenticate hook must fail closed with 504 and never inject a
+/// `UserContext` — the request must not pass while the plugin is stuck.
+#[tokio::test]
+async fn auth_timeout_fails_closed_with_504() {
+    let _guard = TimeoutOverride::ms(30);
+    let seen = StdArc::new(AtomicU8::new(NOT_SEEN));
+    let router = probe_router(ok_handle(fake_auth_hangs), seen.clone());
+    let resp = probe_request(router).await.unwrap();
+    assert_eq!(resp.status(), StatusCode::GATEWAY_TIMEOUT);
+    assert_eq!(seen.load(Ordering::SeqCst), NOT_SEEN);
+}
+
+/// A hung authorize hook must not fail open: the timeout maps to 500 and the
+/// request never reaches the handler.
+#[tokio::test]
+async fn rbac_timeout_fails_closed() {
+    unsafe extern "C" fn fake_authorize_hangs(
+        _path: *const std::ffi::c_char,
+        _method: *const std::ffi::c_char,
+        _ctx_json: *const std::ffi::c_char,
+    ) -> i32 {
+        std::thread::sleep(std::time::Duration::from_secs(5));
+        0
+    }
+    let _guard = TimeoutOverride::ms(30);
+    let handle = Arc::new(HttpPluginHandle {
+        init: None,
+        authenticate: Some(fake_auth_empty_ctx),
+        authorize: Some(fake_authorize_hangs),
+        audit_request: Some(test_audit_noop),
+        handle_api: test_handle_api_always_500,
+    });
+    let seen = StdArc::new(AtomicU8::new(NOT_SEEN));
+    let router = probe_router(handle, seen.clone());
+    let resp = probe_request(router).await.unwrap();
+    assert_eq!(resp.status(), StatusCode::INTERNAL_SERVER_ERROR);
+    assert_eq!(seen.load(Ordering::SeqCst), NOT_SEEN);
+}
+
+/// A hung `handle_api` must surface as 504 from the dispatch handler.
+#[tokio::test]
+async fn api_timeout_maps_to_504() {
+    unsafe extern "C" fn fake_handle_api_hangs(
+        _method: *const std::ffi::c_char,
+        _path: *const std::ffi::c_char,
+        _body: *const std::ffi::c_char,
+        _ctx_json: *const std::ffi::c_char,
+        _out: *mut std::ffi::c_char,
+        _out_len: usize,
+    ) -> u32 {
+        std::thread::sleep(std::time::Duration::from_secs(5));
+        200
+    }
+    let _guard = TimeoutOverride::ms(30);
+    let handle = Arc::new(HttpPluginHandle {
+        init: None,
+        authenticate: None,
+        authorize: None,
+        audit_request: None,
+        handle_api: fake_handle_api_hangs,
+    });
+    // Timeout is signalled as `None` (the dispatch handler maps it to 504).
+    assert!(
+        handle.call_api("GET", "/probe", "", "").await.is_none(),
+        "hung handle_api must surface as None (timeout)"
+    );
+}

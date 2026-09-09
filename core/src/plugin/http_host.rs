@@ -18,6 +18,8 @@ use std::collections::HashMap;
 use std::ffi::CString;
 use std::net::SocketAddr;
 use std::sync::Arc;
+use std::sync::atomic::{AtomicU64, Ordering};
+use std::time::Duration;
 use tracing::warn;
 
 #[derive(Clone)]
@@ -74,31 +76,81 @@ impl HttpPluginHandle {
         Ok(())
     }
 
-    fn call_api(&self, method: &str, path: &str, body: &str, ctx_json: &str) -> (u16, String) {
+    /// Run a blocking plugin FFI call on the blocking pool with a wall-clock
+    /// budget. `None` means the call did not complete in time.
+    ///
+    /// All FFI entry points are wrapped here: without the timeout a plugin
+    /// that never returns pins a blocking-pool thread forever, and enough
+    /// concurrent stuck calls starve the pool (API-wide hang).
+    async fn bounded_ffi<T, F>(&self, f: F) -> Option<T>
+    where
+        T: Send + 'static,
+        F: FnOnce() -> T + Send + 'static,
+    {
+        // Ok(Ok(v)) = answered in time; timeout or JoinError (which includes a
+        // panicking call — though plugin-side guards should prevent that) both
+        // collapse to `None`, the fail-closed "no answer" signal.
+        match tokio::time::timeout(ffi_timeout(), tokio::task::spawn_blocking(f)).await {
+            Ok(Ok(v)) => Some(v),
+            _ => None,
+        }
+    }
+
+    async fn call_api(
+        &self,
+        method: &str,
+        path: &str,
+        body: &str,
+        ctx_json: &str,
+    ) -> Option<(u16, String)> {
         let method_c = CString::new(method).unwrap_or_default();
         let path_c = CString::new(path).unwrap_or_default();
         let body_c = CString::new(body).unwrap_or_default();
         let ctx_c = CString::new(ctx_json).unwrap_or_default();
+        let handle_api = self.handle_api;
         let mut buf = vec![0u8; 65536];
         // SAFETY: the four input pointers are valid NUL-terminated `CString`s
         // and `buf` is a valid writable buffer of `buf.len()` bytes, all
         // outliving the call; the ABI contract is that the plugin writes a
         // NUL-terminated response of at most `buf.len()` bytes.
-        let status = unsafe {
-            (self.handle_api)(
-                method_c.as_ptr(),
-                path_c.as_ptr(),
-                body_c.as_ptr(),
-                ctx_c.as_ptr(),
-                buf.as_mut_ptr().cast(),
-                buf.len(),
+        self.bounded_ffi(move || {
+            let status = unsafe {
+                (handle_api)(
+                    method_c.as_ptr(),
+                    path_c.as_ptr(),
+                    body_c.as_ptr(),
+                    ctx_c.as_ptr(),
+                    buf.as_mut_ptr().cast(),
+                    buf.len(),
+                )
+            };
+            let nul = buf.iter().position(|&b| b == 0).unwrap_or(buf.len());
+            (
+                status as u16,
+                String::from_utf8_lossy(&buf[..nul]).into_owned(),
             )
-        };
-        let nul = buf.iter().position(|&b| b == 0).unwrap_or(buf.len());
-        (
-            status as u16,
-            String::from_utf8_lossy(&buf[..nul]).into_owned(),
-        )
+        })
+        .await
+    }
+}
+
+/// Wall-clock budget for a plugin FFI call on the request hot path.
+///
+/// These calls block a host OS thread (spawn_blocking) for the full duration;
+/// a plugin that never returns would otherwise pin that thread forever and,
+/// under enough concurrent slow requests, starve the blocking pool and hang
+/// the whole API. On timeout the host answers fail-closed (5xx) and abandons
+/// the call — the plugin thread may still finish later and its answer is
+/// discarded.
+pub const PLUGIN_FFI_TIMEOUT: Duration = Duration::from_secs(10);
+
+/// Test-only override for `PLUGIN_FFI_TIMEOUT` (milliseconds); 0 = use default.
+static FFI_TIMEOUT_MS_OVERRIDE: AtomicU64 = AtomicU64::new(0);
+
+fn ffi_timeout() -> Duration {
+    match FFI_TIMEOUT_MS_OVERRIDE.load(Ordering::Relaxed) {
+        0 => PLUGIN_FFI_TIMEOUT,
+        ms => Duration::from_millis(ms),
     }
 }
 
@@ -265,7 +317,19 @@ async fn plugin_api_handler(
         .await
         .unwrap_or_default();
     let body_str = String::from_utf8_lossy(&body);
-    let (status, resp_body) = handle.call_api(&method, &path, &body_str, &ctx_json);
+    // `None` = plugin did not answer within PLUGIN_FFI_TIMEOUT: fail closed.
+    let Some((status, resp_body)) = handle.call_api(&method, &path, &body_str, &ctx_json).await
+    else {
+        warn!("Plugin API call timed out: {method} {path}");
+        return (
+            StatusCode::GATEWAY_TIMEOUT,
+            Json(serde_json::json!({
+                "status": "error",
+                "message": "plugin handler timed out",
+            })),
+        )
+            .into_response();
+    };
     api_response(status, resp_body)
 }
 
@@ -307,30 +371,46 @@ async fn plugin_auth_middleware(
     let query_c = CString::new(query).unwrap_or_default();
     let mut buf = vec![0u8; 2048];
 
-    let code = unsafe {
-        // SAFETY: the three input pointers are valid NUL-terminated `CString`s
-        // and `buf` is a valid writable buffer of `buf.len()` bytes, all
-        // outliving the call; `authenticate` is a checked vtable entry point.
-        authenticate(
-            path_c.as_ptr(),
-            auth_c.as_ptr(),
-            query_c.as_ptr(),
-            buf.as_mut_ptr().cast(),
-            buf.len(),
-        )
+    // `None` = plugin did not answer within PLUGIN_FFI_TIMEOUT: fail closed
+    // (5xx), never fail open on a slow/hung authentication hook. The buffer is
+    // moved into the bounded call; on code 0 the answer is read back from it.
+    let Some((code, ctx_json)) = handle
+        .bounded_ffi(move || unsafe {
+            // SAFETY: the three input pointers are valid NUL-terminated `CString`s
+            // and `buf` is a valid writable buffer of `buf.len()` bytes, all
+            // outliving the call; `authenticate` is a checked vtable entry point.
+            let code = authenticate(
+                path_c.as_ptr(),
+                auth_c.as_ptr(),
+                query_c.as_ptr(),
+                buf.as_mut_ptr().cast(),
+                buf.len(),
+            );
+            let nul = buf.iter().position(|&b| b == 0).unwrap_or(buf.len());
+            // Strict UTF-8: lossy conversion would silently repair non-UTF-8
+            // garbage into U+FFFD and the 500 contract below would never fire.
+            // `None` = plugin wrote invalid UTF-8 (contract violation).
+            (
+                code,
+                std::str::from_utf8(&buf[..nul]).ok().map(str::to_string),
+            )
+        })
+        .await
+    else {
+        warn!("Plugin authenticate timed out for {path}");
+        return StatusCode::GATEWAY_TIMEOUT.into_response();
     };
 
     match code {
         3 => next.run(req).await,
         0 => {
-            let nul = buf.iter().position(|&b| b == 0).unwrap_or(buf.len());
-            let Ok(json) = std::str::from_utf8(&buf[..nul]) else {
+            let Some(json) = ctx_json else {
                 return StatusCode::INTERNAL_SERVER_ERROR.into_response();
             };
             req.extensions_mut().insert(PluginAuthContext {
-                ctx_json: json.to_string(),
+                ctx_json: json.clone(),
             });
-            if let Ok(user) = serde_json::from_str::<UserContext>(json) {
+            if let Ok(user) = serde_json::from_str::<UserContext>(&json) {
                 req.extensions_mut().insert(user);
             }
             next.run(req).await
@@ -347,9 +427,8 @@ async fn plugin_auth_middleware(
                 .into_response()
         }
         4 => {
-            let nul = buf.iter().position(|&b| b == 0).unwrap_or(buf.len());
-            let detail = std::str::from_utf8(&buf[..nul]).unwrap_or("");
-            let body = if detail.trim().starts_with('{') {
+            let detail = ctx_json.as_deref().unwrap_or("").trim();
+            let body = if detail.starts_with('{') {
                 serde_json::from_str::<serde_json::Value>(detail).unwrap_or_else(|_| {
                     serde_json::json!({
                         "status": "error",
@@ -389,14 +468,25 @@ async fn plugin_rbac_middleware(
     let method_c = CString::new(method).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
     let ctx_c = CString::new(ctx.ctx_json.as_str()).unwrap_or_default();
 
+    // Timeout also fails closed here: a hung authorize hook yields 500 (mapped
+    // from the Err below), not an implicit allow.
     // SAFETY: all three pointers are valid NUL-terminated `CString`s that
     // outlive the call; `authorize` is a checked vtable entry point.
-    let code = unsafe { authorize(path_c.as_ptr(), method_c.as_ptr(), ctx_c.as_ptr()) };
-    if code == 0 {
-        Ok(next.run(req).await)
-    } else {
-        warn!("Forbidden access to {}", path);
-        Err(StatusCode::FORBIDDEN)
+    let code = handle
+        .bounded_ffi(move || unsafe {
+            authorize(path_c.as_ptr(), method_c.as_ptr(), ctx_c.as_ptr())
+        })
+        .await;
+    match code {
+        Some(0) => Ok(next.run(req).await),
+        Some(_) => {
+            warn!("Forbidden access to {}", path);
+            Err(StatusCode::FORBIDDEN)
+        }
+        None => {
+            warn!("Plugin authorize timed out for {path}");
+            Err(StatusCode::INTERNAL_SERVER_ERROR)
+        }
     }
 }
 
@@ -433,16 +523,25 @@ async fn plugin_audit_middleware(
     let path_c = CString::new(path.as_str()).unwrap_or_default();
     let ip_c = CString::new(ip).unwrap_or_default();
 
-    // SAFETY: all four pointers are valid NUL-terminated `CString`s that
-    // outlive the call; `audit_request` is a checked vtable entry point.
-    unsafe {
-        audit_request(
-            ctx_c.as_ptr(),
-            method_c.as_ptr(),
-            path_c.as_ptr(),
-            status,
-            ip_c.as_ptr(),
-        );
+    // Best effort: the response is already computed, so a timed-out audit hook
+    // is only logged — the request result is never altered (audit must not
+    // become a availability lever either way).
+    if handle
+        .bounded_ffi(move || unsafe {
+            // SAFETY: all four pointers are valid NUL-terminated `CString`s that
+            // outlive the call; `audit_request` is a checked vtable entry point.
+            audit_request(
+                ctx_c.as_ptr(),
+                method_c.as_ptr(),
+                path_c.as_ptr(),
+                status,
+                ip_c.as_ptr(),
+            );
+        })
+        .await
+        .is_none()
+    {
+        warn!("Plugin audit_request timed out for {method} {path}");
     }
 
     Ok(response)
