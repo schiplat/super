@@ -5,7 +5,37 @@ use common::plugin_ui_abi::{SuperPluginUiV1, UI_PLUGIN_API_VERSION, UI_PLUGIN_SY
 use libloading::Library;
 use std::ffi::{CStr, CString};
 use std::sync::Arc;
+use std::time::Duration;
 use tracing::info;
+
+/// Wall-clock budget for one UI asset resolve FFI call. Mirrors the HTTP
+/// host's `PLUGIN_FFI_TIMEOUT`: a plugin that never returns must not pin a
+/// core async worker thread — the resolve runs on the blocking pool and this
+/// budget bounds how long a request can wait on it.
+const RESOLVE_FFI_TIMEOUT: Duration = Duration::from_secs(10);
+
+/// Test-only override for the resolve budget (milliseconds); 0 = use default.
+static RESOLVE_TIMEOUT_MS_OVERRIDE: std::sync::atomic::AtomicU64 =
+    std::sync::atomic::AtomicU64::new(0);
+
+fn resolve_timeout() -> Duration {
+    use std::sync::atomic::Ordering;
+    match RESOLVE_TIMEOUT_MS_OVERRIDE.load(Ordering::Relaxed) {
+        0 => RESOLVE_FFI_TIMEOUT,
+        ms => Duration::from_millis(ms),
+    }
+}
+
+/// Outcome of a bounded UI asset resolve.
+pub enum UiResolveOutcome {
+    /// Asset found; owned copies of the plugin's static mime/data bytes.
+    Asset { mime: String, data: Vec<u8> },
+    /// Plugin answered "not found" / invalid arguments.
+    Missing,
+    /// The plugin did not answer within the budget (or the call panicked).
+    /// Fail-closed: callers answer 504, never fall back to SPA routing.
+    TimedOut,
+}
 
 #[derive(Clone)]
 pub struct UiPluginHandle {
@@ -65,6 +95,56 @@ impl UiPluginHandle {
         // library; valid until the library is unloaded (never during superd lifetime).
         let data = unsafe { std::slice::from_raw_parts(ptr, len) };
         Some(UiAsset { data, mime })
+    }
+
+    /// Bounded resolve for the request path: runs the synchronous FFI on the
+    /// blocking pool under a wall-clock budget, copying the plugin's static
+    /// bytes out so nothing points into plugin memory after the call.
+    ///
+    /// The unbounded [`Self::resolve`] stays for non-request uses where a
+    /// borrowed view is preferred (none today; `build_id` is startup-only).
+    pub async fn resolve_bounded(&self, path: &str) -> UiResolveOutcome {
+        let path_c = match CString::new(path) {
+            Ok(p) => p,
+            Err(_) => return UiResolveOutcome::Missing,
+        };
+        let resolve_asset = self.resolve_asset;
+
+        let attempt = tokio::time::timeout(
+            resolve_timeout(),
+            tokio::task::spawn_blocking(move || {
+                let mut ptr: *const u8 = std::ptr::null();
+                let mut len: usize = 0;
+                let mut mime_ptr: *const std::ffi::c_char = std::ptr::null();
+                // SAFETY: `path_c` is a valid NUL-terminated `CString` and the
+                // three out-pointers are valid for writes for the duration of
+                // the call; `resolve_asset` is a checked vtable entry point.
+                let code =
+                    unsafe { (resolve_asset)(path_c.as_ptr(), &mut ptr, &mut len, &mut mime_ptr) };
+                if code != 0 || ptr.is_null() || len == 0 {
+                    return UiResolveOutcome::Missing;
+                }
+                let mime = if mime_ptr.is_null() {
+                    "application/octet-stream".to_string()
+                } else {
+                    // SAFETY: plugin returns a NUL-terminated static string.
+                    let s = unsafe { CStr::from_ptr(mime_ptr) };
+                    s.to_str().unwrap_or("application/octet-stream").to_string()
+                };
+                // SAFETY: pointer/length refer to read-only embedded data in
+                // the loaded plugin library; valid for the process lifetime.
+                let data = unsafe { std::slice::from_raw_parts(ptr, len) }.to_vec();
+                UiResolveOutcome::Asset { mime, data }
+            }),
+        )
+        .await;
+
+        match attempt {
+            Ok(Ok(outcome)) => outcome,
+            // Timeout, JoinError (panic), or a plugin answering garbage is
+            // collapsed here; callers fail closed with 504.
+            _ => UiResolveOutcome::TimedOut,
+        }
     }
 }
 
@@ -130,14 +210,5 @@ pub fn normalize_ui_path(uri_path: &str) -> String {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn normalize_root_to_index() {
-        assert_eq!(normalize_ui_path("/"), "index.html");
-        assert_eq!(normalize_ui_path(""), "index.html");
-        assert_eq!(normalize_ui_path("/assets/app.js"), "assets/app.js");
-        assert_eq!(normalize_ui_path("/../etc/passwd"), "index.html");
-    }
-}
+#[path = "tests/ui_host_tests.rs"]
+mod ui_host_tests;

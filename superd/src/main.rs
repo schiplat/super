@@ -157,47 +157,71 @@ async fn ui_fallback_handler(
         return html_response(&html);
     };
 
-    serve_ui_asset(
+    match serve_ui_asset(
         &ui,
         &normalize_ui_path(path),
         auth_required,
         is_licensed,
         false,
     )
-    .unwrap_or_else(|| spa_fallback(&ui, auth_required, is_licensed))
+    .await
+    {
+        Some(resp) => resp,
+        None => spa_fallback(&ui, auth_required, is_licensed).await,
+    }
 }
 
-fn spa_fallback(
+async fn spa_fallback(
     ui: &super_core::plugin::UiPluginHandle,
     auth_required: bool,
     is_licensed: bool,
 ) -> Response {
     serve_ui_asset(ui, "index.html", auth_required, is_licensed, true)
+        .await
         .unwrap_or(StatusCode::NOT_FOUND.into_response())
 }
 
-fn serve_ui_asset(
+/// Resolve a UI asset through the plugin and build the response.
+///
+/// The resolve FFI runs on the blocking pool under a 10 s wall-clock budget
+/// (mirroring the HTTP host's plugin-call budget): a plugin that never
+/// answers must not pin a core async worker, and this fallback path sits
+/// *outside* the API router's `request_timeout_secs` layer, so the budget
+/// has to live here. `TimedOut` fails closed with 504 — never SPA fallback,
+/// which would mask a wedged plugin as a routing miss.
+async fn serve_ui_asset(
     ui: &super_core::plugin::UiPluginHandle,
     file_path: &str,
     auth_required: bool,
     is_licensed: bool,
     inject_config: bool,
 ) -> Option<Response> {
-    let asset = ui.resolve(file_path)?;
-    let body = if inject_config || file_path == "index.html" {
-        inject_ui_config(asset.data, auth_required, is_licensed)
-    } else {
-        bytes::Bytes::copy_from_slice(asset.data)
-    };
+    match ui.resolve_bounded(file_path).await {
+        super_core::plugin::UiResolveOutcome::Asset { mime, data } => {
+            let body = if inject_config || file_path == "index.html" {
+                inject_ui_config(&data, auth_required, is_licensed)
+            } else {
+                bytes::Bytes::from(data)
+            };
 
-    let mut headers = axum::http::HeaderMap::new();
-    headers.insert(
-        header::CONTENT_TYPE,
-        HeaderValue::from_str(asset.mime)
-            .unwrap_or_else(|_| HeaderValue::from_static("application/octet-stream")),
-    );
+            let mut headers = axum::http::HeaderMap::new();
+            headers.insert(
+                header::CONTENT_TYPE,
+                HeaderValue::from_str(&mime)
+                    .unwrap_or_else(|_| HeaderValue::from_static("application/octet-stream")),
+            );
 
-    Some((headers, body).into_response())
+            Some((headers, body).into_response())
+        }
+        super_core::plugin::UiResolveOutcome::Missing => None,
+        super_core::plugin::UiResolveOutcome::TimedOut => {
+            tracing::warn!(
+                "UI plugin resolve timed out for '{}'; answering 504 (fail closed)",
+                file_path
+            );
+            Some((StatusCode::GATEWAY_TIMEOUT, "ui plugin timed out\n").into_response())
+        }
+    }
 }
 
 fn inject_ui_config(raw_html: &[u8], auth_required: bool, is_licensed: bool) -> bytes::Bytes {

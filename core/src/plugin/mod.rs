@@ -20,4 +20,4 @@ pub use host::{
 pub use host_emit::host_vtable;
 pub use http_host::attach_http_plugins;
 pub use loader::{PluginRuntime, load_authorized_plugins, resolve_plugin_path};
-pub use ui_host::{UiPluginHandle, load_ui_plugin, normalize_ui_path};
+pub use ui_host::{UiPluginHandle, UiResolveOutcome, load_ui_plugin, normalize_ui_path};
