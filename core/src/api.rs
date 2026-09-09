@@ -12,6 +12,9 @@ use axum::{
     response::IntoResponse,
     routing::{get, post, put},
 };
+use std::pin::Pin;
+use std::task::Poll;
+use std::time::Duration;
 
 use common::{
     ArtifactConfig, BatchAction, BatchProgramRequest, BatchProgramResponse, CreateProgramRequest,
@@ -307,7 +310,125 @@ pub fn make_api_router(
         }
     }
 
-    api_router
+    match request_timeout_layer(config.server.request_timeout_secs) {
+        Some(layer) => api_router.layer(layer),
+        None => api_router,
+    }
+}
+
+/// Whole-request wall-clock budget for the API (`[server].request_timeout_secs`,
+/// default 30s, `0` disables). This is the outermost guard: plugin FFI calls
+/// carry their own tighter 10s budget, so this only catches slow core work
+/// (locked SQLite, wedged handlers). Timeout answers 408 with the standard
+/// JSON error shape so clients can treat it like any other API error.
+/// `None` = limit disabled.
+///
+/// Hand-rolled instead of `tower_http::timeout::TimeoutLayer` because the
+/// tower-http middleware emits an empty body on timeout; we want the same
+/// JSON error envelope every other API error uses.
+pub(super) fn request_timeout_layer(request_timeout_secs: u64) -> Option<RequestTimeoutLayer> {
+    if request_timeout_secs == 0 {
+        return None;
+    }
+    Some(RequestTimeoutLayer {
+        duration: Duration::from_secs(request_timeout_secs),
+    })
+}
+
+/// Layer producing [`RequestTimeout`]. Cheap to clone.
+#[derive(Clone, Copy)]
+pub(super) struct RequestTimeoutLayer {
+    duration: Duration,
+}
+
+impl<S> tower::Layer<S> for RequestTimeoutLayer {
+    type Service = RequestTimeout<S>;
+
+    fn layer(&self, inner: S) -> Self::Service {
+        RequestTimeout {
+            inner,
+            duration: self.duration,
+        }
+    }
+}
+
+/// Service wrapper enforcing the per-request wall-clock budget.
+/// `Clone` (axum's `Router::layer` requires it); cloning shares nothing —
+/// each clone keeps its own inner service and re-arms its own deadline.
+#[derive(Clone, Copy)]
+pub(super) struct RequestTimeout<S> {
+    inner: S,
+    duration: Duration,
+}
+
+impl<S, ReqBody> tower::Service<Request<ReqBody>> for RequestTimeout<S>
+where
+    S: tower::Service<Request<ReqBody>, Response = Response>,
+{
+    type Response = Response;
+    type Error = S::Error;
+    type Future = private::RequestTimeoutFuture<S::Future>;
+
+    fn poll_ready(
+        &mut self,
+        cx: &mut std::task::Context<'_>,
+    ) -> std::task::Poll<Result<(), Self::Error>> {
+        self.inner.poll_ready(cx)
+    }
+
+    fn call(&mut self, req: Request<ReqBody>) -> Self::Future {
+        private::RequestTimeoutFuture::new(self.inner.call(req), tokio::time::sleep(self.duration))
+    }
+}
+
+mod private {
+    use super::*;
+
+    /// Timeout race future. On budget expiry, answers 408 + JSON envelope;
+    /// the inner future's own error type is passed through unchanged.
+    /// Held pinned by the service wrapper, so inner polling is safe.
+    pub struct RequestTimeoutFuture<F> {
+        inner: F,
+        sleep: tokio::time::Sleep,
+    }
+
+    impl<F> RequestTimeoutFuture<F> {
+        pub(super) fn new(inner: F, sleep: tokio::time::Sleep) -> Self {
+            Self { inner, sleep }
+        }
+    }
+
+    impl<F, E> Future for RequestTimeoutFuture<F>
+    where
+        F: Future<Output = Result<Response, E>>,
+    {
+        type Output = Result<Response, E>;
+
+        fn poll(
+            self: Pin<&mut Self>,
+            cx: &mut std::task::Context<'_>,
+        ) -> std::task::Poll<Self::Output> {
+            // SAFETY: structural pinning of both fields; this future is
+            // pinned once by the executor and never moved afterwards, so
+            // projecting each field with Pin::new_unchecked is sound.
+            let this = unsafe { self.get_unchecked_mut() };
+            let mut sleep = unsafe { Pin::new_unchecked(&mut this.sleep) };
+            if sleep.as_mut().poll(cx).is_ready() {
+                tracing::warn!("API request exceeded the configured wall-clock budget");
+                return Poll::Ready(Ok((
+                    StatusCode::REQUEST_TIMEOUT,
+                    Json(serde_json::json!({
+                        "status": "error",
+                        "message": "request timeout",
+                    })),
+                )
+                    .into_response()));
+            }
+            // SAFETY: see above — same structural-pinning argument.
+            let inner = unsafe { Pin::new_unchecked(&mut this.inner) };
+            inner.poll(cx)
+        }
+    }
 }
 
 /// System Shutdown
@@ -1248,5 +1369,52 @@ health_check = { type = "tcp", port = 8080 }
             msg.contains("services[0]") && msg.contains("bogus"),
             "{msg}"
         );
+    }
+
+    // ---- request timeout ([server].request_timeout_secs) ----
+
+    /// A service that never answers, to exercise the wall-clock budget.
+    #[derive(Clone, Copy)]
+    struct NeverService;
+
+    impl tower::Service<Request> for NeverService {
+        type Response = Response;
+        type Error = std::convert::Infallible;
+        type Future = std::future::Pending<Result<Response, Self::Error>>;
+
+        fn poll_ready(
+            &mut self,
+            _cx: &mut std::task::Context<'_>,
+        ) -> std::task::Poll<Result<(), Self::Error>> {
+            std::task::Poll::Ready(Ok(()))
+        }
+
+        fn call(&mut self, _req: Request) -> Self::Future {
+            std::future::pending()
+        }
+    }
+
+    #[tokio::test]
+    async fn request_timeout_answers_408_with_json_envelope() {
+        use tower::Layer as _;
+        let mut svc = request_timeout_layer(1).unwrap().layer(NeverService);
+        let req = Request::builder().body(Body::empty()).unwrap();
+        let resp = tower::Service::call(&mut svc, req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::REQUEST_TIMEOUT);
+        let body = axum::body::to_bytes(resp.into_body(), 4096).await.unwrap();
+        let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        assert_eq!(json["status"], "error");
+        assert_eq!(json["message"], "request timeout");
+    }
+
+    #[tokio::test]
+    async fn request_timeout_zero_disables_limit() {
+        assert!(request_timeout_layer(0).is_none());
+    }
+
+    #[test]
+    fn config_default_request_timeout_is_30s() {
+        let cfg = common::config::ServerSection::default();
+        assert_eq!(cfg.request_timeout_secs, 30);
     }
 }

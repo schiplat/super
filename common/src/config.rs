@@ -148,6 +148,12 @@ pub struct ServerSection {
     /// Bind only the Unix socket and skip the TCP listener entirely.
     #[serde(default)]
     pub socket_only: bool,
+
+    /// Whole-request wall-clock budget for the API (seconds). 0 disables the
+    /// limit. Applies to every route (core + plugin + UI fallback); plugin
+    /// FFI calls carry their own tighter 10s budget. Default 30.
+    #[serde(default = "default_request_timeout")]
+    pub request_timeout_secs: u64,
 }
 
 /// Default Unix socket permission mode as an octal string.
@@ -171,6 +177,7 @@ impl Default for ServerSection {
             socket: None,
             socket_mode: default_socket_mode(),
             socket_only: false,
+            request_timeout_secs: default_request_timeout(),
         }
     }
 }
@@ -298,6 +305,9 @@ fn default_port() -> u16 {
 }
 fn default_shutdown_timeout() -> u64 {
     10
+}
+fn default_request_timeout() -> u64 {
+    30
 }
 fn default_data_file() -> PathBuf {
     "./data/snapshot.json".into()

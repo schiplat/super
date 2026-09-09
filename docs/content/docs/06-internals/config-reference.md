@@ -57,6 +57,7 @@ Global settings for the daemon.
 | `socket` | string | — | Optional Unix socket endpoint for the API, e.g. `socket = "run/superd.sock"`. Relative paths resolve under `SUPER_ROOT`; absolute paths are used as-is. Unix only (macOS/Linux). When set, the daemon listens on **both** TCP and the socket unless `socket_only = true`. The socket file is created with `socket_mode` permissions (default `0600`, owner only) and removed on clean shutdown. |
 | `socket_mode` | string | `0600` | Unix socket file permission mode as an octal string (`0600` = owner read/write, `0660` = owner + group, `0640` = owner read/write + group read). **World-writable modes (`0666`) are refused** — a world-writable socket would let any local user drive the control API. |
 | `socket_only` | bool | `false` | When `true`, bind **only** the Unix socket and skip the TCP listener entirely (zero network exposure). Requires `socket` to be set. The non-loopback bind check no longer applies because no TCP port is opened. |
+| `request_timeout_secs` | int | `30` | Whole-request wall-clock budget for the API in seconds. A request that does not finish in time is answered with `408` (`{"status":"error","message":"request timeout"}`). `0` disables the limit. Plugin HTTP hooks carry their own tighter 10-second budget inside this. |
 
 ```toml
 # super.toml — [server]
@@ -64,6 +65,9 @@ Global settings for the daemon.
 # Optional self-daemonize when not using systemd/Docker:
 # daemon = true
 # pidfile = "run/superd.pid"   # default when daemonizing
+
+# Optional wall-clock budget for API requests (seconds, 0 = disabled):
+# request_timeout_secs = 30
 
 # Optional Unix socket endpoint (default 0600, owner-only):
 # socket = "run/superd.sock"
