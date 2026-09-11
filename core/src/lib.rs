@@ -1,4 +1,5 @@
 pub mod api;
+pub mod auth;
 pub mod event_db;
 pub mod logger;
 pub mod manager;
@@ -50,6 +51,9 @@ pub struct SystemPaths {
     pub notify_file: PathBuf,
     pub state_file: PathBuf,
     pub auth_file: PathBuf,
+    /// OSS admin secret file (`data/auth.key`). Distinct from `auth_file`
+    /// (`data/auth.json`), which stores licensed multi-user tokens.
+    pub auth_key_file: PathBuf,
     pub log_dir: PathBuf,
     pub plugins_dir: PathBuf,
 }
@@ -80,6 +84,7 @@ pub async fn bootstrap(extension: Box<dyn Extension>) -> anyhow::Result<SystemCo
         notify_file: conf_dir.join("notify.toml"),
         state_file: root.join("data/snapshot.json"),
         auth_file: root.join("data/auth.json"),
+        auth_key_file: root.join("data/auth.key"),
         log_dir: root.join("logs"),
         plugins_dir: root.join("plugins"),
     };

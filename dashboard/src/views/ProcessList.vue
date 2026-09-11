@@ -7,6 +7,7 @@ import { useAuthStore } from '@/stores/auth';
 import { useClipboard, useWindowSize } from '@vueuse/core';
 import StatusBadge from '@/components/StatusBadge.vue';
 import ActionButtons from '@/components/ActionButtons.vue';
+import Slot from '@/slots/Slot.vue';
 import BasePagination from '@/components/BasePagination.vue';
 import OverviewHeader from '@/components/OverviewHeader.vue';
 import TopologyGraph from '@/components/TopologyGraph.vue';
@@ -305,7 +306,10 @@ const hasActiveFilters = computed(() => activeFilter.value !== 'ALL' || !!select
                 <td class="py-3 font-mono text-xs text-muted-foreground">{{ formatUptime(proc.uptime_sec) }}</td>
                 <td v-if="hasAnyResourceLimits" class="py-3"><span v-if="formatResourceLimits(proc)" class="font-mono text-xs text-violet-600/80" :title="`CPU / memory cap: ${formatResourceLimits(proc)}`">{{ formatResourceLimits(proc) }}</span><span v-else class="text-muted-foreground/20">—</span></td>
                 <td class="py-3 !text-[11px] leading-tight text-muted-foreground font-mono tabular-nums">{{ formatTime(proc.updated_at) }}</td>
-                <td class="pr-6 py-3"><div class="flex justify-center"><ActionButtons :id="proc.id" :status="proc.status" :name="proc.name" /></div></td>
+                <td class="pr-6 py-3"><div class="flex items-center justify-center gap-0.5">
+                  <Slot name="process.actions" :context="{ process: proc }" />
+                  <ActionButtons :id="proc.id" :status="proc.status" :name="proc.name" />
+                </div></td>
               </tr>
             </tbody>
           </table>

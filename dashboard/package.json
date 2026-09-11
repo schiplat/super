@@ -6,7 +6,8 @@
   "scripts": {
     "dev": "vite",
     "build": "vue-tsc -b && vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "test": "vitest run"
   },
   "dependencies": {
     "@guolao/vue-monaco-editor": "^1.6.0",
@@ -31,9 +32,11 @@
     "@types/node": "^24.10.1",
     "@types/uuid": "^10.0.0",
     "@vitejs/plugin-vue": "^6.0.1",
+    "@vue/test-utils": "^2.5.0",
     "@vue/tsconfig": "^0.8.1",
     "autoprefixer": "^10.4.23",
     "clsx": "^2.1.1",
+    "jsdom": "^30.0.1",
     "lucide-vue-next": "^0.562.0",
     "postcss": "^8.5.6",
     "tailwind-merge": "^3.6.0",
@@ -41,6 +44,7 @@
     "tailwindcss-animate": "^1.0.7",
     "typescript": "~5.9.3",
     "vite": "^7.2.4",
+    "vitest": "^5.0.0",
     "vue-tsc": "^3.1.4"
   }
 }

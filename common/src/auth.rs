@@ -81,4 +81,8 @@ pub struct AuthStatusResponse {
     pub can_disable_auth_secret: bool,
     /// Whether Bearer `auth_secret` is accepted right now.
     pub auth_secret_login_allowed: bool,
+    /// True when multi-user token CRUD (`/auth/tokens`) is available.
+    /// OSS core auth sets this to `false`; the security plugin sets `true`.
+    #[serde(default)]
+    pub token_management: bool,
 }

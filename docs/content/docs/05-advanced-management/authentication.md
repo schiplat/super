@@ -4,12 +4,39 @@ weight: 1
 description: "Securing the Daemon with Access Tokens."
 ---
 
+## OSS built-in auth (single admin secret)
+
+OSS `superd` can require a Bearer secret without any plugin:
+
+| Bind | Default | How to enable auth |
+| :--- | :--- | :--- |
+| Loopback (`127.0.0.1` / `::1`) | **Open** (scripts / local CLI keep working) | Set `[server].auth_required = true` |
+| Non-loopback | **Auth required** | Automatic — core generates or loads a secret |
+| Unix socket only (`socket_only`) | Open (filesystem mode bits) | Set `[server].auth_required = true` if desired |
+
+When core auth activates and `auth_secret` is **not** set in `conf/super.toml`, `superd` creates `$SUPER_ROOT/data/auth.key` (32 CSPRNG bytes, hex, mode `0600`) if missing, prints the plaintext **once** on first generation, and on later boots only logs the file path.
+
+```toml
+[server]
+auth_required = true   # force login even on loopback
+```
+
+Optional override (skips `data/auth.key`):
+
+```toml
+auth_secret = "your-own-long-random-string"
+```
+
+Use the secret as `Authorization: Bearer <secret>` or paste it into the dashboard login page. `data/auth.key` is the OSS admin secret; licensed multi-user tokens still live in `data/auth.json` (security plugin).
+
+`[server].allow_insecure_public_bind` is **deprecated** — non-loopback binds now require authentication (core secret or security plugin) instead of an insecure opt-in.
+
+---
+
 > [!IMPORTANT] Licensed feature — `security` plugin
-> This page covers a **licensed feature** provided by the **`security` plugin**, which is included with every subscription and **required for licensed startup**. It needs a valid `[license].key`, the plugin library in `$SUPER_ROOT/plugins/`, and `auth_secret`. OSS `superd` without the plugin does not register the `/api/v1/auth/*` routes.
+> The sections below cover **multi-user Access Tokens**, RBAC, and audit — provided by the **`security` plugin** (included with every subscription and **required for licensed startup**). It needs a valid `[license].key`, the plugin library in `$SUPER_ROOT/plugins/`, and `auth_secret`. When the plugin is loaded it **replaces** the OSS core auth gate (one middleware, not two).
 
-The **default OSS deployment has no API authentication**. By default, `superd` binds to loopback and **refuses to start** on a non-loopback address unless you explicitly set `allow_insecure_public_bind = true` in `[server]` or load the optional **`security` plugin** for token-based auth.
-
-OSS deployments without a valid `[license].key` have no API auth; public bind requires explicit opt-in via `allow_insecure_public_bind` as described above.
+The **default OSS loopback deployment has no API authentication**. Non-loopback binds activate core auth automatically (see above). Multi-user tokens require the licensed **`security` plugin**.
 
 ## Licensed deployments require `security`
 
@@ -38,7 +65,8 @@ Production subscription templates ship with `strict = true`. Fix the key, renew,
 
 | Mode | API auth | Startup if `security` missing |
 | :--- | :--- | :--- |
-| OSS | ❌ Open (loopback-first) | N/A — runs without plugins |
+| OSS (loopback, default) | Open; optional via `auth_required` | N/A |
+| OSS (non-loopback / `auth_required`) | Core random/`auth_secret` | N/A |
 | **Licensed** | ✅ Required (via `security`) | **Hard fail** |
 | **Invalid key + licensed intent / strict** | — | **Hard fail** (no OSS fallback) |
 
@@ -105,7 +133,7 @@ State is persisted in `$SUPER_ROOT/data/auth_settings.json`. While disabled, Bea
 **Recovery:** revoke **all Admin** Access Tokens — `auth_secret` is re-enabled automatically. Startup still requires `auth_secret` to be set in `super.toml`.
 
 > [!WARNING]
-> Without the security plugin: OSS `superd` has no `/api/v1/auth/*` routes. `super login` will fail with 404 until the plugin is loaded.
+> Without core auth and without the security plugin, OSS `superd` has no `/api/v1/auth/*` routes. Enable `[server].auth_required` (or bind non-loopback) for a single admin secret, or load the security plugin for multi-user tokens.
 
 ## Managing Tokens (HTTP API)
 

@@ -41,8 +41,8 @@ export const useAuthStore = defineStore('auth', () => {
     const caps = useCapabilitiesStore();
     await caps.ensureDiscovered();
 
-    // OSS / no security plugin: full local control, no login wall.
-    if (!caps.security) {
+    // OSS / no auth gate: full local control, no login wall.
+    if (!caps.auth) {
       applyLocalAdmin();
       return;
     }
@@ -50,6 +50,17 @@ export const useAuthStore = defineStore('auth', () => {
     const token = localStorage.getItem('super_token');
     if (!token) {
       user.value = null;
+      return;
+    }
+
+    // Core auth only (no token CRUD): the Bearer secret is the root admin.
+    if (!caps.security) {
+      user.value = {
+        id: 'root',
+        name: 'Administrator',
+        role: 'Admin',
+        avatar: 'A',
+      };
       return;
     }
 
@@ -111,7 +122,7 @@ export const useAuthStore = defineStore('auth', () => {
   async function logout() {
     const caps = useCapabilitiesStore();
     const token = localStorage.getItem('super_token');
-    if (token && caps.security) {
+    if (token && caps.auth) {
       try {
         await apiClient.post('/api/v1/auth/logout');
       } catch {
@@ -121,7 +132,7 @@ export const useAuthStore = defineStore('auth', () => {
     localStorage.removeItem('super_token');
     user.value = null;
 
-    if (!caps.security) {
+    if (!caps.auth) {
       applyLocalAdmin();
       return;
     }

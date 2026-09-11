@@ -24,7 +24,7 @@ const router = createRouter({
       path: '/login',
       name: 'Login',
       component: Login,
-      meta: { requiresSecurity: true },
+      meta: { requiresAuth: true },
     },
     {
       path: '/error/:code',
@@ -117,10 +117,13 @@ router.beforeEach(async (to) => {
   if (to.meta.requiresSecurity && !caps.security) {
     return { path: '/' }
   }
+  if (to.meta.requiresAuth && !caps.auth) {
+    return { path: '/' }
+  }
 
-  // Licensed + security: require a session for app pages (not login/error).
+  // Auth gate active: require a session for app pages (not login/error).
   if (
-    caps.security &&
+    caps.auth &&
     !localStorage.getItem('super_token') &&
     to.path !== '/login' &&
     !to.path.startsWith('/error')

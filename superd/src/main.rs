@@ -13,7 +13,7 @@ use common::{
 };
 use std::path::{Path, PathBuf};
 use super_core::{
-    ManagerHandle, api, bootstrap,
+    ManagerHandle, api, auth, bootstrap,
     plugin::{
         PluginHost, RunMode, attach_http_plugins, enforce_license_degradation_policy,
         load_ui_plugin, log_license_degradation, normalize_ui_path, validate_licensed_auth_secret,
@@ -28,6 +28,18 @@ mod daemonize;
 mod embedded_ui;
 
 const VERSION: &str = env!("CARGO_PKG_VERSION");
+
+/// Map `/api/v1/plugins/{id}/ui.js` → the asset key served by the ui plugin
+/// ("ui.js"). Returns None for every other API path (they 404 as before).
+fn plugin_ui_bundle_path(path: &str) -> Option<&'static str> {
+    const PREFIX: &str = "/api/v1/plugins/";
+    let rest = path.strip_prefix(PREFIX)?;
+    let (id, file) = rest.split_once('/')?;
+    if id != "ui" || file != "ui.js" {
+        return None;
+    }
+    Some("ui.js")
+}
 
 #[derive(Debug, Parser)]
 #[command(
@@ -58,6 +70,7 @@ async fn ui_fallback_handler(
     ui: Option<std::sync::Arc<super_core::plugin::UiPluginHandle>>,
     auth_required: bool,
     is_licensed: bool,
+    ui_plugin_ids: Vec<String>,
 ) -> Response {
     let path = uri.path();
     if path.starts_with("/api/")
@@ -65,6 +78,17 @@ async fn ui_fallback_handler(
         || path == "/metrics"
         || path.starts_with("/ws")
     {
+        // Slot extension bundles: /api/v1/plugins/{id}/ui.js is served from
+        // the ui plugin's resolve FFI (falls through when no ui plugin).
+        if let Some(js_path) = plugin_ui_bundle_path(path) {
+            if let Some(ui) = ui.as_ref()
+                && let Some(resp) =
+                    serve_ui_asset(ui, js_path, auth_required, is_licensed, false, &[]).await
+            {
+                return resp;
+            }
+            return StatusCode::NOT_FOUND.into_response();
+        }
         return StatusCode::NOT_FOUND.into_response();
     }
 
@@ -76,30 +100,42 @@ async fn ui_fallback_handler(
             auth_required,
             is_licensed,
             false,
+            &ui_plugin_ids,
         )
         .await
         {
             Some(resp) => return resp,
             None => {
-                return spa_fallback(ui, auth_required, is_licensed).await;
+                return spa_fallback(ui, auth_required, is_licensed, &ui_plugin_ids).await;
             }
         }
     }
 
     // OSS default: Dashboard embedded in this binary.
     let file_path = normalize_ui_path(path);
-    embedded_ui::response(&file_path, auth_required, is_licensed, inject_ui_config)
-        .unwrap_or_else(|| embedded_ui::spa_index(auth_required, is_licensed, inject_ui_config))
+    let inject = |raw: &[u8], auth: bool, lic: bool| {
+        inject_ui_config_with_plugins(raw, auth, lic, &ui_plugin_ids)
+    };
+    embedded_ui::response(&file_path, auth_required, is_licensed, inject)
+        .unwrap_or_else(|| embedded_ui::spa_index(auth_required, is_licensed, inject))
 }
 
 async fn spa_fallback(
     ui: &super_core::plugin::UiPluginHandle,
     auth_required: bool,
     is_licensed: bool,
+    ui_plugin_ids: &[String],
 ) -> Response {
-    serve_ui_asset(ui, "index.html", auth_required, is_licensed, true)
-        .await
-        .unwrap_or(StatusCode::NOT_FOUND.into_response())
+    serve_ui_asset(
+        ui,
+        "index.html",
+        auth_required,
+        is_licensed,
+        true,
+        ui_plugin_ids,
+    )
+    .await
+    .unwrap_or(StatusCode::NOT_FOUND.into_response())
 }
 
 /// Resolve a UI asset through the plugin and build the response.
@@ -116,11 +152,12 @@ async fn serve_ui_asset(
     auth_required: bool,
     is_licensed: bool,
     inject_config: bool,
+    ui_plugin_ids: &[String],
 ) -> Option<Response> {
     match ui.resolve_bounded(file_path).await {
         super_core::plugin::UiResolveOutcome::Asset { mime, data } => {
             let body = if inject_config || file_path == "index.html" {
-                inject_ui_config(&data, auth_required, is_licensed)
+                inject_ui_config_with_plugins(&data, auth_required, is_licensed, ui_plugin_ids)
             } else {
                 bytes::Bytes::from(data)
             };
@@ -153,11 +190,21 @@ async fn serve_ui_asset(
     }
 }
 
-fn inject_ui_config(raw_html: &[u8], auth_required: bool, is_licensed: bool) -> bytes::Bytes {
+/// Inject shell config + plugin-UI manifest into index.html.
+///
+/// Also advertises plugin UI bundles via `window.__SUPER_PLUGINS__` so the
+/// shell's loader can import them (slot extensions live in plugin JS).
+fn inject_ui_config_with_plugins(
+    raw_html: &[u8],
+    auth_required: bool,
+    is_licensed: bool,
+    ui_plugin_ids: &[String],
+) -> bytes::Bytes {
     let html_str = String::from_utf8_lossy(raw_html);
     let edition = if is_licensed { "licensed" } else { "oss" };
+    let plugins_json = serde_json::to_string(ui_plugin_ids).unwrap_or_else(|_| "[]".into());
     let config_js = format!(
-        "window.__SUPER_CONFIG__ = {{ edition: '{edition}', auth_required: {auth_required}, version: '{VERSION}' }};",
+        "window.__SUPER_CONFIG__ = {{ edition: '{edition}', auth_required: {auth_required}, version: '{VERSION}' }};window.__SUPER_PLUGINS__ = {plugins_json};",
         auth_required = auth_required,
     );
     let mut injected = html_str.replace("window.__SUPER_CONFIG__ = defaultConfig;", &config_js);
@@ -350,7 +397,7 @@ async fn async_main() -> anyhow::Result<()> {
         license_info,
     );
 
-    let (api_router, auth_required) =
+    let (mut api_router, mut auth_required) =
         attach_http_plugins(base_router, &plugin_runtime, &core.paths)?;
 
     if auth_required {
@@ -360,14 +407,43 @@ async fn async_main() -> anyhow::Result<()> {
             "Licensed deployment requires the security plugin HTTP auth middleware, but it is not active. \
              Ensure security.so exports authenticate and re-check superd logs."
         );
+    } else if auth::core_auth_should_activate(
+        &core.config.server.host,
+        core.config.server.socket_only,
+        core.config.server.auth_required,
+        false,
+    ) {
+        let (secret, source) = auth::resolve_auth_secret(
+            core.config.auth_secret.as_deref(),
+            &core.paths.auth_key_file,
+        )?;
+        auth::log_auth_secret_source(&source, &secret);
+        let state = auth::AuthState::new(secret);
+        api_router = auth::install_core_auth(api_router, state);
+        auth_required = true;
+        tracing::info!("Core HTTP auth middleware active");
+    }
+
+    if core.config.server.allow_insecure_public_bind {
+        tracing::warn!(
+            "[server].allow_insecure_public_bind is deprecated — non-loopback binds now require \
+             authentication (core secret or security plugin). Remove this flag from conf/super.toml."
+        );
     }
 
     let auth_flag = auth_required;
     let licensed_flag = is_licensed;
     let ui_handle = ui_plugin.clone();
+    // Plugin ids with a UI bundle the shell should import (slot extensions).
+    let ui_plugin_ids: Vec<String> = if ui_plugin.is_some() {
+        vec!["ui".to_string()]
+    } else {
+        Vec::new()
+    };
     let app = Router::new().merge(api_router).fallback(move |uri: Uri| {
         let ui = ui_handle.clone();
-        async move { ui_fallback_handler(uri, ui, auth_flag, licensed_flag).await }
+        let ids = ui_plugin_ids.clone();
+        async move { ui_fallback_handler(uri, ui, auth_flag, licensed_flag, ids).await }
     });
 
     let addr = format!("{}:{}", core.config.server.host, core.config.server.port);

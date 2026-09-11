@@ -19,6 +19,7 @@ tracing = { workspace = true }
 bytes = "1"
 toml = { workspace = true }
 rust-embed = { workspace = true }
+serde_json = { workspace = true }
 
 [build-dependencies]
 # build.rs validates ../dashboard/dist before compile

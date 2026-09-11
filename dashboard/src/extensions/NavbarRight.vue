@@ -104,7 +104,7 @@ function handleLogout() {
           License
         </a>
 
-        <template v-if="caps.security">
+        <template v-if="caps.auth">
           <div class="h-px bg-border my-1 mx-2"></div>
 
           <a

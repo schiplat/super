@@ -8,6 +8,11 @@ export interface LicenseSnapshot {
   [key: string]: unknown;
 }
 
+interface AuthStatusBody {
+  token_management?: boolean;
+  auth_secret_login_allowed?: boolean;
+}
+
 /** Probe without axios interceptors (avoids 401 → /login during discovery). */
 async function probeStatus(path: string): Promise<number> {
   try {
@@ -18,6 +23,29 @@ async function probeStatus(path: string): Promise<number> {
     return res.status;
   } catch {
     return 0;
+  }
+}
+
+async function probeAuthStatus(): Promise<{ status: number; body: AuthStatusBody | null }> {
+  try {
+    const headers: Record<string, string> = { Accept: 'application/json' };
+    const token = localStorage.getItem('super_token');
+    if (token) headers.Authorization = `Bearer ${token}`;
+    const res = await fetch('/api/v1/auth/status', {
+      method: 'GET',
+      headers,
+      credentials: 'same-origin',
+    });
+    if (res.status === 200) {
+      try {
+        return { status: 200, body: (await res.json()) as AuthStatusBody };
+      } catch {
+        return { status: 200, body: null };
+      }
+    }
+    return { status: res.status, body: null };
+  } catch {
+    return { status: 0, body: null };
   }
 }
 
@@ -41,9 +69,13 @@ async function probeLicense(): Promise<LicenseSnapshot | null> {
 /**
  * Runtime feature flags for the Dashboard shell.
  * Licensed UI entries must stay hidden when the matching plugin is not loaded.
+ *
+ * `auth` = login gate (OSS core secret or security plugin).
+ * `security` = multi-user token CRUD (security plugin only).
  */
 export const useCapabilitiesStore = defineStore('capabilities', () => {
   const ready = ref(false);
+  const auth = ref(false);
   const security = ref(false);
   const notify = ref(false);
   const isolation = ref(false);
@@ -61,17 +93,29 @@ export const useCapabilitiesStore = defineStore('capabilities', () => {
     licensed.value =
       edition === 'licensed' || edition.includes('premium') || edition.includes('pro');
 
-    const [authStatus, notifyStatus, lic] = await Promise.all([
-      probeStatus('/api/v1/auth/status'),
+    const [authProbe, notifyStatus, lic] = await Promise.all([
+      probeAuthStatus(),
       probeStatus('/api/v1/system/notify'),
       probeLicense(),
     ]);
 
-    // Prefer live probes when the API is reachable; else fall back to injected config.
-    if (authStatus === 0) {
-      security.value = cfg.auth_required === true;
+    // Auth gate vs token management (see AuthStatusResponse.token_management).
+    if (authProbe.status === 0) {
+      auth.value = cfg.auth_required === true;
+      security.value = false;
+    } else if (authProbe.status === 404) {
+      auth.value = false;
+      security.value = false;
+    } else if (authProbe.status === 401) {
+      // Security plugin present but session missing — tokens are available after login.
+      auth.value = true;
+      security.value = true;
+    } else if (authProbe.status === 200) {
+      auth.value = true;
+      security.value = authProbe.body?.token_management === true;
     } else {
-      security.value = authStatus !== 404;
+      auth.value = cfg.auth_required === true;
+      security.value = false;
     }
 
     if (notifyStatus === 0) {
@@ -85,7 +129,10 @@ export const useCapabilitiesStore = defineStore('capabilities', () => {
       licensed.value = true;
       const grants = Array.isArray(lic.grants) ? lic.grants : [];
       const versions = lic.plugin_versions || {};
-      if (grants.includes('security') || versions.security) security.value = true;
+      if (grants.includes('security') || versions.security) {
+        auth.value = true;
+        security.value = true;
+      }
       if (grants.includes('notify') || versions.notify) notify.value = true;
       isolation.value = !!(grants.includes('isolation') || versions.isolation);
     } else {
@@ -109,6 +156,7 @@ export const useCapabilitiesStore = defineStore('capabilities', () => {
 
   return {
     ready,
+    auth,
     security,
     notify,
     isolation,

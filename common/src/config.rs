@@ -116,9 +116,15 @@ pub struct ServerSection {
     #[serde(default = "default_enable_docs")] // dev: true, production: false
     pub enable_docs: bool,
 
-    /// Allow binding to a non-loopback address without the security plugin (OSS only).
+    /// Allow binding to a non-loopback address without authentication (deprecated).
+    /// Prefer enabling auth (core random secret or security plugin) instead.
     #[serde(default)]
     pub allow_insecure_public_bind: bool,
+
+    /// Force API authentication even when bound to loopback. Non-loopback binds
+    /// always require auth (core secret or security plugin) regardless of this flag.
+    #[serde(default)]
+    pub auth_required: bool,
 
     /// Self-daemonize after startup (Unix only). Default false — use foreground under
     /// systemd/Docker. Conflicts with systemd service environments.
@@ -172,6 +178,7 @@ impl Default for ServerSection {
             flapping_threshold: default_flapping_threshold(),
             enable_docs: default_enable_docs(),
             allow_insecure_public_bind: false,
+            auth_required: false,
             daemon: false,
             pidfile: None,
             socket: None,

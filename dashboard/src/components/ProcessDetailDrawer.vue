@@ -14,6 +14,7 @@ import { API_PATHS } from '@/api/paths';
 import LogTerminal from '@/components/LogTerminal.vue';
 import StatusBadge from '@/components/StatusBadge.vue';
 import ActionButtons from '@/components/ActionButtons.vue';
+import Slot from '@/slots/Slot.vue';
 import UiBadge from '@/components/ui/UiBadge.vue';
 import UiButton from '@/components/ui/UiButton.vue';
 import type { ProgramDetail, ProgramLogsResponse, ProgramEventRecord, ProcessStatus, EventStats } from '@/types';
@@ -115,6 +116,18 @@ const detailData = ref<ProgramDetail | null>(null);
 function formatTime(timestamp: number) { return timestamp ? format(new Date(timestamp * 1000), 'yyyy-MM-dd HH:mm') : '—'; }
 
 const summaryData = computed(() => store.programs.find(p => p.id === props.processId));
+
+/**
+ * Slot tab API for extensions on `process.detail.tabs`. A plugin calls
+ * context.registerTab({ id, label, render }) and renders its tab button +
+ * panel itself; the drawer only mounts the anchor at the end of the strip.
+ */
+function registerTab(tab: { id: string; label: string; render: () => unknown }) {
+  const cur = activeTab.value as string;
+  void cur;
+  console.debug('[Slot:process.detail.tabs] registerTab', tab.id, tab.label);
+  return () => {};
+}
 
 const currentError = computed(() =>
   (detailData.value as any)?.last_error || (detailData.value as any)?.health_error || (summaryData.value as any)?.last_error || (summaryData.value as any)?.health_error || null
@@ -570,6 +583,8 @@ function goToEdit() { if (props.processId) router.push(`/programs/${props.proces
           <button class="flex items-center gap-2 px-4 py-3 text-sm font-medium border-b-[3px] transition-all -mb-px" :class="activeTab === 'logs' ? 'border-foreground text-foreground' : 'border-transparent text-muted-foreground hover:text-foreground hover:border-border'" @click="activeTab = 'logs'"><TerminalIcon class="w-4 h-4" />Logs</button>
           <button class="flex items-center gap-2 px-4 py-3 text-sm font-medium border-b-[3px] transition-all -mb-px" :class="activeTab === 'events' ? 'border-foreground text-foreground' : 'border-transparent text-muted-foreground hover:text-foreground hover:border-border'" @click="activeTab = 'events'"><History class="w-4 h-4" />Events</button>
           <button class="flex items-center gap-2 px-4 py-3 text-sm font-medium border-b-[3px] transition-all -mb-px" :class="activeTab === 'config' ? 'border-foreground text-foreground' : 'border-transparent text-muted-foreground hover:text-foreground hover:border-border'" @click="activeTab = 'config'"><FileText class="w-4 h-4" />Configuration</button>
+          <!-- Plugin-registered tabs; each extension renders its own tab strip entry + panel via context.slotTabs -->
+          <Slot name="process.detail.tabs" :context="{ process: summaryData, registerTab }" />
         </div>
       </div>
 

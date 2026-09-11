@@ -3548,6 +3548,7 @@ dependencies = [
  "common",
  "nix 0.27.1",
  "rust-embed",
+ "serde_json",
  "super-core",
  "tokio",
  "toml",
