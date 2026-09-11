@@ -9,6 +9,37 @@ rather than duplicating a second page.
 
 Priorities: **P0** (next in line) · **P1** (soon) · **P2** (backlog) · **Directions** (multi-release horizons).
 
+## P0 — OSS single-host Dashboard
+
+**Status:** agreed direction; not yet implemented.
+
+Ship a **usable single-host Web Dashboard with the OSS / Community edition** —
+process overview, stack editor, logs, health, and day-to-day controls — without
+requiring a subscription key. Today the browser UI ships only via the licensed
+`ui` plugin; after this change, the default experience is: what you see in the
+shell works.
+
+### Product boundary (customer-facing)
+
+| In OSS Dashboard (default) | Licensed plugins (appear only when loaded) |
+|---|---|
+| Overview, start/stop/restart, detail logs & event history | API auth / RBAC / Access Tokens (`security`) |
+| Stack editor, topology, create/edit (incl. health, cron, OTA fields) | Notifications UI (`notify`) |
+| Host metrics, reload-from-disk | cgroup / resource-limit form fields (`isolation`, Linux) |
+| Compact license / edition page with upgrade CTA | Full subscription detail when a key is present |
+
+**UX rule:** licensed entries are **absent** from navigation when the matching
+plugin is not loaded — no disabled buttons, dead routes, or “coming soon”
+stubs. Contributors cloning the OSS tree get a self-contained shell with no
+private-repo or license requirement.
+
+**Out of scope for this wave:** a browser **Operation Audit** page (audit
+remains write-only log files under the `security` plugin when licensed); multi-
+node / hub UI; fine-grained commercial micro-frontends.
+
+Docs (feature matrix, Getting Started, editions) update in the same release
+window as the implementation — not ahead of a working OSS shell.
+
 ## P0 — Migration importers (`super import`)
 
 **Status:** agreed, not yet implemented.
@@ -92,8 +123,13 @@ subscription plugins remain optional.
 **Status:** long-horizon product direction; not a near-term GA commitment.
 
 Evolve beyond **single-host subscription plugins** toward a **cloud-hosted
-control hub** (SaaS / Hub): multi-node inventory, central access lifecycle, and
-a shared operator portal — while each host still runs a lean local `superd`.
+control hub** (SaaS / Hub): multi-node inventory, optional host **connector**,
+central access lifecycle, and a shared operator portal — while each host still
+runs a lean local `superd`.
+
+Single-host production hardening (`security` / `notify` / `isolation`) remains
+a separate subscription tier from hub/enterprise multi-node features. The OSS
+Dashboard work above does **not** wait on Hub delivery.
 
 Principles: the local daemon stays authoritative for process lifecycle; the hub
 coordinates and delivers policy/artifacts; OSS remains useful offline; public
