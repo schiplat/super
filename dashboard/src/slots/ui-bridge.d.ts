@@ -8,7 +8,10 @@
 
 export type SlotName =
   | 'process.actions'
-  | 'process.detail.tabs';
+  | 'process.detail.tabs'
+  | 'nav.account'
+  | 'nav.manage'
+  | 'nav.mobile';
 
 export interface ProcessContext {
   id: string;
@@ -20,6 +23,16 @@ export interface ProcessContext {
 
 export interface SlotContext {
   process?: ProcessContext;
+  /** Nav slots: push a path and optionally close the open menu. */
+  navigate?: (path: string) => void;
+  close?: () => void;
+  /** process.detail.tabs: register a named tab + panel component. */
+  registerTab?: (tab: {
+    id: string;
+    label: string;
+    component: unknown;
+  }) => () => void;
+  activeTab?: string;
   [key: string]: unknown;
 }
 
@@ -29,10 +42,25 @@ export interface SlotExtension {
   component: unknown;
 }
 
+export interface PluginRoute {
+  path: string;
+  name?: string;
+  component: unknown;
+  meta?: Record<string, unknown>;
+  children?: PluginRoute[];
+  parent?: string;
+  redirect?: string;
+}
+
 export interface UiComponents {
   UiButton: unknown;
   UiBadge: unknown;
   UiDialog: unknown;
+  UiInput: unknown;
+  UiSwitch: unknown;
+  UiField: unknown;
+  RouterLink: unknown;
+  RouterView: unknown;
 }
 
 export interface SuperCoreBridge {
@@ -46,13 +74,27 @@ export interface SuperCoreBridge {
     delete(url: string, config?: unknown): Promise<unknown>;
   };
   components: UiComponents;
+  dialogs: {
+    alert(message: string, opts?: unknown): Promise<void>;
+    confirm(message: string, opts?: unknown): Promise<boolean>;
+  };
   registerSlot(name: SlotName, ext: SlotExtension): () => void;
   unregisterSlot(name: SlotName, ext: SlotExtension): void;
+  registerRoute(route: PluginRoute): () => void;
+  stores: {
+    auth(): unknown;
+    capabilities(): unknown;
+  };
+  router: unknown;
 }
 
 export declare global {
   interface Window {
     __SUPER_CORE__?: SuperCoreBridge;
+    /** Full Vue namespace (IIFE external `vue` → `__SUPER_VUE__`). */
+    __SUPER_VUE__?: unknown;
+    /** Full vue-router namespace (IIFE external → `__SUPER_VUE_ROUTER__`). */
+    __SUPER_VUE_ROUTER__?: unknown;
     /** Injected by superd: plugin ids whose UI bundles are available. */
     __SUPER_PLUGINS__?: string[];
   }

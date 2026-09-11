@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, watch, onUnmounted, nextTick, computed } from 'vue';
+import { ref, watch, onUnmounted, nextTick, computed, type Component } from 'vue';
 import { useRouter } from 'vue-router';
 import {
   X, Terminal as TerminalIcon, FileText, Cpu,
@@ -21,6 +21,12 @@ import type { ProgramDetail, ProgramLogsResponse, ProgramEventRecord, ProcessSta
 import { useClipboard } from '@vueuse/core';
 import { format } from 'date-fns';
 import { alertDialog } from '@/lib/app-dialog';
+
+interface PluginDetailTab {
+  id: string;
+  label: string;
+  component: Component;
+}
 
 const props = defineProps<{
   modelValue: boolean;
@@ -53,7 +59,8 @@ async function copyProgramId() {
 }
 const router = useRouter();
 
-const activeTab = ref<'logs' | 'config' | 'events'>('logs');
+const activeTab = ref<string>('logs');
+const pluginTabs = ref<PluginDetailTab[]>([]);
 const logMode = ref<'live' | 'history'>('live');
 const historyLines = ref(200);
 const historySource = ref<'all' | 'stdout' | 'stderr'>('all');
@@ -119,14 +126,20 @@ const summaryData = computed(() => store.programs.find(p => p.id === props.proce
 
 /**
  * Slot tab API for extensions on `process.detail.tabs`. A plugin calls
- * context.registerTab({ id, label, render }) and renders its tab button +
- * panel itself; the drawer only mounts the anchor at the end of the strip.
+ * context.registerTab({ id, label, component }) from an extension mounted
+ * in the strip Slot; the drawer renders the button + panel.
  */
-function registerTab(tab: { id: string; label: string; render: () => unknown }) {
-  const cur = activeTab.value as string;
-  void cur;
-  console.debug('[Slot:process.detail.tabs] registerTab', tab.id, tab.label);
-  return () => {};
+function registerTab(tab: PluginDetailTab) {
+  const existing = pluginTabs.value.findIndex((t) => t.id === tab.id);
+  if (existing >= 0) {
+    pluginTabs.value[existing] = tab;
+  } else {
+    pluginTabs.value = [...pluginTabs.value, tab];
+  }
+  return () => {
+    pluginTabs.value = pluginTabs.value.filter((t) => t.id !== tab.id);
+    if (activeTab.value === tab.id) activeTab.value = 'logs';
+  };
 }
 
 const currentError = computed(() =>
@@ -583,8 +596,16 @@ function goToEdit() { if (props.processId) router.push(`/programs/${props.proces
           <button class="flex items-center gap-2 px-4 py-3 text-sm font-medium border-b-[3px] transition-all -mb-px" :class="activeTab === 'logs' ? 'border-foreground text-foreground' : 'border-transparent text-muted-foreground hover:text-foreground hover:border-border'" @click="activeTab = 'logs'"><TerminalIcon class="w-4 h-4" />Logs</button>
           <button class="flex items-center gap-2 px-4 py-3 text-sm font-medium border-b-[3px] transition-all -mb-px" :class="activeTab === 'events' ? 'border-foreground text-foreground' : 'border-transparent text-muted-foreground hover:text-foreground hover:border-border'" @click="activeTab = 'events'"><History class="w-4 h-4" />Events</button>
           <button class="flex items-center gap-2 px-4 py-3 text-sm font-medium border-b-[3px] transition-all -mb-px" :class="activeTab === 'config' ? 'border-foreground text-foreground' : 'border-transparent text-muted-foreground hover:text-foreground hover:border-border'" @click="activeTab = 'config'"><FileText class="w-4 h-4" />Configuration</button>
-          <!-- Plugin-registered tabs; each extension renders its own tab strip entry + panel via context.slotTabs -->
-          <Slot name="process.detail.tabs" :context="{ process: summaryData, registerTab }" />
+          <button
+            v-for="tab in pluginTabs"
+            :key="tab.id"
+            type="button"
+            class="flex items-center gap-2 px-4 py-3 text-sm font-medium border-b-[3px] transition-all -mb-px"
+            :class="activeTab === tab.id ? 'border-foreground text-foreground' : 'border-transparent text-muted-foreground hover:text-foreground hover:border-border'"
+            @click="activeTab = tab.id"
+          >{{ tab.label }}</button>
+          <!-- Extensions call registerTab in setup/onMounted; render nothing themselves -->
+          <Slot name="process.detail.tabs" :context="{ process: summaryData, registerTab, activeTab }" />
         </div>
       </div>
 
@@ -959,6 +980,16 @@ function goToEdit() { if (props.processId) router.push(`/programs/${props.proces
               </div>
             </section>
           </div>
+        </div>
+
+        <!-- Plugin detail tabs -->
+        <div
+          v-for="tab in pluginTabs"
+          :key="tab.id"
+          v-show="activeTab === tab.id"
+          class="absolute inset-0 overflow-y-auto p-4 md:p-6 lg:p-8"
+        >
+          <component :is="tab.component" :process="summaryData" />
         </div>
       </div>
     </div>

@@ -29,16 +29,20 @@ mod embedded_ui;
 
 const VERSION: &str = env!("CARGO_PKG_VERSION");
 
-/// Map `/api/v1/plugins/{id}/ui.js` → the asset key served by the ui plugin
-/// ("ui.js"). Returns None for every other API path (they 404 as before).
+/// Map `/api/v1/plugins/{id}/ui.js|ui.css` → the asset key served by the ui
+/// plugin. Returns None for every other API path (they 404 as before).
 fn plugin_ui_bundle_path(path: &str) -> Option<&'static str> {
     const PREFIX: &str = "/api/v1/plugins/";
     let rest = path.strip_prefix(PREFIX)?;
     let (id, file) = rest.split_once('/')?;
-    if id != "ui" || file != "ui.js" {
+    if id != "ui" {
         return None;
     }
-    Some("ui.js")
+    match file {
+        "ui.js" => Some("ui.js"),
+        "ui.css" => Some("ui.css"),
+        _ => None,
+    }
 }
 
 #[derive(Debug, Parser)]
@@ -78,12 +82,12 @@ async fn ui_fallback_handler(
         || path == "/metrics"
         || path.starts_with("/ws")
     {
-        // Slot extension bundles: /api/v1/plugins/{id}/ui.js is served from
-        // the ui plugin's resolve FFI (falls through when no ui plugin).
-        if let Some(js_path) = plugin_ui_bundle_path(path) {
+        // Slot extension bundles: /api/v1/plugins/{id}/ui.js|ui.css from the
+        // ui plugin's resolve FFI (falls through when no ui plugin).
+        if let Some(asset_path) = plugin_ui_bundle_path(path) {
             if let Some(ui) = ui.as_ref()
                 && let Some(resp) =
-                    serve_ui_asset(ui, js_path, auth_required, is_licensed, false, &[]).await
+                    serve_ui_asset(ui, asset_path, auth_required, is_licensed, false, &[]).await
             {
                 return resp;
             }

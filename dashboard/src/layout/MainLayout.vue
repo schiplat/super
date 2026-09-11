@@ -2,21 +2,20 @@
 import { RouterView, RouterLink, useRoute, useRouter } from 'vue-router';
 import {
   LayoutDashboard, Settings, RefreshCw, ChevronDown,
-  Menu, X, Sun, Moon, Bell, Layers
+  Menu, X, Sun, Moon, Layers
 } from 'lucide-vue-next';
 import { useProgramStore } from '@/stores/program';
 import { useAuthStore } from '@/stores/auth';
-import { useCapabilitiesStore } from '@/stores/capabilities';
 import { computed, ref, onMounted } from 'vue';
 import { useDark, useToggle } from '@vueuse/core';
 import UiButton from '@/components/ui/UiButton.vue';
 import UiDialog from '@/components/ui/UiDialog.vue';
 import NavbarRight from '@extensions/NavbarRight.vue';
 import AppFooter from '@extensions/AppFooter.vue';
+import Slot from '@/slots/Slot.vue';
 
 const store = useProgramStore();
 const authStore = useAuthStore();
-const caps = useCapabilitiesStore();
 const route = useRoute();
 const router = useRouter();
 
@@ -60,7 +59,16 @@ function onManageFocusOut(e: FocusEvent) {
 
 function navigateTo(path: string) {
   manageDropdownOpen.value = false;
+  mobileMenuOpen.value = false;
   void router.push(path);
+}
+
+function closeManageMenu() {
+  manageDropdownOpen.value = false;
+}
+
+function closeMobileMenu() {
+  mobileMenuOpen.value = false;
 }
 
 function requestReload() {
@@ -138,18 +146,11 @@ onMounted(() => {
             v-if="manageDropdownOpen"
             class="absolute top-full left-0 mt-1.5 w-56 rounded-xl bg-card border border-border shadow-[0_10px_40px_-10px_rgba(28,25,23,0.15)] p-1.5 flex flex-col gap-0.5"
           >
-            <a
-              v-if="caps.notify"
-              href="/settings/notify"
-              class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors"
-              :class="route.path.startsWith('/settings/')
-                ? 'bg-muted text-foreground'
-                : 'text-muted-foreground hover:text-foreground hover:bg-muted/80'"
-              @click.prevent="navigateTo('/settings/notify')"
-            >
-              <Bell class="w-4 h-4 opacity-50" />
-              Notifications
-            </a>
+            <!-- Pro / plugin manage links (e.g. Notifications) -->
+            <Slot
+              name="nav.manage"
+              :context="{ navigate: navigateTo, close: closeManageMenu, routePath: route.path }"
+            />
             <a
               href="/stack"
               class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors"
@@ -221,14 +222,10 @@ onMounted(() => {
 
       <div class="h-px bg-border my-1"></div>
 
-      <a
-        v-if="caps.notify"
-        href="/settings/notify"
-        class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-muted-foreground hover:bg-muted transition-colors"
-        @click.prevent="navigateTo('/settings/notify'); mobileMenuOpen = false"
-      >
-        <Bell class="w-4 h-4" /> Notifications
-      </a>
+      <Slot
+        name="nav.mobile"
+        :context="{ navigate: navigateTo, close: closeMobileMenu }"
+      />
       <a
         href="/stack"
         class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-muted-foreground hover:bg-muted transition-colors"

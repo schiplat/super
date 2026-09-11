@@ -12,14 +12,15 @@ const app = createApp(App)
 const pinia = createPinia()
 
 app.use(pinia)
-installBridge(app, APP_VERSION)
+// Bridge + router bind before plugins so registerRoute/addRoute works.
+installBridge(app, APP_VERSION, router)
 
 // Discover plugins before first paint / route guards rely on ready flags.
 void useCapabilitiesStore(pinia)
   .ensureDiscovered()
   .then(async () => {
-    // Plugin UI bundles self-register into slots; must land before mount so
-    // the first paint already includes injected actions/tabs.
+    // Plugin UI bundles self-register into slots + routes; must land before
+    // mount so the first paint already includes injected actions/nav/pages.
     await loadPluginUIs()
     await loadDevPluginUI()
   })

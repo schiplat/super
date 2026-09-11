@@ -4,6 +4,8 @@ interface ImportMetaEnv {
   readonly DEV: boolean;
   /** Dev-only: URL of a plugin UI bundle served outside this shell. */
   readonly VITE_DEV_PLUGIN_URL?: string;
+  /** Dev-only: URL of the plugin CSS companion (optional). */
+  readonly VITE_DEV_PLUGIN_CSS_URL?: string;
 }
 
 interface ImportMeta {
@@ -15,6 +17,8 @@ interface Window {
   __SUPER_PLUGINS__?: string[];
   /** Host bridge (installed by src/slots/bridge.ts before plugin load). */
   __SUPER_CORE__?: unknown;
-  /** Shared Vue runtime primitives for plugin bundles. */
+  /** Full Vue namespace for plugin IIFE externals. */
   __SUPER_VUE__?: unknown;
+  /** Full vue-router namespace for plugin IIFE externals. */
+  __SUPER_VUE_ROUTER__?: unknown;
 }

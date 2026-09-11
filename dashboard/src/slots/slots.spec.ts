@@ -28,6 +28,13 @@ describe('slot registry', () => {
     expect(slotExtensions('process.actions')).toHaveLength(0);
   });
 
+  it('accepts nav.* slot names', () => {
+    const ext = { id: 'nav1', component: defineComponent({ render: () => h('a', 'Tokens') }) };
+    const off = registerSlot('nav.account', ext);
+    expect(slotExtensions('nav.account')).toHaveLength(1);
+    off();
+  });
+
   it('renders nothing (no DOM) with zero registrations', () => {
     const wrapper = mount(Slot, { props: { name: 'process.actions' } });
     expect(wrapper.html()).toBe('');

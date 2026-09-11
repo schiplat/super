@@ -60,7 +60,10 @@ export function slotExtensions(name: SlotName): readonly SlotExtension[] {
 /** Open slot names (kept in one place; extended as new anchors land). */
 export type SlotName =
   | 'process.actions'
-  | 'process.detail.tabs';
+  | 'process.detail.tabs'
+  | 'nav.account'
+  | 'nav.manage'
+  | 'nav.mobile';
 
 /** Names of all slots that currently have at least one extension. */
 export function populatedSlots(): SlotName[] {

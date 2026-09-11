@@ -2,9 +2,10 @@
 import { useAuthStore } from '@/stores/auth';
 import { useProgramStore } from '@/stores/program';
 import { useCapabilitiesStore } from '@/stores/capabilities';
-import { LogOut, ChevronDown, ShieldCheck, Wifi, WifiOff, Key } from 'lucide-vue-next';
+import { LogOut, ChevronDown, ShieldCheck, Wifi, WifiOff } from 'lucide-vue-next';
 import { useRouter } from 'vue-router';
 import { ref } from 'vue';
+import Slot from '@/slots/Slot.vue';
 
 const authStore = useAuthStore();
 const programStore = useProgramStore();
@@ -20,6 +21,10 @@ function toggleUserMenu() {
 function navigateTo(path: string) {
   userMenuOpen.value = false;
   void router.push(path);
+}
+
+function closeUserMenu() {
+  userMenuOpen.value = false;
 }
 
 function handleBlur() {
@@ -85,15 +90,11 @@ function handleLogout() {
           Account
         </div>
 
-        <a
-          v-if="caps.security"
-          href="/tokens"
-          class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-muted-foreground hover:text-foreground hover:bg-muted/80 font-medium transition-colors"
-          @click.prevent="navigateTo('/tokens')"
-        >
-          <Key class="w-4 h-4 opacity-70" />
-          Tokens
-        </a>
+        <!-- Pro / plugin account links (e.g. Tokens) -->
+        <Slot
+          name="nav.account"
+          :context="{ navigate: navigateTo, close: closeUserMenu }"
+        />
 
         <a
           href="/license"
