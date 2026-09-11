@@ -25,6 +25,7 @@ use tokio::signal;
 
 #[cfg(unix)]
 mod daemonize;
+mod embedded_ui;
 
 const VERSION: &str = env!("CARGO_PKG_VERSION");
 
@@ -52,91 +53,6 @@ struct Cli {
     pidfile: Option<PathBuf>,
 }
 
-const OSS_UI_MESSAGE: &str = r#"<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Super — OSS</title>
-  <style>
-    :root { color-scheme: light dark; }
-    body {
-      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-      max-width: 40rem;
-      margin: 0 auto;
-      padding: 3rem 1.25rem 4rem;
-      line-height: 1.6;
-      background: #fafaf7;
-    }
-    .card {
-      background: #fff;
-      color: #171613;
-      border: 1px solid #e8e6e1;
-      border-radius: 1rem;
-      padding: 1.75rem 1.5rem;
-      box-shadow: 0 1px 2px rgba(0,0,0,.04);
-    }
-    h1 { font-size: 1.375rem; margin: 0 0 .4rem; letter-spacing: -0.02em; font-weight: 700; color: inherit; }
-    .lead { font-size: 0.975rem; margin: 0 0 1rem; color: #6b6760; }
-    p { margin: 0 0 .85rem; color: inherit; font-size: 0.9375rem; }
-    ul { margin: .35rem 0 1rem; padding-left: 1.2rem; color: inherit; font-size: 0.9375rem; }
-    li { margin: .2rem 0; }
-    code { background: #f3f2ef; color: #171613; padding: .1rem .35rem; border-radius: .25rem; font-size: .9em; }
-    .actions { display: flex; flex-wrap: wrap; gap: .6rem; margin-top: 1.25rem; }
-    .actions a {
-      display: inline-block;
-      padding: .5rem .95rem;
-      border-radius: .5rem;
-      font-size: .875rem;
-      font-weight: 600;
-      text-decoration: none;
-      transition: opacity .15s;
-    }
-    .actions a:hover { opacity: .88; }
-    .cta-primary { background: #0d9488; color: #fff; }
-    .cta-secondary {
-      background: #f3f2ef;
-      color: #171613;
-      border: 1px solid #e8e6e1;
-    }
-    .muted { font-size: .8125rem; color: #9c9890; margin-top: 1.25rem; margin-bottom: 0; }
-    @media (prefers-color-scheme: dark) {
-      body { background: #0d0d0c; }
-      .card { background: #161613; color: #ededeb; border-color: #2a2a25; }
-      .lead { color: #a19e96; }
-      code { background: #1c1c18; color: #ededeb; }
-      .muted { color: #6e6b64; }
-      .cta-primary { background: #14b8a6; }
-      .cta-secondary { background: #1c1c18; color: #ededeb; border-color: #2a2a25; }
-    }
-  </style>
-</head>
-<body>
-  <div class="card">
-    <h1>Super is running</h1>
-    <p class="lead">Open-source build — manage processes with the CLI and HTTP API.</p>
-    <p>Included in this binary:</p>
-    <ul>
-      <li><code>super</code> CLI for day-to-day control</li>
-      <li><code>/api/v1/*</code> for scripts and CI/CD</li>
-      <li><code>/metrics</code> for Prometheus</li>
-    </ul>
-    <p>
-      There is no built-in dashboard in OSS.
-      <strong>Super Pro</strong> loads signed plugins on this same <code>superd</code>
-      binary: Web UI, API auth, notifications, and Linux resource limits.
-    </p>
-    <div class="actions">
-      <a class="cta-primary" href="https://super.docs.sconts.com/go/pro/" rel="noopener noreferrer">Get Super Pro</a>
-      <a class="cta-secondary" href="https://super.docs.sconts.com/docs/07-editions/feature-matrix" rel="noopener noreferrer">Feature matrix</a>
-      <a class="cta-secondary" href="https://super.docs.sconts.com/docs/" rel="noopener noreferrer">Docs</a>
-    </div>
-    <p class="muted">Version VERSION_PLACEHOLDER · MIT open-source core</p>
-  </div>
-</body>
-</html>
-"#;
-
 async fn ui_fallback_handler(
     uri: Uri,
     ui: Option<std::sync::Arc<super_core::plugin::UiPluginHandle>>,
@@ -152,23 +68,28 @@ async fn ui_fallback_handler(
         return StatusCode::NOT_FOUND.into_response();
     }
 
-    let Some(ui) = ui else {
-        let html = OSS_UI_MESSAGE.replace("VERSION_PLACEHOLDER", VERSION);
-        return html_response(&html);
-    };
-
-    match serve_ui_asset(
-        &ui,
-        &normalize_ui_path(path),
-        auth_required,
-        is_licensed,
-        false,
-    )
-    .await
-    {
-        Some(resp) => resp,
-        None => spa_fallback(&ui, auth_required, is_licensed).await,
+    // Prefer licensed ui plugin assets when loaded (optional override / hot path).
+    if let Some(ui) = ui.as_ref() {
+        match serve_ui_asset(
+            ui,
+            &normalize_ui_path(path),
+            auth_required,
+            is_licensed,
+            false,
+        )
+        .await
+        {
+            Some(resp) => return resp,
+            None => {
+                return spa_fallback(ui, auth_required, is_licensed).await;
+            }
+        }
     }
+
+    // OSS default: Dashboard embedded in this binary.
+    let file_path = normalize_ui_path(path);
+    embedded_ui::response(&file_path, auth_required, is_licensed, inject_ui_config)
+        .unwrap_or_else(|| embedded_ui::spa_index(auth_required, is_licensed, inject_ui_config))
 }
 
 async fn spa_fallback(
@@ -210,6 +131,14 @@ async fn serve_ui_asset(
                 HeaderValue::from_str(&mime)
                     .unwrap_or_else(|_| HeaderValue::from_static("application/octet-stream")),
             );
+            if file_path == "index.html" || file_path.is_empty() || file_path == "/" {
+                headers.insert(header::CACHE_CONTROL, HeaderValue::from_static("no-cache"));
+            } else {
+                headers.insert(
+                    header::CACHE_CONTROL,
+                    HeaderValue::from_static("public, max-age=31536000, immutable"),
+                );
+            }
 
             Some((headers, body).into_response())
         }
@@ -236,12 +165,6 @@ fn inject_ui_config(raw_html: &[u8], auth_required: bool, is_licensed: bool) -> 
         injected = html_str.replace("// __INJECT_CONFIG__", &config_js);
     }
     bytes::Bytes::from(injected.into_bytes())
-}
-
-fn html_response(html: &str) -> Response {
-    let mut headers = axum::http::HeaderMap::new();
-    headers.insert(header::CONTENT_TYPE, HeaderValue::from_static("text/html"));
-    (headers, html.to_string()).into_response()
 }
 
 async fn shutdown_signal(mut rx: tokio::sync::broadcast::Receiver<()>, manager: ManagerHandle) {

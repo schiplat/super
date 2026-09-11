@@ -3547,6 +3547,7 @@ dependencies = [
  "clap",
  "common",
  "nix 0.27.1",
+ "rust-embed",
  "super-core",
  "tokio",
  "toml",

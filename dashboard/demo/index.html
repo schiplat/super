@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Super Dashboard</title>
+    <style>
+        body { font-family: sans-serif; padding: 2rem; background: #f0f2f5; }
+        .card { background: white; padding: 2rem; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
+        .tag { display: inline-block; padding: 4px 8px; border-radius: 4px; font-weight: bold; }
+        .tag.premium { background: #ffd700; color: #333; }
+        .tag.oss { background: #eee; color: #666; }
+        pre { background: #333; color: #fff; padding: 1rem; border-radius: 4px; }
+    </style>
+    <!-- Backend replaces this comment with injected JS config -->
+    <script>
+        // __INJECT_CONFIG__
+    </script>
+</head>
+<body>
+    <div class="card">
+        <h1>🚀 Project Super <span id="edition-tag" class="tag">Loading...</span></h1>
+        <p>Backend Connection Status: <strong style="color: green">Connected</strong></p>
+
+        <h3>System Info</h3>
+        <p>Version: <span id="version">-</span></p>
+        <p>Auth Required: <span id="auth">-</span></p>
+
+        <h3>Raw Config</h3>
+        <pre id="debug">waiting for injection...</pre>
+    </div>
+
+    <script>
+        // Read injected global config
+        const config = window.__SUPER_CONFIG__ || { edition: 'unknown', version: 'unknown' };
+
+        const tag = document.getElementById('edition-tag');
+        tag.innerText = config.edition.toUpperCase();
+        tag.className = `tag ${config.edition}`; // premium or oss
+
+        document.getElementById('version').innerText = config.version;
+        document.getElementById('auth').innerText = config.auth_required ? 'Yes 🔒' : 'No 🔓';
+        document.getElementById('debug').innerText = JSON.stringify(config, null, 2);
+    </script>
+</body>
+</html>

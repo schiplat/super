@@ -1,0 +1,241 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --background: 210 20% 98%;
+  --foreground: 222 20% 12%;
+  --card: 0 0% 100%;
+  --card-foreground: 222 20% 12%;
+  --primary: 172 66% 42%;
+  --primary-foreground: 0 0% 100%;
+  --secondary: 180 15% 94%;
+  --secondary-foreground: 180 20% 25%;
+  --muted: 180 12% 95%;
+  --muted-foreground: 180 8% 40%;
+  --accent: 180 12% 91%;
+  --accent-foreground: 180 20% 22%;
+  --border: 180 10% 86%;
+  --input: 0 0% 100%;
+  --ring: 172 66% 42%;
+  --radius: 0.75rem;
+  --sidebar: 180 15% 96%;
+  --sidebar-foreground: 180 20% 22%;
+  --sidebar-border: 180 10% 88%;
+  --sidebar-accent: 180 12% 92%;
+  --destructive: 0 70% 50%;
+  --destructive-foreground: 0 0% 100%;
+  --success: 155 55% 34%;
+  --success-foreground: 155 35% 96%;
+  --warning: 36 82% 44%;
+  --warning-foreground: 40 40% 97%;
+  --info: 198 60% 42%;
+  --info-foreground: 200 40% 97%;
+  --notice: 262 40% 48%;
+  --notice-foreground: 265 30% 97%;
+}
+
+.dark {
+  --background: 215 20% 6%;
+  --foreground: 185 15% 93%;
+  --card: 215 15% 8%;
+  --card-foreground: 185 15% 93%;
+  --primary: 172 72% 48%;
+  --primary-foreground: 180 30% 8%;
+  --secondary: 185 12% 14%;
+  --secondary-foreground: 185 12% 82%;
+  --muted: 185 12% 14%;
+  --muted-foreground: 180 10% 56%;
+  --accent: 185 12% 18%;
+  --accent-foreground: 185 15% 88%;
+  --border: 185 10% 20%;
+  --input: 185 12% 12%;
+  --ring: 172 72% 48%;
+  --sidebar: 215 12% 7%;
+  --sidebar-foreground: 185 15% 84%;
+  --sidebar-border: 185 10% 18%;
+  --sidebar-accent: 185 12% 15%;
+  --destructive: 0 62% 50%;
+  --destructive-foreground: 0 0% 100%;
+  --success: 155 50% 36%;
+  --success-foreground: 155 30% 94%;
+  --warning: 36 75% 48%;
+  --warning-foreground: 40 30% 95%;
+  --info: 198 52% 42%;
+  --info-foreground: 198 35% 95%;
+  --notice: 262 45% 52%;
+  --notice-foreground: 265 30% 95%;
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  html {
+    font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11';
+  }
+
+  body {
+    @apply bg-background text-sm leading-normal text-foreground antialiased;
+    margin: 0;
+    min-height: 100vh;
+    font-family: 'DM Sans', ui-sans-serif, system-ui, sans-serif;
+    letter-spacing: -0.011em;
+  }
+
+  h1 {
+    @apply text-xl font-semibold tracking-tight text-foreground;
+  }
+
+  h2 {
+    @apply text-base font-semibold tracking-tight text-foreground;
+  }
+
+  h3 {
+    @apply text-sm font-semibold tracking-tight text-foreground;
+  }
+
+  code,
+  pre,
+  .font-mono {
+    font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-feature-settings: normal;
+    letter-spacing: 0;
+  }
+
+  ::selection {
+    background: hsl(24 10% 14% / 0.12);
+  }
+}
+
+@layer components {
+  .surface-card {
+    @apply rounded-2xl bg-card;
+  }
+
+  .surface-muted {
+    @apply rounded-2xl bg-muted;
+  }
+
+  .surface-inset {
+    @apply rounded-xl bg-muted;
+  }
+
+  .field-control {
+    @apply flex h-10 w-full rounded-xl border border-border bg-card px-3 text-sm text-foreground;
+    @apply shadow-[inset_0_1px_1px_rgba(28,25,23,0.04)];
+    @apply placeholder:text-muted-foreground;
+    @apply transition-[border-color,box-shadow,background-color];
+    @apply focus-visible:outline-none focus-visible:border-foreground/35 focus-visible:ring-2 focus-visible:ring-ring/30;
+    @apply disabled:cursor-not-allowed disabled:bg-muted disabled:text-muted-foreground disabled:opacity-70;
+  }
+
+  select.field-control {
+    @apply appearance-none bg-[length:1rem] bg-[right_0.65rem_center] bg-no-repeat pr-9;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%235a534d' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+  }
+
+  .page-stack {
+    @apply w-full max-w-none space-y-7;
+  }
+
+  .shell-inset {
+    @apply px-6 md:px-8;
+  }
+
+  .data-table-scroll {
+    @apply overflow-x-auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .data-table {
+    @apply w-full min-w-[640px] text-left text-sm;
+  }
+
+  .data-table thead {
+    @apply bg-transparent;
+  }
+
+  .data-table th {
+    @apply px-3.5 py-2.5 text-xs font-semibold uppercase tracking-[0.06em] text-muted-foreground;
+  }
+
+  .data-table td {
+    @apply px-3.5 py-3 align-middle text-sm;
+  }
+
+  .data-table tbody tr {
+    @apply transition-colors border-b border-border/40;
+  }
+
+  .data-table tbody tr:last-child {
+    @apply border-b-0;
+  }
+
+  .data-table tbody tr + tr td {
+    @apply border-0;
+  }
+
+  .data-table tbody tr[role='link'],
+  .data-table tbody tr.clickable {
+    @apply cursor-pointer hover:bg-muted/80;
+  }
+
+  .data-table tbody tr.clickable td:first-child {
+    @apply rounded-l-xl;
+  }
+
+  .data-table tbody tr.clickable td:last-child {
+    @apply rounded-r-xl;
+  }
+
+  .field-error {
+    @apply rounded-xl bg-destructive/10 px-3 py-2 text-sm text-destructive;
+  }
+
+  .mono-chip {
+    @apply inline-flex max-w-full items-center truncate rounded-md bg-muted px-1.5 py-0.5 font-mono text-[0.75rem] leading-tight tracking-tight text-foreground/75;
+  }
+
+  .data-table .cell-meta {
+    @apply text-xs leading-snug text-muted-foreground;
+  }
+
+  .data-table .cell-id {
+    @apply font-mono text-[0.75rem] leading-snug tracking-tight text-muted-foreground;
+  }
+
+  .data-table .cell-clamp {
+    @apply max-w-[18rem] break-all line-clamp-2;
+  }
+
+  .data-table .cell-chips {
+    @apply flex max-w-[22rem] flex-wrap gap-1;
+  }
+
+  .soft-panel {
+    @apply rounded-2xl bg-card p-1 shadow-[0_12px_40px_rgba(28,25,23,0.08)];
+  }
+
+  .type-meta {
+    @apply text-xs leading-relaxed text-muted-foreground;
+  }
+
+  .type-label {
+    @apply text-xs font-semibold uppercase tracking-[0.06em] text-muted-foreground;
+  }
+
+  .type-eyebrow {
+    @apply text-xs font-semibold uppercase tracking-[0.08em] text-muted-foreground/70;
+  }
+
+  /* Custom scrollbar */
+  ::-webkit-scrollbar { width: 8px; height: 8px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { @apply bg-muted-foreground/20 rounded-full; }
+  ::-webkit-scrollbar-thumb:hover { @apply bg-muted-foreground/30; }
+
+  .tabular-nums { font-feature-settings: "tnum"; font-variant-numeric: tabular-nums; }
+  html, body, #app { height: 100%; width: 100%; margin: 0; overflow: hidden; }
+}

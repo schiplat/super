@@ -77,7 +77,7 @@ The baked-in OSS config listens on `0.0.0.0` inside the container. On the host, 
 docker run --rm -p 127.0.0.1:9002:9002 schiplat/super:latest
 ```
 
-HTTP API / OSS notice: http://127.0.0.1:9002 (no embedded dashboard in the OSS image)
+HTTP API / Web Dashboard: http://127.0.0.1:9002 (OSS image embeds the Vue shell; subscription plugins optional)
 
 ## Configuration
 

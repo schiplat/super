@@ -33,6 +33,7 @@ jobs:
               - 'core/**'
               - 'cli/**'
               - 'superd/**'
+              - 'dashboard/**'
               - 'Cargo.toml'
               - 'Cargo.lock'
               - 'rust-toolchain.toml'
@@ -76,6 +77,20 @@ jobs:
         uses: swatinem/rust-cache@v2
         with:
           key: ${{ matrix.os }}
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: dashboard/package-lock.json
+
+      - name: Build dashboard (embedded in superd)
+        working-directory: dashboard
+        run: |
+          npm ci
+          npm run build
+          test -f dist/index.html
 
       - name: Format check
         run: cargo fmt --all -- --check

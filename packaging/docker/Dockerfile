@@ -18,7 +18,14 @@
 #     -v ./my-conf:/app/super/conf -v ./my-data:/app/super/data \
 #     schiplat/super:latest
 #
-# OSS image: no embedded dashboard. Install the UI plugin from a subscription package for the web control plane.
+# OSS image: includes the embedded Web Dashboard. Subscription plugins remain optional.
+
+FROM node:22-bookworm AS dashboard
+WORKDIR /build/dashboard
+COPY dashboard/package.json dashboard/package-lock.json ./
+RUN npm ci
+COPY dashboard/ ./
+RUN npm run build && test -f dist/index.html
 
 FROM rust:1-trixie AS backend
 WORKDIR /build
@@ -27,6 +34,7 @@ COPY common/ common/
 COPY core/ core/
 COPY cli/ cli/
 COPY superd/ superd/
+COPY --from=dashboard /build/dashboard/dist dashboard/dist/
 RUN cargo build --release -p superd -p super-cli
 
 # tini is not included in distroless; copy from a minimal Debian stage (build-only).

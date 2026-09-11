@@ -22,9 +22,10 @@ help:
 	@echo "Usage: make [target]"
 	@echo ""
 	@echo "Targets:"
-	@echo "  build       Build OSS binaries (superd + super CLI)"
+	@echo "  frontend    Build Vue dashboard → dashboard/dist (required by superd)"
+	@echo "  build       Build OSS binaries (superd + super CLI; runs frontend if needed)"
 	@echo "  fetch-keys  Local/debug: fetch Manager keyring into common/keys/ (do not commit by default)"
-	@echo "  clean       Clean up build artifacts (target/)"
+	@echo "  clean       Clean up build artifacts (target/, dashboard/dist)"
 	@echo "  check       Run cargo check"
 	@echo "  set-version Sync VERSION into this repo + ../super-pro (delegates)"
 	@echo "              make set-version VERSION=1.5.5"
@@ -44,8 +45,22 @@ fetch-keys:
 	@echo "$(BLUE)🔑 Fetching verifying keyring from Manager...$(NC)"
 	@REQUIRE_MANAGER_KEYRING=1 bash .github/scripts/fetch-verifying-keys.sh
 
+.PHONY: frontend
+frontend:
+	@echo "$(BLUE)📦 Building dashboard...$(NC)"
+	@cd dashboard && npm install
+	@cd dashboard && npm run build
+	@echo "$(GREEN)✅ Dashboard → dashboard/dist$(NC)"
+
+.PHONY: ensure-dashboard
+ensure-dashboard:
+	@if [ ! -f dashboard/dist/index.html ]; then \
+		echo "$(YELLOW)Dashboard dist missing; building...$(NC)"; \
+		$(MAKE) frontend; \
+	fi
+
 .PHONY: build
-build:
+build: ensure-dashboard
 	@echo "$(BLUE)🦀 Building Rust Binaries (OSS)...$(NC)"
 	@cargo build --release $(BINARIES)
 	@echo "$(GREEN)🎉 All OSS binaries built successfully!$(NC)"
@@ -61,10 +76,11 @@ build:
 clean:
 	@echo "$(YELLOW)🧹 Cleaning up...$(NC)"
 	@cargo clean
+	@rm -rf dashboard/dist
 	@echo "$(GREEN)✅ Clean complete.$(NC)"
 
 .PHONY: check
-check:
+check: ensure-dashboard
 	@cargo check
 
 # Bump workspace version in lockstep with ../super-pro (Cargo + OSS banner/docker examples).

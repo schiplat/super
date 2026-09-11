@@ -6,6 +6,10 @@ version="${1:?version required}"
 platform="${2:?platform required (e.g. linux-amd64)}"
 target="${3:-}"
 
+echo "==> Building dashboard (embedded in superd)..."
+(cd dashboard && npm ci && npm run build)
+test -f dashboard/dist/index.html
+
 if [[ -n "$target" ]]; then
   cargo build --release --target "$target" -p superd -p super-cli
   bin_dir="target/${target}/release"

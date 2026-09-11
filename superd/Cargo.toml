@@ -18,6 +18,10 @@ axum = { workspace = true }
 tracing = { workspace = true }
 bytes = "1"
 toml = { workspace = true }
+rust-embed = { workspace = true }
+
+[build-dependencies]
+# build.rs validates ../dashboard/dist before compile
 
 [target.'cfg(unix)'.dependencies]
 nix = { workspace = true }
