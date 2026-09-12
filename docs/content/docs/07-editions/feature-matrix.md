@@ -28,7 +28,7 @@ Same **`superd`** and **`super`** binaries for both columns — **Licensed** is 
 To try, renew, or learn about the commercial plugin set, see **[Get Super Pro](/go/pro/)** (free 90-day trial, optional ¥10/mo OSS sponsorship, license version coverage). Existing subscribers can also sign in to the **[Super Pro Portal](https://platform.ddl.sconts.com/portal/login)**.
 
 > [!IMPORTANT]
-> `security` is included with every subscription and is **required for startup** when `[license].key` is valid. RBAC, audit logs, and API token auth come from the `security` plugin. See [Authentication](/docs/05-advanced-management/authentication#licensed-deployments-require-security).
+> `security` is included with every subscription and is **required for startup** when `[license].key` is valid. RBAC, audit logs, and API token auth come from the `security` plugin. See [Authentication](/docs/02-essentials/authentication#licensed-deployments-require-security).
 
 ## Event hooks vs alerting
 

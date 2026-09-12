@@ -45,7 +45,7 @@ Provide a new `artifact` block with a **different `checksum`** than the one alre
 
 ### Via Dashboard 💎
 
-With the licensed **`ui`** plugin: **Create Program** or **Edit Program** → enable **OTA Artifact**. Fill source, checksum, destination, extract, restart policy, and optional download/verify timeouts, then Save. Same trigger rule: a changed checksum starts OTA. See [Dashboard](/docs/05-advanced-management/web-ui).
+With the licensed **`ui`** plugin: **Create Program** or **Edit Program** → enable **OTA Artifact**. Fill source, checksum, destination, extract, restart policy, and optional download/verify timeouts, then Save. Same trigger rule: a changed checksum starts OTA. See [Dashboard](/docs/02-essentials/web-ui).
 
 ### Via API (recommended for CI/CD)
 

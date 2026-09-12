@@ -536,7 +536,7 @@ Same binaries and `djangoapp.toml`. After `[license].key`, `auth_secret`, and pl
 | **notify** | IM/webhook when `worker` or `web` goes Fatal |
 | **isolation** (Linux) | cgroup caps on `worker` so a poison task cannot starve Gunicorn |
 
-Enable checklist: [Licensed deployments require security](/docs/05-advanced-management/authentication#licensed-deployments-require-security).
+Enable checklist: [Licensed deployments require security](/docs/02-essentials/authentication#licensed-deployments-require-security).
 
 ---
 

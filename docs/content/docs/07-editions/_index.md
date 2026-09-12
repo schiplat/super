@@ -37,10 +37,10 @@ Pages mark licensed capabilities with **💎** and a "Licensed feature" callout 
 ## Switching between modes
 
 *   **OSS → Licensed:** add `[license].key` to `conf/super.toml` and place the plugin libraries from your subscription into `$SUPER_ROOT/plugins/`, then restart `superd`. Same binaries, nothing to rebuild.
-*   **Licensed → OSS:** remove the key (and plugin libraries), or use `[license].strict = false` behavior that degrades to OSS on an invalid key — see [Authentication](/docs/05-advanced-management/authentication#invalid-or-incompatible-license-key).
+*   **Licensed → OSS:** remove the key (and plugin libraries), or use `[license].strict = false` behavior that degrades to OSS on an invalid key — see [Authentication](/docs/02-essentials/authentication#invalid-or-incompatible-license-key).
 
 > [!IMPORTANT]
-> When licensed intent is present (plugins on disk, `auth_secret` set, or a non-loopback bind), `superd` **refuses startup** instead of silently dropping licensed features — see [Authentication](/docs/05-advanced-management/authentication#invalid-or-incompatible-license-key).
+> When licensed intent is present (plugins on disk, `auth_secret` set, or a non-loopback bind), `superd` **refuses startup** instead of silently dropping licensed features — see [Authentication](/docs/02-essentials/authentication#invalid-or-incompatible-license-key).
 
 ## Getting Super Pro
 

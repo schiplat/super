@@ -10,9 +10,9 @@ Super exposes a RESTful API on port `9002` (default). All responses are in JSON 
 
 **Without `security` plugin loaded** (OSS only): No API authentication. The API is open on the bind address. OSS ships with `host = "127.0.0.1"` and `allow_insecure_public_bind = false`; `superd` **refuses startup** on a non-loopback bind unless you set that flag to `true`. See [Configuration — OSS security defaults](/docs/02-essentials/configuration#oss-security-defaults-fail-closed).
 
-**Licensed (`[license].key` valid):** `security` is bundled with every subscription and **must load** — otherwise `superd` refuses startup. API auth is always active when licensed. See [Authentication — Licensed deployments require security](/docs/05-advanced-management/authentication#licensed-deployments-require-security).
+**Licensed (`[license].key` valid):** `security` is bundled with every subscription and **must load** — otherwise `superd` refuses startup. API auth is always active when licensed. See [Authentication — Licensed deployments require security](/docs/02-essentials/authentication#licensed-deployments-require-security).
 
-**With `security` plugin loaded**: All API requests require `Authorization: Bearer <token>` (except `/health`, `/metrics`, and docs whitelist). Public bind is allowed because auth middleware is active. Config `auth_secret` bootstraps Access Tokens and stays usable until an Admin explicitly disables it. See [Authentication](/docs/05-advanced-management/authentication).
+**With `security` plugin loaded**: All API requests require `Authorization: Bearer <token>` (except `/health`, `/metrics`, and docs whitelist). Public bind is allowed because auth middleware is active. Config `auth_secret` bootstraps Access Tokens and stays usable until an Admin explicitly disables it. See [Authentication](/docs/02-essentials/authentication).
 
 ## Health & docs
 
@@ -376,7 +376,7 @@ Example — stop several programs:
 > [!WARNING]
 > Without the plugin, these routes are not registered. Requests return **404 Not Found**.
 
-Manage access tokens for API authorization. Bootstrap with config `auth_secret`; Admins may optionally disable it after creating an Admin token. See [Authentication](/docs/05-advanced-management/authentication#optional-disable-auth_secret).
+Manage access tokens for API authorization. Bootstrap with config `auth_secret`; Admins may optionally disable it after creating an Admin token. See [Authentication](/docs/02-essentials/authentication#optional-disable-auth_secret).
 
 ### Login
 *   **POST** `/api/v1/auth/login`

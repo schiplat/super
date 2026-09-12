@@ -12,7 +12,7 @@ description: "Complete schema for super.toml."
 | *(no mark)* | Available in OSS (with or without plugins). |
 
 > [!TIP] Free 90-day beta trial
-> Licensed plugins (Super Pro) are available with a **free 90-day trial license** ([Portal claim](https://platform.ddl.sconts.com/portal/claim?product=super-pro&plan=first-trials-001)). We recommend staging and non-critical workloads until GA; see the [feature matrix](/docs/07-editions/feature-matrix/). Plugins, licensing, and trial details are covered in [Advanced Management](/docs/05-advanced-management/).
+> Licensed plugins (Super Pro) are available with a **free 90-day trial license** ([Portal claim](https://platform.ddl.sconts.com/portal/claim?product=super-pro&plan=first-trials-001)). We recommend staging and non-critical workloads until GA; see the [feature matrix](/docs/07-editions/feature-matrix/). Day-to-day auth and Dashboard: [Essentials](/docs/02-essentials/). Licensed plugins: [Advanced Management](/docs/05-advanced-management/).
 
 **Licensed-plugin fields in this reference** (quick index):
 
@@ -83,11 +83,11 @@ Top-level fields in `super.toml` (sibling to `[server]`, not inside it):
 
 | Key | Type | Default | Description |
 | :--- | :--- | :--- | :--- |
-| `auth_secret` 💎 | string | — | **Plugin only** (`security`). Required for licensed startup. Root Admin Bearer for bootstrap; Admins may explicitly disable login with it after creating an Admin Access Token. See [Authentication](/docs/05-advanced-management/authentication). |
+| `auth_secret` 💎 | string | — | **Plugin only** (`security`). Required for licensed startup. Root Admin Bearer for bootstrap; Admins may explicitly disable login with it after creating an Admin Access Token. See [Authentication](/docs/02-essentials/authentication). |
 
 ## `[license]` — subscription key (Licensed 💎)
 
-Optional section in `conf/super.toml`. When present and valid, `superd` loads authorized plugins from `plugins/` and **requires the bundled `security` plugin** (`security.so` + `auth_secret`) or refuses startup. See [Licensed deployments require security](/docs/05-advanced-management/authentication#licensed-deployments-require-security).
+Optional section in `conf/super.toml`. When present and valid, `superd` loads authorized plugins from `plugins/` and **requires the bundled `security` plugin** (`security.so` + `auth_secret`) or refuses startup. See [Licensed deployments require security](/docs/02-essentials/authentication#licensed-deployments-require-security).
 
 When a key is present but **does not verify**, behavior depends on deployment signals:
 
@@ -101,7 +101,7 @@ The `SUPER_LICENSE` and `SUPER_LICENSE_STRICT` overrides are documented in [Envi
 
 | Key | Type | Default | Description |
 | :--- | :--- | :--- | :--- |
-| `key` 💎 | string | — | Base64-encoded signed subscription key. Obtain from your subscription vendor. Override: `SUPER_LICENSE` env (same format). Every valid license includes a signing key id (`kid`, e.g. `k_<8hex>`) that must match a verifying key embedded in your `superd` build — see [Troubleshooting license verification](/docs/05-advanced-management/authentication#troubleshooting-license-verification). |
+| `key` 💎 | string | — | Base64-encoded signed subscription key. Obtain from your subscription vendor. Override: `SUPER_LICENSE` env (same format). Every valid license includes a signing key id (`kid`, e.g. `k_<8hex>`) that must match a verifying key embedded in your `superd` build — see [Troubleshooting license verification](/docs/02-essentials/authentication#troubleshooting-license-verification). |
 | `strict` 💎 | bool | `false` | When `true`, invalid or incompatible keys refuse startup instead of degrading to OSS. Recommended for production licensed deployments. Override: `SUPER_LICENSE_STRICT=1`. |
 
 ```toml

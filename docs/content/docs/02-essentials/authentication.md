@@ -1,7 +1,10 @@
 ---
 title: "Authentication"
-weight: 1
-description: "Securing the Daemon with Access Tokens."
+weight: 3
+description: "OSS admin Bearer secret, and multi-user Access Tokens with the security plugin."
+aliases:
+  - /docs/05-advanced-management/authentication/
+  - /docs/05-advanced-management/authentication
 ---
 
 ## OSS built-in auth (single admin secret)

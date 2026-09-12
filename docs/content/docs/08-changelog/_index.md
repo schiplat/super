@@ -19,7 +19,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- **Dashboard shell is embedded in OSS `superd`.** Process overview, logs, stack editor, and related shell pages no longer require the `ui` plugin. The subscription **`ui`** plugin now delivers **Pro extensions** only (Access Tokens UI, Notification Settings including inhibition rules and delivery history, process hot-reload, and matching nav entries). See [Dashboard](/docs/05-advanced-management/web-ui/) and the [feature matrix](/docs/07-editions/feature-matrix/).
+- **Dashboard shell is embedded in OSS `superd`.** Process overview, logs, stack editor, and related shell pages no longer require the `ui` plugin. The subscription **`ui`** plugin now delivers **Pro extensions** only (Access Tokens UI, Notification Settings including inhibition rules and delivery history, process hot-reload, and matching nav entries). See [Dashboard](/docs/02-essentials/web-ui/) and the [feature matrix](/docs/07-editions/feature-matrix/).
+- **Docs IA:** [Authentication](/docs/02-essentials/authentication/) and [Dashboard](/docs/02-essentials/web-ui/) move under **Essentials**. [Advanced Management](/docs/05-advanced-management/) covers licensed plugins only (RBAC, audit, isolation, notify). Old `/docs/05-advanced-management/{authentication,web-ui}/` URLs remain as aliases.
 
 ---
 
@@ -103,7 +104,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- Docs terminology: the licensed browser UI is consistently called **Dashboard** (still provided by the **`ui` plugin**). Path `/docs/05-advanced-management/web-ui/` is unchanged (aliases retained).
+- Docs terminology: the licensed browser UI is consistently called **Dashboard** (still provided by the **`ui` plugin**). Path `/docs/02-essentials/web-ui/` is unchanged (aliases retained).
 
 ### Fixed
 
@@ -237,7 +238,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Create / update program (HTTP, CLI `add`/`update`, dashboard, stack apply) run a shared structural check. Failures return **400** with a `message` that names the field (`command:`, `health_check.url:`), the program or `services[i] (name=…)`, and for TOML/JSON syntax / unknown keys `path:line:col:` (TOML) or `JSON line N column M`. `super check` reports include problems as `path:line:col:` or `path: services[i] (name=…): field:`.
 - `super check` reports invalid license as an error when strict or licensed deployment signals apply.
 - License verification requires a `kid` claim on every license; the legacy `v1` kid and compile-time fallback are removed. Signing key ids use `k_<8hex>` (derived from the Ed25519 public key). Re-issue licenses from your vendor if verification fails with “missing signing key id”.
-- Docs: [Troubleshooting license verification](/docs/05-advanced-management/authentication#troubleshooting-license-verification) — suggested `super check`, `super doctor`, and `super keyring` for self-service diagnosis.
+- Docs: [Troubleshooting license verification](/docs/02-essentials/authentication#troubleshooting-license-verification) — suggested `super check`, `super doctor`, and `super keyring` for self-service diagnosis.
 
 ### Notes
 - Workspace **1.3.2**; pair with commercial plugin packages `super-plugins-1.3.2-…`.
@@ -293,7 +294,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 - License docs/API wording: version span → **version scope**.
-- [Dashboard](/docs/05-advanced-management/web-ui/): tour screenshots refreshed (notify/stack, program config).
+- [Dashboard](/docs/02-essentials/web-ui/): tour screenshots refreshed (notify/stack, program config).
 
 ### Notes
 - Pair OSS `1.2.4` with matching commercial plugin packages (`super-plugins-1.2.4-…`).
@@ -303,7 +304,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [1.2.3] - 2026-07-25
 
 ### Changed
-- [Dashboard](/docs/05-advanced-management/web-ui/): dashboard tour screenshots refreshed (overview, program detail/logs, inhibition rules).
+- [Dashboard](/docs/02-essentials/web-ui/): dashboard tour screenshots refreshed (overview, program detail/logs, inhibition rules).
 
 ### Notes
 - Pair OSS `1.2.3` with matching commercial plugin packages (`super-plugins-1.2.3-…`).

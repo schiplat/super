@@ -46,4 +46,4 @@ If an application goes into a loop printing 100MB lines, it would otherwise cras
 | `auth_secret` disabled, **all** Admin tokens were **deleted** | **Automatic self-heal.** `superd` re-enables `auth_secret` as soon as no Admin token records remain — `ensure_auth_secret_policy` runs on every login/status call, before the disabled check. Sign in with `auth_secret` and create a new token. |
 | `auth_secret` disabled, Admin tokens still stored but secrets forgotten | **Filesystem rescue** (needs write access to `$SUPER_ROOT/data/`, i.e. the user running `superd`): stop `superd`, then either set `auth_secret_disabled` to `false` in `data/auth_settings.json` (or delete that file — the default is `false`), or delete `data/auth.json` to clear all token records, then start `superd` and sign in with `auth_secret`. |
 
-See [Authentication — Optional: disable `auth_secret`](/docs/05-advanced-management/authentication#optional-disable-auth_secret) for the disable/recovery model.
+See [Authentication — Optional: disable `auth_secret`](/docs/02-essentials/authentication#optional-disable-auth_secret) for the disable/recovery model.

@@ -392,14 +392,14 @@ super shutdown
 ```
 
 ### `doctor`
-One-shot diagnostics: config check (`super check` output), daemon health, license status, a **Verifying keys** summary line (same ids as [`super keyring`](#keyring)), and local `[server].daemon` / pidfile hints (systemd conflict, stale pidfile). See [Troubleshooting license verification](/docs/05-advanced-management/authentication#troubleshooting-license-verification).
+One-shot diagnostics: config check (`super check` output), daemon health, license status, a **Verifying keys** summary line (same ids as [`super keyring`](#keyring)), and local `[server].daemon` / pidfile hints (systemd conflict, stale pidfile). See [Troubleshooting license verification](/docs/02-essentials/authentication#troubleshooting-license-verification).
 
 ```bash
 super doctor
 ```
 
 ### `keyring`
-List Ed25519 verifying key ids (`kid`) compiled into this `super` binary — one row per key, so multiple rotation keys are all visible. Each `kid` uses the `k_<8hex>` convention (first four bytes of the public key as hex). Suggested when a license fails with an unknown signing key or to compare a local build with an official release. See [Troubleshooting license verification](/docs/05-advanced-management/authentication#troubleshooting-license-verification).
+List Ed25519 verifying key ids (`kid`) compiled into this `super` binary — one row per key, so multiple rotation keys are all visible. Each `kid` uses the `k_<8hex>` convention (first four bytes of the public key as hex). Suggested when a license fails with an unknown signing key or to compare a local build with an official release. See [Troubleshooting license verification](/docs/02-essentials/authentication#troubleshooting-license-verification).
 
 > [!NOTE]
 > This command exists to help diagnose **license verification for licensed deployments**. Pure OSS builds have no license, so the keyring output is irrelevant unless you run a licensed instance.
@@ -440,7 +440,7 @@ export SUPER_TOKEN=sk-...
 | `super login <secret> --url <URL>` 💎 | string | configured server | Server URL saved with the credentials; pins subsequent commands to that endpoint |
 | `super token create --role <ROLE>` 💎 | enum | `operator` | Access token role: `viewer`, `operator`, or `admin` |
 
-`auth_secret` stays usable by default; Admins may explicitly disable it after creating an Admin Access Token. See [Authentication](/docs/05-advanced-management/authentication#optional-disable-auth_secret).
+`auth_secret` stays usable by default; Admins may explicitly disable it after creating an Admin Access Token. See [Authentication](/docs/02-essentials/authentication#optional-disable-auth_secret).
 
 Without the plugin, `super login` fails (404 on `/api/v1/auth/login`). OSS deployments without auth can use `super list` directly on localhost.
 
@@ -459,7 +459,7 @@ curl -X POST http://127.0.0.1:9002/api/v1/auth/tokens \
 curl -H "Authorization: Bearer sk-..." http://127.0.0.1:9002/api/v1/programs
 ```
 
-See [Authentication](/docs/05-advanced-management/authentication) for details.
+See [Authentication](/docs/02-essentials/authentication) for details.
 
 ## Environment variables
 

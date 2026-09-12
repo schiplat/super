@@ -94,13 +94,13 @@ docker run --rm -p 127.0.0.1:9002:9002 \
 Place `super.toml` under `/path/to/conf/`. Reference profiles in `packaging/docker/conf/`:
 
 - **`super.toml`** — OSS default baked into the image (`allow_insecure_public_bind = true` for container networking). How to structure the file and every supported key: [Configuration](/docs/02-essentials/configuration) and [Config Reference](/docs/06-internals/config-reference).
-- **`super.subscription.example.toml`** — subscription template (not a runtime config — copy its contents into `super.toml`) with `[license].key`, `auth_secret`, and security plugin expectations. Parameter details: [Config Reference](/docs/06-internals/config-reference). Mandatory security plugin + `auth_secret` at startup: [Licensed deployments require security](/docs/05-advanced-management/authentication#licensed-deployments-require-security).
+- **`super.subscription.example.toml`** — subscription template (not a runtime config — copy its contents into `super.toml`) with `[license].key`, `auth_secret`, and security plugin expectations. Parameter details: [Config Reference](/docs/06-internals/config-reference). Mandatory security plugin + `auth_secret` at startup: [Licensed deployments require security](/docs/02-essentials/authentication#licensed-deployments-require-security).
 
 Drop stack files into `conf/conf.d/*` (TOML by default; legacy `.json` also works) to seed programs on startup.
 
 If you bind to `0.0.0.0` or another non-loopback address, set `allow_insecure_public_bind = true` in `[server]` (or load the **`security` plugin`). The repo's `examples/demo/conf/super.toml` sets this to `false` for local-only deployments.
 
-If you add licensed plugins, **`security.so` and `auth_secret` are required** for startup — security is included with every subscription. See [Licensed deployments require security](/docs/05-advanced-management/authentication#licensed-deployments-require-security).
+If you add licensed plugins, **`security.so` and `auth_secret` are required** for startup — security is included with every subscription. See [Licensed deployments require security](/docs/02-essentials/authentication#licensed-deployments-require-security).
 
 ### Build from this repository
 

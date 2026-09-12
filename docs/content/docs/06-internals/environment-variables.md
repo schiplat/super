@@ -58,7 +58,7 @@ export SUPER_LICENSE_STRICT=1
 superd
 ```
 
-Without `SUPER_LICENSE_STRICT`, startup still hard-fails when the key does not verify and any of these deployment signals is present: plugin libraries in `$SUPER_ROOT/plugins/`, an `auth_secret` configured, or a non-loopback bind. See [Authentication — license verification](/docs/05-advanced-management/authentication).
+Without `SUPER_LICENSE_STRICT`, startup still hard-fails when the key does not verify and any of these deployment signals is present: plugin libraries in `$SUPER_ROOT/plugins/`, an `auth_secret` configured, or a non-loopback bind. See [Authentication — license verification](/docs/02-essentials/authentication).
 
 ### `SUPER_HOSTNAME`
 

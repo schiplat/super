@@ -1,11 +1,9 @@
 ---
 title: "Dashboard"
-weight: 6
+weight: 5
 description: "Browser Dashboard embedded in OSS superd; subscription ui plugin adds Tokens, Notify, and other Pro surfaces."
 imageZoom: true
 aliases:
-  - /docs/02-essentials/web-ui/
-  - /docs/02-essentials/web-ui
   - /docs/05-advanced-management/web-ui/
   - /docs/05-advanced-management/web-ui
 ---
@@ -16,7 +14,7 @@ The Dashboard is the browser UI for `superd`. **OSS builds embed the shell** (pr
 
 | Edition | Dashboard at `/` |
 | :--- | :--- |
-| **OSS** (no plugins) | **Embedded shell** — overview, logs, stack, program create/edit, license CTA, optional [core auth](/docs/05-advanced-management/authentication#oss-built-in-auth-single-admin-secret) login. No Tokens / Notify menus. |
+| **OSS** (no plugins) | **Embedded shell** — overview, logs, stack, program create/edit, license CTA, optional [core auth](/docs/02-essentials/authentication#oss-built-in-auth-single-admin-secret) login. No Tokens / Notify menus. |
 | **Licensed** + **`ui` plugin** | Same shell, plus Pro extensions (Tokens, Notifications, process hot-reload) when `security` / `notify` (and peers) are loaded. |
 
 > [!TIP]
@@ -26,7 +24,7 @@ The Dashboard is the browser UI for `superd`. **OSS builds embed the shell** (pr
 
 **http://localhost:9002** (default; see `port` in config)
 
-- **OSS / loopback:** open by default. Set `[server].auth_required = true` (or bind beyond loopback) to require the admin Bearer secret — see [Authentication](/docs/05-advanced-management/authentication).
+- **OSS / loopback:** open by default. Set `[server].auth_required = true` (or bind beyond loopback) to require the admin Bearer secret — see [Authentication](/docs/02-essentials/authentication).
 - **Licensed:** the **`security`** plugin is required at startup. Prefer generated Access Tokens (`sk-…`) for day-to-day login; config `auth_secret` remains usable until an Admin disables it.
 
 ## Dashboard tour
@@ -89,9 +87,9 @@ Restart `superd` after updating plugins. The shell loads the plugin’s extensio
 
 ## Security
 
-**OSS:** Dashboard and API follow [core auth](/docs/05-advanced-management/authentication#oss-built-in-auth-single-admin-secret) (loopback open by default; non-loopback or `auth_required` requires the admin secret). Multi-user tokens are not available without `security`.
+**OSS:** Dashboard and API follow [core auth](/docs/02-essentials/authentication#oss-built-in-auth-single-admin-secret) (loopback open by default; non-loopback or `auth_required` requires the admin secret). Multi-user tokens are not available without `security`.
 
-**Licensed:** `security` **must** load — startup fails otherwise. Prefer generated Access Tokens for day-to-day login. See [Access control](/docs/05-advanced-management/access-control) and [Authentication](/docs/05-advanced-management/authentication).
+**Licensed:** `security` **must** load — startup fails otherwise. Prefer generated Access Tokens for day-to-day login. See [Access control](/docs/05-advanced-management/access-control) and [Authentication](/docs/02-essentials/authentication).
 
 > [!WARNING]
 > Binding beyond localhost without authentication is unsafe. Prefer loopback, a reverse proxy with TLS, or a licensed `security` deployment.

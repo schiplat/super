@@ -25,7 +25,7 @@ allow_insecure_public_bind = false
 ```
 
 > [!CAUTION]
-> OSS has no API authentication. The default bind is `127.0.0.1` with `allow_insecure_public_bind = false`, so `superd` will **not** start on a public address (e.g. `0.0.0.0`) unless you deliberately set that flag to `true` or load the **`security` plugin** — see [Authentication](/docs/05-advanced-management/authentication). Use a firewall or reverse proxy if you expose the API another way.
+> Default loopback bind keeps the API open for local CLI/scripts. Non-loopback binds (or `[server].auth_required = true`) require the [OSS admin secret](/docs/02-essentials/authentication/); multi-user tokens need the **`security` plugin**. Prefer a firewall or reverse proxy if you expose the API.
 
 If you use the repo's [example config](https://github.com/schiplat/super/blob/master/examples/demo/conf/super.toml), it also binds to port **9002** — keep CLI/API URLs in sync with your `super.toml`.
 
@@ -171,9 +171,9 @@ curl http://127.0.0.1:8080
 
 Open **[http://127.0.0.1:9002](http://127.0.0.1:9002)**.
 
-**OSS:** The embedded Dashboard shell loads (process list, logs, stack editor). Optional [core auth](/docs/05-advanced-management/authentication#oss-built-in-auth-single-admin-secret) may prompt for login.
+**OSS:** The embedded Dashboard shell loads (process list, logs, stack editor). Optional [core auth](/docs/02-essentials/authentication#oss-built-in-auth-single-admin-secret) may prompt for login.
 
-**With subscription plugins:** The **`ui`** plugin adds Pro surfaces (Access Tokens, Notification Settings, hot-reload) when `security` / `notify` are also loaded — see [Dashboard](/docs/05-advanced-management/web-ui).
+**With subscription plugins:** The **`ui`** plugin adds Pro surfaces (Access Tokens, Notification Settings, hot-reload) when `security` / `notify` are also loaded — see [Dashboard](/docs/02-essentials/web-ui).
 
 ---
 
@@ -219,7 +219,7 @@ cp /path/to/subscription/plugins/* "$SUPER_ROOT/plugins/"
 ```
 
 > [!IMPORTANT]
-> Licensed startup **fails fast** instead of silently losing API auth: `security` must load (file present **and** listed in the license claims) and `auth_secret` must be set — see [Licensed deployments require security](/docs/05-advanced-management/authentication#licensed-deployments-require-security). Without a valid `[license].key`, `superd` runs in OSS mode and ignores `plugins/`.
+> Licensed startup **fails fast** instead of silently losing API auth: `security` must load (file present **and** listed in the license claims) and `auth_secret` must be set — see [Licensed deployments require security](/docs/02-essentials/authentication#licensed-deployments-require-security). Without a valid `[license].key`, `superd` runs in OSS mode and ignores `plugins/`.
 
 **First sign-in** — with `security` active, bootstrap an **Admin** Access Token, then prefer `sk-…` tokens for day-to-day use:
 
@@ -229,4 +229,4 @@ super token create admin --role admin
 super token list
 ```
 
-**Next — Advanced Management.** Token lifecycle, RBAC roles, the Dashboard, isolation, audit, and notifications each have their own page: **[Advanced Management](/docs/05-advanced-management/)**. During the public beta you can request a **free 90-day Super Pro trial** ([Portal claim](https://platform.ddl.sconts.com/portal/claim?product=super-pro&plan=first-trials-001)); compare editions in the [feature matrix](/docs/07-editions/feature-matrix/).
+**Next.** Day-to-day topics (config, auth, Dashboard) are under **[Essentials](/docs/02-essentials/)**. Licensed governance (RBAC, audit, isolation, notify) is under **[Advanced Management](/docs/05-advanced-management/)**. During the public beta you can request a **free 90-day Super Pro trial** ([Portal claim](https://platform.ddl.sconts.com/portal/claim?product=super-pro&plan=first-trials-001)); compare editions in the [feature matrix](/docs/07-editions/feature-matrix/).

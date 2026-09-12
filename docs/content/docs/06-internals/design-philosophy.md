@@ -99,7 +99,7 @@ flowchart TB
 
 **OSS (default):** loopback-first bind, no built-in dashboard, API open only on the bind address you configure. See [Configuration — OSS security defaults](/docs/02-essentials/configuration#oss-security-defaults-fail-closed).
 
-**Subscription:** same `superd` binary; add `[license].key`, deploy plugin libraries under `plugins/`, and set `auth_secret`. The **`security` plugin is included with every subscription** and is required for licensed startup — API token auth and RBAC then protect the control plane. See [Authentication](/docs/05-advanced-management/authentication#licensed-deployments-require-security) and the [Feature matrix](/docs/07-editions/feature-matrix/).
+**Subscription:** same `superd` binary; add `[license].key`, deploy plugin libraries under `plugins/`, and set `auth_secret`. The **`security` plugin is included with every subscription** and is required for licensed startup — API token auth and RBAC then protect the control plane. See [Authentication](/docs/02-essentials/authentication#licensed-deployments-require-security) and the [Feature matrix](/docs/07-editions/feature-matrix/).
 
 **Typical control flow:** an operator or pipeline sends `POST /api/v1/programs` (or `super add`) → the Manager validates config → spawns the child in its own **process group** → streams stdout/stderr to disk and WebSocket → records lifecycle events to the SQLite queue (batch-flushed to `events.db`) → health probes and dependency rules decide when downstream services start. Shutdown and OTA paths use the same Manager mailbox so state stays consistent under load.
 

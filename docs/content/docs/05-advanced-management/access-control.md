@@ -34,7 +34,7 @@ curl -X POST http://127.0.0.1:9002/api/v1/auth/tokens \
   -d '{"name":"dev-team","role":"operator"}'
 ```
 
-After the first Admin Access Token exists, an Admin may optionally **disable** `auth_secret` — see [Authentication](/docs/05-advanced-management/authentication#optional-disable-auth_secret).
+After the first Admin Access Token exists, an Admin may optionally **disable** `auth_secret` — see [Authentication](/docs/02-essentials/authentication#optional-disable-auth_secret).
 
 **2. Developer usage:**
 

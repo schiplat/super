@@ -12,7 +12,7 @@ description: "Real-time alerts via Webhooks and IM, with storm suppression (cool
 Super acts as an intelligent observer. Instead of just logging errors, it can actively push events to external systems like Slack, Microsoft Teams, or your company's internal IM tools.
 
 > [!TIP] Production alerting without notification storms
-> A flapping process can generate dozens of alerts per minute. The licensed **`notify`** plugin includes **[Storm Suppression](#storm-suppression)** — per-channel **delivery strategies** (`immediate`, `cooldown`, `batch`) plus global **inhibition rules** (When → Mute targets → For) so related events do not flood every webhook. Configure in `conf/notify.toml` or the Dashboard **Notification Settings** (requires the **`ui`** plugin as well — see [Dashboard](/docs/05-advanced-management/web-ui)); changes apply on `super reload`.
+> A flapping process can generate dozens of alerts per minute. The licensed **`notify`** plugin includes **[Storm Suppression](#storm-suppression)** — per-channel **delivery strategies** (`immediate`, `cooldown`, `batch`) plus global **inhibition rules** (When → Mute targets → For) so related events do not flood every webhook. Configure in `conf/notify.toml` or the Dashboard **Notification Settings** (requires the **`ui`** plugin as well — see [Dashboard](/docs/02-essentials/web-ui)); changes apply on `super reload`.
 
 ## Configuration
 
@@ -505,7 +505,7 @@ Super's **storm suppression** system prevents notification floods with two compl
 | **Delivery Strategy** | Per webhook (`[[channels]]`) | Controls how frequently that destination receives notifications |
 | **Inhibition** | Global | Suppresses related events after a source event fires (same program) |
 
-In the licensed **Dashboard** ([Notification Settings](/docs/05-advanced-management/web-ui)), these map to:
+In the licensed **Dashboard** ([Notification Settings](/docs/02-essentials/web-ui)), these map to:
 
 | Dashboard | Configures |
 |-----------|------------|
