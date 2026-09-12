@@ -171,9 +171,9 @@ curl http://127.0.0.1:8080
 
 Open **[http://127.0.0.1:9002](http://127.0.0.1:9002)**.
 
-**OSS only:** You will see a short HTML notice — there is **no built-in Dashboard**. Manage processes with the `super` CLI or `/api/v1/*` (see [Dashboard](/docs/05-advanced-management/web-ui)).
+**OSS:** The embedded Dashboard shell loads (process list, logs, stack editor). Optional [core auth](/docs/05-advanced-management/authentication#oss-built-in-auth-single-admin-secret) may prompt for login.
 
-**With the `ui` plugin:** The full Dashboard (process list, logs, controls) is served from `plugins/ui.{so,dylib}`.
+**With subscription plugins:** The **`ui`** plugin adds Pro surfaces (Access Tokens, Notification Settings, hot-reload) when `security` / `notify` are also loaded — see [Dashboard](/docs/05-advanced-management/web-ui).
 
 ---
 
@@ -190,7 +190,7 @@ Open **[http://127.0.0.1:9002](http://127.0.0.1:9002)**.
 
 ## Appendix: Licensed Plugins 💎
 
-Licensed Super Pro capabilities (Dashboard, token authentication & RBAC, resource isolation, event notifications, operation audit) ship as **signed plugin libraries** — `.so` on Linux, `.dylib` on macOS. They run on the **same OSS `superd` and `super` binaries**; there is no separate "Pro daemon". Enabling licensed mode only adds three things from your subscription delivery:
+Licensed Super Pro capabilities (Dashboard Pro extensions via `ui`, token authentication & RBAC, resource isolation, event notifications, operation audit) ship as **signed plugin libraries** — `.so` on Linux, `.dylib` on macOS. They run on the **same OSS `superd` and `super` binaries**; there is no separate "Pro daemon". Enabling licensed mode only adds three things from your subscription delivery:
 
 | Piece | Where | Notes |
 | :--- | :--- | :--- |

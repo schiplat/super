@@ -19,8 +19,8 @@ description: "OSS core vs optional licensed plugins."
 | **RBAC (User Roles)**<br>`security` plugin (**required** for licensed startup) | ❌ | ✅ |
 | **Audit Logging**<br>`security` plugin (**required** for licensed startup) | ❌ | ✅ |
 | **Linux Cgroups Isolation**<br>`isolation` plugin (**Linux only**) | ❌ | ✅ |
-| **Dashboard**<br>`ui` plugin; OSS is API/CLI only | ❌ | ✅ |
-| **Alerting**<br>`notify` plugin: IM templates, multi-channel routing, [storm suppression](/docs/05-advanced-management/event-notifications#storm-suppression) | ❌ | ✅ |
+| **Dashboard**<br>Shell embedded in OSS `superd`; Pro pages (Tokens, Notify, …) via `ui` plugin | ✅ shell | ✅ shell + Pro extensions |
+| **Alerting**<br>`notify` plugin: IM templates, multi-channel routing, [storm suppression](/docs/05-advanced-management/event-notifications#storm-suppression) (UI needs `ui` plugin) | ❌ | ✅ |
 | **License** | MIT | Commercial |
 
 Same **`superd`** and **`super`** binaries for both columns — **Licensed** is OSS plus commercial plugins: drop `plugins/*.so` + `[license].key` in `conf/super.toml` to enable the right-hand column (see [Editions](/docs/07-editions/)).
@@ -50,6 +50,6 @@ To try, renew, or learn about the commercial plugin set, see **[Get Super Pro](/
 *   **`security.so` + `auth_secret`** — required for any licensed startup (included with subscription). `auth_secret` bootstraps Access Tokens; Admins may explicitly disable it after creating an Admin token.
 *   **PaaS** or shared hosting with cgroup isolation (`isolation`, **Linux hosts only**).
 *   **Production alerting** (`notify` plugin) — IM/webhook channels and [storm suppression](/docs/05-advanced-management/event-notifications#storm-suppression); complements (does not replace) `[[event_hooks]]`.
-*   **Visual dashboard** (`ui`) — requires `security` for licensed startup.
+*   **Visual dashboard** — OSS ships an embedded shell; subscription **`ui`** adds Tokens / Notify (and related) surfaces when peer plugins load.
 *   Regulated environments needing **audit logs** (`security`).
 *   Exposing API/Dashboard beyond localhost — **`security` is always loaded** when licensed; configure bind and tokens accordingly.

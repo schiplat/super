@@ -9,7 +9,7 @@ Super is a modern replacement for tools like [Supervisor](https://supervisord.or
 > Super `1.x` is feature-complete and in active hardening. The core process-management paths (start/stop/restart, auto-recovery, health checks, OTA rollback) are covered by integration tests and run in the maintainers' own deployments. We recommend it for staging and non-critical workloads today; see [below](#toward-ga) for what we require before calling it production-ready (GA).
 >
 > - **OSS core** (`superd` + `super`) is free under MIT — install and try anytime.
-> - **Super Pro plugins** (Dashboard UI, API auth/RBAC/audit, notifications with storm suppression, Linux cgroup isolation) are available with a **free 90-day license** during the beta. No payment required.
+> - **Super Pro plugins** (API auth/RBAC/audit, notifications with storm suppression, Linux cgroup isolation, Dashboard Pro extensions via `ui`) are available with a **free 90-day license** during the beta. No payment required.
 >
 > **Request a free Pro trial:** open the [Super Pro Portal claim page](https://platform.ddl.sconts.com/portal/claim?product=super-pro&plan=first-trials-001). Leave a contact email — we issue the license key and plugin package to that address.
 
@@ -17,13 +17,13 @@ Super is a modern replacement for tools like [Supervisor](https://supervisord.or
 
 ## Core Features
 
-* **Single binary** — Rust `superd` process manager; TOML or REST config; CLI and HTTP API (Dashboard via optional `ui` plugin)
+* **Single binary** — Rust `superd` process manager; TOML or REST config; CLI, HTTP API, and an **embedded Dashboard** (subscription `ui` plugin adds Tokens, notifications UI, and related Pro surfaces)
 * **Declarative orchestration** — stacks, dependencies, health checks
 * **Lifecycle hooks** — `pre_start`, `post_start`, `post_stop`, and global event hooks
 * **Observability** — WebSocket logs, historical logs API, system metrics
 * **Auto-recovery** — Supervisor-compatible `autorestart`, `exitcodes`, `startsecs`
 
-Licensed under the **[MIT License](LICENSE)**. Optional **licensed plugins** (`.so` / `.dylib` under `$SUPER_ROOT/plugins/`) add API auth, RBAC, notifications ([storm suppression](https://super.docs.sconts.com/docs/05-advanced-management/event-notifications/#storm-suppression)), and cgroup limits — same `superd` binary, no separate commercial build. Compare editions in the [feature matrix](https://super.docs.sconts.com/docs/07-editions/feature-matrix/).
+Licensed under the **[MIT License](LICENSE)**. Optional **licensed plugins** (`.so` / `.dylib` under `$SUPER_ROOT/plugins/`) add API auth, RBAC, notifications ([storm suppression](https://super.docs.sconts.com/docs/05-advanced-management/event-notifications/#storm-suppression)), cgroup limits, and Dashboard Pro extensions — same `superd` binary, no separate commercial build. Compare editions in the [feature matrix](https://super.docs.sconts.com/docs/07-editions/feature-matrix/).
 
 ## Quick Start
 

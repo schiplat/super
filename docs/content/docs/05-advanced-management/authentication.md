@@ -106,7 +106,7 @@ auth_secret = "my-super-secure-root-password"
 Once the `security` plugin is active:
 
 1. All API requests require an `Authorization: Bearer <token>` header (except `/health`, `/metrics`, and docs whitelist).
-2. The Dashboard prompts for an **Access Token** when `auth_required` is injected.
+2. The Dashboard prompts for an **Access Token** when auth is required (licensed `security`, or OSS core auth with a single admin secret).
 
 ## Bootstrap with `auth_secret`
 
@@ -121,11 +121,13 @@ curl -X POST http://127.0.0.1:9002/api/v1/auth/tokens \
 
 By default **`auth_secret` stays usable** even after tokens exist (with a Dashboard warning). Prefer generated `sk-...` tokens for day-to-day access.
 
+The **Access Tokens** page in the Dashboard (Account menu) appears when the **`security`** and **`ui`** plugins are loaded. You can always manage tokens via the HTTP API below without that UI.
+
 ### Optional: disable `auth_secret`
 
 An **Admin** (including a root session still using `auth_secret`) can explicitly disable config `auth_secret` after **at least one Admin Access Token** exists:
 
-- Dashboard → Access Tokens → **Disable auth_secret**
+- Dashboard → Access Tokens → **Disable auth_secret** (requires `ui` + `security`)
 - Or `POST /api/v1/auth/secret/disable`
 
 State is persisted in `$SUPER_ROOT/data/auth_settings.json`. While disabled, Bearer/`auth_secret` login is rejected.

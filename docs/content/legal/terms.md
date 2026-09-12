@@ -20,7 +20,7 @@ The **Project Super** Community Edition on GitHub remains under its open-source 
 One Super Pro subscription unlocks official plugins on the same **`superd` / `super`** binaries you already run, typically including:
 
 - **security** — API auth, RBAC, audit (required for licensed startup)
-- **ui** — Dashboard
+- **ui** — Dashboard Pro extensions (Tokens, Notify UI, …) on the OSS-embedded shell
 - **notify** — webhook notifications
 - **isolation** — Linux cgroup limits (Linux)
 

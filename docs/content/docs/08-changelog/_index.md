@@ -17,6 +17,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **Dashboard shell is embedded in OSS `superd`.** Process overview, logs, stack editor, and related shell pages no longer require the `ui` plugin. The subscription **`ui`** plugin now delivers **Pro extensions** only (Access Tokens UI, Notification Settings including inhibition rules and delivery history, process hot-reload, and matching nav entries). See [Dashboard](/docs/05-advanced-management/web-ui/) and the [feature matrix](/docs/07-editions/feature-matrix/).
+
 ---
 
 ## [1.5.6] - 2026-09-07

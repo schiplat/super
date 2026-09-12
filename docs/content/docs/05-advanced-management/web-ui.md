@@ -1,7 +1,7 @@
 ---
 title: "Dashboard"
 weight: 6
-description: "Browser Dashboard via the optional ui plugin; OSS is API and CLI only."
+description: "Browser Dashboard embedded in OSS superd; subscription ui plugin adds Tokens, Notify, and other Pro surfaces."
 imageZoom: true
 aliases:
   - /docs/02-essentials/web-ui/
@@ -10,28 +10,24 @@ aliases:
   - /docs/05-advanced-management/web-ui
 ---
 
-> [!IMPORTANT] Licensed feature — `ui` plugin
-> This page covers a **licensed feature** provided by the **`ui` plugin**. It requires a valid subscription `[license].key` and the plugin library in `$SUPER_ROOT/plugins/`. OSS `superd` serves a short notice at `/` instead of the Dashboard.
+The Dashboard is the browser UI for `superd`. **OSS builds embed the shell** (process overview, detail drawer, stack editor, license page, login). With a subscription, the optional **`ui` plugin** loads a small extension bundle that registers **Pro-only pages and actions** (Access Tokens, Notification Settings, hot-reload) — those entries stay hidden until the matching plugins are licensed.
 
 ## OSS vs subscription
 
 | Edition | Dashboard at `/` |
 | :--- | :--- |
-| **OSS** (no plugins) | Static notice — **no Dashboard**. Use `super` CLI or `/api/v1/*`. Links to [Get Super Pro](https://super.docs.sconts.com/go/pro/) and the [feature matrix](/docs/07-editions/feature-matrix). |
-| **Licensed** | Full Dashboard served by the authorized **`ui` plugin**. |
+| **OSS** (no plugins) | **Embedded shell** — overview, logs, stack, program create/edit, license CTA, optional [core auth](/docs/05-advanced-management/authentication#oss-built-in-auth-single-admin-secret) login. No Tokens / Notify menus. |
+| **Licensed** + **`ui` plugin** | Same shell, plus Pro extensions (Tokens, Notifications, process hot-reload) when `security` / `notify` (and peers) are loaded. |
 
-OSS `superd` does **not** embed a Dashboard. The optional **`ui`** plugin serves it at runtime via `super_plugin_ui_v1` after you add a license key and plugin libraries — see [Get Super Pro](https://super.docs.sconts.com/go/pro/).
+> [!TIP]
+> You do **not** need the `ui` plugin to open a basic Dashboard on OSS. Add `ui` (and a license) when you want the Pro UI surfaces listed below.
 
-## Accessing the Dashboard (licensed)
+## Accessing the Dashboard
 
-With the `ui` plugin loaded and authorized in `[license].key`:
+**http://localhost:9002** (default; see `port` in config)
 
-**http://localhost:9002**
-
-> [!NOTE]
-> Assuming `port = 9002` in your config
-
-Log in with an **Access Token** (`sk-…`) when the **`security`** plugin is enabled. Prefer generated tokens for day-to-day use; config `auth_secret` remains usable until an Admin explicitly disables it. See [Authentication](/docs/05-advanced-management/authentication).
+- **OSS / loopback:** open by default. Set `[server].auth_required = true` (or bind beyond loopback) to require the admin Bearer secret — see [Authentication](/docs/05-advanced-management/authentication).
+- **Licensed:** the **`security`** plugin is required at startup. Prefer generated Access Tokens (`sk-…`) for day-to-day login; config `auth_secret` remains usable until an Admin disables it.
 
 ## Dashboard tour
 
@@ -40,13 +36,15 @@ Screenshots below are from a licensed deployment (`docs/static/images/`). Use th
 {{< tabs >}}
 
   {{< tab name="Overview" icon="view-grid" >}}
-Process list with host CPU/memory metrics (from the machine running **superd**), status filters, search, and topology view.
+Process list with host CPU/memory metrics (from the machine running **superd**), status filters, search, and topology view. Available in OSS and licensed installs.
 
 {{< ui-screenshot src="/images/overview.png" alt="Dashboard overview — process list and host metrics" caption="Overview — programs, host metrics, filters" >}}
   {{< /tab >}}
 
   {{< tab name="Program detail" icon="cog" >}}
 Process detail drawer: actions, configuration (command, hooks, health checks, resource limits, environment). **Create / Edit Program** also exposes an **OTA Artifact** section (source, checksum, destination, extract, restart policy, download/verify timeouts). Saving with a **new checksum** triggers transactional OTA — same rule as the API/CLI; see [Atomic OTA Updates — When OTA runs](/docs/03-orchestration/ota-updates#when-ota-runs).
+
+Licensed installs with the `ui` plugin may show extra actions (for example **Hot Reload** / SIGHUP) in the process action strip.
 
 {{< ui-screenshot src="/images/program_config.png" alt="Program configuration in the detail drawer" caption="Program detail — Configuration" >}}
   {{< /tab >}}
@@ -58,7 +56,7 @@ Live stdout/stderr streaming from the process detail drawer, plus file log histo
   {{< /tab >}}
 
   {{< tab name="Inhibition rules" icon="bell" >}}
-**Notification Settings** when the **`notify`** plugin is licensed — three routes under `/settings/notify/`:
+**Notification Settings** when the **`notify`** plugin **and** the **`ui`** plugin are licensed — three routes under `/settings/notify/`:
 
 | Route | Page |
 | :--- | :--- |
@@ -66,36 +64,34 @@ Live stdout/stderr streaming from the process detail drawer, plus file log histo
 | `/settings/notify/rules` | Inhibition rules (When → Mute targets → For) |
 | `/settings/notify/delivery` | Persisted delivery history (OK / Fail / Cooldown / Inhibited) |
 
-See [Event notifications](/docs/05-advanced-management/event-notifications#storm-suppression) and [Delivery history](/docs/05-advanced-management/event-notifications#delivery-history).
+These pages are **Pro Dashboard extensions** (not part of the OSS shell). Without `notify` / `ui`, the Notifications menu does not appear. See [Event notifications](/docs/05-advanced-management/event-notifications#storm-suppression) and [Delivery history](/docs/05-advanced-management/event-notifications#delivery-history).
 
 {{< ui-screenshot src="/images/notify_rules.png" alt="Notification settings — Inhibition rules" caption="Notifications — Inhibition rules" >}}
   {{< /tab >}}
 
 {{< /tabs >}}
 
-## Deploy the ui plugin
+## Deploy the ui plugin (Pro extensions)
 
-Install the **`ui`** plugin library from your subscription delivery package into `$SUPER_ROOT/plugins/` (instance root resolved from the [`SUPER_ROOT` environment variable](/docs/06-internals/environment-variables#super_root)).
+Install the **`ui`** plugin library from your subscription package into `$SUPER_ROOT/plugins/` (instance root from [`SUPER_ROOT`](/docs/06-internals/environment-variables#super_root)). Pair it with the plugins whose UI you need (`security` for Tokens, `notify` for Notification Settings).
 
-Restart `superd` after updating plugins.
+Restart `superd` after updating plugins. The shell loads the plugin’s extension assets and registers routes / nav items only when those capabilities are present — OSS installs never show empty Pro stubs.
 
 ## Feature summary
 
-| Area | What you get |
-| :--- | :--- |
-| **Overview** | Process counts, host metrics, filters, list/graph views |
-| **Program detail** | Config, hooks, health checks, live logs, start/stop/restart |
-| **Notifications** | Webhooks, Inhibition rules, and Delivery history (`notify` plugin) — `/settings/notify/*` |
-
-The Dashboard also includes create/edit program forms, a [stack editor](/docs/04-production-scenarios/delivery/declarative-stack) (apply with `prune: true` shows a keep/create/REMOVE diff and requires typing **`confirmed`** before removals), API token management, and a license page — not shown above.
+| Area | OSS shell | With subscription `ui` + peer plugins |
+| :--- | :--- | :--- |
+| **Overview / detail / logs** | ✅ | ✅ (+ optional Hot Reload action) |
+| **Stack editor / create-edit** | ✅ | ✅ |
+| **License page** | ✅ (Community CTA) | ✅ (status when licensed) |
+| **Access Tokens** | — | ✅ (`security` + `ui`) — Account menu |
+| **Notifications** | — | ✅ (`notify` + `ui`) — Webhooks, Inhibition rules, Delivery |
 
 ## Security
 
-**Without `security` plugin (OSS only):** The API and Dashboard static assets are reachable without authentication on the bind address. OSS defaults to loopback-only startup (`allow_insecure_public_bind = false`).
+**OSS:** Dashboard and API follow [core auth](/docs/05-advanced-management/authentication#oss-built-in-auth-single-admin-secret) (loopback open by default; non-loopback or `auth_required` requires the admin secret). Multi-user tokens are not available without `security`.
 
-**Licensed:** `security` is bundled and **must load** — startup fails otherwise. Dashboard and API require token auth.
-
-**With `security` plugin loaded:** Token authentication and RBAC apply to the API and Dashboard. Prefer generated Access Tokens for day-to-day login. `auth_secret` remains usable until an Admin explicitly disables it (after creating an Admin token). See [Access control](/docs/05-advanced-management/access-control) and [Authentication](/docs/05-advanced-management/authentication).
+**Licensed:** `security` **must** load — startup fails otherwise. Prefer generated Access Tokens for day-to-day login. See [Access control](/docs/05-advanced-management/access-control) and [Authentication](/docs/05-advanced-management/authentication).
 
 > [!WARNING]
-> OSS exposure beyond localhost requires explicit `allow_insecure_public_bind = true` or the **`security` plugin**. Licensed deployments always load `security`.
+> Binding beyond localhost without authentication is unsafe. Prefer loopback, a reverse proxy with TLS, or a licensed `security` deployment.
