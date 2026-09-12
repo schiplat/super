@@ -316,7 +316,6 @@ init_super_root() {
 [server]
 host = "127.0.0.1"
 port = 9002
-allow_insecure_public_bind = false
 shutdown_timeout = 10
 enable_docs = false
 # Local CLI prefers this socket when SUPER_ROOT is set (see env.sh).

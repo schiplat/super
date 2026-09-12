@@ -52,7 +52,9 @@ pub struct LicenseSection {
 
 #[derive(Debug, Deserialize, Clone, Default)]
 pub struct ServerConfig {
-    /// Root API secret for the security plugin (subscription).
+    /// Admin Bearer secret. Non-empty enables OSS core auth (or bootstraps the
+    /// licensed `security` plugin). Required for non-loopback TCP binds unless
+    /// the security plugin is active.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub auth_secret: Option<String>,
 
@@ -116,16 +118,6 @@ pub struct ServerSection {
     #[serde(default = "default_enable_docs")] // dev: true, production: false
     pub enable_docs: bool,
 
-    /// Allow binding to a non-loopback address without authentication (deprecated).
-    /// Prefer enabling auth (core random secret or security plugin) instead.
-    #[serde(default)]
-    pub allow_insecure_public_bind: bool,
-
-    /// Force API authentication even when bound to loopback. Non-loopback binds
-    /// always require auth (core secret or security plugin) regardless of this flag.
-    #[serde(default)]
-    pub auth_required: bool,
-
     /// Self-daemonize after startup (Unix only). Default false — use foreground under
     /// systemd/Docker. Conflicts with systemd service environments.
     #[serde(default)]
@@ -177,8 +169,6 @@ impl Default for ServerSection {
             flapping_window: default_flapping_window(),
             flapping_threshold: default_flapping_threshold(),
             enable_docs: default_enable_docs(),
-            allow_insecure_public_bind: false,
-            auth_required: false,
             daemon: false,
             pidfile: None,
             socket: None,

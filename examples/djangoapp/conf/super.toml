@@ -4,7 +4,6 @@
 [server]
 host = "127.0.0.1"
 port = 9012
-allow_insecure_public_bind = false
 socket = "run/superd.sock"
 enable_docs = false
 

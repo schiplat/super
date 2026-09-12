@@ -1,6 +1,14 @@
 /**
  * @super/ui-bridge — shared types between the OSS shell and plugin UI bundles.
  *
+ * ⚠ STABLE PLUGIN CONTRACT — do not change casually.
+ * Paid / third-party UI plugins type-check and register against this file.
+ * Renaming slots, dropping ProcessContext fields (e.g. `pid`), or altering
+ * SuperCoreBridge methods will break those plugins without a compile error in
+ * this repo. Extend only; removals need an intentional ABI/docs bump.
+ * CI: `dashboard` vitest (`slots.spec.ts`) asserts this surface — do not delete
+ * or skip those tests to “make the PR green”.
+ *
  * Zero runtime code: both sides `import type` from here so a plugin can be
  * type-checked against the exact contract the shell serves. Keep this file
  * dependency-free; it is published verbatim.
@@ -17,6 +25,7 @@ export interface ProcessContext {
   id: string;
   name: string;
   status: string;
+  /** Optional at runtime (stopped programs); still part of the contract shape. */
   pid?: number;
   [key: string]: unknown;
 }

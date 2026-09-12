@@ -43,9 +43,9 @@ OTA is **not** a background poller and does **not** run on daemon start / `super
 
 Provide a new `artifact` block with a **different `checksum`** than the one already stored. Super compares checksums; if unchanged, config is saved but **no OTA download** runs.
 
-### Via Dashboard 💎
+### Via Dashboard
 
-With the licensed **`ui`** plugin: **Create Program** or **Edit Program** → enable **OTA Artifact**. Fill source, checksum, destination, extract, restart policy, and optional download/verify timeouts, then Save. Same trigger rule: a changed checksum starts OTA. See [Dashboard](/docs/02-essentials/web-ui).
+**Create Program** or **Edit Program** → enable **OTA Artifact**. Fill source, checksum, destination, extract, restart policy, and optional download/verify timeouts, then Save. Same trigger rule: a changed checksum starts OTA. See [Dashboard](/docs/02-essentials/web-ui) (OSS-embedded shell).
 
 ### Via API (recommended for CI/CD)
 

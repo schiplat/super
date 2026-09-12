@@ -19,7 +19,7 @@ The **Project Super** Community Edition on GitHub remains under its open-source 
 
 One Super Pro subscription unlocks official plugins on the same **`superd` / `super`** binaries you already run, typically including:
 
-- **security** — API auth, RBAC, audit (required for licensed startup)
+- **security** — multi-user Access Tokens, RBAC, audit (required for licensed startup; OSS already has single-admin core auth)
 - **ui** — Dashboard Pro extensions (Tokens, Notify UI, …) on the OSS-embedded shell
 - **notify** — webhook notifications
 - **isolation** — Linux cgroup limits (Linux)
@@ -65,7 +65,7 @@ Support is best-effort via **support@ddl.sconts.com**. We may change prices, che
 
 Software is provided “as is.” To the maximum extent permitted by law, the operator is not liable for indirect, incidental, or lost-profit damages; total liability to you will not exceed the amounts you actually paid for Super Pro in the **12 months** before the claim.
 
-You are responsible for how you deploy Super (bind address, secrets, network exposure). Community Edition has no API auth by default; licensed deployments must load the security plugin and configure it correctly.
+You are responsible for how you deploy Super (bind address, secrets, network exposure). Community Edition leaves the API open on **loopback** by default; set `auth_secret` to enable a single admin Bearer (required for non-loopback binds). Licensed deployments must load the security plugin and configure it correctly.
 
 ## 9. Final interpretation
 

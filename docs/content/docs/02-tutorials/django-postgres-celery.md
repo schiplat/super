@@ -143,7 +143,6 @@ cat > "$SUPER_ROOT/conf/super.toml" <<'EOF'
 [server]
 host = "127.0.0.1"
 port = 9002
-allow_insecure_public_bind = false
 socket = "run/superd.sock"
 
 [storage]
@@ -532,7 +531,7 @@ Same binaries and `djangoapp.toml`. After `[license].key`, `auth_secret`, and pl
 | Plugin | Fit for this tutorial |
 | :--- | :--- |
 | **security** | Token auth / RBAC / audit when the API leaves loopback |
-| **ui** | Dashboard for `nginx` / `web` / `worker` / `beat` |
+| **ui** | Pro Dashboard extensions (Tokens, Notify, hot-reload) when licensed |
 | **notify** | IM/webhook when `worker` or `web` goes Fatal |
 | **isolation** (Linux) | cgroup caps on `worker` so a poison task cannot starve Gunicorn |
 

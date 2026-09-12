@@ -162,14 +162,20 @@ pub fn run(file_path: Option<PathBuf>) -> anyhow::Result<()> {
 
     let licensed_ready = check_licensed_deployment(&path, &config, &mut errors, &mut warnings);
 
+    let has_auth_secret = config
+        .auth_secret
+        .as_deref()
+        .map(str::trim)
+        .is_some_and(|s| !s.is_empty());
+
     if !licensed_ready
         && !is_loopback_bind_host(&config.server.host)
-        && !config.server.allow_insecure_public_bind
         && !socket_only
+        && !has_auth_secret
     {
         errors.push(format!(
-            "Server binds to {} without loopback isolation. \
-             Set allow_insecure_public_bind = true, bind to 127.0.0.1, \
+            "Server binds to {} without authentication. \
+             Set auth_secret in conf/super.toml, bind to 127.0.0.1, \
              or load the security plugin at runtime.",
             config.server.host
         ));
@@ -535,12 +541,8 @@ fn check_licensed_deployment(
     };
 
     let plugins_dir = resolve_super_root_for_config(config_path).join("plugins");
-    let req_errors = licensed_requirement_errors(
-        &claims.grants,
-        &plugins_dir,
-        config.auth_secret.as_deref(),
-        config.server.allow_insecure_public_bind,
-    );
+    let req_errors =
+        licensed_requirement_errors(&claims.grants, &plugins_dir, config.auth_secret.as_deref());
     let ok = req_errors.is_empty();
     errors.extend(req_errors);
     ok
@@ -551,7 +553,6 @@ fn licensed_requirement_errors(
     plugins_in_claims: &[String],
     plugins_dir: &Path,
     auth_secret: Option<&str>,
-    allow_insecure_public_bind: bool,
 ) -> Vec<String> {
     let mut errors = Vec::new();
 
@@ -574,12 +575,6 @@ fn licensed_requirement_errors(
     if auth_secret.is_none_or(|s| s.trim().is_empty()) {
         errors.push(
             "Licensed deployment requires auth_secret in super.toml (or via environment).".into(),
-        );
-    }
-
-    if allow_insecure_public_bind {
-        errors.push(
-            "allow_insecure_public_bind is not used when a valid license is configured — remove it or use OSS mode without a license key.".into(),
         );
     }
 
@@ -640,7 +635,6 @@ mod tests {
             &["security".into(), "ui".into()],
             &plugins,
             Some("secret"),
-            false,
         );
         assert!(errors.is_empty(), "{errors:?}");
         let _ = fs::remove_dir_all(&dir);
@@ -658,7 +652,7 @@ mod tests {
         let plugins = dir.join("plugins");
         fs::create_dir_all(&plugins).unwrap();
 
-        let errors = licensed_requirement_errors(&["ui".into()], &plugins, Some("  "), true);
+        let errors = licensed_requirement_errors(&["ui".into()], &plugins, Some("  "));
         assert!(
             errors
                 .iter()
@@ -671,12 +665,6 @@ mod tests {
         );
         assert!(
             errors.iter().any(|e| e.contains("auth_secret")),
-            "{errors:?}"
-        );
-        assert!(
-            errors
-                .iter()
-                .any(|e| e.contains("allow_insecure_public_bind")),
             "{errors:?}"
         );
         let _ = fs::remove_dir_all(&dir);

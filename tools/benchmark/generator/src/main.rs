@@ -69,7 +69,6 @@ fn super_toml(pro: bool) -> String {
          [server]\n\
          host = \"127.0.0.1\"\n\
          port = 9002\n\
-         allow_insecure_public_bind = false\n\
          enable_docs = false\n\
          daemon = false\n\
          shutdown_timeout = 10\n\

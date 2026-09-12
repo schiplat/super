@@ -126,7 +126,7 @@ def arm_block(name, generated):
             "kind": "http",
             "bind": "127.0.0.1:9002",
             "auth": False if name == "super-oss" else "security_plugin_plus_auth_secret",
-            "note": "OSS: loopback, no API auth. Non-loopback fail-closed without allow_insecure_public_bind or security plugin.",
+            "note": "OSS: loopback, no API auth. Non-loopback requires auth_secret or security plugin.",
         }
         block["logging_notes"] = [
             "Child stdout/stderr files under storage.log_dir; rotation is built into OSS (bench disables backups).",

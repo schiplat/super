@@ -1,45 +1,77 @@
 ---
 title: "Authentication"
 weight: 3
-description: "OSS admin Bearer secret, and multi-user Access Tokens with the security plugin."
+description: "OSS admin Bearer via auth_secret, and multi-user Access Tokens with the security plugin."
 aliases:
   - /docs/05-advanced-management/authentication/
   - /docs/05-advanced-management/authentication
 ---
 
-## OSS built-in auth (single admin secret)
+## Can OSS use `--token`?
 
-OSS `superd` can require a Bearer secret without any plugin:
+**Yes.** OSS has no `sk-…` Access Tokens, but when you set a non-empty **`auth_secret`** in `conf/super.toml`, that string **is** the Bearer credential for:
 
-| Bind | Default | How to enable auth |
+- `super --token <secret> …`
+- `export SUPER_TOKEN=<secret>`
+- `super login <secret>`
+- Dashboard login
+- `Authorization: Bearer <secret>`
+
+```bash
+super --token 'your-auth-secret' list
+```
+
+`--token` only means “send this string as Bearer”; it does **not** mint or imply an `sk-…` token.
+
+| Credential | OSS | Subscription (`security` plugin) |
 | :--- | :--- | :--- |
-| Loopback (`127.0.0.1` / `::1`) | **Open** (scripts / local CLI keep working) | Set `[server].auth_required = true` |
-| Non-loopback | **Auth required** | Automatic — core generates or loads a secret |
-| Unix socket only (`socket_only`) | Open (filesystem mode bits) | Set `[server].auth_required = true` if desired |
+| `auth_secret` (in `conf/super.toml`) | ✅ single shared secret | ✅ bootstrap Admin Bearer |
+| Multi-user Access Tokens (`sk-…`) | ❌ | ✅ |
 
-When core auth activates and `auth_secret` is **not** set in `conf/super.toml`, `superd` creates `$SUPER_ROOT/data/auth.key` (32 CSPRNG bytes, hex, mode `0600`) if missing, prints the plaintext **once** on first generation, and on later boots only logs the file path.
+---
+
+## OSS admin secret
+
+### Rules
+
+| Situation | Behavior |
+| :--- | :--- |
+| Default (`host = "127.0.0.1"`, no `auth_secret`) | API **open** (local CLI / scripts) |
+| Non-empty `auth_secret` | **Auth on** — Bearer = that value |
+| Non-loopback TCP **without** `auth_secret` (and without the `security` plugin) | **Refuse to start** |
+| Unix socket only (`socket_only`) | Open (filesystem ACLs); set `auth_secret` if you want Bearer auth anyway |
+
+There is **no** on-disk `auth.key`. The only OSS secret is `auth_secret` in config.
 
 ```toml
-[server]
-auth_required = true   # force login even on loopback
-```
-
-Optional override (skips `data/auth.key`):
-
-```toml
+# conf/super.toml — enable auth (also required for non-loopback binds)
 auth_secret = "your-own-long-random-string"
+
+[server]
+host = "127.0.0.1"   # default; use 0.0.0.0 only with auth_secret set
 ```
 
-Use the secret as `Authorization: Bearer <secret>` or paste it into the dashboard login page. `data/auth.key` is the OSS admin secret; licensed multi-user tokens still live in `data/auth.json` (security plugin).
+### Use the secret
 
-`[server].allow_insecure_public_bind` is **deprecated** — non-loopback binds now require authentication (core secret or security plugin) instead of an insecure opt-in.
+```bash
+SECRET='your-own-long-random-string'   # same as auth_secret in toml
+
+super login "$SECRET"
+super list
+
+super --token "$SECRET" list
+export SUPER_TOKEN="$SECRET"
+
+curl -H "Authorization: Bearer $SECRET" \
+  http://127.0.0.1:9002/api/v1/programs
+```
+
+Dashboard: open `/`, paste the same string when prompted.
 
 ---
 
 > [!IMPORTANT] Licensed feature — `security` plugin
-> The sections below cover **multi-user Access Tokens**, RBAC, and audit — provided by the **`security` plugin** (included with every subscription and **required for licensed startup**). It needs a valid `[license].key`, the plugin library in `$SUPER_ROOT/plugins/`, and `auth_secret`. When the plugin is loaded it **replaces** the OSS core auth gate (one middleware, not two).
-
-The **default OSS loopback deployment has no API authentication**. Non-loopback binds activate core auth automatically (see above). Multi-user tokens require the licensed **`security` plugin**.
+> Sections below are **multi-user Access Tokens**, RBAC, and audit — **`security` plugin** (every subscription; **required for licensed startup**). Needs a valid `[license].key`, the plugin in `$SUPER_ROOT/plugins/`, and `auth_secret`. When loaded it **replaces** the OSS core auth gate (one middleware, not two).
 
 ## Licensed deployments require `security`
 
@@ -68,8 +100,9 @@ Production subscription templates ship with `strict = true`. Fix the key, renew,
 
 | Mode | API auth | Startup if `security` missing |
 | :--- | :--- | :--- |
-| OSS (loopback, default) | Open; optional via `auth_required` | N/A |
-| OSS (non-loopback / `auth_required`) | Core random/`auth_secret` | N/A |
+| OSS (loopback, no `auth_secret`) | Open | N/A |
+| OSS (`auth_secret` set) | Core Bearer = `auth_secret` | N/A |
+| OSS (non-loopback, no secret / no plugin) | — | **Refuse start** |
 | **Licensed** | ✅ Required (via `security`) | **Hard fail** |
 | **Invalid key + licensed intent / strict** | — | **Hard fail** (no OSS fallback) |
 
@@ -109,7 +142,7 @@ auth_secret = "my-super-secure-root-password"
 Once the `security` plugin is active:
 
 1. All API requests require an `Authorization: Bearer <token>` header (except `/health`, `/metrics`, and docs whitelist).
-2. The Dashboard prompts for an **Access Token** when auth is required (licensed `security`, or OSS core auth with a single admin secret).
+2. The Dashboard prompts for an **Access Token** when auth is required (or the admin/`auth_secret` string for bootstrap).
 
 ## Bootstrap with `auth_secret`
 
@@ -138,7 +171,7 @@ State is persisted in `$SUPER_ROOT/data/auth_settings.json`. While disabled, Bea
 **Recovery:** revoke **all Admin** Access Tokens — `auth_secret` is re-enabled automatically. Startup still requires `auth_secret` to be set in `super.toml`.
 
 > [!WARNING]
-> Without core auth and without the security plugin, OSS `superd` has no `/api/v1/auth/*` routes. Enable `[server].auth_required` (or bind non-loopback) for a single admin secret, or load the security plugin for multi-user tokens.
+> Without `auth_secret` and without the `security` plugin, OSS `superd` has no `/api/v1/auth/*` routes (loopback stays open). Set `auth_secret` for a single admin Bearer, or load the `security` plugin for multi-user Access Tokens.
 
 ## Managing Tokens (HTTP API)
 

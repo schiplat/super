@@ -34,6 +34,11 @@ export default defineConfig({
     }
   },
 
+  test: {
+    environment: 'jsdom',
+    include: ['src/**/*.{spec,test}.{ts,tsx}'],
+  },
+
   // Build optimization
   build: {
     // Raise chunk size warning threshold (1000kb = 1mb)

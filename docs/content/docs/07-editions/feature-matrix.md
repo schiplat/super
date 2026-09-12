@@ -16,11 +16,13 @@ description: "OSS core vs optional licensed plugins."
 | **System Stats API** | ✅ | ✅ |
 | **Event reactions** (`[[event_hooks]]`) | ✅ <br>local scripts **or** webhook POST (`command` or `url`) | ✅ <br>same hooks; optional `notify` alongside |
 | **Cron Scheduled Tasks** | ✅ | ✅ |
+| **Web Dashboard**<br>Process list, logs, stack editor, license page — embedded in OSS `superd` | ✅ | ✅ |
+| **API authentication**<br>OSS: single admin Bearer (`auth_secret`); Licensed: multi-user Access Tokens (`security`) | ✅ | ✅ |
 | **RBAC (User Roles)**<br>`security` plugin (**required** for licensed startup) | ❌ | ✅ |
 | **Audit Logging**<br>`security` plugin (**required** for licensed startup) | ❌ | ✅ |
 | **Linux Cgroups Isolation**<br>`isolation` plugin (**Linux only**) | ❌ | ✅ |
-| **Dashboard**<br>Shell embedded in OSS `superd`; Pro pages (Tokens, Notify, …) via `ui` plugin | ✅ shell | ✅ shell + Pro extensions |
-| **Alerting**<br>`notify` plugin: IM templates, multi-channel routing, [storm suppression](/docs/05-advanced-management/event-notifications#storm-suppression) (UI needs `ui` plugin) | ❌ | ✅ |
+| **Alerting**<br>`notify` plugin: IM templates, multi-channel routing, [storm suppression](/docs/05-advanced-management/event-notifications#storm-suppression) | ❌ | ✅ |
+| **Dashboard Pro extensions**<br>Tokens UI, Notification Settings, process hot-reload (`ui` plugin; needs peer plugins) | ❌ | ✅ |
 | **License** | MIT | Commercial |
 
 Same **`superd`** and **`super`** binaries for both columns — **Licensed** is OSS plus commercial plugins: drop `plugins/*.so` + `[license].key` in `conf/super.toml` to enable the right-hand column (see [Editions](/docs/07-editions/)).
@@ -41,7 +43,7 @@ To try, renew, or learn about the commercial plugin set, see **[Get Super Pro](/
 ### OSS
 
 *   Personal projects, homelab, or local development.
-*   Loopback-first defaults (`127.0.0.1`, `allow_insecure_public_bind = false`); explicit opt-in required for network-facing bind without auth.
+*   Embedded Dashboard and optional [single-secret API auth](/docs/02-essentials/authentication/) (loopback open by default; set `auth_secret` to turn auth on — required for non-loopback binds).
 *   Trusted private network (VPN/VPC) with firewall in front of the API if you must expose the port.
 *   No strict per-process CPU/memory enforcement.
 
@@ -50,6 +52,6 @@ To try, renew, or learn about the commercial plugin set, see **[Get Super Pro](/
 *   **`security.so` + `auth_secret`** — required for any licensed startup (included with subscription). `auth_secret` bootstraps Access Tokens; Admins may explicitly disable it after creating an Admin token.
 *   **PaaS** or shared hosting with cgroup isolation (`isolation`, **Linux hosts only**).
 *   **Production alerting** (`notify` plugin) — IM/webhook channels and [storm suppression](/docs/05-advanced-management/event-notifications#storm-suppression); complements (does not replace) `[[event_hooks]]`.
-*   **Visual dashboard** — OSS ships an embedded shell; subscription **`ui`** adds Tokens / Notify (and related) surfaces when peer plugins load.
+*   **Dashboard Pro extensions** (`ui`) — Tokens, Notification Settings, hot-reload when peer plugins load (shell already in OSS).
 *   Regulated environments needing **audit logs** (`security`).
 *   Exposing API/Dashboard beyond localhost — **`security` is always loaded** when licensed; configure bind and tokens accordingly.

@@ -19,9 +19,17 @@ We aim to acknowledge reports within **72 hours** and will coordinate disclosure
 
 ## OSS security model
 
-The Community Edition (`superd`) does **not** implement API authentication by default. Shipped example configs use `host = "127.0.0.1"` and **`allow_insecure_public_bind = false`**, so the daemon **refuses startup** on a non-loopback bind unless you explicitly opt in or load the **security** plugin.
+The Community Edition (`superd`) ships an **embedded Dashboard** and optional **single-admin Bearer auth** (no plugins required).
 
-To bind on `0.0.0.0` or another network-facing address without the security plugin, set `allow_insecure_public_bind = true` and accept that the REST API is open to anyone who can reach the port (OSS only). **Licensed deployments must load the bundled `security` plugin** — startup fails otherwise. For token-based auth and RBAC, use `auth_secret` with the **security** plugin and a valid `[license].key` in `conf/super.toml`.
+| Bind | Default | Auth |
+| :--- | :--- | :--- |
+| Loopback (`127.0.0.1` / `::1`) | API open (local CLI / scripts) | Set `auth_secret` in `conf/super.toml` to require the admin Bearer |
+| Non-loopback | Auth **required** | Must set `auth_secret` (or load `security`); otherwise `superd` refuses to start |
+| Licensed + `security` plugin | Auth **required** | Multi-user Access Tokens / RBAC; core auth stays off (one gate) |
+
+Prefer loopback on the host, a reverse proxy with TLS, or a licensed `security` deployment for shared / public networks.
+
+**Licensed deployments must load the bundled `security` plugin** (and set `auth_secret`) or `superd` refuses startup. See [Authentication](https://super.docs.sconts.com/docs/02-essentials/authentication/).
 
 ### Built-in safeguards (OSS)
 
@@ -29,7 +37,7 @@ Super applies defensive defaults even when no plugins are loaded:
 
 | Safeguard | Behaviour |
 | :--- | :--- |
-| **Bind policy** | Fail-closed on non-loopback unless `allow_insecure_public_bind = true` or `security` plugin auth is active |
+| **Bind / auth policy** | Non-loopback requires `auth_secret` (or `security` when licensed); loopback open unless `auth_secret` is set |
 | **Log path confinement** | Custom program log paths must stay under `storage.log_dir` |
 | **OTA fetch policy** | Remote artifact URLs must use HTTPS; link-local / metadata targets blocked |
 | **Health probes** | HTTP(S) URLs only for outbound health checks |
@@ -57,4 +65,4 @@ We hold the codebase to the following public standards, checked on every release
 
 If you find a gap between these standards and the code, that is a security bug — please report it as above.
 
-> **Licensed plugins:** Optional subscription capabilities load as signed plugins with a vendor-supplied `[license].key`. See the [feature matrix](https://super.docs.sconts.com/docs/07-editions/feature-matrix/) and [authentication](https://super.docs.sconts.com/docs/05-advanced-management/authentication/).
+> **Licensed plugins:** Optional subscription capabilities load as signed plugins with a vendor-supplied `[license].key`. See the [feature matrix](https://super.docs.sconts.com/docs/07-editions/feature-matrix/) and [Authentication](https://super.docs.sconts.com/docs/02-essentials/authentication/).

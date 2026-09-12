@@ -35,8 +35,8 @@ flowchart TB
   end
 
   subgraph optional["Optional plugins runtime"]
-    SEC["security\nAPI auth · RBAC"]
-    UI["ui\nDashboard"]
+    SEC["security\nTokens · RBAC · audit"]
+    UI["ui\nPro UI extensions"]
     NOT["notify\nWebhooks · IM"]
     ISO["isolation\ncgroups Linux"]
   end
@@ -48,7 +48,7 @@ flowchart TB
     LOGS["logs/\ndaemon + child"]
     RUN["run/\nsocket · pidfile"]
     PLUG["plugins/*.so"]
-    AUTH["data/auth.json\nLicensed tokens"]
+    AUTH["data/tokens.json\nLicensed tokens"]
   end
 
   subgraph workloads["Managed programs"]
@@ -89,15 +89,16 @@ flowchart TB
 | **`super` CLI** | Local or remote control against the API (create/start/logs/stack). Same commands whether `superd` is foreground or self-daemonized. |
 | **REST + WebSocket** | Declarative control, live log streaming, and event history queries (`GET /api/v1/events`, `/events/stats`). |
 | **`/metrics`** | Prometheus scrape endpoint (OSS). |
-| **`conf/super.toml`** | Daemon settings (including optional `daemon` / `pidfile`, `[[event_hooks]]`), optional `[license].key`, `auth_secret` when subscribed. |
+| **`conf/super.toml`** | Daemon settings (including optional `daemon` / `pidfile`, `[[event_hooks]]`), optional `[license].key`, optional `auth_secret`. |
 | **`data/snapshot.json`** | Durable program registry (atomic writes + `.bak` recovery). See [Snapshot persistence](/docs/04-production-scenarios/delivery/snapshot-and-restore). |
 | **`data/events.db`** | SQLite event history (WAL mode): **all** lifecycle events — crashes, recoveries, cron runs, daemon startup/shutdown. The Manager queues records to a **background batch writer** so the actor loop never blocks on disk; retention is configurable via `[storage] events_keep_days`. See [Event History](/docs/03-orchestration/events/history). |
 | **`logs/`** | Daemon (`app.log`) and child process stdout/stderr (rotation configurable). Paths resolve under `SUPER_ROOT`. |
 | **`run/`** | Optional Unix socket (`run/superd.sock`) and pidfile when self-daemonizing. |
-| **`data/auth.json`** | Licensed: persisted API tokens (`security` plugin). |
+| **`data/tokens.json`** | Licensed: Access Token hashes (`security` plugin). |
+| **`data/auth_settings.json`** | Licensed: `auth_secret_disabled` and related `security` flags. |
 | **Plugins** | Optional `.so` / `.dylib` loaded at runtime after license verification. `notify` subscribes to the same `SystemEvent` stream as OSS hooks. |
 
-**OSS (default):** loopback-first bind, no built-in dashboard, API open only on the bind address you configure. See [Configuration — OSS security defaults](/docs/02-essentials/configuration#oss-security-defaults-fail-closed).
+**OSS (default):** loopback-first bind with an **embedded Dashboard**; API open on loopback unless `auth_secret` is set. Non-loopback binds require `auth_secret` or refuse to start. See [Authentication](/docs/02-essentials/authentication/) and [Configuration](/docs/02-essentials/configuration).
 
 **Subscription:** same `superd` binary; add `[license].key`, deploy plugin libraries under `plugins/`, and set `auth_secret`. The **`security` plugin is included with every subscription** and is required for licensed startup — API token auth and RBAC then protect the control plane. See [Authentication](/docs/02-essentials/authentication#licensed-deployments-require-security) and the [Feature matrix](/docs/07-editions/feature-matrix/).
 

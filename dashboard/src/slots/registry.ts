@@ -1,6 +1,11 @@
 /**
  * Slot registry — OSS-side extension points for plugin-injected UI.
  *
+ * ⚠ STABLE PLUGIN CONTRACT — do not rename SlotName values or drop fields on
+ * ProcessContext / SlotContext unless you know how subscription UI plugins use
+ * them. See `ui-bridge.d.ts` and `slots.spec.ts` (CI). Empty slots must stay
+ * silent (no DOM, no warnings) for OSS-only installs.
+ *
  * A slot is a named anchor rendered inside OSS views (e.g. process action
  * bars, detail tabs). Plugins register render functions against a slot;
  * the <Slot> component renders all registered extensions and contains

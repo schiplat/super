@@ -56,7 +56,6 @@ cat >"$SUPER_ROOT/conf/super.toml" <<'EOF'
 [server]
 host = "127.0.0.1"
 port = 9002
-allow_insecure_public_bind = false
 
 [logging]
 log_level = "info"

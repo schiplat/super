@@ -6,6 +6,8 @@ description: "Start, stop, restart, and signal processes using the CLI."
 
 The `super` CLI tool allows you to interact with the daemon locally or remotely. It uses the HTTP API under the hood.
 
+This page covers day-to-day process operations. Full flags, batch forms, and every subcommand: [CLI Reference](/docs/06-internals/cli-reference/).
+
 ## Basic Commands
 
 ### List Processes
@@ -82,3 +84,7 @@ By default, CLI commands are async. You can use `--wait` to block until the oper
 # Wait up to 10 seconds for the process to actually stop
 super stop api-srv --wait --timeout 10
 ```
+
+## See also
+
+- [CLI Reference](/docs/06-internals/cli-reference/) — complete command and flag list

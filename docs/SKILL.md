@@ -232,27 +232,31 @@ injection: `SUPER_LICENSE` env var + `SUPER_LICENSE_STRICT=1` instead of
 
 | Plugin | Feature | Notes |
 | :--- | :--- | :--- |
-| `security` | API auth (tokens), RBAC roles, audit log | **Required** for licensed startup; included with every subscription |
-| `ui` | Web dashboard at `/` | Requires `security` for licensed startup |
+| `security` | Multi-user Access Tokens, RBAC, audit | **Required** for licensed startup; included with every subscription |
+| `ui` | Dashboard **Pro extensions** (Tokens / Notify UI / hot-reload) | Layers on the OSS-embedded shell at `/`; needs `security`/`notify` as appropriate |
 | `notify` | IM/Webhook notifications, `conf/notify.toml` | Hot-reloadable channels; distinct from OSS `[[event_hooks]]` |
 | `isolation` | cgroups v2 CPU/memory limits (`resource_limits`) | **Linux only**, privileged |
 
 ### Licensed-only CLI & API surface
 
-- `super login <secret>` / `super logout` / `super token list|create|revoke`
-  (bootstrap with `auth_secret`, day-to-day with `sk-...` tokens).
-- Global `--token <TOKEN>` / `SUPER_TOKEN` for authenticated requests.
+- `super login <secret>` works for **OSS core auth** (admin Bearer) and for
+  licensed `security` bootstrap (`auth_secret`). Day-to-day **Access Tokens**
+  (`super token list|create|revoke`, `sk-...`) need the `security` plugin.
+- Global `--token <TOKEN>` / `SUPER_TOKEN` for authenticated requests (core
+  admin secret or `sk-...`).
 - `super add|update --cpu --memory --memory-warn-percent --memory-warn-headroom
   --memory-high` and stack `resource_limits` (requires `isolation`, Linux).
-- API auth: `Authorization: Bearer <auth_secret>` (bootstrap) or
+- Licensed API auth: `Authorization: Bearer <auth_secret>` (bootstrap) or
   `Authorization: Bearer sk-...` (tokens).
 
 ### What stays OSS (no plugin needed)
 
-Cron scheduling (`cron` / `on_overlap` / `catchup` / `jitter_sec` /
-`max_concurrent` / `max_queued`), health checks & tuning, OTA updates, event
-hooks (`[[event_hooks]]` command/webhook), `super top`, `super logs`,
-dependencies (`depends_on`), `numprocs` scaling.
+Embedded **Dashboard** shell (overview, logs, stack, license), **core auth**
+(single admin secret via `auth_secret`; required for non-loopback binds), cron scheduling
+(`cron` / `on_overlap` / `catchup` / `jitter_sec` / `max_concurrent` /
+`max_queued`), health checks & tuning, OTA updates, event hooks
+(`[[event_hooks]]` command/webhook), `super top`, `super logs`, dependencies
+(`depends_on`), `numprocs` scaling.
 
 ---
 
@@ -339,10 +343,10 @@ API / stack / CLI / dashboard. Schema: [Config reference — artifact](https://s
    - Daemon alive? `super doctor`; check `$SUPER_ROOT/logs/app.log`.
 
 2. **Daemon refuses to start on a non-loopback bind**
-   - OSS: explicitly set `allow_insecure_public_bind = true` (or load the
-     `security` plugin). This is by design (fail-closed).
-   - Licensed: startup requires the `security` plugin + `auth_secret` + valid
-     `[license].key`. See `super doctor` / `super keyring` for verify issues.
+   - Non-loopback TCP requires non-empty `auth_secret` (or the `security`
+     plugin when licensed). Otherwise startup fails.
+   - Licensed: also requires the `security` plugin + valid `[license].key`.
+     See `super doctor` / `super keyring` for verify issues.
 
 3. **License verification fails**
    - `super doctor` prints the verifying-key summary; `super keyring` lists
@@ -357,14 +361,20 @@ API / stack / CLI / dashboard. Schema: [Config reference — artifact](https://s
    - Licensed daemon: bootstrap with `super login <auth_secret>`, then create an
      access token (`super token create <name> --role admin|operator|viewer`) and
      use `sk-...` / `SUPER_TOKEN` day-to-day.
-   - OSS daemon: no auth by default — a 401 means you hit a licensed daemon.
+   - OSS with core auth active (`auth_secret` set): use
+     `super login <auth_secret>`.
+     Loopback OSS without `auth_secret` stays open — a surprising 401 usually
+     means you hit a non-loopback (must have secret) or licensed daemon.
 
-3c. **Web dashboard / notifications / resource limits not working**
-   - Confirm the plugin file exists in `$SUPER_ROOT/plugins/` (no `lib` prefix),
-     the license grants the plugin id, and `super doctor` reports it loaded.
+3c. **Pro Dashboard surfaces / notifications / resource limits not working**
+   - Basic Dashboard at `/` is **embedded in OSS** — no `ui` plugin needed.
+   - Tokens / Notify Settings / hot-reload need the `ui` plugin (plus
+     `security` / `notify` as appropriate). Confirm plugin files exist in
+     `$SUPER_ROOT/plugins/` (no `lib` prefix), the license grants the plugin id,
+     and `super doctor` reports them loaded.
    - `notify` reads `conf/notify.toml`; `isolation` is **Linux-only** cgroups v2.
-   - OSS builds ignore unknown licensed fields — a missing feature usually means
-     the plugin did not load.
+   - OSS builds ignore unknown licensed fields — a missing Pro feature usually
+     means the plugin did not load.
 
 4. **Program keeps restarting (restart loop)**
    - `super events <name>` shows `process_fatal` / backoff / OOM history

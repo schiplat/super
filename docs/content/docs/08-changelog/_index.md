@@ -20,7 +20,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - **Dashboard shell is embedded in OSS `superd`.** Process overview, logs, stack editor, and related shell pages no longer require the `ui` plugin. The subscription **`ui`** plugin now delivers **Pro extensions** only (Access Tokens UI, Notification Settings including inhibition rules and delivery history, process hot-reload, and matching nav entries). See [Dashboard](/docs/02-essentials/web-ui/) and the [feature matrix](/docs/07-editions/feature-matrix/).
-- **Docs IA:** [Authentication](/docs/02-essentials/authentication/) and [Dashboard](/docs/02-essentials/web-ui/) move under **Essentials**. [Advanced Management](/docs/05-advanced-management/) covers licensed plugins only (RBAC, audit, isolation, notify). Old `/docs/05-advanced-management/{authentication,web-ui}/` URLs remain as aliases.
+- **Dashboard slot contract tests in OSS CI.** `dashboard` runs `npm test` (vitest) before the production build; `slots.spec.ts` guards slot names, `context.process` fields, and mount-site `:context` shapes. Do not skip or weaken these tests without understanding the plugin UI contract (`ui-bridge.d.ts`).
+- **OSS core auth is `auth_secret`-only.** Non-empty `auth_secret` in `conf/super.toml` enables the single admin Bearer. Non-loopback TCP without a secret (and without the `security` plugin) **refuses to start**. No `data/auth.key`, no `auth_required` / `allow_insecure_public_bind` knobs. Docker OSS image ships a placeholder `auth_secret` (change before public exposure). See [Authentication](/docs/02-essentials/authentication/).
 
 ---
 

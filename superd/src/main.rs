@@ -411,28 +411,14 @@ async fn async_main() -> anyhow::Result<()> {
             "Licensed deployment requires the security plugin HTTP auth middleware, but it is not active. \
              Ensure security.so exports authenticate and re-check superd logs."
         );
-    } else if auth::core_auth_should_activate(
-        &core.config.server.host,
-        core.config.server.socket_only,
-        core.config.server.auth_required,
-        false,
-    ) {
-        let (secret, source) = auth::resolve_auth_secret(
-            core.config.auth_secret.as_deref(),
-            &core.paths.auth_key_file,
-        )?;
-        auth::log_auth_secret_source(&source, &secret);
+    } else if auth::core_auth_should_activate(core.config.auth_secret.as_deref(), false) {
+        let secret = auth::non_empty_auth_secret(core.config.auth_secret.as_deref())
+            .expect("core_auth_should_activate implies non-empty auth_secret");
+        tracing::info!("API auth using auth_secret from conf/super.toml");
         let state = auth::AuthState::new(secret);
         api_router = auth::install_core_auth(api_router, state);
         auth_required = true;
         tracing::info!("Core HTTP auth middleware active");
-    }
-
-    if core.config.server.allow_insecure_public_bind {
-        tracing::warn!(
-            "[server].allow_insecure_public_bind is deprecated — non-loopback binds now require \
-             authentication (core secret or security plugin). Remove this flag from conf/super.toml."
-        );
     }
 
     let auth_flag = auth_required;
@@ -468,14 +454,10 @@ async fn async_main() -> anyhow::Result<()> {
     let tcp_listener = if socket_only {
         None
     } else {
-        if !common::is_loopback_bind_host(&server.host)
-            && !auth_required
-            && !server.allow_insecure_public_bind
-        {
+        if !common::is_loopback_bind_host(&server.host) && !auth_required {
             anyhow::bail!(
                 "Refusing to bind to {} without authentication. \
-                 Set server.allow_insecure_public_bind = true to acknowledge the risk, \
-                 bind to 127.0.0.1, or load the security plugin.",
+                 Set auth_secret in conf/super.toml, bind to 127.0.0.1, or load the security plugin.",
                 server.host
             );
         }

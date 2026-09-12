@@ -8,7 +8,7 @@ One subscription unlocks the official plugin set on the same **`superd`** / **`s
 
 | Plugin | What you get |
 | :--- | :--- |
-| **security** | Bearer auth on the API, RBAC (admin / operator / viewer), immutable audit log. **Required** for any licensed startup. |
+| **security** | Multi-user Access Tokens, RBAC (admin / operator / viewer), immutable audit log. **Required** for any licensed startup (replaces OSS single-secret core auth when loaded). |
 | **ui** | Dashboard **Pro extensions** — Access Tokens UI, Notification Settings (webhooks / inhibition / delivery), process hot-reload, and related nav — on top of the OSS-embedded shell. Pair with `security` / `notify` as needed. |
 | **notify** | Production alerting: Slack / DingTalk / Feishu / Teams / custom webhooks, channel routing, hot-reload via `conf/notify.toml`, and [storm suppression](/docs/05-advanced-management/event-notifications#storm-suppression) (rate limits + inhibition) so incident bursts do not flood your channels. Complements OSS `[[event_hooks]]`; does not replace them. |
 | **isolation** | Linux cgroups v2 CPU/memory limits per program (hot-update without restart). **Linux only.** |

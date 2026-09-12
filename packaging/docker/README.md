@@ -30,11 +30,11 @@ docker buildx imagetools inspect schiplat/super:latest
 | **`docker run`** (default) | No | Uses the config **inside the image** — ready to use |
 | **`docker run`** (custom) | Optional | `-v ./my-conf:/app/super/conf` replaces the baked-in config |
 
-Verify the image starts (distroless has no shell — use the HTTP port or healthcheck). **OSS image has no API authentication** — bind to loopback on the host:
+Verify the image starts (distroless has no shell — use the HTTP port or healthcheck). **Non-loopback bind requires `auth_secret`** (baked-in placeholder `CHANGE-ME-BEFORE-EXPOSE` — replace before publishing beyond the host). Prefer publishing on host loopback:
 
 ```bash
 docker run --rm -d -p 127.0.0.1:9002:9002 --name super-test schiplat/super:latest
-curl -sf http://127.0.0.1:9002/ >/dev/null && echo OK
+curl -sf http://127.0.0.1:9002/health && echo OK
 docker stop super-test
 ```
 
@@ -71,13 +71,13 @@ docker buildx build --platform linux/amd64,linux/arm64 \
 
 ## Run
 
-The baked-in OSS config listens on `0.0.0.0` inside the container. On the host, map **loopback only** unless you deploy the `security` plugin and a valid license:
+The baked-in OSS config listens on `0.0.0.0` inside the container with a placeholder `auth_secret`. On the host, map **loopback only** unless you intentionally expose the admin secret:
 
 ```bash
 docker run --rm -p 127.0.0.1:9002:9002 schiplat/super:latest
 ```
 
-HTTP API / Web Dashboard: http://127.0.0.1:9002 (OSS image embeds the Vue shell; subscription plugins optional)
+HTTP API / Web Dashboard: http://127.0.0.1:9002 (OSS image embeds the Vue shell; business API needs the admin Bearer when auth is on — see [Authentication](https://super.docs.sconts.com/docs/02-essentials/authentication/)). Subscription plugins optional.
 
 ## Configuration
 
@@ -85,7 +85,7 @@ Two reference profiles ship under `packaging/docker/conf/`:
 
 | File | Profile | Baked into image? |
 | :--- | :--- | :---: |
-| `super.toml` | **OSS** — `0.0.0.0` + `allow_insecure_public_bind = true`, no license | Yes (default) |
+| `super.toml` | **OSS** — `0.0.0.0` + placeholder `auth_secret`, no license | Yes (default) |
 | `super.subscription.example.toml` | **Subscription** — `[license].key`, `auth_secret`, security plugin required | No — copy when mounting custom `conf/` |
 
 | Path in container | Purpose |

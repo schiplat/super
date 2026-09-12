@@ -9,7 +9,7 @@ Super is a modern replacement for tools like [Supervisor](https://supervisord.or
 > Super `1.x` is feature-complete and in active hardening. The core process-management paths (start/stop/restart, auto-recovery, health checks, OTA rollback) are covered by integration tests and run in the maintainers' own deployments. We recommend it for staging and non-critical workloads today; see [below](#toward-ga) for what we require before calling it production-ready (GA).
 >
 > - **OSS core** (`superd` + `super`) is free under MIT — install and try anytime.
-> - **Super Pro plugins** (API auth/RBAC/audit, notifications with storm suppression, Linux cgroup isolation, Dashboard Pro extensions via `ui`) are available with a **free 90-day license** during the beta. No payment required.
+> - **Super Pro plugins** (multi-user tokens/RBAC/audit, notifications with storm suppression, Linux cgroup isolation, Dashboard Pro extensions via `ui`) are available with a **free 90-day license** during the beta. No payment required.
 >
 > **Request a free Pro trial:** open the [Super Pro Portal claim page](https://platform.ddl.sconts.com/portal/claim?product=super-pro&plan=first-trials-001). Leave a contact email — we issue the license key and plugin package to that address.
 
@@ -23,7 +23,7 @@ Super is a modern replacement for tools like [Supervisor](https://supervisord.or
 * **Observability** — WebSocket logs, historical logs API, system metrics
 * **Auto-recovery** — Supervisor-compatible `autorestart`, `exitcodes`, `startsecs`
 
-Licensed under the **[MIT License](LICENSE)**. Optional **licensed plugins** (`.so` / `.dylib` under `$SUPER_ROOT/plugins/`) add API auth, RBAC, notifications ([storm suppression](https://super.docs.sconts.com/docs/05-advanced-management/event-notifications/#storm-suppression)), cgroup limits, and Dashboard Pro extensions — same `superd` binary, no separate commercial build. Compare editions in the [feature matrix](https://super.docs.sconts.com/docs/07-editions/feature-matrix/).
+Licensed under the **[MIT License](LICENSE)**. Optional **licensed plugins** (`.so` / `.dylib` under `$SUPER_ROOT/plugins/`) add multi-user tokens / RBAC / audit, notifications ([storm suppression](https://super.docs.sconts.com/docs/05-advanced-management/event-notifications/#storm-suppression)), cgroup limits, and Dashboard Pro extensions — same `superd` binary, no separate commercial build. Compare editions in the [feature matrix](https://super.docs.sconts.com/docs/07-editions/feature-matrix/).
 
 ## Quick Start
 
@@ -47,7 +47,7 @@ Bleeding-edge (may differ from the latest tagged binaries): `curl -fsSL https://
 
 ### Docker
 
-Docker image (`linux/amd64`, `linux/arm64`). **This is the supported path on Windows** (Docker Desktop or WSL2) — there is no native `superd.exe` release. The OSS image has **no API authentication** — bind to loopback on the host unless you add the `security` plugin and a license:
+Docker image (`linux/amd64`, `linux/arm64`). **This is the supported path on Windows** (Docker Desktop or WSL2) — there is no native `superd.exe` release. The image binds `0.0.0.0` with placeholder `auth_secret = "CHANGE-ME-BEFORE-EXPOSE"` (replace before publishing beyond the host); publish only to loopback on the host unless you intentionally expose the API:
 
 ```bash
 docker pull schiplat/super:latest

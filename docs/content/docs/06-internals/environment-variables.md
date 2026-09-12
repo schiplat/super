@@ -31,7 +31,7 @@ Relative Unix socket paths (`--server unix://run/superd.sock`, `[server] socket`
 
 ### `SUPER_TOKEN`
 
-Access token for CLI → daemon requests. Equivalent to `super --token <TOKEN>`, and takes precedence over a saved `~/.super/cli.json` login for that invocation. Only relevant when the `security` plugin is loaded; OSS daemons accept requests without auth on loopback.
+Access token or admin Bearer for CLI → daemon requests. Equivalent to `super --token <TOKEN>`, and takes precedence over a saved `~/.super/cli.json` login for that invocation. Relevant when **core auth** is active (`auth_secret` set) or the `security` plugin is loaded. Default loopback OSS without `auth_secret` accepts requests without a token.
 
 ```bash
 export SUPER_TOKEN=sk-...

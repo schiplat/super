@@ -5,8 +5,8 @@
 #   - plugins/security.so (+ ui, notify, … per your license)
 #   - a valid [license].key from your vendor
 #
-# Unlike the OSS Docker default, do NOT set allow_insecure_public_bind — API auth
-# is provided by the bundled security plugin.
+# Unlike the OSS Docker default (core auth on 0.0.0.0), API auth here is
+# provided by the bundled security plugin + auth_secret.
 # =============================================================================
 
 auth_secret = "CHANGE-ME-strong-random-secret"
@@ -19,7 +19,6 @@ key = "PASTE-BASE64-LICENSE-KEY"
 # 0.0.0.0 is OK when security plugin is loaded (Bearer auth on API).
 host = "0.0.0.0"
 port = 9002
-allow_insecure_public_bind = false
 # Keep false under systemd/Docker. Bare metal without init: daemon = true or superd --daemon
 # daemon = false
 # pidfile = "run/superd.pid"

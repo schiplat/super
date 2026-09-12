@@ -604,7 +604,7 @@ function goToEdit() { if (props.processId) router.push(`/programs/${props.proces
             :class="activeTab === tab.id ? 'border-foreground text-foreground' : 'border-transparent text-muted-foreground hover:text-foreground hover:border-border'"
             @click="activeTab = tab.id"
           >{{ tab.label }}</button>
-          <!-- Extensions call registerTab in setup/onMounted; render nothing themselves -->
+          <!-- STABLE: process.detail.tabs — plugins call registerTab; need process + activeTab. Do not change without slots.spec.ts / ui-bridge review. -->
           <Slot name="process.detail.tabs" :context="{ process: summaryData, registerTab, activeTab }" />
         </div>
       </div>

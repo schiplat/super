@@ -505,7 +505,8 @@ Super's **storm suppression** system prevents notification floods with two compl
 | **Delivery Strategy** | Per webhook (`[[channels]]`) | Controls how frequently that destination receives notifications |
 | **Inhibition** | Global | Suppresses related events after a source event fires (same program) |
 
-In the licensed **Dashboard** ([Notification Settings](/docs/02-essentials/web-ui)), these map to:
+In the licensed **Dashboard**, these map to:
+
 
 | Dashboard | Configures |
 |-----------|------------|

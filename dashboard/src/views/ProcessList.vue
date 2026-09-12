@@ -307,6 +307,7 @@ const hasActiveFilters = computed(() => activeFilter.value !== 'ALL' || !!select
                 <td v-if="hasAnyResourceLimits" class="py-3"><span v-if="formatResourceLimits(proc)" class="font-mono text-xs text-violet-600/80" :title="`CPU / memory cap: ${formatResourceLimits(proc)}`">{{ formatResourceLimits(proc) }}</span><span v-else class="text-muted-foreground/20">—</span></td>
                 <td class="py-3 !text-[11px] leading-tight text-muted-foreground font-mono tabular-nums">{{ formatTime(proc.updated_at) }}</td>
                 <td class="pr-6 py-3"><div class="flex items-center justify-center gap-0.5">
+                  <!-- STABLE: process.actions — plugins read context.process.{id,name,status,pid}. Do not change :context shape without updating slots.spec.ts + ui-bridge. -->
                   <Slot name="process.actions" :context="{ process: proc }" />
                   <ActionButtons :id="proc.id" :status="proc.status" :name="proc.name" />
                 </div></td>

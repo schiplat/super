@@ -8,11 +8,11 @@ Super exposes a RESTful API on port `9002` (default). All responses are in JSON 
 
 ## Authentication
 
-**Without `security` plugin loaded** (OSS only): No API authentication. The API is open on the bind address. OSS ships with `host = "127.0.0.1"` and `allow_insecure_public_bind = false`; `superd` **refuses startup** on a non-loopback bind unless you set that flag to `true`. See [Configuration — OSS security defaults](/docs/02-essentials/configuration#oss-security-defaults-fail-closed).
+**OSS (no `security` plugin):** Loopback binds leave the API open by default. A non-empty top-level `auth_secret` activates **core auth** (Bearer = that string). Non-loopback TCP without `auth_secret` (and without the security plugin) refuses to start. See [Authentication](/docs/02-essentials/authentication/).
 
 **Licensed (`[license].key` valid):** `security` is bundled with every subscription and **must load** — otherwise `superd` refuses startup. API auth is always active when licensed. See [Authentication — Licensed deployments require security](/docs/02-essentials/authentication#licensed-deployments-require-security).
 
-**With `security` plugin loaded**: All API requests require `Authorization: Bearer <token>` (except `/health`, `/metrics`, and docs whitelist). Public bind is allowed because auth middleware is active. Config `auth_secret` bootstraps Access Tokens and stays usable until an Admin explicitly disables it. See [Authentication](/docs/02-essentials/authentication).
+**With `security` plugin loaded:** All API requests require `Authorization: Bearer <token>` (except `/health`, `/metrics`, and docs whitelist). Config `auth_secret` bootstraps Access Tokens and stays usable until an Admin explicitly disables it. Core auth stays off so there is one gate. See [Authentication](/docs/02-essentials/authentication/).
 
 ## Health & docs
 
@@ -371,44 +371,41 @@ Example — stop several programs:
 }
 ```
 
-## Security & Authentication (`security` plugin 💎)
+## Authentication routes
+
+### Core auth (OSS) — login / logout / status
+
+When [core auth](/docs/02-essentials/authentication/#oss-admin-secret) is active, OSS registers:
+
+*   **POST** `/api/v1/auth/login` — Bearer must match the admin secret
+*   **POST** `/api/v1/auth/logout`
+*   **GET** `/api/v1/auth/status` — capability discovery (auth-exempt)
+
+Without core auth and without the `security` plugin, these routes are **not** registered (**404**).
+
+### Access Tokens & secret policy 💎 (`security` plugin)
 
 > [!WARNING]
-> Without the plugin, these routes are not registered. Requests return **404 Not Found**.
+> Token CRUD and `auth_secret` disable require the licensed **`security` plugin**. Without it those routes return **404**. When the plugin is loaded it **replaces** the OSS core auth gate (one middleware).
 
-Manage access tokens for API authorization. Bootstrap with config `auth_secret`; Admins may optionally disable it after creating an Admin token. See [Authentication](/docs/02-essentials/authentication#optional-disable-auth_secret).
+Bootstrap with config `auth_secret`; Admins may optionally disable it after creating an Admin token. See [Authentication](/docs/02-essentials/authentication#optional-disable-auth_secret).
 
-### Login
 *   **POST** `/api/v1/auth/login`
-
-### Logout
 *   **POST** `/api/v1/auth/logout`
-
-### Auth status
 *   **GET** `/api/v1/auth/status`
+*   **POST** `/api/v1/auth/secret/disable` 💎
+*   **GET** `/api/v1/auth/tokens` 💎
+*   **POST** `/api/v1/auth/tokens` 💎
+*   **POST** `/api/v1/auth/tokens/{id}/renew` 💎
+*   **DELETE** `/api/v1/auth/tokens/{id}` 💎
 
-### Disable auth_secret
-*   **POST** `/api/v1/auth/secret/disable`
-
-### List Tokens
-*   **GET** `/api/v1/auth/tokens`
-
-### Create Token
-*   **POST** `/api/v1/auth/tokens`
-
-### Renew Token
-*   **POST** `/api/v1/auth/tokens/{id}/renew`
-
-### Create Token body
+**Create Token body** 💎:
 ```json
 {
   "name": "ci-deploy-bot",
   "role": "operator"
 }
 ```
-
-### Revoke Token
-*   **DELETE** `/api/v1/auth/tokens/{id}`
 
 
 ## System Configuration (licensed plugins 💎)
@@ -417,14 +414,14 @@ Manage access tokens for API authorization. Bootstrap with config `auth_secret`;
 > **License route** is served by **OSS core** when a valid `[license].key` is configured at startup.  
 > **Notify routes** require the `notify` plugin; without it they return **404 Not Found**.
 >
-> **Authentication:** When the `security` plugin is loaded, protected routes (including license) require a valid Bearer token — same as other authenticated API calls.
+> **Authentication:** When core auth or the `security` plugin is active, protected routes (including license) require a valid Bearer — same as other authenticated API calls.
 
 ### Get License Info
 *   **GET** `/api/v1/system/license`
 
 Returns verified subscription metadata plus runtime plugin versions (versions are **not** part of the signed license claims).
 
-**Auth:** Required when `security` plugin is active (`Authorization: Bearer <token>`).
+**Auth:** Required when core auth or the `security` plugin is active (`Authorization: Bearer <secret-or-token>`).
 
 **Response `200`:**
 ```json

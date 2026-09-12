@@ -20,7 +20,7 @@ Docs site (optional): `make docs-serve` or `cd docs && hugo server -D --disableF
 
 ## Scope
 
-This repository is the **open-source core** (`superd`, `super`, MIT). Optional subscription capabilities (API auth, notifications, cgroup limits, dashboard UI) are loaded at **runtime** from signed plugin libraries — they are **not built from this repo** and are out of scope for most OSS PRs.
+This repository is the **open-source core** (`superd`, `super`, embedded Dashboard shell, MIT). Optional subscription capabilities (multi-user tokens / RBAC, notifications, cgroup limits, Dashboard Pro UI extensions) are loaded at **runtime** from signed plugin libraries — plugin **implementations** are out of scope for most OSS PRs.
 
 ## OSS vs subscription runtime
 
@@ -31,12 +31,17 @@ super (this repo, MIT)              subscription delivery (separate)
 ────────────────────────            ─────────────────────────────────
 superd ── verifies ──► [license].key   signed key from your vendor
        ── dlopen ───► plugins/*.so     official plugin libraries
-       ── OSS API ──► process control   optional: auth, UI, notify, …
+       ── OSS API ──► process control   optional: auth, Pro UI, notify, …
+       ── Dashboard ─► embedded shell   Pro pages via ui plugin slots
 ```
 
-**In scope here:** process manager, REST/WS API, plugin host (verify + dlopen + ABIs), `[license]` **verification** only.
+**In scope here:** process manager, REST/WS API, embedded Dashboard shell, plugin host (verify + dlopen + ABIs), `[license]` **verification** only.
 
-**Out of scope here:** plugin implementations, subscription key signing, plugin SKU catalogs, dashboard sources.
+**Out of scope here:** plugin implementations, subscription key signing, plugin SKU catalogs.
+
+### Dashboard slot contract (do not change casually)
+
+The shell exposes named UI slots (`process.actions`, `process.detail.tabs`, `nav.*`) and `context.process` fields (`id`, `name`, `status`, `pid`, …) consumed by subscription UI plugins. **Do not rename slots, drop context fields, or rewrite `:context="{ … }"` at mount sites unless you know exactly what you are doing** — that breaks paid plugins without failing this repo’s TypeScript build. CI runs `cd dashboard && npm test` (see `dashboard/src/slots/slots.spec.ts` and `ui-bridge.d.ts`). Extending with new optional fields / new slot names is fine; removals need maintainer review.
 
 Licensed-plugin fields in config and API are documented with a 💎 marker; see the public [Feature matrix](https://super.docs.sconts.com/docs/07-editions/feature-matrix/) on the docs site.
 

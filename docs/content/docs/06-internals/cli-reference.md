@@ -10,7 +10,7 @@ The `super` binary is the primary way to interact with the daemon. Commands are 
 
 | Mark | Meaning |
 | :--- | :--- |
-| **💎 Subscription** | Requires a valid `[license].key` and the matching licensed plugin (`security` for auth, `isolation` for resource limits). OSS builds/deployments don't have these. |
+| **💎 Subscription** | Requires a valid `[license].key` and the matching licensed plugin (e.g. `security` for multi-user Access Tokens / RBAC, `isolation` for cgroup limits). OSS already has [core auth](/docs/02-essentials/authentication/) (single admin secret) without plugins. |
 | *(no mark)* | Available in OSS (with or without plugins). |
 
 **Global Flags:**
@@ -18,7 +18,7 @@ The `super` binary is the primary way to interact with the daemon. Commands are 
 | Flag | Type | Default | Description |
 | :--- | :--- | :--- | :--- |
 | `--server <URL>` / `-s` | string | `http://127.0.0.1:9002` | Override the server endpoint. Accepts an HTTP(S) URL or a Unix socket (`unix:///path/to/superd.sock`). Relative socket paths resolve under `SUPER_ROOT`; auto-discovery may prefer the socket (see below) |
-| `--token <TOKEN>` 💎 | string | — | API token for authenticated daemons (falls back to `SUPER_TOKEN`). Requires the licensed `security` plugin |
+| `--token <TOKEN>` | string | — | Bearer for authenticated daemons (falls back to `SUPER_TOKEN`). Works with OSS core auth admin secret or licensed Access Tokens (`sk-…`; `security` plugin) |
 | `--yes` / `-y` | bool | `false` | Skip batch confirmation prompts |
 | `--dry-run` | bool | `false` | Preview which programs a batch operation would affect, without executing |
 
@@ -82,13 +82,13 @@ CLI overrides: `--daemon` / `--foreground` / `--pidfile <PATH>`. See [Config ref
 | [`super doctor`](#doctor) | — | One-shot diagnostics (config, daemon, license) |
 | [`super keyring [--json]`](#keyring) | — | List embedded license verifying keys |
 
-### Security (plugin 💎)
+### Authentication
 
 | Command | Alias | Description |
 | :--- | :--- | :--- |
-| [`super login <secret>`](#security-requires-security-plugin) | — | Save credentials to `~/.super/cli.json` |
-| [`super logout`](#security-requires-security-plugin) | — | Clear saved credentials |
-| [`super token list\|create\|revoke`](#security-requires-security-plugin) | — | Manage API access tokens |
+| [`super login <secret>`](#authentication) | — | Save Bearer credentials to `~/.super/cli.json` (OSS core auth **or** licensed bootstrap / Access Token) |
+| [`super logout`](#authentication) | — | Clear saved credentials |
+| [`super token list\|create\|revoke`](#authentication) 💎 | — | Manage multi-user Access Tokens (`security` plugin) |
 
 ## Runtime & Monitoring
 
@@ -413,44 +413,63 @@ super keyring --json
 | :--- | :--- | :--- | :--- |
 | `--json` | bool | `false` | Output JSON (for scripts / monitoring) |
 
-## Security (requires `security` plugin)
+## Authentication
 
-> 💎 **Subscription.** The `security` plugin is bundled with every license and gates API authentication — `super login` / `super logout` / `super token` and the `--token` global flag require it. OSS deployments have no auth and use `super list` directly on localhost.
+<a id="security-plugin-"></a>
+<a id="security-requires-security-plugin"></a>
 
-When the `security` plugin is loaded, use the same `super` CLI:
+CLI auth talks to the same `/api/v1/auth/*` surface as the Dashboard. See [Authentication](/docs/02-essentials/authentication/).
+
+### OSS core auth (single admin secret)
+
+When [core auth](/docs/02-essentials/authentication/#oss-admin-secret) is active (non-empty `auth_secret` in `conf/super.toml`), there is **one admin Bearer secret** — not an `sk-…` Access Token. That string is what you pass to login / `--token` (full detail: [Can OSS use `--token`?](/docs/02-essentials/authentication/#can-oss-use---token)):
+
+```bash
+SECRET='your-auth-secret'   # same as auth_secret in toml
+
+super login "$SECRET"                          # saves ~/.super/cli.json
+super login "$SECRET" --url http://127.0.0.1:9002
+super list                                     # uses saved Bearer
+super --token "$SECRET" list                   # one-shot: secret = Bearer
+export SUPER_TOKEN="$SECRET"
+super logout
+```
+
+Default **loopback** OSS without `auth_secret` stays open — no login is needed for `super list`. Non-loopback binds require `auth_secret` or the daemon refuses to start.
+
+### Multi-user Access Tokens 💎 (`security` plugin)
+
+> 💎 **Subscription.** Token CRUD (`super token …`), roles, and day-to-day `sk-…` credentials require the licensed **`security` plugin**. `super login` / `--token` / `SUPER_TOKEN` still work for the bootstrap `auth_secret` and for Access Tokens once the plugin is loaded.
 
 ```bash
 # Bootstrap only (no Access Tokens yet), or after all tokens were revoked:
-super login <auth_secret>          # save credentials to ~/.super/cli.json
+super login <auth_secret>
 
 # Day-to-day: use a generated token
 super login sk-...
-super logout                        # clear saved credentials (~/.super/cli.json)
 super token list
 super token create ci-bot --role operator
 super token revoke <id>
 
-# or pass token per invocation:
 super --token sk-... list
 export SUPER_TOKEN=sk-...
 ```
 
-| Flag | Type | Default | Description |
+| Flag / form | Type | Default | Description |
 | :--- | :--- | :--- | :--- |
-| `super login <secret> --url <URL>` 💎 | string | configured server | Server URL saved with the credentials; pins subsequent commands to that endpoint |
-| `super token create --role <ROLE>` 💎 | enum | `operator` | Access token role: `viewer`, `operator`, or `admin` |
+| `super login <secret> --url <URL>` | string | configured server | Server URL saved with the credentials; pins subsequent commands to that endpoint (OSS or licensed) |
+| `super token create --role <ROLE>` 💎 | enum | `operator` | Access token role: `viewer`, `operator`, or `admin` (`security` plugin) |
 
-`auth_secret` stays usable by default; Admins may explicitly disable it after creating an Admin Access Token. See [Authentication](/docs/02-essentials/authentication#optional-disable-auth_secret).
+`auth_secret` stays usable by default under the plugin; Admins may explicitly disable it after creating an Admin Access Token. See [Optional: disable auth_secret](/docs/02-essentials/authentication#optional-disable-auth_secret).
 
-Without the plugin, `super login` fails (404 on `/api/v1/auth/login`). OSS deployments without auth can use `super list` directly on localhost.
-
-Alternative via curl:
+Alternative via curl (licensed token create):
 
 ```bash
-# Bootstrap (login with auth_secret only when no tokens exist yet):
+# OSS core auth or licensed bootstrap:
 curl -X POST http://127.0.0.1:9002/api/v1/auth/login \
-    -H "Authorization: Bearer <auth_secret>"
+    -H "Authorization: Bearer <admin-or-auth_secret>"
 
+# 💎 security plugin — create an Access Token:
 curl -X POST http://127.0.0.1:9002/api/v1/auth/tokens \
   -H "Authorization: Bearer <auth_secret>" \
   -H "Content-Type: application/json" \
@@ -458,8 +477,6 @@ curl -X POST http://127.0.0.1:9002/api/v1/auth/tokens \
 
 curl -H "Authorization: Bearer sk-..." http://127.0.0.1:9002/api/v1/programs
 ```
-
-See [Authentication](/docs/02-essentials/authentication) for details.
 
 ## Environment variables
 

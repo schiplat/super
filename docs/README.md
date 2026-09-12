@@ -26,11 +26,11 @@ Source for the public documentation site:
 | Section | Contents |
 | --- | --- |
 | `01-getting-started/` | Installation, quick start |
-| `02-essentials/` | Core concepts: configuration, scheduling, processes, health |
+| `02-essentials/` | Core day-to-day: configuration, authentication, Dashboard, scheduling, processes |
 | `03-orchestration/` | Lifecycle, hooks, system events, readiness-aware reload |
 | `04-production-scenarios/` | Migrations, delivery, extensibility, observability, stability |
-| `05-advanced-management/` | Licensed plugin features (auth, RBAC, audit, isolation, Dashboard/`ui`, notifications) |
-| `06-internals/` | CLI / API / config references, environment variables, changelog |
+| `05-advanced-management/` | Licensed plugins only (RBAC, audit, isolation, notifications) |
+| `06-internals/` | CLI / API / config references, environment variables |
 | `07-editions/` | Edition feature matrix |
 | `08-changelog/` | Changelog |
 | `09-development/` | Building from source and writing super-core extensions |

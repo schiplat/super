@@ -85,10 +85,15 @@ jobs:
           cache: npm
           cache-dependency-path: dashboard/package-lock.json
 
-      - name: Build dashboard (embedded in superd)
+      - name: Dashboard slot contract tests
         working-directory: dashboard
         run: |
           npm ci
+          npm test
+
+      - name: Build dashboard (embedded in superd)
+        working-directory: dashboard
+        run: |
           npm run build
           test -f dist/index.html
 

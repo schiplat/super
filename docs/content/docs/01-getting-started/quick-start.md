@@ -19,13 +19,11 @@ Create a file named `super.toml`. We only need to configure the server port.
 [server]
 host = "127.0.0.1"
 port = 9002
-# OSS has no API auth. superd refuses non-loopback bind unless you opt in here
-# or load the security plugin. Keep false for local-only deployments.
-allow_insecure_public_bind = false
+# auth_secret = "…"   # optional on loopback; required for non-loopback binds
 ```
 
 > [!CAUTION]
-> Default loopback bind keeps the API open for local CLI/scripts. Non-loopback binds (or `[server].auth_required = true`) require the [OSS admin secret](/docs/02-essentials/authentication/); multi-user tokens need the **`security` plugin**. Prefer a firewall or reverse proxy if you expose the API.
+> Default loopback bind keeps the API open for local CLI/scripts. Non-loopback binds **require** a non-empty [`auth_secret`](/docs/02-essentials/authentication/#oss-admin-secret) (or the daemon refuses to start). Multi-user Access Tokens need the **`security` plugin**. Prefer a firewall or reverse proxy if you expose the API.
 
 If you use the repo's [example config](https://github.com/schiplat/super/blob/master/examples/demo/conf/super.toml), it also binds to port **9002** — keep CLI/API URLs in sync with your `super.toml`.
 
@@ -56,6 +54,8 @@ Expected output includes `Super Core starting...` and the listen address.
     schiplat/super:latest
   ```
 
+  The image binds `0.0.0.0` and ships placeholder `auth_secret = "CHANGE-ME-BEFORE-EXPOSE"` in the baked `super.toml`. Replace it before publishing beyond the host. Use that value for Dashboard login and host CLI (`super login …` / `super --token …`). Details: [Authentication](/docs/02-essentials/authentication/#oss-admin-secret).
+
   **`superd` runs inside the container; the CLI does not have to.** With `-p 127.0.0.1:9002:9002`, the HTTP API is on your host — use any option below for steps 3–4:
 
   | Option | When to use |
@@ -76,7 +76,7 @@ curl http://127.0.0.1:9002/health
 ```
 
 > [!NOTE]
-> The `/health` endpoint is an **unauthenticated liveness probe** — it only says the API is reachable. OSS exposes the full REST API on the same port; with the `security` plugin, business endpoints require a token while `/health` stays open.
+> The `/health` endpoint is an **unauthenticated liveness probe** — it only says the API is reachable. On default **loopback OSS**, the REST API is open on the same port. With **core auth** (`auth_secret` set) or the `security` plugin, business endpoints require a Bearer while `/health` stays open.
 
 ## 3. Create Program via API
 
@@ -171,7 +171,7 @@ curl http://127.0.0.1:8080
 
 Open **[http://127.0.0.1:9002](http://127.0.0.1:9002)**.
 
-**OSS:** The embedded Dashboard shell loads (process list, logs, stack editor). Optional [core auth](/docs/02-essentials/authentication#oss-built-in-auth-single-admin-secret) may prompt for login.
+**OSS:** The embedded Dashboard shell loads (process list, logs, stack editor). Optional [core auth](/docs/02-essentials/authentication/#oss-admin-secret) may prompt for login.
 
 **With subscription plugins:** The **`ui`** plugin adds Pro surfaces (Access Tokens, Notification Settings, hot-reload) when `security` / `notify` are also loaded — see [Dashboard](/docs/02-essentials/web-ui).
 
@@ -196,7 +196,7 @@ Licensed Super Pro capabilities (Dashboard Pro extensions via `ui`, token authen
 | :--- | :--- | :--- |
 | **`[license].key`** | `conf/super.toml` | Signed license authorizing your plugins |
 | **`auth_secret`** | `conf/super.toml` | Root bootstrap credential for first sign-in |
-| **Plugin libraries** (`security`, `ui`, `notify`, `isolation`, …) | `$SUPER_ROOT/plugins/` | `security` is **required** — it provides API auth |
+| **Plugin libraries** (`security`, `ui`, `notify`, `isolation`, …) | `$SUPER_ROOT/plugins/` | `security` is **required** — multi-user tokens / RBAC / audit |
 
 ```text
 $SUPER_ROOT/

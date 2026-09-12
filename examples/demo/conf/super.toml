@@ -6,8 +6,8 @@
 [server]
 host = "127.0.0.1"
 port = 9002   # docs and quick-start use 9002; change if you need another port
-# OSS has no API auth. Keep false unless you bind beyond loopback without the security plugin.
-allow_insecure_public_bind = false
+# Loopback leaves the API open by default. Set auth_secret to enable
+# core auth (required for non-loopback binds).
 # Graceful shutdown timeout (seconds)
 shutdown_timeout = 7
 enable_docs = false  # set true only on trusted localhost deployments

@@ -34,7 +34,7 @@ The official OSS image ships `superd` and `super` (API + CLI) on a **distroless*
 
 ### Pull and run
 
-The image ships with a default config at `/app/super/conf/super.toml` (`host = "0.0.0.0"`, port `9002`, and `allow_insecure_public_bind = true` so the container can listen on all interfaces). **The OSS image has no API authentication** — on the host, bind to loopback unless you deploy the `security` plugin and a valid license.
+The image ships with a default config at `/app/super/conf/super.toml` (`host = "0.0.0.0"`, port `9002`, placeholder `auth_secret = "CHANGE-ME-BEFORE-EXPOSE"`). Non-loopback bind requires that secret — replace it before publishing beyond the host. Use it for Dashboard login and `super --token` / `super login` — see [Authentication](/docs/02-essentials/authentication/#oss-admin-secret). Prefer publishing only to loopback on the host (`-p 127.0.0.1:9002:9002`) unless you intentionally expose the API.
 
 ```bash
 docker pull schiplat/super:latest
@@ -42,7 +42,7 @@ docker pull schiplat/super:latest
 docker run --rm -p 127.0.0.1:9002:9002 -p 127.0.0.1:8080:8080 schiplat/super:latest
 ```
 
-Open **http://127.0.0.1:9002** for the OSS HTML notice and HTTP API. Follow [Quick Start — Docker tabs](/docs/01-getting-started/quick-start/#3-create-program-via-api) to register the demo `busybox httpd` program (do **not** use the Python example inside this image).
+Open **http://127.0.0.1:9002** for the **embedded Dashboard** and HTTP API. Follow [Quick Start — Docker tabs](/docs/01-getting-started/quick-start/#3-create-program-via-api) to register the demo `busybox httpd` program (do **not** use the Python example inside this image).
 
 Images are published for **linux/amd64** and **linux/arm64**. Docker picks the matching manifest for your host (`docker buildx imagetools inspect schiplat/super:latest`).
 
@@ -93,12 +93,12 @@ docker run --rm -p 127.0.0.1:9002:9002 \
 
 Place `super.toml` under `/path/to/conf/`. Reference profiles in `packaging/docker/conf/`:
 
-- **`super.toml`** — OSS default baked into the image (`allow_insecure_public_bind = true` for container networking). How to structure the file and every supported key: [Configuration](/docs/02-essentials/configuration) and [Config Reference](/docs/06-internals/config-reference).
+- **`super.toml`** — OSS default baked into the image (`host = "0.0.0.0"` so the container can accept mapped ports; core auth applies — see [Authentication](/docs/02-essentials/authentication/)). How to structure the file and every supported key: [Configuration](/docs/02-essentials/configuration) and [Config Reference](/docs/06-internals/config-reference).
 - **`super.subscription.example.toml`** — subscription template (not a runtime config — copy its contents into `super.toml`) with `[license].key`, `auth_secret`, and security plugin expectations. Parameter details: [Config Reference](/docs/06-internals/config-reference). Mandatory security plugin + `auth_secret` at startup: [Licensed deployments require security](/docs/02-essentials/authentication#licensed-deployments-require-security).
 
 Drop stack files into `conf/conf.d/*` (TOML by default; legacy `.json` also works) to seed programs on startup.
 
-If you bind to `0.0.0.0` or another non-loopback address, set `allow_insecure_public_bind = true` in `[server]` (or load the **`security` plugin`). The repo's `examples/demo/conf/super.toml` sets this to `false` for local-only deployments.
+Non-loopback binds activate [OSS core auth](/docs/02-essentials/authentication/) (or the `security` plugin when licensed). Prefer publishing Docker ports to `127.0.0.1` on the host unless you intentionally expose the API.
 
 If you add licensed plugins, **`security.so` and `auth_secret` are required** for startup — security is included with every subscription. See [Licensed deployments require security](/docs/02-essentials/authentication#licensed-deployments-require-security).
 
@@ -304,7 +304,7 @@ cat > "$SUPER_ROOT/conf/super.toml" <<'EOF'
 [server]
 host = "127.0.0.1"
 port = 9002
-allow_insecure_public_bind = false
+# auth_secret = "…"   # optional on loopback; required for non-loopback binds
 socket = "run/superd.sock"
 
 [storage]
@@ -317,7 +317,7 @@ files = ["conf/conf.d/*.toml"]
 EOF
 ```
 
-**C — Skip the file.** If `conf/super.toml` is missing, `superd` still starts with built-in defaults (loopback `127.0.0.1:9002`, `allow_insecure_public_bind = false`). Prefer A or B so bind address, socket, and storage paths are explicit and reviewable.
+**C — Skip the file.** If `conf/super.toml` is missing, `superd` still starts with built-in defaults (loopback `127.0.0.1:9002`). Prefer A or B so bind address, socket, and storage paths are explicit and reviewable.
 
 Do **not** put programs in `super.toml` — declare them via `conf/conf.d/*.toml`, the CLI, or the API (see [Configuration](/docs/02-essentials/configuration) and [Quick Start](/docs/01-getting-started/quick-start/#1-minimal-configuration)). Full key list: [Config Reference](/docs/06-internals/config-reference).
 

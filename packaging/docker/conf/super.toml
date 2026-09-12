@@ -1,8 +1,12 @@
 # =============================================================================
 # Project Super — OSS default for schiplat/super Docker image
 # =============================================================================
-# Profile: OSS (no license). API has no authentication — allow_insecure_public_bind
-# is required for 0.0.0.0 inside the container.
+# Profile: OSS (no license). Binds 0.0.0.0 so the API/Dashboard are reachable
+# from the published port. Non-loopback bind **requires** auth_secret below
+# (superd refuses to start without it).
+#
+# Replace auth_secret before exposing beyond the host. Prefer publishing on
+# host loopback: `-p 127.0.0.1:9002:9002`.
 #
 # For subscription deployments, see super.subscription.example.toml in this folder.
 # =============================================================================
@@ -17,13 +21,14 @@
 #   -v ./my-conf:/app/super/conf -v ./my-data:/app/super/data
 # =============================================================================
 
+# Placeholder so the image can start with host = 0.0.0.0.
+# Replace before publishing the API beyond the host (or mount your own conf/).
+auth_secret = "CHANGE-ME-BEFORE-EXPOSE"
+
 [server]
 # Bind on all interfaces so the API/dashboard is reachable from outside the container.
 host = "0.0.0.0"
 port = 9002
-
-# OSS has no API auth — must opt in when binding beyond loopback (required for 0.0.0.0).
-allow_insecure_public_bind = true
 
 # Containers/systemd: keep foreground (daemon = false). Never set daemon = true as PID 1.
 # daemon = false
@@ -67,7 +72,8 @@ files = ["conf/conf.d/*"]
 # Managed processes are stored in data/snapshot.json (API/CLI/dashboard).
 # You can also seed programs by adding stack files (TOML default) under conf/conf.d/.
 #
-# Example (API after container starts):
+# Example (API after container starts — Bearer = auth_secret above):
+#   super login CHANGE-ME-BEFORE-EXPOSE
 #   super add --name my-app --autostart /path/to/binary
 #
 # Example event hook (uncomment to enable):

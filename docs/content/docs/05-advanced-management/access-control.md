@@ -5,7 +5,7 @@ description: "Fine-grained permissions for teams."
 ---
 
 > [!IMPORTANT] Licensed feature — `security` plugin
-> This page covers a **licensed feature** provided by the **`security` plugin**, which is included with every subscription and **required for licensed startup**. It needs a valid `[license].key`, the plugin library in `$SUPER_ROOT/plugins/`, and `auth_secret`. OSS `superd` without the plugin does not register the RBAC / role APIs.
+> This page covers **RBAC roles on multi-user Access Tokens** from the **`security` plugin** (included with every subscription and **required for licensed startup**). It needs a valid `[license].key`, the plugin library in `$SUPER_ROOT/plugins/`, and `auth_secret`. OSS single-admin [core auth](/docs/02-essentials/authentication/) does **not** include roles — only one Bearer secret.
 
 ### Role-Based Access Control 💎
 

@@ -17,9 +17,8 @@ The `[server]` section controls the `superd` daemon itself. Example from `conf/s
 host = "127.0.0.1"
 port = 9002
 
-# OSS has no API auth. superd refuses non-loopback bind unless you opt in here
-# or load the security plugin. Shipped example configs set this to false explicitly.
-allow_insecure_public_bind = false
+# Optional: enable admin Bearer auth (required for non-loopback binds)
+# auth_secret = "your-own-long-random-string"
 
 # Graceful shutdown timeout (seconds)
 shutdown_timeout = 10
@@ -39,7 +38,7 @@ log_level = "info"
 ```
 
 > [!CAUTION]
-> OSS builds ship with `host = "127.0.0.1"` and `allow_insecure_public_bind = false`. To bind on `0.0.0.0` or another non-loopback address you must either set `allow_insecure_public_bind = true` (acknowledging that the API is open to the network) or load the **`security` plugin** for token-based auth. Protect the port with a firewall or reverse proxy in either case.
+> OSS defaults to `host = "127.0.0.1"`. Binding beyond loopback **requires** a non-empty [`auth_secret`](/docs/02-essentials/authentication/) (or the daemon refuses to start). On loopback, set `auth_secret` if you want the same gate. Prefer a firewall or reverse proxy when exposing the port.
 
 > [!NOTE]
 > Default is **foreground** (correct for systemd `Type=simple` and containers). Optional `[server] daemon = true` / `superd --daemon` detaches without systemd; do not combine with a systemd unit. Full keys: [Config reference — `[server]`](/docs/06-internals/config-reference/#server).
@@ -50,7 +49,7 @@ Super defaults to **restrictive, fail-closed** behaviour in OSS. You can opt int
 
 | Area | Default behaviour | How to change (if you accept the risk) |
 | :--- | :--- | :--- |
-| **API bind** | Refuses non-loopback `host` unless auth is active | OSS: `allow_insecure_public_bind = true`, or load **`security`** (N/A for licensed — security is mandatory) |
+| **API bind / auth** | Loopback open; non-loopback requires `auth_secret` (or `security` when licensed) | Set `auth_secret` — see [Authentication](/docs/02-essentials/authentication/) |
 | **Custom log paths** | `stdout_logfile` / `stderr_logfile` must resolve under `storage.log_dir` | Use paths inside `log_dir` (relative paths are joined there) |
 | **OTA downloads** | Remote URLs must be **HTTPS**; cloud metadata endpoints blocked | Use HTTPS release URLs; loopback HTTP allowed for local dev only |
 | **Health HTTP probes** | `http://` and `https://` only; no file or exotic schemes | Point probes at your service URLs |
@@ -59,7 +58,7 @@ Super defaults to **restrictive, fail-closed** behaviour in OSS. You can opt int
 | **API responses** | Env keys matching `SECRET`, `PASSWORD`, `TOKEN`, `KEY`, `CREDENTIAL` are masked | See [Environment & Secrets](/docs/02-essentials/environment-secrets) |
 | **Swagger UI** | Off by default (`enable_docs = false`); when on, served at `/api/docs` | Set `enable_docs = true` only on trusted localhost setups |
 
-See [Authentication](/docs/02-essentials/authentication#licensed-deployments-require-security) and [SECURITY.md](https://github.com/schiplat/super/blob/master/SECURITY.md) for the full OSS security model.
+See [Authentication](/docs/02-essentials/authentication/) and [SECURITY.md](https://github.com/schiplat/super/blob/master/SECURITY.md) for the full OSS security model.
 
 ## Data Storage & Event Retention
 

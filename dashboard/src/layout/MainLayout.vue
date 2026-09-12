@@ -146,7 +146,7 @@ onMounted(() => {
             v-if="manageDropdownOpen"
             class="absolute top-full left-0 mt-1.5 w-56 rounded-xl bg-card border border-border shadow-[0_10px_40px_-10px_rgba(28,25,23,0.15)] p-1.5 flex flex-col gap-0.5"
           >
-            <!-- Pro / plugin manage links (e.g. Notifications) -->
+            <!-- STABLE: nav.manage — plugins need navigate/close/routePath. Do not change :context without slots.spec.ts review. -->
             <Slot
               name="nav.manage"
               :context="{ navigate: navigateTo, close: closeManageMenu, routePath: route.path }"
@@ -222,6 +222,7 @@ onMounted(() => {
 
       <div class="h-px bg-border my-1"></div>
 
+      <!-- STABLE: nav.mobile — plugins need navigate/close. Do not change :context without slots.spec.ts review. -->
       <Slot
         name="nav.mobile"
         :context="{ navigate: navigateTo, close: closeMobileMenu }"

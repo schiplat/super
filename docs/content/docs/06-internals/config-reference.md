@@ -8,7 +8,7 @@ description: "Complete schema for super.toml."
 
 | Mark | Meaning |
 | :--- | :--- |
-| **💎 Subscription** | Requires valid `[license].key` in `conf/super.toml` and matching authorized plugin libraries. OSS ignores unknown subscription-only fields. |
+| **💎 Subscription** | Requires valid `[license].key` in `conf/super.toml` and matching authorized plugin libraries. Single-admin [core auth](/docs/02-essentials/authentication/) and the embedded Dashboard are OSS (no 💎). |
 | *(no mark)* | Available in OSS (with or without plugins). |
 
 > [!TIP] Free 90-day beta trial
@@ -18,7 +18,7 @@ description: "Complete schema for super.toml."
 
 | Location | Keys / file |
 | :--- | :--- |
-| Root (`super.toml`) | `auth_secret` 💎 |
+| Root (`super.toml`) | `auth_secret` — OSS core auth **or** licensed `security` bootstrap (💎 required when licensed) |
 | `[license]` | `key` 💎 — cryptographically signed subscription token from your vendor |
 | `conf/conf.d/*` *(program stacks)* | `services[].resource_limits` (`cpu_quota`, `memory_limit`, `memory_warn_percent`, `memory_warn_headroom`, `memory_high`) 💎 |
 | `conf/notify.toml` *(separate file)* | `[[channels]]` 💎 — see [Event Notifications](/docs/05-advanced-management/event-notifications) |
@@ -35,6 +35,8 @@ The instance root is resolved from `SUPER_ROOT` first, then the binary's directo
 | `conf/super.toml` | Daemon settings (this file) |
 | `conf/notify.toml` | Licensed notify plugin config (optional) |
 | `data/` | Persisted registry / auth state |
+| `data/tokens.json` | 💎 Access Token records (`security` plugin). |
+| `data/auth_settings.json` | 💎 `security` plugin: currently `auth_secret_disabled` (turn off bootstrap `auth_secret` login). |
 | `logs/` | Daemon (`app.log`) and child process logs |
 | `run/` | Runtime files; default pidfile `run/superd.pid` when self-daemonizing |
 | `plugins/` | Licensed `.so` / `.dylib` libraries |
@@ -47,7 +49,6 @@ Global settings for the daemon.
 | :--- | :--- | :--- | :--- |
 | `host` | string | `127.0.0.1` | Bind address for API and Dashboard. |
 | `port` | int | `9002` | Bind port. |
-| `allow_insecure_public_bind` | bool | `false` | Explicit opt-in to bind on a non-loopback address without the `security` plugin. OSS **refuses startup** when `host` is not loopback and this is `false`. **Licensed deployments always load `security`** — this flag applies to OSS only. |
 | `shutdown_timeout` | int | `10` | Seconds to wait for SIGTERM before SIGKILL during shutdown. |
 | `flapping_window` | int | `60` | Time window (seconds) to detect restart loops. |
 | `flapping_threshold` | int | `5` | Max restarts allowed within the window. |
@@ -77,13 +78,18 @@ Global settings for the daemon.
 # CLI: super --server unix:///path/to/superd.sock list
 ```
 
-## Root keys (Licensed 💎)
+## Root keys (auth)
 
 Top-level fields in `super.toml` (sibling to `[server]`, not inside it):
 
 | Key | Type | Default | Description |
 | :--- | :--- | :--- | :--- |
-| `auth_secret` 💎 | string | — | **Plugin only** (`security`). Required for licensed startup. Root Admin Bearer for bootstrap; Admins may explicitly disable login with it after creating an Admin Access Token. See [Authentication](/docs/02-essentials/authentication). |
+| `auth_secret` | string | — | Admin Bearer secret. **Non-empty enables OSS [core auth](/docs/02-essentials/authentication/).** Required for non-loopback TCP binds (unless `security` is active). **Licensed 💎:** also required for `security` plugin startup / bootstrap; Admins may later disable login with it after creating an Admin Access Token. |
+
+```toml
+# Enable API auth (required when binding beyond loopback):
+# auth_secret = "your-own-long-random-string"
+```
 
 ## `[license]` — subscription key (Licensed 💎)
 

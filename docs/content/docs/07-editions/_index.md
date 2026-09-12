@@ -15,7 +15,7 @@ The core is open-source under the [**MIT License**](https://opensource.org/licen
 | Binaries | `superd` + `super` (MIT) | **The same binaries** — drop-in enable, no reinstall |
 | What enables it | install & run | a valid `[license].key` in `conf/super.toml` **and** plugin libraries under `$SUPER_ROOT/plugins/` |
 | Plugins loaded | none | authorized ones only (verified against the key) |
-| Feature examples | process management, OTA, health checks, cron, event hooks, log rotation, **embedded Dashboard shell** | + API auth / RBAC / audit (`security`), cgroup limits (`isolation`, Linux), notifications (`notify`), Dashboard Pro extensions (`ui` plugin) |
+| Feature examples | process management, OTA, health checks, cron, event hooks, log rotation, **embedded Dashboard**, single-admin API auth | + multi-user tokens / RBAC / audit (`security`), cgroup limits (`isolation`, Linux), notifications (`notify`), Dashboard Pro extensions (`ui` plugin) |
 | License | MIT | Commercial plugin license (see [Get Super Pro](/go/pro/)) |
 
 Licensed plugins are optional `.so` / `.dylib` files loaded at runtime after license verification — same binaries, no separate “Premium daemon.” If `[license].key` is absent (or invalid without licensed intent), `superd` runs in OSS mode and ignores the plugin directory.
@@ -28,7 +28,7 @@ These terms are used consistently across the documentation:
 | :--- | :--- |
 | **OSS** | The open-source run mode: `superd` + `super`, MIT, no plugins. |
 | **Licensed** | The run mode with a valid `[license].key` and commercial plugins loaded (also "licensed feature", "licensed plugins"). |
-| **Super Pro** | **Brand name** of the commercial plugin set (auth/audit, isolation, notify, ui). Used for purchasing and trials — [Get Super Pro](/go/pro/). The docs describe capabilities as *Licensed*. |
+| **Super Pro** | **Brand name** of the commercial plugin set (multi-user tokens / RBAC / audit, isolation, notify, Dashboard Pro UI). Used for purchasing and trials — [Get Super Pro](/go/pro/). The docs describe capabilities as *Licensed*. |
 | **License key** | The signed `[license].key` value in `conf/super.toml`; runtime credential that authorizes which plugins load. |
 | **Plugin** | A signed `.so` / `.dylib` under `$SUPER_ROOT/plugins/` that implements a licensed capability. |
 

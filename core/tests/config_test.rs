@@ -12,7 +12,6 @@ fn test_default_config() {
 
     assert_eq!(config.server.port, 8080);
     assert_eq!(config.server.host, "127.0.0.1"); // Default host (localhost only, avoids accidentally exposing the API)
-    assert!(!config.server.allow_insecure_public_bind);
     assert_eq!(config.logging.log_level, "info"); // Default log level
     assert_eq!(config.child_logging.max_size_mb, 10); // Default child process log size
 }
