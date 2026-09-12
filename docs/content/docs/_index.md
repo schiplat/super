@@ -18,7 +18,7 @@ Project Super ships as **one open-source binary** (`superd` + `super`) — there
 | :--- | :--- | :--- |
 | Binary | `superd` + `super` (MIT, free) | Same binaries — nothing to reinstall |
 | Plugins | none | `[license].key` + `plugins/*` from your subscription (Super Pro) |
-| Adds | Core process management, OTA, health checks, cron, event hooks, **embedded Dashboard shell**, single-admin API auth | Multi-user tokens / RBAC / audit (`security`), cgroups limits (`isolation`, Linux), notifications (`notify`), Dashboard Pro extensions (`ui` plugin) |
+| Adds | Core process management (incl. `numprocs` workers), OTA, health checks, cron, event hooks, **embedded Dashboard shell**, single-admin API auth | Multi-user tokens / RBAC / audit (`security`), cgroups limits (`isolation`, Linux), notifications (`notify`), Dashboard Pro extensions (`ui` plugin) |
 | How to enable | install & run | add a license key and plugin libraries |
 
 Pages mark licensed capabilities with **💎** / "Licensed"; "Super Pro" is the brand name of the commercial plugin set ([Get Super Pro](/go/pro/)). The authoritative edition model, terminology, and switching guide live in [Editions](/docs/07-editions/).

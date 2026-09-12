@@ -77,9 +77,23 @@ super <start|stop|restart|remove> <name|@group|id|all>
 
 One deliberate difference: `pm2 delete` stops and removes in one step, while Super requires a program to be stopped before it can be removed — `super remove` on a running program fails with `Cannot remove running program`. Use `super stop <...> && super remove <...>` to mirror `pm2 delete`. PM2's `json_conf` target has no equivalent in Super; declarative batches go through `super apply <stack.toml>`.
 
+## 6. Multiple processes (`instances` vs `numprocs`)
+
+PM2 **`instances` in fork mode** maps closely to Super **`numprocs`**: one program definition starts N OS processes (`worker-0` …), with `SUPER_PROCESS_NUM` / `SUPER_PROCESS_TOTAL` injected for workers that need an index. See [Process Operations](/docs/02-essentials/process-control/#multi-process-programs-numprocs).
+
+```bash
+# PM2 (fork)
+pm2 start worker.js -i 4
+
+# Super
+super add --name worker --numprocs 4 /usr/local/bin/worker
+```
+
+PM2 **cluster mode** (Node.js shared listen port, in-process load balancing, zero-downtime Node reloads) has **no Super equivalent**. Prefer PM2 when that Node-specific path is the reason you stay on it; use Super `numprocs` for language-agnostic multi-worker processes (queue consumers, Celery-style workers, and similar).
+
 ## Summary
 
-* **Stick with PM2** if you run a Node.js stack and want cluster mode for zero-downtime Node reloads.
-* **Look at Super** if you manage mixed binaries (Go, Rust, Python, Java, or a combination) and want a native control plane, built-in log rotation, and — with a subscription on Linux — optional cgroup limits.
+* **Stick with PM2** if you run a Node.js stack and want **cluster mode** for zero-downtime Node reloads.
+* **Look at Super** if you manage mixed binaries (Go, Rust, Python, Java, or a combination) and want a native control plane, built-in log rotation, fork-style multi-process workers (`numprocs`), and — with a subscription on Linux — optional cgroup limits.
 
 Do not cite a fixed “saves N MB per instance” figure from this page. Measure on your hardware, or wait for a published benchmark snapshot with versions and methodology.

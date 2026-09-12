@@ -62,6 +62,26 @@ Also supported: `super start all` and `super stop all`.
 
 Group operations are **order-aware**: starts run dependencies first, stops run dependents first, and a group restart is a two-phase bounce (everything stops, then everything starts in dependency order) — see [Ordered group operations](/docs/03-orchestration/dependencies/#ordered-group-operations).
 
+## Multi-process programs (`numprocs`)
+
+One program definition can start **N OS processes** — useful for queue workers and similar workloads. This is **not** a rolling release of two versions of the same service, and it is **not** Node.js cluster mode (shared listen port / in-process load balancing).
+
+```bash
+super add --name worker --numprocs 4 /usr/local/bin/worker
+```
+
+Or in a stack file:
+
+```toml
+[[services]]
+name = "worker"
+command = "/usr/local/bin/worker"
+numprocs = 4
+# optional: process_name = "worker-{num}"   # default is {name}-{num}
+```
+
+Each instance gets `SUPER_PROCESS_NUM` (0-based) and `SUPER_PROCESS_TOTAL` — see [Environment Variables](/docs/06-internals/environment-variables/#variables-injected-into-children-and-hooks). Lifecycle commands (`start` / `stop` / `restart`) target the **program** and apply to all of its processes. Worked example: [Django tutorial — scale Celery workers](/docs/02-tutorials/django-postgres-celery/#scale-celery-workers).
+
 ## Sending Signals
 
 Sometimes you need to send a specific POSIX signal (e.g., to reload configuration without restarting).

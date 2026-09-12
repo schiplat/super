@@ -19,11 +19,12 @@ Super is a modern replacement for tools like [Supervisor](https://supervisord.or
 
 * **Single binary** — Rust `superd` process manager; TOML or REST config; CLI, HTTP API, and an **embedded Dashboard** (subscription `ui` plugin adds Tokens, notifications UI, and related Pro surfaces)
 * **Declarative orchestration** — stacks, dependencies, health checks
+* **Multi-process programs** — `numprocs` starts N workers from one definition (`process_name`, `SUPER_PROCESS_NUM` / `SUPER_PROCESS_TOTAL`); not Node cluster / zero-downtime reload
 * **Lifecycle hooks** — `pre_start`, `post_start`, `post_stop`, and global event hooks
 * **Observability** — WebSocket logs, historical logs API, system metrics
 * **Auto-recovery** — Supervisor-compatible `autorestart`, `exitcodes`, `startsecs`
 
-Licensed under the **[MIT License](LICENSE)**. Optional **licensed plugins** (`.so` / `.dylib` under `$SUPER_ROOT/plugins/`) add multi-user tokens / RBAC / audit, notifications ([storm suppression](https://super.docs.sconts.com/docs/05-advanced-management/event-notifications/#storm-suppression)), cgroup limits, and Dashboard Pro extensions — same `superd` binary, no separate commercial build. Compare editions in the [feature matrix](https://super.docs.sconts.com/docs/07-editions/feature-matrix/).
+Licensed under the **[MIT License](LICENSE)**. Optional **licensed plugins** (`.so` / `.dylib` under `$SUPER_ROOT/plugins/`) add multi-user tokens / RBAC / audit, notifications ([storm suppression](https://super.docs.sconts.com/docs/05-advanced-management/event-notifications/#storm-suppression)), **Linux cgroup CPU/memory limits** via per-program `resource_limits` ([resource isolation](https://super.docs.sconts.com/docs/05-advanced-management/resource-isolation/); OSS stores the fields, the `isolation` plugin enforces them), and Dashboard Pro extensions — same `superd` binary, no separate commercial build. Compare editions in the [feature matrix](https://super.docs.sconts.com/docs/07-editions/feature-matrix/).
 
 ## Quick Start
 

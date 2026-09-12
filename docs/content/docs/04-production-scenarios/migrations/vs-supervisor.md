@@ -118,12 +118,14 @@ Supervisor and Super use different configuration models. Use this table when mig
 2. **Changed global server settings** → `super reload` (no target).
 3. **App supports SIGHUP config reload (nginx, etc.)** → `super reload <name>` without restart.
 4. **Deploy new binary** → use OTA `artifact` block, or replace binary + `super restart <name>`.
-5. **Zero-downtime release** → use load balancer / blue-green; Super intentionally does **not** run two instances of the same program (same as Supervisor).
+5. **Zero-downtime release** → use load balancer / blue-green. Super (like Supervisor) does **not** dual-run old and new versions of the same program during a deploy. For **N concurrent workers** from one definition, use `numprocs` (below) — that is multi-process workers, not a rolling release.
 
 ### Fields mapped from Supervisor
 
 | Supervisor | Super |
 | :--- | :--- |
+| `numprocs` | `numprocs` (spawn N processes; see [Process Operations](/docs/02-essentials/process-control/#multi-process-programs-numprocs)) |
+| `process_name` | `process_name` (template with `{num}`; default `{name}-{num}`) |
 | `stopwaitsecs` | `stopsecs` (optional; else `[server].shutdown_timeout`) |
 | `priority` | `priority` (lower starts first; complements `depends_on`) |
 | `stdout_logfile` | `stdout_logfile` (must resolve under `storage.log_dir`) |

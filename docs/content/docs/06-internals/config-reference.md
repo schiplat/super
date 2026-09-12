@@ -185,8 +185,8 @@ The keys below describe a **single program entry** — one item in a stack file'
 | `cwd` | string | — | Working directory. |
 | `user` | string | — | Run as this user (requires root). |
 | `group` | string | — | Logical group for batch control (e.g. `@backend`). |
-| `numprocs` | int | `1` | Spawn N process instances (CLI: `super add --numprocs`). |
-| `process_name` | string | `{name}-{num}` | Process name template for multiple instances (e.g. `worker-{num}`). |
+| `numprocs` | int | `1` | Spawn N OS processes from this program (`super add --numprocs`). For workers / queue consumers — not a rolling dual-version deploy, and not Node cluster mode. See [Process Operations](/docs/02-essentials/process-control/#multi-process-programs-numprocs). |
+| `process_name` | string | `{name}-{num}` | Name template when `numprocs > 1` (e.g. `worker-{num}`). Each instance gets `SUPER_PROCESS_NUM` / `SUPER_PROCESS_TOTAL`. |
 
 ### Restart & stop behaviour
 

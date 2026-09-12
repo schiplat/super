@@ -6,7 +6,7 @@ description: "OSS core vs optional licensed plugins."
 
 | Feature | OSS | Licensed |
 | :--- | :---: | :---: |
-| **Core Process Management** | ✅ | ✅ |
+| **Core Process Management**<br>Start/stop/restart, `autorestart`, multi-process programs (`numprocs`) | ✅ | ✅ |
 | **Dependency Orchestration** | ✅ | ✅ |
 | **Atomic OTA Updates** | ✅ | ✅ |
 | **Health Checks (TCP/HTTP)** | ✅ | ✅ |
