@@ -98,9 +98,12 @@ control hub** (SaaS / Hub): multi-node inventory, optional host **connector**,
 central access lifecycle, and a shared operator portal — while each host still
 runs a lean local `superd`.
 
-Single-host production hardening (`security` / `notify` / `isolation`) remains
-a separate subscription tier from hub/enterprise multi-node features. Hub UI
-stays a later direction; the OSS single-host Dashboard already ships without it.
+Single-host subscription plugins remain a separate tier from hub/enterprise
+multi-node features: **`security` is required** for licensed startup; **`notify`**,
+**`isolation`**, and **`ui`** are optional grants (`ui` adds Pro Dashboard
+extensions — Tokens, Notification Settings, hot-reload — on top of the OSS
+shell). Hub UI stays a later direction; the OSS single-host Dashboard already
+ships without any of these plugins.
 
 Principles: the local daemon stays authoritative for process lifecycle; the hub
 coordinates and delivers policy/artifacts; OSS remains useful offline; public
