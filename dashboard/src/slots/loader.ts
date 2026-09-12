@@ -21,7 +21,18 @@ function injectStylesheet(href: string): void {
   link.rel = 'stylesheet';
   link.href = href;
   link.dataset.superPluginCss = href;
-  document.head.appendChild(link);
+  // Prepend before the shell's stylesheets. Plugin Tailwind utilities include
+  // bare `.hidden { display: none }` (and similar) without the matching
+  // responsive variants (`md:flex`, …). Appending after the shell CSS lets
+  // those rules win the cascade and collapse the desktop nav/layout.
+  const firstStylesheet = document.head.querySelector(
+    'link[rel="stylesheet"], style',
+  );
+  if (firstStylesheet?.parentNode) {
+    firstStylesheet.parentNode.insertBefore(link, firstStylesheet);
+  } else {
+    document.head.appendChild(link);
+  }
 }
 
 export async function loadPluginUIs(): Promise<void> {

@@ -1,6 +1,6 @@
 ---
 title: "Scheduled Tasks (Cron)"
-weight: 6
+weight: 8
 description: "Replace legacy crontab by scheduling periodic jobs directly in Super."
 aliases:
   - /docs/05-advanced-management/scheduled-tasks/

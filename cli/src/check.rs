@@ -52,6 +52,9 @@ pub fn run(file_path: Option<PathBuf>) -> anyhow::Result<()> {
     if legacy_webhook_section_present(&content) {
         errors.push(LEGACY_WEBHOOK_SECTION_MSG.to_string());
     }
+    if common::config::legacy_top_level_auth_secret_present(&content) {
+        errors.push(common::config::LEGACY_TOP_LEVEL_AUTH_SECRET_MSG.to_string());
+    }
     if stray_program_tables_in_toml(&content) {
         errors.push(
             "[[program]] / [[programs]] in super.toml is ignored — programs load from \
@@ -163,6 +166,7 @@ pub fn run(file_path: Option<PathBuf>) -> anyhow::Result<()> {
     let licensed_ready = check_licensed_deployment(&path, &config, &mut errors, &mut warnings);
 
     let has_auth_secret = config
+        .server
         .auth_secret
         .as_deref()
         .map(str::trim)
@@ -175,7 +179,7 @@ pub fn run(file_path: Option<PathBuf>) -> anyhow::Result<()> {
     {
         errors.push(format!(
             "Server binds to {} without authentication. \
-             Set auth_secret in conf/super.toml, bind to 127.0.0.1, \
+             Set [server].auth_secret in conf/super.toml, bind to 127.0.0.1, \
              or load the security plugin at runtime.",
             config.server.host
         ));
@@ -541,8 +545,11 @@ fn check_licensed_deployment(
     };
 
     let plugins_dir = resolve_super_root_for_config(config_path).join("plugins");
-    let req_errors =
-        licensed_requirement_errors(&claims.grants, &plugins_dir, config.auth_secret.as_deref());
+    let req_errors = licensed_requirement_errors(
+        &claims.grants,
+        &plugins_dir,
+        config.server.auth_secret.as_deref(),
+    );
     let ok = req_errors.is_empty();
     errors.extend(req_errors);
     ok
@@ -573,9 +580,7 @@ fn licensed_requirement_errors(
     }
 
     if auth_secret.is_none_or(|s| s.trim().is_empty()) {
-        errors.push(
-            "Licensed deployment requires auth_secret in super.toml (or via environment).".into(),
-        );
+        errors.push("Licensed deployment requires [server].auth_secret in super.toml.".into());
     }
 
     errors

@@ -23,9 +23,9 @@
 
 # Placeholder so the image can start with host = 0.0.0.0.
 # Replace before publishing the API beyond the host (or mount your own conf/).
-auth_secret = "CHANGE-ME-BEFORE-EXPOSE"
 
 [server]
+auth_secret = "CHANGE-ME-BEFORE-EXPOSE"
 # Bind on all interfaces so the API/dashboard is reachable from outside the container.
 host = "0.0.0.0"
 port = 9002

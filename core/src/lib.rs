@@ -92,6 +92,11 @@ pub async fn bootstrap(extension: Box<dyn Extension>) -> anyhow::Result<SystemCo
         if common::config::legacy_webhook_section_present(&content) {
             return Err(anyhow::anyhow!(common::config::LEGACY_WEBHOOK_SECTION_MSG));
         }
+        if common::config::legacy_top_level_auth_secret_present(&content) {
+            return Err(anyhow::anyhow!(
+                common::config::LEGACY_TOP_LEVEL_AUTH_SECRET_MSG
+            ));
+        }
         match toml::from_str::<ServerConfig>(&content) {
             Ok(c) => c,
             Err(e) => {

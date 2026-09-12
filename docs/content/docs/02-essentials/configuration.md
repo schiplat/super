@@ -11,7 +11,8 @@ Super uses TOML (Tom's Obvious, Minimal Language) for configuration. The daemon 
 The `[server]` section controls the `superd` daemon itself. Example from `conf/super.toml`:
 
 ```toml
-# conf/super.toml — [server]
+# conf/super.toml
+
 [server]
 # The IP and port for the API and Dashboard
 host = "127.0.0.1"

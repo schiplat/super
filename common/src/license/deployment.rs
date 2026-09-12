@@ -64,6 +64,7 @@ pub fn licensed_deployment_intent(config: &ServerConfig, installed_plugins: &[St
         return true;
     }
     if config
+        .server
         .auth_secret
         .as_ref()
         .is_some_and(|s| !s.trim().is_empty())
@@ -118,7 +119,10 @@ mod tests {
     #[test]
     fn intent_when_auth_secret_set() {
         let config = ServerConfig {
-            auth_secret: Some("secret".into()),
+            server: crate::config::ServerSection {
+                auth_secret: Some("secret".into()),
+                ..Default::default()
+            },
             ..Default::default()
         };
         assert!(licensed_deployment_intent(&config, &[]));

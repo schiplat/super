@@ -275,7 +275,7 @@ pub fn validate_licensed_auth_secret(
         return Ok(());
     }
     anyhow::bail!(
-        "Licensed deployment requires auth_secret in conf/super.toml for the security plugin."
+        "Licensed deployment requires [server].auth_secret in conf/super.toml for the security plugin."
     );
 }
 

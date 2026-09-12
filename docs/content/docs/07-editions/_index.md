@@ -13,7 +13,7 @@ The core is open-source under the [**MIT License**](https://opensource.org/licen
 | | **OSS** | **Licensed** |
 | :--- | :--- | :--- |
 | Binaries | `superd` + `super` (MIT) | **The same binaries** — drop-in enable, no reinstall |
-| What enables it | install & run | a valid `[license].key` in `conf/super.toml` **and** plugin libraries under `$SUPER_ROOT/plugins/` |
+| What enables it | install & run | a valid `[license].key` in `conf/super.toml`, `[server].auth_secret`, **and** plugin libraries under `$SUPER_ROOT/plugins/` (`security` required) |
 | Plugins loaded | none | authorized ones only (verified against the key) |
 | Feature examples | process management, OTA, health checks, cron, event hooks, log rotation, **embedded Dashboard**, single-admin API auth | + multi-user tokens / RBAC / audit (`security`), cgroup limits (`isolation`, Linux), notifications (`notify`), Dashboard Pro extensions (`ui` plugin) |
 | License | MIT | Commercial plugin license (see [Get Super Pro](/go/pro/)) |
@@ -36,7 +36,7 @@ Pages mark licensed capabilities with **💎** and a "Licensed feature" callout 
 
 ## Switching between modes
 
-*   **OSS → Licensed:** add `[license].key` to `conf/super.toml` and place the plugin libraries from your subscription into `$SUPER_ROOT/plugins/`, then restart `superd`. Same binaries, nothing to rebuild.
+*   **OSS → Licensed:** add `[license].key` and `[server].auth_secret` to `conf/super.toml`, place the plugin libraries from your subscription into `$SUPER_ROOT/plugins/` (including **`security`**), then restart `superd`. Same binaries, nothing to rebuild.
 *   **Licensed → OSS:** remove the key (and plugin libraries), or use `[license].strict = false` behavior that degrades to OSS on an invalid key — see [Authentication](/docs/02-essentials/authentication#invalid-or-incompatible-license-key).
 
 > [!IMPORTANT]

@@ -7,14 +7,14 @@
       </h2>
       <a class="home-premium-cta" href="/go/pro/">Get Super Pro</a>
     </div>
-    <p class="home-section-lead">すべてのユーザーが同じ <code>superd</code> バイナリを使用。商用機能は署名済み<strong>プラグイン</strong>として提供 — 認可された <code>plugins/*.so</code> を <code>$SUPER_ROOT</code> に配置し、<code>conf/super.toml</code> に有効な <code>[license].key</code> を追加。ライセンスに列挙されたプラグインのみランタイムでロードされます。</p>
+    <p class="home-section-lead">すべてのユーザーが同じ <code>superd</code> バイナリを使用。商用機能は署名済み<strong>プラグイン</strong>として提供 — <code>conf/super.toml</code> に有効な <code>[license].key</code> と<code>[server].auth_secret</code> を追加し、認可されたライブラリを <code>$SUPER_ROOT/plugins/</code> に配置。ライセンスに列挙されたプラグインのみランタイムでロードされます。</p>
   </div>
   <div class="home-plugin-flow" aria-label="商用版デプロイ 3 ステップ">
     <div class="home-plugin-flow-step">
       <span class="home-plugin-flow-num">1</span>
       <div>
-        <strong>ライセンスを設定</strong>
-        <div class="home-plugin-flow-desc">サブスクリプション交付パッケージのファイルを <code>$SUPER_ROOT/plugins/</code> にコピー</div>
+        <strong>ライセンスと auth_secret を設定</strong>
+        <div class="home-plugin-flow-desc"><code>[license].key</code> を貼り付け、<code>[server].auth_secret</code> を設定（<code>security</code> 起動 / ブートストラップに必須）</div>
       </div>
     </div>
     <span class="home-plugin-flow-arrow" aria-hidden="true"></span>
@@ -22,7 +22,7 @@
       <span class="home-plugin-flow-num">2</span>
       <div>
         <strong>プラグインファイルを配置</strong>
-        <div class="home-plugin-flow-desc">サブスクリプション交付パッケージのファイルを <code>$SUPER_ROOT/plugins/</code> にコピー</div>
+        <div class="home-plugin-flow-desc">サブスクリプション交付パッケージのファイルを <code>$SUPER_ROOT/plugins/</code> にコピー（<code>security</code> 必須）</div>
       </div>
     </div>
     <span class="home-plugin-flow-arrow" aria-hidden="true"></span>
@@ -30,7 +30,7 @@
       <span class="home-plugin-flow-num">3</span>
       <div>
         <strong>superd を再起動</strong>
-        <div class="home-plugin-flow-desc">サブスクリプション交付パッケージのファイルを <code>$SUPER_ROOT/plugins/</code> にコピー</div>
+        <div class="home-plugin-flow-desc">起動時に鍵を検証し、<code>security</code> と <code>auth_secret</code> を要求 — コアバイナリの差し替えは不要</div>
       </div>
     </div>
   </div>

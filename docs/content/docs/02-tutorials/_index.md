@@ -1,6 +1,6 @@
 ---
 title: "Tutorials"
-weight: 2
+weight: 3
 description: "End-to-end worked examples — run a real application stack under Super."
 ---
 

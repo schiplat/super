@@ -54,11 +54,13 @@ The image runs **`superd` in the foreground**; you control it over **HTTP on por
 
 ```bash
 # From GitHub Releases tarball or install.sh — you only need the `super` binary on PATH.
+# Image ships auth_secret = "CHANGE-ME-BEFORE-EXPOSE" — pass it (or export SUPER_TOKEN=…).
+export SUPER_TOKEN=CHANGE-ME-BEFORE-EXPOSE
 super --server http://127.0.0.1:9002 list
 super --server http://127.0.0.1:9002 add --name my-app --autostart /path/to/app
 ```
 
-If the host has **no** local `$SUPER_ROOT/run/superd.sock`, the CLI already defaults to `http://127.0.0.1:9002` — after `-p 127.0.0.1:9002:9002`, plain `super list` works once the binary is on `PATH`. Use `--server` when you publish a different host/port, or when a local socket would otherwise take precedence.
+If the host has **no** local `$SUPER_ROOT/run/superd.sock`, the CLI already defaults to `http://127.0.0.1:9002` — after `-p 127.0.0.1:9002:9002`, `super list` works once the binary is on `PATH` **and** `SUPER_TOKEN` / `--token` matches `auth_secret`. Use `--server` when you publish a different host/port, or when a local socket would otherwise take precedence.
 
 **Option B — copy `super` out of the image** (no full install):
 
@@ -66,16 +68,16 @@ If the host has **no** local `$SUPER_ROOT/run/superd.sock`, the CLI already defa
 CID=$(docker create schiplat/super:latest)
 docker cp "$CID:/usr/local/bin/super" ./super && docker rm "$CID"
 chmod +x ./super
-./super --server http://127.0.0.1:9002 list
+./super --server http://127.0.0.1:9002 --token CHANGE-ME-BEFORE-EXPOSE list
 ```
 
 **Option C — `docker exec`** (quick try; name your container, e.g. `docker run --name super …`):
 
 ```bash
-docker exec super /usr/local/bin/super list
+docker exec -e SUPER_TOKEN=CHANGE-ME-BEFORE-EXPOSE super /usr/local/bin/super list
 ```
 
-**Option D — REST only:** `curl http://127.0.0.1:9002/api/v1/…` (no CLI binary).
+**Option D — REST only:** `curl -H "Authorization: Bearer CHANGE-ME-BEFORE-EXPOSE" http://127.0.0.1:9002/api/v1/…` (no CLI binary; `/health` needs no Bearer).
 
 > [!NOTE]
 > Host `super` will **not** auto-discover the container's Unix socket (`run/superd.sock` lives inside the container). Always pass **`--server http://127.0.0.1:9002`** (or the host/port you published) when `superd` runs in Docker.
@@ -98,7 +100,7 @@ Place `super.toml` under `/path/to/conf/`. Reference profiles in `packaging/dock
 
 Drop stack files into `conf/conf.d/*` (TOML by default; legacy `.json` also works) to seed programs on startup.
 
-Non-loopback binds activate [OSS core auth](/docs/02-essentials/authentication/) (or the `security` plugin when licensed). Prefer publishing Docker ports to `127.0.0.1` on the host unless you intentionally expose the API.
+Non-loopback binds **require** a non-empty [`[server].auth_secret`](/docs/02-essentials/authentication/) (or the `security` plugin when licensed) — otherwise `superd` refuses to start. Prefer publishing Docker ports to `127.0.0.1` on the host unless you intentionally expose the API.
 
 If you add licensed plugins, **`security.so` and `auth_secret` are required** for startup — security is included with every subscription. See [Licensed deployments require security](/docs/02-essentials/authentication#licensed-deployments-require-security).
 

@@ -8,7 +8,7 @@ Super exposes a RESTful API on port `9002` (default). All responses are in JSON 
 
 ## Authentication
 
-**OSS (no `security` plugin):** Loopback binds leave the API open by default. A non-empty top-level `auth_secret` activates **core auth** (Bearer = that string). Non-loopback TCP without `auth_secret` (and without the security plugin) refuses to start. See [Authentication](/docs/02-essentials/authentication/).
+**OSS (no `security` plugin):** Loopback binds leave the API open by default. A non-empty `[server].auth_secret` activates **core auth** (Bearer = that string). Non-loopback TCP without `auth_secret` (and without the security plugin) refuses to start. See [Authentication](/docs/02-essentials/authentication/).
 
 **Licensed (`[license].key` valid):** `security` is bundled with every subscription and **must load** — otherwise `superd` refuses startup. API auth is always active when licensed. See [Authentication — Licensed deployments require security](/docs/02-essentials/authentication#licensed-deployments-require-security).
 
@@ -155,7 +155,7 @@ curl -X PUT "http://127.0.0.1:9002/api/v1/programs/${PROGRAM_ID}" \
 
 Full schema: [Config reference — `artifact`](/docs/06-internals/config-reference#artifact). Flow: [Atomic OTA Updates](/docs/03-orchestration/ota-updates).
 
-**With `security` plugin**: add `-H "Authorization: Bearer <token>"`.
+**Auth:** When **core auth** is active (`auth_secret` set) or the **`security` plugin** is loaded, add `-H "Authorization: Bearer <secret-or-token>"`. `/health` stays open without a Bearer.
 
 **Response:** `200 OK` on success; `400` if the program is not found or validation fails. The `message` names the field (and `program '…'` when known). JSON syntax / unknown fields include `JSON line N column M`.
 

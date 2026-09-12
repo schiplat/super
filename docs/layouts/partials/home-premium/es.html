@@ -7,14 +7,14 @@
       </h2>
       <a class="home-premium-cta" href="/go/pro/">Get Super Pro</a>
     </div>
-    <p class="home-section-lead">Un solo binario <code>superd</code> para todos. Las capacidades comerciales son <strong>plugins</strong> firmados — coloque <code>plugins/*.so</code> autorizados en <code>$SUPER_ROOT</code> y añada un <code>[license].key</code> válido en <code>conf/super.toml</code>. Solo se cargan los plugins listados en la licencia.</p>
+    <p class="home-section-lead">Un solo binario <code>superd</code> para todos. Las capacidades comerciales son <strong>plugins</strong> firmados — añada un <code>[license].key</code> válido y un <code>auth_secret</code> en <code>[server]</code> en <code>conf/super.toml</code>, luego coloque las bibliotecas autorizadas en <code>$SUPER_ROOT/plugins/</code>. Solo se cargan los plugins listados en la licencia.</p>
   </div>
   <div class="home-plugin-flow" aria-label="Despliegue comercial en tres pasos">
     <div class="home-plugin-flow-step">
       <span class="home-plugin-flow-num">1</span>
       <div>
-        <strong>Configurar licencia</strong>
-        <div class="home-plugin-flow-desc">Copie los archivos del paquete de suscripción en <code>$SUPER_ROOT/plugins/</code></div>
+        <strong>Configurar licencia + auth_secret</strong>
+        <div class="home-plugin-flow-desc">Pegue la clave en <code>[license]</code> y defina <code>auth_secret</code> en <code>[server]</code> (obligatorio para arrancar <code>security</code>)</div>
       </div>
     </div>
     <span class="home-plugin-flow-arrow" aria-hidden="true"></span>
@@ -22,7 +22,7 @@
       <span class="home-plugin-flow-num">2</span>
       <div>
         <strong>Desplegar plugins</strong>
-        <div class="home-plugin-flow-desc">Copie los archivos del paquete de suscripción en <code>$SUPER_ROOT/plugins/</code></div>
+        <div class="home-plugin-flow-desc">Copie los archivos del paquete de suscripción en <code>$SUPER_ROOT/plugins/</code> (<code>security</code> es obligatorio)</div>
       </div>
     </div>
     <span class="home-plugin-flow-arrow" aria-hidden="true"></span>
@@ -30,7 +30,7 @@
       <span class="home-plugin-flow-num">3</span>
       <div>
         <strong>Reiniciar superd</strong>
-        <div class="home-plugin-flow-desc">Copie los archivos del paquete de suscripción en <code>$SUPER_ROOT/plugins/</code></div>
+        <div class="home-plugin-flow-desc">Al arrancar valida la clave y exige <code>security</code> + <code>auth_secret</code> — no hace falta reemplazar el binario núcleo</div>
       </div>
     </div>
   </div>

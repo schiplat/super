@@ -21,7 +21,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **Dashboard shell is embedded in OSS `superd`.** Process overview, logs, stack editor, and related shell pages no longer require the `ui` plugin. The subscription **`ui`** plugin now delivers **Pro extensions** only (Access Tokens UI, Notification Settings including inhibition rules and delivery history, process hot-reload, and matching nav entries). See [Dashboard](/docs/02-essentials/web-ui/) and the [feature matrix](/docs/07-editions/feature-matrix/).
 - **Dashboard slot contract tests in OSS CI.** `dashboard` runs `npm test` (vitest) before the production build; `slots.spec.ts` guards slot names, `context.process` fields, and mount-site `:context` shapes. Do not skip or weaken these tests without understanding the plugin UI contract (`ui-bridge.d.ts`).
-- **OSS core auth is `auth_secret`-only.** Non-empty `auth_secret` in `conf/super.toml` enables the single admin Bearer. Non-loopback TCP without a secret (and without the `security` plugin) **refuses to start**. No `data/auth.key`, no `auth_required` / `allow_insecure_public_bind` knobs. Docker OSS image ships a placeholder `auth_secret` (change before public exposure). See [Authentication](/docs/02-essentials/authentication/).
+- **OSS core auth is `auth_secret`-only under `[server]`.** Non-empty `[server].auth_secret` enables the single admin Bearer. Non-loopback TCP without a secret (and without the `security` plugin) **refuses to start**. Top-level `auth_secret` keys are **rejected** (no compatibility). No `data/auth.key`, no `auth_required` / `allow_insecure_public_bind` knobs. Docker OSS image ships a placeholder under `[server]` (change before public exposure). See [Authentication](/docs/02-essentials/authentication/).
 
 ---
 
@@ -360,7 +360,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **HTTP plugin ABI** — generic `attach_http_plugins()` in OSS core; plugins register routes and auth middleware without linking `super-core`.
 - **Lifecycle plugin ABI** — `on_event`, `after_stop`, metrics, and manager hooks via `ExtensionStack`.
 - **`[license].key` in `conf/super.toml`** — replaces legacy `license.key` file; `SUPER_LICENSE` env override supported.
-- **`auth_secret`** in `ServerConfig` (typed in OSS config; enforced when `security` plugin is loaded).
+- **`auth_secret`** typed in OSS config (historical note: early docs listed it under `ServerConfig` as a root field; it later moved to **`[server].auth_secret`**). Enforced for licensed `security` plugin startup / bootstrap.
 - **Unified CLI** — `login` / `token` subcommands in OSS `super` when `security` plugin is active.
 - **`common::plugin_async`** — shared worker for cdylib async boundaries.
 
@@ -425,6 +425,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 - OSS API no longer uses `auth_secret`; bind to `127.0.0.1` or use a firewall for exposure control.
 - Documentation updates across config, API, and feature matrix.
+
+> **Historical (1.1.7):** later releases restored optional OSS `auth_secret` and refuse non-loopback binds without it — today the key lives under **`[server]`** (see [Authentication](/docs/02-essentials/authentication/) and Unreleased notes above).
 
 ### Fixed
 - Historical logs API now reads from the correct log directory when `[storage]` is omitted.

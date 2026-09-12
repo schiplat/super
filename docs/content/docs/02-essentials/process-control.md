@@ -87,4 +87,5 @@ super stop api-srv --wait --timeout 10
 
 ## See also
 
+- [Authentication](/docs/02-essentials/authentication/) — Bearer / `--token` when core auth or `security` is active
 - [CLI Reference](/docs/06-internals/cli-reference/) — complete command and flag list

@@ -200,8 +200,24 @@ fn inject_pro_license(root: &Path) -> anyhow::Result<()> {
     };
     let secret_esc = secret.replace('\\', "\\\\").replace('"', "\\\"");
     let key_esc = key.replace('\\', "\\\\").replace('"', "\\\"");
+    // Ensure [server].auth_secret (not a top-level key) and [license].
+    if !toml.contains("[server]") {
+        toml.push_str("\n[server]\n");
+    }
+    if let Some(idx) = toml.find("[server]") {
+        let insert_at = toml[idx..]
+            .find('\n')
+            .map(|n| idx + n + 1)
+            .unwrap_or(toml.len());
+        toml.insert_str(
+            insert_at,
+            &format!("auth_secret = \"{secret_esc}\"\n"),
+        );
+    } else {
+        anyhow::bail!("conf/super.toml missing [server] after inject prep");
+    }
     toml.push_str(&format!(
-        "\nauth_secret = \"{secret_esc}\"\n[license]\nkey = \"{key_esc}\"\nstrict = true\n"
+        "\n[license]\nkey = \"{key_esc}\"\nstrict = true\n"
     ));
     fs::write(toml_path, toml)?;
     Ok(())

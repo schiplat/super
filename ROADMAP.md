@@ -8,16 +8,18 @@ This is the **single** public roadmap source. Docs and the changelog link here
 rather than duplicating a second page.
 
 Priorities: **P0** (next in line) · **P1** (soon) · **P2** (backlog) · **Directions** (multi-release horizons).
+Implemented P0 items stay listed for history; the active next-in-line P0 is **Migration importers**.
 
 ## P0 — OSS single-host Dashboard
 
-**Status:** agreed direction; not yet implemented.
+**Status:** implemented (OSS shell embedded in `superd`; subscription `ui` plugin delivers Pro extensions only).
 
 Ship a **usable single-host Web Dashboard with the OSS / Community edition** —
 process overview, stack editor, logs, health, and day-to-day controls — without
-requiring a subscription key. Today the browser UI ships only via the licensed
-`ui` plugin; after this change, the default experience is: what you see in the
-shell works.
+requiring a subscription key. The shell is **rust-embedded in OSS `superd`**;
+the licensed **`ui`** plugin adds Pro surfaces (Access Tokens UI, Notification
+Settings, process hot-reload) via capability-gated slots when peer plugins are
+loaded.
 
 ### Product boundary (customer-facing)
 

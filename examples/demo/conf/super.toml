@@ -3,11 +3,12 @@
 # Install path: /app/super/conf/super.toml
 # -------------------------------------------------------------
 
+# Admin Bearer under [server] (optional on loopback; required for non-loopback binds).
+
 [server]
+# auth_secret = "demo-change-me"
 host = "127.0.0.1"
 port = 9002   # docs and quick-start use 9002; change if you need another port
-# Loopback leaves the API open by default. Set auth_secret to enable
-# core auth (required for non-loopback binds).
 # Graceful shutdown timeout (seconds)
 shutdown_timeout = 7
 enable_docs = false  # set true only on trusted localhost deployments

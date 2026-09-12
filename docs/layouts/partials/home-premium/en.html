@@ -7,14 +7,14 @@
       </h2>
       <a class="home-premium-cta" href="/go/pro/">Get Super Pro</a>
     </div>
-    <p class="home-section-lead">One <code>superd</code> binary for everyone. Optional capabilities ship as signed <strong>plugins</strong> — add a vendor-supplied <code>[license].key</code> to <code>conf/super.toml</code> and place authorized libraries under <code>$SUPER_ROOT/plugins/</code>. Only modules named in the key are loaded at runtime.</p>
+    <p class="home-section-lead">One <code>superd</code> binary for everyone. Optional capabilities ship as signed <strong>plugins</strong> — add a vendor-supplied <code>[license].key</code> and a <code>[server].auth_secret</code> to <code>conf/super.toml</code>, then place authorized libraries under <code>$SUPER_ROOT/plugins/</code>. Only modules named in the key are loaded at runtime.</p>
   </div>
   <div class="home-plugin-flow" aria-label="Licensed deployment in three steps">
     <div class="home-plugin-flow-step">
       <span class="home-plugin-flow-num">1</span>
       <div>
-        <strong>Configure license</strong>
-        <div class="home-plugin-flow-desc">Paste the vendor-supplied key into <code>[license]</code> in <code>conf/super.toml</code> — defines which modules are active and when they expire</div>
+        <strong>Configure license + auth_secret</strong>
+        <div class="home-plugin-flow-desc">Paste the vendor-supplied key into <code>[license]</code> and set <code>[server].auth_secret</code> (required for <code>security</code> startup / bootstrap)</div>
       </div>
     </div>
     <span class="home-plugin-flow-arrow" aria-hidden="true"></span>
@@ -22,7 +22,7 @@
       <span class="home-plugin-flow-num">2</span>
       <div>
         <strong>Deploy plugin libraries</strong>
-        <div class="home-plugin-flow-desc">Copy files from your subscription delivery package into <code>$SUPER_ROOT/plugins/</code></div>
+        <div class="home-plugin-flow-desc">Copy files from your subscription delivery package into <code>$SUPER_ROOT/plugins/</code> (<code>security</code> is mandatory)</div>
       </div>
     </div>
     <span class="home-plugin-flow-arrow" aria-hidden="true"></span>
@@ -30,7 +30,7 @@
       <span class="home-plugin-flow-num">3</span>
       <div>
         <strong>Restart superd</strong>
-        <div class="home-plugin-flow-desc">On startup the service validates the key and enables matching features — no need to replace the core binary</div>
+        <div class="home-plugin-flow-desc">On startup the service validates the key, requires <code>security</code> + <code>auth_secret</code>, and enables matching features — no need to replace the core binary</div>
       </div>
     </div>
   </div>

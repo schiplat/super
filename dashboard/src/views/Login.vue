@@ -23,7 +23,10 @@ async function handleLogin() {
     router.push('/');
   } catch (e: any) {
     console.error(e);
-    error.value = e.response?.data?.message || e.response?.data?.error || 'Invalid Access Token';
+    error.value =
+      e.response?.data?.message ||
+      e.response?.data?.error ||
+      'Invalid credential';
     localStorage.removeItem('super_token');
   } finally {
     loading.value = false;
@@ -46,13 +49,16 @@ async function handleLogin() {
         </div>
         <div class="flex flex-col gap-5">
           <div class="flex flex-col gap-1.5">
-            <label class="text-xs font-semibold uppercase tracking-wider text-muted-foreground/60 pl-1">Access Token</label>
+            <label class="text-xs font-semibold uppercase tracking-wider text-muted-foreground/60 pl-1">Bearer credential</label>
             <input
-              v-model="token" type="password" placeholder="sk-..."
+              v-model="token" type="password" placeholder="auth_secret or sk-…"
               class="w-full px-4 py-3 rounded-xl bg-muted border border-border text-foreground font-mono text-sm focus:outline-none focus:ring-2 focus:ring-ring/30 focus:border-foreground/35 transition-all placeholder:text-muted-foreground/50"
               :class="{ 'bg-destructive/5 border-destructive focus:border-destructive focus:ring-destructive/20': error }"
               @keyup.enter="handleLogin" autofocus
             />
+            <p class="text-[11px] text-muted-foreground/70 pl-1 leading-snug">
+              OSS: use <code class="font-mono">[server].auth_secret</code>. Licensed: prefer an Access Token (<code class="font-mono">sk-…</code>).
+            </p>
             <div class="min-h-4 pl-1">
               <p v-if="error" class="text-destructive text-xs font-medium leading-snug">{{ error }}</p>
             </div>
@@ -71,7 +77,7 @@ async function handleLogin() {
         </div>
       </div>
       <div class="bg-muted py-4 text-center border-t border-border">
-        <p class="text-xs text-muted-foreground/70 font-medium">Secured by Super Premium</p>
+        <p class="text-xs text-muted-foreground/70 font-medium">Secured by Super</p>
       </div>
     </div>
   </div>

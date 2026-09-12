@@ -361,7 +361,7 @@ async fn async_main() -> anyhow::Result<()> {
     validate_licensed_auth_secret(
         plugin_host.mode,
         &loaded_plugins,
-        core.config.auth_secret.as_deref(),
+        core.config.server.auth_secret.as_deref(),
     )?;
 
     if is_licensed {
@@ -411,10 +411,10 @@ async fn async_main() -> anyhow::Result<()> {
             "Licensed deployment requires the security plugin HTTP auth middleware, but it is not active. \
              Ensure security.so exports authenticate and re-check superd logs."
         );
-    } else if auth::core_auth_should_activate(core.config.auth_secret.as_deref(), false) {
-        let secret = auth::non_empty_auth_secret(core.config.auth_secret.as_deref())
+    } else if auth::core_auth_should_activate(core.config.server.auth_secret.as_deref(), false) {
+        let secret = auth::non_empty_auth_secret(core.config.server.auth_secret.as_deref())
             .expect("core_auth_should_activate implies non-empty auth_secret");
-        tracing::info!("API auth using auth_secret from conf/super.toml");
+        tracing::info!("API auth using [server].auth_secret from conf/super.toml");
         let state = auth::AuthState::new(secret);
         api_router = auth::install_core_auth(api_router, state);
         auth_required = true;
@@ -457,7 +457,7 @@ async fn async_main() -> anyhow::Result<()> {
         if !common::is_loopback_bind_host(&server.host) && !auth_required {
             anyhow::bail!(
                 "Refusing to bind to {} without authentication. \
-                 Set auth_secret in conf/super.toml, bind to 127.0.0.1, or load the security plugin.",
+                 Set [server].auth_secret in conf/super.toml, bind to 127.0.0.1, or load the security plugin.",
                 server.host
             );
         }

@@ -27,13 +27,12 @@ fn test_legacy_webhook_section_rejected_by_check_helper() {
 #[test]
 fn test_auth_secret_config() {
     let toml_str = r#"
-        auth_secret = "root-secret"
-
         [server]
+        auth_secret = "root-secret"
         port = 9002
     "#;
     let config: ServerConfig = toml::from_str(toml_str).unwrap();
-    assert_eq!(config.auth_secret.as_deref(), Some("root-secret"));
+    assert_eq!(config.server.auth_secret.as_deref(), Some("root-secret"));
 }
 
 #[test]

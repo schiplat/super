@@ -7,14 +7,14 @@
       </h2>
       <a class="home-premium-cta" href="/go/pro/">获取 Super Pro</a>
     </div>
-    <p class="home-section-lead">所有人使用同一个 <code>superd</code> 二进制。可选能力以签名<strong>插件</strong>形式交付 — 将供应商提供的 <code>[license].key</code> 写入 <code>conf/super.toml</code>，并把授权库文件放入 <code>$SUPER_ROOT/plugins/</code>。运行时仅加载密钥中列出的模块。</p>
+    <p class="home-section-lead">所有人使用同一个 <code>superd</code> 二进制。可选能力以签名<strong>插件</strong>形式交付 — 将供应商提供的 <code>[license].key</code> 与<code>[server].auth_secret</code> 写入 <code>conf/super.toml</code>，并把授权库文件放入 <code>$SUPER_ROOT/plugins/</code>。运行时仅加载密钥中列出的模块。</p>
   </div>
   <div class="home-plugin-flow" aria-label="授权部署三步">
     <div class="home-plugin-flow-step">
       <span class="home-plugin-flow-num">1</span>
       <div>
-        <strong>配置 License</strong>
-        <div class="home-plugin-flow-desc">将供应商提供的密钥写入 <code>conf/super.toml</code> 的 <code>[license]</code> 段 — 决定启用哪些模块及到期时间</div>
+        <strong>配置 License + auth_secret</strong>
+        <div class="home-plugin-flow-desc">写入 <code>[license]</code> 密钥，并设置<code>[server].auth_secret</code>（<code>security</code> 启动 / 引导登录所必需）</div>
       </div>
     </div>
     <span class="home-plugin-flow-arrow" aria-hidden="true"></span>
@@ -22,7 +22,7 @@
       <span class="home-plugin-flow-num">2</span>
       <div>
         <strong>部署插件库</strong>
-        <div class="home-plugin-flow-desc">将订阅交付包中的文件复制到 <code>$SUPER_ROOT/plugins/</code></div>
+        <div class="home-plugin-flow-desc">将订阅交付包中的文件复制到 <code>$SUPER_ROOT/plugins/</code>（必须包含 <code>security</code>）</div>
       </div>
     </div>
     <span class="home-plugin-flow-arrow" aria-hidden="true"></span>
@@ -30,7 +30,7 @@
       <span class="home-plugin-flow-num">3</span>
       <div>
         <strong>重启 superd</strong>
-        <div class="home-plugin-flow-desc">服务启动时自动校验密钥并启用对应功能 — 无需更换核心程序</div>
+        <div class="home-plugin-flow-desc">启动时校验密钥，并要求 <code>security</code> + <code>auth_secret</code> — 无需更换核心程序</div>
       </div>
     </div>
   </div>

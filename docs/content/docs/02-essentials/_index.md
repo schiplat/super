@@ -1,6 +1,6 @@
 ---
 title: "Essentials"
-weight: 3
+weight: 2
 description: "Core day-to-day use: configuration, auth, Dashboard, process ops, and logging."
 ---
 

@@ -210,8 +210,9 @@ strict = true
 ```
 
 ```toml
-# super.toml — root
-# 2. Root-level auth_secret (required for licensed startup)
+# super.toml — [server]
+# 2. [server].auth_secret (required for licensed startup)
+[server]
 auth_secret = "change-me-before-bootstrap"
 ```
 

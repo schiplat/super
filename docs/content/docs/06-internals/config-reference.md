@@ -18,7 +18,7 @@ description: "Complete schema for super.toml."
 
 | Location | Keys / file |
 | :--- | :--- |
-| Root (`super.toml`) | `auth_secret` — OSS core auth **or** licensed `security` bootstrap (💎 required when licensed) |
+| `[server]` | `auth_secret` — OSS core auth **or** licensed `security` bootstrap (💎 required when licensed) |
 | `[license]` | `key` 💎 — cryptographically signed subscription token from your vendor |
 | `conf/conf.d/*` *(program stacks)* | `services[].resource_limits` (`cpu_quota`, `memory_limit`, `memory_warn_percent`, `memory_warn_headroom`, `memory_high`) 💎 |
 | `conf/notify.toml` *(separate file)* | `[[channels]]` 💎 — see [Event Notifications](/docs/05-advanced-management/event-notifications) |
@@ -47,6 +47,7 @@ Global settings for the daemon.
 
 | Key | Type | Default | Description |
 | :--- | :--- | :--- | :--- |
+| `auth_secret` | string | — | Admin Bearer secret. **Non-empty enables OSS [core auth](/docs/02-essentials/authentication/).** Required for non-loopback TCP binds (unless `security` is active). **Licensed 💎:** also required for `security` plugin startup / bootstrap; Admins may later disable login with it after creating an Admin Access Token. Top-level `auth_secret` keys are **rejected** (must live here under `[server]`). |
 | `host` | string | `127.0.0.1` | Bind address for API and Dashboard. |
 | `port` | int | `9002` | Bind port. |
 | `shutdown_timeout` | int | `10` | Seconds to wait for SIGTERM before SIGKILL during shutdown. |
@@ -63,6 +64,9 @@ Global settings for the daemon.
 ```toml
 # super.toml — [server]
 [server]
+# Enable API auth (required when binding beyond loopback):
+# auth_secret = "your-own-long-random-string"
+
 # Optional self-daemonize when not using systemd/Docker:
 # daemon = true
 # pidfile = "run/superd.pid"   # default when daemonizing
@@ -76,19 +80,6 @@ Global settings for the daemon.
 # socket_only = true     # disable the TCP listener entirely
 
 # CLI: super --server unix:///path/to/superd.sock list
-```
-
-## Root keys (auth)
-
-Top-level fields in `super.toml` (sibling to `[server]`, not inside it):
-
-| Key | Type | Default | Description |
-| :--- | :--- | :--- | :--- |
-| `auth_secret` | string | — | Admin Bearer secret. **Non-empty enables OSS [core auth](/docs/02-essentials/authentication/).** Required for non-loopback TCP binds (unless `security` is active). **Licensed 💎:** also required for `security` plugin startup / bootstrap; Admins may later disable login with it after creating an Admin Access Token. |
-
-```toml
-# Enable API auth (required when binding beyond loopback):
-# auth_secret = "your-own-long-random-string"
 ```
 
 ## `[license]` — subscription key (Licensed 💎)

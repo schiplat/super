@@ -5,6 +5,7 @@
 # Typical SUPER_ROOT: /opt/super (system) or ~/.super (user)
 
 [server]
+# auth_secret = "CHANGE-ME-strong-random-secret"
 host = "127.0.0.1"
 port = 9002
 shutdown_timeout = 10
@@ -54,16 +55,13 @@ files = ["conf/conf.d/*.toml"]
 #        plugins/ui.so|.dylib         — web dashboard
 #        plugins/notify.so|.dylib     — IM / webhook notifications
 #        plugins/isolation.so|.dylib  — Linux cgroup CPU/memory limits
-#   2. Uncomment auth_secret and [license] below; fill in real values
+#   2. Uncomment [server].auth_secret above and [license] below; fill in real values
 #   3. Restart superd — licensed mode hard-requires security + auth_secret
 #
 # Related files (also subscription; create when needed):
 #   conf/notify.toml     — notify plugin channels / templates
 #   conf/conf.d/*.toml   — per-program resource_limits (isolation plugin)
 # =============================================================================
-
-# Root Admin bootstrap secret for the security plugin. Use a long random string.
-# auth_secret = "CHANGE-ME-strong-random-secret"
 
 # [license]
 # # Prefer true in production so an invalid key refuses startup (no silent OSS fall-back).

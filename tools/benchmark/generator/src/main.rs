@@ -92,7 +92,7 @@ fn super_toml(pro: bool) -> String {
     if pro {
         s.push_str(
             "\n# Filled by the orchestrator from SUPER_BENCH_AUTH_SECRET / SUPER_BENCH_LICENSE_FILE.\n\
-             # auth_secret = \"\"\n\
+             # [server] auth_secret = \"\"\n\
              # [license]\n\
              # key = \"\"\n\
              # strict = true\n",

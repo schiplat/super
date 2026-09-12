@@ -9,13 +9,13 @@
 # provided by the bundled security plugin + auth_secret.
 # =============================================================================
 
-auth_secret = "CHANGE-ME-strong-random-secret"
 
 [license]
 strict = true
 key = "PASTE-BASE64-LICENSE-KEY"
 
 [server]
+auth_secret = "CHANGE-ME-strong-random-secret"
 # 0.0.0.0 is OK when security plugin is loaded (Bearer auth on API).
 host = "0.0.0.0"
 port = 9002

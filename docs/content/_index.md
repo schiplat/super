@@ -1,7 +1,7 @@
 ---
 title: ""
 homeTitle: "Super – API-First Rust Process Manager for the Edge"
-description: "Super is an open-source, API-first process manager written in Rust: declarative TOML/REST config, health checks, crash recovery, dependency orchestration, and an auditable event ledger — extensible with licensed plugins for auth, alerting, and cgroup limits."
+description: "Super is an open-source, API-first process manager written in Rust: declarative TOML/REST config, health checks, crash recovery, dependency orchestration, and an auditable event ledger — with optional single-admin API auth, plus licensed plugins for multi-user tokens, alerting, and cgroup limits."
 width: full
 toc: false
 ---

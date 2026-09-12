@@ -52,12 +52,6 @@ pub struct LicenseSection {
 
 #[derive(Debug, Deserialize, Clone, Default)]
 pub struct ServerConfig {
-    /// Admin Bearer secret. Non-empty enables OSS core auth (or bootstraps the
-    /// licensed `security` plugin). Required for non-loopback TCP binds unless
-    /// the security plugin is active.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub auth_secret: Option<String>,
-
     #[serde(default)]
     pub license: Option<LicenseSection>,
 
@@ -90,6 +84,21 @@ pub fn legacy_webhook_section_present(content: &str) -> bool {
 /// User-facing message when `[webhook]` is still present in `super.toml`.
 pub const LEGACY_WEBHOOK_SECTION_MSG: &str = "[webhook] in super.toml is not supported — use [[event_hooks]] for local scripts or conf/notify.toml with the notify plugin for HTTP/IM alerts";
 
+/// Detect a legacy top-level `auth_secret` key (must be under `[server]` only).
+pub fn legacy_top_level_auth_secret_present(content: &str) -> bool {
+    let Ok(value) = toml::from_str::<toml::Value>(content) else {
+        return false;
+    };
+    value
+        .as_table()
+        .is_some_and(|t| t.contains_key("auth_secret"))
+}
+
+/// User-facing message when top-level `auth_secret` is still present.
+pub const LEGACY_TOP_LEVEL_AUTH_SECRET_MSG: &str = "auth_secret must be under [server] in conf/super.toml (not a top-level key). Example:\n\
+     [server]\n\
+     auth_secret = \"…\"";
+
 #[derive(Debug, Deserialize, Clone, Default)]
 pub struct IncludeSection {
     // Glob patterns, e.g. ["/etc/super/conf.d/*.json"]
@@ -98,6 +107,12 @@ pub struct IncludeSection {
 
 #[derive(Debug, Deserialize, Clone)]
 pub struct ServerSection {
+    /// Admin Bearer secret. Non-empty enables OSS core auth (or bootstraps the
+    /// licensed `security` plugin). Required for non-loopback TCP binds unless
+    /// the security plugin is active. Must live under `[server]` (not top-level).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub auth_secret: Option<String>,
+
     #[serde(default = "default_host")]
     pub host: String,
     #[serde(default = "default_port")]
@@ -163,6 +178,7 @@ fn default_socket_mode() -> String {
 impl Default for ServerSection {
     fn default() -> Self {
         Self {
+            auth_secret: None,
             host: default_host(),
             port: default_port(),
             shutdown_timeout: default_shutdown_timeout(),
@@ -346,14 +362,18 @@ fn default_enable_docs() -> bool {
     false
 } // OSS default off; enable for onboarding
 
-/// Read `auth_secret` from `conf/super.toml`.
+/// Read `[server].auth_secret` from `conf/super.toml`.
 pub fn read_auth_secret(config_path: &Path) -> anyhow::Result<Option<String>> {
     if !config_path.exists() {
         return Ok(None);
     }
     let content = std::fs::read_to_string(config_path)?;
+    if legacy_top_level_auth_secret_present(&content) {
+        anyhow::bail!("{LEGACY_TOP_LEVEL_AUTH_SECRET_MSG}");
+    }
     let config: ServerConfig = toml::from_str(&content)?;
     Ok(config
+        .server
         .auth_secret
         .map(|s| s.trim().to_string())
         .filter(|s| !s.is_empty()))
@@ -391,16 +411,29 @@ mod tests {
     use super::*;
 
     #[test]
-    fn legacy_webhook_section_detection() {
-        assert!(legacy_webhook_section_present(
-            "[webhook]\nurl = \"http://x\"\n"
+    fn legacy_top_level_auth_secret_detection() {
+        assert!(legacy_top_level_auth_secret_present(
+            "auth_secret = \"x\"\n[server]\nhost = \"127.0.0.1\"\n"
         ));
-        assert!(!legacy_webhook_section_present(
-            "[[event_hooks]]\ncommand = \"./h.sh\"\n"
+        assert!(!legacy_top_level_auth_secret_present(
+            "[server]\nauth_secret = \"x\"\nhost = \"127.0.0.1\"\n"
         ));
-        assert!(!legacy_webhook_section_present(
-            "# [webhook] legacy example\n"
+        assert!(!legacy_top_level_auth_secret_present(
+            "# auth_secret = \"x\"\n[server]\nhost = \"127.0.0.1\"\n"
         ));
+    }
+
+    #[test]
+    fn auth_secret_under_server_parses() {
+        let cfg: ServerConfig = toml::from_str(
+            r#"
+            [server]
+            auth_secret = "s3cret"
+            host = "127.0.0.1"
+            "#,
+        )
+        .unwrap();
+        assert_eq!(cfg.server.auth_secret.as_deref(), Some("s3cret"));
     }
 
     #[test]

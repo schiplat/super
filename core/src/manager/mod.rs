@@ -2877,6 +2877,9 @@ impl Manager {
     async fn handle_reload(&mut self) -> anyhow::Result<Vec<ProgramSummary>> {
         tracing::info!("Reloading configuration from {:?}", self.config_path);
         let content = tokio::fs::read_to_string(&self.config_path).await?;
+        if common::config::legacy_top_level_auth_secret_present(&content) {
+            anyhow::bail!(common::config::LEGACY_TOP_LEVEL_AUTH_SECRET_MSG);
+        }
         let new_config: ServerConfig = toml::from_str(&content)?;
 
         if new_config.logging.log_level != self.config.logging.log_level {

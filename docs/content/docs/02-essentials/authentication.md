@@ -7,6 +7,8 @@ aliases:
   - /docs/05-advanced-management/authentication
 ---
 
+**On this page:** [OSS admin secret](#oss-admin-secret) (Community / no plugins) → [Licensed `security`](#licensed-deployments-require-security) (multi-user Access Tokens). Day-to-day RBAC and audit deep-dives live under [Advanced Management](/docs/05-advanced-management/).
+
 ## Can OSS use `--token`?
 
 **Yes.** OSS has no `sk-…` Access Tokens, but when you set a non-empty **`auth_secret`** in `conf/super.toml`, that string **is** the Bearer credential for:
@@ -25,7 +27,7 @@ super --token 'your-auth-secret' list
 
 | Credential | OSS | Subscription (`security` plugin) |
 | :--- | :--- | :--- |
-| `auth_secret` (in `conf/super.toml`) | ✅ single shared secret | ✅ bootstrap Admin Bearer |
+| `auth_secret` (`[server]` in `conf/super.toml`) | ✅ single shared secret | ✅ bootstrap Admin Bearer |
 | Multi-user Access Tokens (`sk-…`) | ❌ | ✅ |
 
 ---
@@ -45,9 +47,8 @@ There is **no** on-disk `auth.key`. The only OSS secret is `auth_secret` in conf
 
 ```toml
 # conf/super.toml — enable auth (also required for non-loopback binds)
-auth_secret = "your-own-long-random-string"
-
 [server]
+auth_secret = "your-own-long-random-string"
 host = "127.0.0.1"   # default; use 0.0.0.0 only with auth_secret set
 ```
 
@@ -79,7 +80,7 @@ Dashboard: open `/`, paste the same string when prompted.
 
 1. **`security` is listed in the signed license claims** (re-issue legacy keys that omit it).
 2. **`security.so` / `security.dylib` loads successfully** from `$SUPER_ROOT/plugins/`.
-3. **`auth_secret` is set** in `conf/super.toml` (root Admin Bearer for bootstrap).
+3. **`auth_secret` is set** in `conf/super.toml` (Admin Bearer for bootstrap).
 4. **HTTP auth middleware is active** (the security plugin exports `authenticate`).
 
 Other licensed plugins (`ui`, `notify`, `isolation`, …) load only after these checks pass. OSS deployments (no valid license) are unchanged.
@@ -132,10 +133,11 @@ Official release binaries may embed **more** verifying keys than a local `cargo 
 
 1. Add a valid `[license].key` in `conf/super.toml` (must authorize `security` — included with every subscription).
 2. Install **`security.so`** from your subscription delivery package into `$SUPER_ROOT/plugins/` (required for startup).
-3. Set `auth_secret` in `super.toml` (required for startup):
+3. Set `[server].auth_secret` in `super.toml` (required for startup):
 
 ```toml
 # super.toml (subscription)
+[server]
 auth_secret = "my-super-secure-root-password"
 ```
 

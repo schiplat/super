@@ -7,14 +7,14 @@
       </h2>
       <a class="home-premium-cta" href="/go/pro/">Get Super Pro</a>
     </div>
-    <p class="home-section-lead">Один бинарник <code>superd</code> для всех. Коммерческие возможности — подписанные <strong>плагины</strong>: положите авторизованные <code>plugins/*.so</code> в <code>$SUPER_ROOT</code> и добавьте действующий <code>[license].key</code> в <code>conf/super.toml</code>. Загружаются только плагины из лицензии.</p>
+    <p class="home-section-lead">Один бинарник <code>superd</code> для всех. Коммерческие возможности — подписанные <strong>плагины</strong>: добавьте действующий <code>[license].key</code> и <code>[server].auth_secret</code> в <code>conf/super.toml</code>, затем положите авторизованные библиотеки в <code>$SUPER_ROOT/plugins/</code>. Загружаются только плагины из лицензии.</p>
   </div>
   <div class="home-plugin-flow" aria-label="Развёртывание коммерческой версии в три шага">
     <div class="home-plugin-flow-step">
       <span class="home-plugin-flow-num">1</span>
       <div>
-        <strong>Настроить лицензию</strong>
-        <div class="home-plugin-flow-desc">Скопируйте файлы из пакета подписки в <code>$SUPER_ROOT/plugins/</code></div>
+        <strong>Лицензия + auth_secret</strong>
+        <div class="home-plugin-flow-desc">Вставьте ключ в <code>[license]</code> и задайте <code>[server].auth_secret</code> (обязателен для старта <code>security</code>)</div>
       </div>
     </div>
     <span class="home-plugin-flow-arrow" aria-hidden="true"></span>
@@ -22,7 +22,7 @@
       <span class="home-plugin-flow-num">2</span>
       <div>
         <strong>Разместить файлы плагинов</strong>
-        <div class="home-plugin-flow-desc">Скопируйте файлы из пакета подписки в <code>$SUPER_ROOT/plugins/</code></div>
+        <div class="home-plugin-flow-desc">Скопируйте файлы из пакета подписки в <code>$SUPER_ROOT/plugins/</code> (<code>security</code> обязателен)</div>
       </div>
     </div>
     <span class="home-plugin-flow-arrow" aria-hidden="true"></span>
@@ -30,7 +30,7 @@
       <span class="home-plugin-flow-num">3</span>
       <div>
         <strong>Перезапустить superd</strong>
-        <div class="home-plugin-flow-desc">Скопируйте файлы из пакета подписки в <code>$SUPER_ROOT/plugins/</code></div>
+        <div class="home-plugin-flow-desc">При старте проверяет ключ и требует <code>security</code> + <code>auth_secret</code> — заменять ядро не нужно</div>
       </div>
     </div>
   </div>
