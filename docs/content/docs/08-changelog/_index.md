@@ -17,11 +17,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.5.7] - 2026-09-12
+
 ### Changed
 
 - **Dashboard shell is embedded in OSS `superd`.** Process overview, logs, stack editor, and related shell pages no longer require the `ui` plugin. The subscription **`ui`** plugin now delivers **Pro extensions** only (Access Tokens UI, Notification Settings including inhibition rules and delivery history, process hot-reload, and matching nav entries). See [Dashboard](/docs/02-essentials/web-ui/) and the [feature matrix](/docs/07-editions/feature-matrix/).
 - **Dashboard slot contract tests in OSS CI.** `dashboard` runs `npm test` (vitest) before the production build; `slots.spec.ts` guards slot names, `context.process` fields, and mount-site `:context` shapes. Do not skip or weaken these tests without understanding the plugin UI contract (`ui-bridge.d.ts`).
 - **OSS core auth is `auth_secret`-only under `[server]`.** Non-empty `[server].auth_secret` enables the single admin Bearer. Non-loopback TCP without a secret (and without the `security` plugin) **refuses to start**. Top-level `auth_secret` keys are **rejected** (no compatibility). No `data/auth.key`, no `auth_required` / `allow_insecure_public_bind` knobs. Docker OSS image ships a placeholder under `[server]` (change before public exposure). See [Authentication](/docs/02-essentials/authentication/).
+
+### Fixed
+
+- **Dashboard footer** shows Community vs Licensed from runtime `edition` (OSS no longer always says Licensed).
+- **Pro UI stylesheet load order:** plugin `ui.css` is inserted before the shell CSS so shared utilities like `.hidden` cannot override host `md:flex` and collapse the desktop nav.
+
+### Notes
+
+- Workspace **1.5.7**; pair with commercial plugin packages `super-plugins-1.5.7-…`.
 
 ---
 
