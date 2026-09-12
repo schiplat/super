@@ -5,41 +5,11 @@ improvements we track publicly. Anything that is an accepted security trade-off
 lives in [SECURITY.md](SECURITY.md); this file is for feature work.
 
 This is the **single** public roadmap source. Docs and the changelog link here
-rather than duplicating a second page.
+rather than duplicating a second page. **Shipped work** belongs in the
+[Changelog](https://super.docs.sconts.com/docs/08-changelog/) (e.g. OSS Dashboard
+shell in **1.5.7**) — not as lingering P0 entries here.
 
 Priorities: **P0** (next in line) · **P1** (soon) · **P2** (backlog) · **Directions** (multi-release horizons).
-Implemented P0 items stay listed for history; the active next-in-line P0 is **Migration importers**.
-
-## P0 — OSS single-host Dashboard
-
-**Status:** shipped in **1.5.7** (OSS shell embedded in `superd`; subscription `ui` plugin delivers Pro extensions only).
-
-The **Community / OSS** edition includes a usable single-host Web Dashboard —
-process overview, stack editor, logs, health, and day-to-day controls — without
-a subscription key. The shell is **rust-embedded in OSS `superd`**. The licensed
-**`ui`** plugin adds Pro surfaces (Access Tokens UI, Notification Settings,
-process hot-reload) via capability-gated slots when peer plugins are loaded.
-
-### Product boundary (customer-facing)
-
-| In OSS Dashboard (default) | Licensed plugins (appear only when loaded) |
-|---|---|
-| Overview, start/stop/restart, detail logs & event history | API auth / RBAC / Access Tokens (`security`) |
-| Stack editor, topology, create/edit (incl. health, cron, OTA fields) | Notifications UI (`notify`) |
-| Host metrics, reload-from-disk | cgroup / resource-limit form fields (`isolation`, Linux) |
-| Compact license / edition page with upgrade CTA | Full subscription detail when a key is present |
-
-**UX rule:** licensed entries are **absent** from navigation when the matching
-plugin is not loaded — no disabled buttons, dead routes, or “coming soon”
-stubs. Contributors cloning the OSS tree get a self-contained shell with no
-private-repo or license requirement.
-
-**Out of scope for this wave (still open):** a browser **Operation Audit** page
-(audit remains write-only log files under the `security` plugin when licensed);
-multi-node / hub UI; fine-grained commercial micro-frontends.
-
-Public docs (feature matrix, Getting Started, editions, Authentication) were
-updated with the 1.5.7 release.
 
 ## P0 — Migration importers (`super import`)
 
@@ -129,13 +99,22 @@ central access lifecycle, and a shared operator portal — while each host still
 runs a lean local `superd`.
 
 Single-host production hardening (`security` / `notify` / `isolation`) remains
-a separate subscription tier from hub/enterprise multi-node features. The OSS
-Dashboard shell already ships without Hub; hub UI stays a later direction.
+a separate subscription tier from hub/enterprise multi-node features. Hub UI
+stays a later direction; the OSS single-host Dashboard already ships without it.
 
 Principles: the local daemon stays authoritative for process lifecycle; the hub
 coordinates and delivers policy/artifacts; OSS remains useful offline; public
 docs stay at product level (no signing-key / issuance internals). Packaging
 (hosted SaaS vs self-hosted Hub) and timeline are TBD.
+
+## P2 — Browser Operation Audit page
+
+**Status:** deferred; no near-term schedule.
+
+Licensed `security` already writes an operation audit log on disk. There is no
+Dashboard page to browse it. If built later, it stays behind the `security`
+capability (OSS must not show an empty stub). Until then, operators use the log
+files / CLI.
 
 ## P2 — Credential-channel env injection (opt-in)
 
