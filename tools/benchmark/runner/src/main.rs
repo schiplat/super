@@ -188,7 +188,7 @@ fn prepare_instance(args: &Args) -> anyhow::Result<()> {
 
 fn inject_pro_license(root: &Path) -> anyhow::Result<()> {
     let toml_path = root.join("conf/super.toml");
-    let mut toml = fs::read_to_string(&toml_path)?;
+    let toml = fs::read_to_string(&toml_path)?;
     let secret = std::env::var("SUPER_BENCH_AUTH_SECRET")
         .map_err(|_| anyhow::anyhow!("super-pro requires SUPER_BENCH_AUTH_SECRET"))?;
     let key = if let Ok(k) = std::env::var("SUPER_BENCH_LICENSE_KEY") {
@@ -198,29 +198,66 @@ fn inject_pro_license(root: &Path) -> anyhow::Result<()> {
     } else {
         anyhow::bail!("super-pro requires SUPER_BENCH_LICENSE_KEY or SUPER_BENCH_LICENSE_FILE");
     };
+    let out = inject_pro_into_toml(&toml, &secret, &key)?;
+    fs::write(toml_path, out)?;
+    Ok(())
+}
+
+/// Inject `[server].auth_secret` and `[license]` for licensed bench instances.
+/// Keeps auth_secret under `[server]` (never a top-level key). Idempotent.
+fn inject_pro_into_toml(toml: &str, secret: &str, key: &str) -> anyhow::Result<String> {
     let secret_esc = secret.replace('\\', "\\\\").replace('"', "\\\"");
     let key_esc = key.replace('\\', "\\\\").replace('"', "\\\"");
-    // Ensure [server].auth_secret (not a top-level key) and [license].
-    if !toml.contains("[server]") {
-        toml.push_str("\n[server]\n");
+    let mut lines: Vec<String> = toml.lines().map(|s| s.to_string()).collect();
+
+    let server_hdr = lines
+        .iter()
+        .position(|l| l.trim() == "[server]")
+        .ok_or_else(|| anyhow::anyhow!("conf/super.toml missing [server] section"))?;
+
+    // Remove existing live auth_secret lines inside [server].
+    let mut i = server_hdr + 1;
+    while i < lines.len() {
+        let t = lines[i].trim();
+        if t.starts_with('[') {
+            break;
+        }
+        if t.starts_with("auth_secret") {
+            lines.remove(i);
+            continue;
+        }
+        i += 1;
     }
-    if let Some(idx) = toml.find("[server]") {
-        let insert_at = toml[idx..]
-            .find('\n')
-            .map(|n| idx + n + 1)
-            .unwrap_or(toml.len());
-        toml.insert_str(
-            insert_at,
-            &format!("auth_secret = \"{secret_esc}\"\n"),
+    lines.insert(server_hdr + 1, format!("auth_secret = \"{secret_esc}\""));
+
+    // Replace or append [license] block.
+    if let Some(lic_pos) = lines.iter().position(|l| l.trim() == "[license]") {
+        let mut end = lic_pos + 1;
+        while end < lines.len() && !lines[end].trim_start().starts_with('[') {
+            end += 1;
+        }
+        lines.splice(
+            lic_pos..end,
+            [
+                "[license]".to_string(),
+                format!("key = \"{key_esc}\""),
+                "strict = true".to_string(),
+            ],
         );
     } else {
-        anyhow::bail!("conf/super.toml missing [server] after inject prep");
+        if !lines.last().map(|l| l.is_empty()).unwrap_or(true) {
+            lines.push(String::new());
+        }
+        lines.push("[license]".to_string());
+        lines.push(format!("key = \"{key_esc}\""));
+        lines.push("strict = true".to_string());
     }
-    toml.push_str(&format!(
-        "\n[license]\nkey = \"{key_esc}\"\nstrict = true\n"
-    ));
-    fs::write(toml_path, toml)?;
-    Ok(())
+
+    let mut out = lines.join("\n");
+    if !out.ends_with('\n') {
+        out.push('\n');
+    }
+    Ok(out)
 }
 
 fn copy_plugins(src: &Path, dst: &Path) -> anyhow::Result<()> {
@@ -494,4 +531,71 @@ fn stop_target(args: &Args, handle: &mut Handle) {
 fn leftovers(pids: &[u32]) -> bool {
     pids.iter()
         .any(|p| Path::new(&format!("/proc/{p}")).exists())
+}
+
+#[cfg(test)]
+mod inject_pro_tests {
+    use super::inject_pro_into_toml;
+
+    fn sample_generator_toml() -> String {
+        String::from(
+            "# Bench instance config.\n\n\
+             [server]\n\
+             host = \"127.0.0.1\"\n\
+             port = 9002\n\
+             enable_docs = false\n\n\
+             [logging]\n\
+             log_level = \"warn\"\n\n\
+             [include]\n\
+             files = [\"conf/conf.d/*.json\"]\n\n\
+             # Filled by orchestrator.\n\
+             # [server] auth_secret = \"\"\n\
+             # [license]\n\
+             # key = \"\"\n",
+        )
+    }
+
+    #[test]
+    fn injects_auth_secret_under_server_not_top_level() {
+        let out = inject_pro_into_toml(&sample_generator_toml(), "bench-secret", "jwt.placeholder")
+            .expect("inject");
+        let server = out.split("[logging]").next().unwrap();
+        assert!(
+            server.contains("auth_secret = \"bench-secret\""),
+            "expected auth_secret in [server] block:\n{server}"
+        );
+        let before = out.split("[server]").next().unwrap();
+        assert!(
+            !before.lines().any(|l| l.trim().starts_with("auth_secret")),
+            "top-level auth_secret must not appear:\n{before}"
+        );
+        assert!(out.contains("[license]"));
+        assert!(out.contains("key = \"jwt.placeholder\""));
+        assert!(out.contains("strict = true"));
+    }
+
+    #[test]
+    fn inject_is_idempotent_for_auth_secret() {
+        let once = inject_pro_into_toml(&sample_generator_toml(), "s1", "k1").expect("first");
+        let twice = inject_pro_into_toml(&once, "s2", "k2").expect("second");
+        let live = twice
+            .lines()
+            .filter(|l| {
+                let t = l.trim();
+                t.starts_with("auth_secret") && !t.starts_with('#')
+            })
+            .count();
+        assert_eq!(live, 1, "duplicate live auth_secret lines:\n{twice}");
+        assert!(twice.contains("auth_secret = \"s2\""), "{twice}");
+        assert!(twice.contains("key = \"k2\""), "{twice}");
+    }
+
+    #[test]
+    fn missing_server_section_errors() {
+        let err = inject_pro_into_toml("log_level = \"warn\"\n", "s", "k").unwrap_err();
+        assert!(
+            err.to_string().contains("[server]"),
+            "unexpected err: {err}"
+        );
+    }
 }
