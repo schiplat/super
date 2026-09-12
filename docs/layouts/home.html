@@ -9,8 +9,15 @@
   {{- end -}}
   {{- $full := eq .Params.width "full" -}}
   <div class='hx:mx-auto hx:flex {{ if $full }}hx:max-w-none hx:w-full home-layout--wide{{ else }}hextra-max-page-width{{ end }}'>
+    {{/* Always render sidebar: hamburger toggles .hextra-sidebar-container.
+         Full-width home must still ship a mobile-only shell (disableSidebar,
+         no placeholder) or the Menu button is a no-op. */}}
+    {{ partial "sidebar.html" (dict
+      "context" . 
+      "disableSidebar" true
+      "displayPlaceholder" (not $full)
+    ) }}
     {{ if not $full }}
-      {{ partial "sidebar.html" (dict "context" . "disableSidebar" true "displayPlaceholder" true) }}
       {{ partial "toc.html" . }}
     {{ end }}
     <article class="hx:w-full hx:break-words hx:flex hx:min-h-[calc(100vh-var(--navbar-height))] hx:min-w-0 hx:justify-center {{ if $full }}hx:pb-0 hx:pr-0{{ else }}hx:pb-8 hx:pr-[calc(env(safe-area-inset-right)-1.5rem)]{{ end }}">

@@ -83,7 +83,7 @@ params:
   banner:
     key: "super-release-banner-v1-5-7"
     message: |
-      **Super 1.5.7 is here** — free 90-day Pro trial via Portal; optional ¥10/mo OSS tip on Afdian. [See what's new →](/docs/08-changelog/)
+      **Super 1.5.7 is here** — Dashboard shell ships in OSS `superd`; admin Bearer via `[server].auth_secret`. [See what's new →](/docs/08-changelog/)
   contact:
     api_url: "https://open.schiplat.com/api/v1/demands"
   externalLinkDecoration: true

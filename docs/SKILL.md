@@ -18,6 +18,8 @@ any language: Node, Python, Go, Rust, shell. Key traits:
 
 - **Declarative programs** declared in **stack files** (`conf/conf.d/*`, TOML default, JSON compatible),
   applied at daemon start and on `super reload`. NOT in `super.toml`.
+- **Ordered orchestration**: `depends_on` + health gates; `@group` / `all` start·stop·restart
+  follow dependency order (reverse on stop). See [Dependencies](https://super.docs.sconts.com/docs/03-orchestration/dependencies/).
 - **API-first**: everything the CLI does is a REST call to `superd`
   (default `http://127.0.0.1:9002`, optional Unix socket).
 - **Fail-closed security**: refuses non-loopback bind unless explicitly opted in
@@ -74,7 +76,8 @@ super top               # htop-style TUI
 
 **Targets**: `<name>` exact name · `@<group>` every program in a group · `<id>`
 UUID (unambiguous prefix ok) · `all` every program. A match on several programs
-is rejected as ambiguous.
+is rejected as ambiguous. Multi-target **start** runs dependency order; **stop**
+runs reverse; multi-target **restart** is stop-all-then-start-all (one bounce).
 
 **Batch safety**: operations touching >1 program (`@group` / `all`) prompt for
 confirmation. `--yes` / `-y` skips it; `--dry-run` prints the affected list and
@@ -134,17 +137,23 @@ Key fields:
 
 - **Identity & execution**: `name` (required), `command` (required), `args`,
   `env`, `env_file`, `cwd`, `user` (root only), `group` (batch target `@group`),
-  `numprocs`, `process_name` (template, `{num}`).
+  `numprocs` (N OS processes from one definition; injects `SUPER_PROCESS_NUM` /
+  `SUPER_PROCESS_TOTAL` — workers, **not** Node cluster / dual-version deploy),
+  `process_name` (template, `{num}`).
 - **Restart**: `autostart`, `autorestart` (`unexpected`|`true`|`false`),
   `exitcodes`, `retry_limit` (max consecutive crashes before `Fatal`),
   `startsecs` (stable uptime resets the retry counter), `stopsecs`
-  (grace after SIGTERM, then SIGKILL; TOML alias `stopwaitsecs`), `priority`.
-- **Orchestration**: `depends_on` (must be **Healthy** first), cron fields below.
+  (grace after SIGTERM, then SIGKILL; TOML alias `stopwaitsecs`), `priority`
+  (tie-break when dependency order is unconstrained; lower first).
+- **Orchestration**: `depends_on` (upstreams must be **Healthy** before start);
+  batch `@group`/`all` lifecycle follows the same order (reverse on stop).
+  Cron fields below.
 - **Hooks**: `hooks.pre_start` / `post_start` / `pre_stop` / `post_stop` (shell).
 - **Health check**: `health_check` block, see below.
-- **Licensed only** 💎: `resource_limits.cpu_quota` (cores) / `memory_limit`
-  (MB) / `memory_warn_percent` / `memory_warn_headroom` / `memory_high`
-  (`isolation` plugin, Linux cgroups v2).
+- **`resource_limits`**: schema fields (`cpu_quota` cores, `memory_limit` MB,
+  `memory_warn_percent` / `memory_warn_headroom` / `memory_high`) are stored in
+  OSS; **enforcement** needs the licensed `isolation` plugin on Linux (cgroups
+  v2). Without the plugin, Super warns and leaves limits stored only.
 - **OTA `artifact`**: `source`, `checksum`, `destination`, `extract`,
   `restart_policy`, `download_timeout` (default 60s), `verify_timeout`
   (default 60s). Per-program — not in `super.toml`.
@@ -257,7 +266,7 @@ Embedded **Dashboard** shell (overview, logs, stack, license), **core auth**
 (`cron` / `on_overlap` / `catchup` / `jitter_sec` / `max_concurrent` /
 `max_queued`), health checks & tuning, OTA updates, event hooks
 (`[[event_hooks]]` command/webhook), `super top`, `super logs`, dependencies
-(`depends_on`), `numprocs` scaling.
+(`depends_on` + ordered batch lifecycle), `numprocs` multi-process workers.
 
 ---
 
@@ -373,9 +382,10 @@ API / stack / CLI / dashboard. Schema: [Config reference — artifact](https://s
      `security` / `notify` as appropriate). Confirm plugin files exist in
      `$SUPER_ROOT/plugins/` (no `lib` prefix), the license grants the plugin id,
      and `super doctor` reports them loaded.
-   - `notify` reads `conf/notify.toml`; `isolation` is **Linux-only** cgroups v2.
-   - OSS builds ignore unknown licensed fields — a missing Pro feature usually
-     means the plugin did not load.
+   - `notify` reads `conf/notify.toml`; `isolation` is **Linux-only** cgroups v2
+     and is what **enforces** `resource_limits` (OSS still stores the fields).
+   - A missing Pro feature usually means the plugin did not load — not that the
+     field was stripped from the stack.
 
 4. **Program keeps restarting (restart loop)**
    - `super events <name>` shows `process_fatal` / backoff / OOM history
@@ -413,8 +423,14 @@ API / stack / CLI / dashboard. Schema: [Config reference — artifact](https://s
   rejected by `super check`). Use stack JSON files, `super add`, or the API.
 - **`super check` is offline** — validates `super.toml` + included stacks without
   a running daemon. `--file` overrides the config path.
-- **SIGKILL (`signal: 9`) in events usually means a cgroup/OOM kill** under
-  `resource_limits`, not a manual kill.
+- **Batch lifecycle is ordered.** `@group` / `all` start follows `depends_on`
+  (+ `priority` ties); stop is reverse; restart is one coordinated bounce — not
+  N independent restarts racing each other.
+- **`numprocs` is multi-process workers**, not Node cluster (shared port / ZDT
+  reload) and not a rolling dual-version deploy of one service.
+- **`resource_limits` without `isolation`**: values persist; cgroups are **not**
+  applied. Look for the “stored only, not enforced” warning. SIGKILL under an
+  enforced hard `memory_limit` is usually cgroup OOM, not a manual kill.
 - **`--wait` vs `--wait-healthy`**: the former accepts `Running`, the latter
   requires `Healthy`. Mutually exclusive.
 - **Health types**: `tcp` needs `host`+`port`; `http` needs `url` (+`method`);
@@ -431,8 +447,8 @@ API / stack / CLI / dashboard. Schema: [Config reference — artifact](https://s
 ## Docs map
 
 - [Getting started](https://super.docs.sconts.com/docs/01-getting-started/)
-- [Configuration](https://super.docs.sconts.com/docs/02-essentials/configuration/) · [Authentication](https://super.docs.sconts.com/docs/02-essentials/authentication/) · [Dashboard](https://super.docs.sconts.com/docs/02-essentials/web-ui/) · [Environment & Secrets](https://super.docs.sconts.com/docs/02-essentials/environment-secrets/)
-- [Health checks](https://super.docs.sconts.com/docs/03-orchestration/health-checks/) · [Scheduled tasks](https://super.docs.sconts.com/docs/02-essentials/scheduled-tasks/) · [OTA updates](https://super.docs.sconts.com/docs/03-orchestration/ota-updates)
+- [Configuration](https://super.docs.sconts.com/docs/02-essentials/configuration/) · [Authentication](https://super.docs.sconts.com/docs/02-essentials/authentication/) · [Dashboard](https://super.docs.sconts.com/docs/02-essentials/web-ui/) · [Process Operations](https://super.docs.sconts.com/docs/02-essentials/process-control/) · [Environment & Secrets](https://super.docs.sconts.com/docs/02-essentials/environment-secrets/)
+- [Dependencies](https://super.docs.sconts.com/docs/03-orchestration/dependencies/) · [Health checks](https://super.docs.sconts.com/docs/03-orchestration/health-checks/) · [Scheduled tasks](https://super.docs.sconts.com/docs/02-essentials/scheduled-tasks/) · [OTA updates](https://super.docs.sconts.com/docs/03-orchestration/ota-updates)
 - [System events](https://super.docs.sconts.com/docs/03-orchestration/system-events/) · [Lifecycle hooks](https://super.docs.sconts.com/docs/03-orchestration/lifecycle-hooks/)
 - [CLI reference](https://super.docs.sconts.com/docs/06-internals/cli-reference/) · [Config reference](https://super.docs.sconts.com/docs/06-internals/config-reference/) · [Environment variables](https://super.docs.sconts.com/docs/06-internals/environment-variables/)
 - [Feature matrix](https://super.docs.sconts.com/docs/07-editions/feature-matrix/) · [Changelog](https://super.docs.sconts.com/docs/08-changelog/)

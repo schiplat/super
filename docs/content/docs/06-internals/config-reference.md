@@ -284,7 +284,7 @@ Per-program lifecycle shell hooks. Full behavior table: [Lifecycle Hooks](/docs/
 
 ### `resource_limits` 💎
 
-**Commercial only.** Linux cgroups CPU/memory limits; requires the `isolation` plugin on Linux. See [Resource Isolation](/docs/05-advanced-management/resource-isolation).
+Schema fields are always accepted and stored. **Enforcement** (Linux cgroups v2 CPU/memory) requires the `isolation` plugin — without it, Super warns that limits are stored only. See [Resource Isolation](/docs/05-advanced-management/resource-isolation).
 
 | Key | Type | Default | Description |
 | :--- | :--- | :--- | :--- |

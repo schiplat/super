@@ -5,7 +5,7 @@ description: "Enforcing limits with Linux Cgroups v2."
 ---
 
 > [!IMPORTANT] Licensed feature — `isolation` plugin
-> This page covers a **licensed feature** provided by the **`isolation` plugin** (Linux only, cgroups v2, privileged access to `/sys/fs/cgroup`). It requires a valid subscription `[license].key` and the plugin library in `$SUPER_ROOT/plugins/`. OSS `superd` without the plugin ignores `resource_limits` and emits no cgroup events.
+> **Enforcement** of `resource_limits` (Linux cgroups v2 CPU/memory) requires the **`isolation` plugin**, a valid subscription `[license].key`, and privileged access to `/sys/fs/cgroup`. Without that plugin, OSS `superd` still **accepts and persists** `resource_limits` on the program (stack / API / CLI) but **does not apply** cgroups — it logs that limits are stored only, and emits no cgroup events (`memory_pressure` / `memory_oom_kill`).
 
 ### Cgroups Integration 💎
 
