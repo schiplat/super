@@ -12,14 +12,13 @@ Implemented P0 items stay listed for history; the active next-in-line P0 is **Mi
 
 ## P0 — OSS single-host Dashboard
 
-**Status:** implemented (OSS shell embedded in `superd`; subscription `ui` plugin delivers Pro extensions only).
+**Status:** shipped in **1.5.7** (OSS shell embedded in `superd`; subscription `ui` plugin delivers Pro extensions only).
 
-Ship a **usable single-host Web Dashboard with the OSS / Community edition** —
+The **Community / OSS** edition includes a usable single-host Web Dashboard —
 process overview, stack editor, logs, health, and day-to-day controls — without
-requiring a subscription key. The shell is **rust-embedded in OSS `superd`**;
-the licensed **`ui`** plugin adds Pro surfaces (Access Tokens UI, Notification
-Settings, process hot-reload) via capability-gated slots when peer plugins are
-loaded.
+a subscription key. The shell is **rust-embedded in OSS `superd`**. The licensed
+**`ui`** plugin adds Pro surfaces (Access Tokens UI, Notification Settings,
+process hot-reload) via capability-gated slots when peer plugins are loaded.
 
 ### Product boundary (customer-facing)
 
@@ -35,12 +34,12 @@ plugin is not loaded — no disabled buttons, dead routes, or “coming soon”
 stubs. Contributors cloning the OSS tree get a self-contained shell with no
 private-repo or license requirement.
 
-**Out of scope for this wave:** a browser **Operation Audit** page (audit
-remains write-only log files under the `security` plugin when licensed); multi-
-node / hub UI; fine-grained commercial micro-frontends.
+**Out of scope for this wave (still open):** a browser **Operation Audit** page
+(audit remains write-only log files under the `security` plugin when licensed);
+multi-node / hub UI; fine-grained commercial micro-frontends.
 
-Docs (feature matrix, Getting Started, editions) update in the same release
-window as the implementation — not ahead of a working OSS shell.
+Public docs (feature matrix, Getting Started, editions, Authentication) were
+updated with the 1.5.7 release.
 
 ## P0 — Migration importers (`super import`)
 
@@ -131,7 +130,7 @@ runs a lean local `superd`.
 
 Single-host production hardening (`security` / `notify` / `isolation`) remains
 a separate subscription tier from hub/enterprise multi-node features. The OSS
-Dashboard work above does **not** wait on Hub delivery.
+Dashboard shell already ships without Hub; hub UI stays a later direction.
 
 Principles: the local daemon stays authoritative for process lifecycle; the hub
 coordinates and delivers policy/artifacts; OSS remains useful offline; public
