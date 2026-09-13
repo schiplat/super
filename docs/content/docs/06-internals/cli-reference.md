@@ -19,8 +19,8 @@ The `super` binary is the primary way to interact with the daemon. Commands are 
 | :--- | :--- | :--- | :--- |
 | `--server <URL>` / `-s` | string | `http://127.0.0.1:9002` | Override the server endpoint. Accepts an HTTP(S) URL or a Unix socket (`unix:///path/to/superd.sock`). Relative socket paths resolve under `SUPER_ROOT`; auto-discovery may prefer the socket (see below) |
 | `--token <TOKEN>` | string | — | Bearer for authenticated daemons (falls back to `SUPER_TOKEN`). Works with OSS core auth admin secret or licensed Access Tokens (`sk-…`; `security` plugin) |
-| `--yes` / `-y` | bool | `false` | Skip batch confirmation prompts |
-| `--dry-run` | bool | `false` | Preview which programs a batch operation would affect, without executing |
+| `--yes` / `-y` | bool | `false` | Skip batch confirmation prompts. Also drives `super import`'s collision prompt (there, `y` keeps the skip-existing behaviour; typing `override` interactively takes existing names over) |
+| `--dry-run` | bool | `false` | Preview which programs a batch operation would affect, without executing. [`super import`](#import) also honors it: prints the import plan and warnings, no daemon changes |
 
 **Endpoint selection** (how `super` picks a daemon to talk to):
 
@@ -71,6 +71,7 @@ CLI overrides: `--daemon` / `--foreground` / `--pidfile <PATH>`. See [Config ref
 | :--- | :--- | :--- |
 | [`super reload [--wait]`](#reload) | — | Reload `super.toml`, or SIGHUP a program |
 | [`super apply <file>`](#apply) | — | Apply a declarative stack (TOML default, JSON compatible) |
+| [`super import <format> <file>`](#import) | — | Import a foreign process-manager config as a stack (`supervisor`) |
 | [`super export`](#export) | — | Export current state as a stack (TOML default, `--format json` available) |
 | [`super check`](#check) | — | Validate `super.toml` without a running daemon |
 
@@ -175,7 +176,7 @@ Batch targets are protected by three safety knobs (global flags, accepted on any
 | Flag | Type | Default | Description |
 | :--- | :--- | :--- | :--- |
 | `--yes` / `-y` | bool | `false` | Skip the interactive confirmation prompt. Batch operations (`@group` / `all`) ask for confirmation before touching more than one program; `--yes` bypasses it for scripts |
-| `--dry-run` | bool | `false` | Show which programs the operation would affect (preview list) and exit without executing anything |
+| `--dry-run` | bool | `false` | Show which programs the operation would affect (preview list) and exit without executing anything. [`super import`](#import) accepts it the same way — plan + warnings only, nothing applied |
 
 Without `--yes`, a batch operation on more than one program prints the affected program list and asks `[y/N]`; answering anything other than `y`/`yes` aborts. Single-target operations never prompt.
 
@@ -359,6 +360,25 @@ super apply <FILE> [--dry-run] [--force-prune]
 | `--force-prune` | bool | `false` | Skip the interactive prune gate when the file sets `prune = true` **and** programs would be removed. Use only in automation after reviewing `--dry-run` |
 
 **`prune` safety (irreversible):** omitted / `prune = false` never deletes programs. If the file sets `prune = true` and any managed program is missing from the stack, the CLI prints a full **apply diff** first — keep/update, create, and every program that would be **REMOVED** (removal names are never truncated) — then requires you to type **`confirmed`** exactly to continue (`y` / `yes` / `prune` / global `--yes` are **not** accepted). The Dashboard Stack Editor uses the same diff + typed-`confirmed` gate. Automation must pass `--force-prune` after reviewing `--dry-run`. Prefer `prune = false` except for deliberate full-inventory GitOps applies. Stacks loaded via `[include]` on daemon start / `super reload` have no prompt — keep `prune = false` there and use `super apply` (or the Dashboard) for intentional prunes.
+
+### `import`
+Convert a foreign process-manager config file into Super stack services: parse, map fields, print every warning, then apply through the same endpoint as [`super apply`](#apply) (create-or-update, **never prunes**). Supported formats: `supervisor` (INI with `[program:*]` sections, `[include]` files, `[group:*]`, `%(ENV_…)`/`%(here)s`/`%(program_name)s` placeholders, `numprocs`/`process_name` templates).
+
+```bash
+super import supervisor /etc/supervisor/conf.d/app.conf --dry-run
+super import supervisor /etc/supervisor/conf.d/app.conf --emit-toml app-stack.toml
+super import supervisor /etc/supervisor/conf.d/app.conf [--yes] [--no-start] [--remap-logs]
+```
+
+| Flag | Type | Default | Description |
+| :--- | :--- | :--- | :--- |
+| `--dry-run` | bool | `false` | Print the import plan (warnings + what would be created/skipped) and exit. Works without a running daemon (skips the name-collision check) |
+| `--emit-toml <path>` | path | — | Write the converted stack as TOML instead of applying (`-` = stdout). Review it, then `super apply` |
+| `--no-start` | bool | `false` | Force `autostart = false` on everything imported so a daemon restart does not launch them; start deliberately with `super start` |
+| `--remap-logs` | bool | `false` | Rewrite foreign absolute log paths to bare file names so they resolve under `storage.log_dir` (custom log paths must live there). Without it, foreign paths are kept and rejected by apply-side validation |
+| `--yes` / `-y` | bool | `false` | Skip the confirmation prompt |
+
+**Safety:** names that already exist on the daemon are **skipped** (kept as-is); interactive runs may type `override` to take them over with the imported config. Imports are always `prune = false`. Anything the converter could not map faithfully — `stopsignal=QUIT`, per-program log-rotation keys, `[eventlistener:*]`, `[fcgi-program:*]` — is reported as a warning, never silently dropped. Full field mapping: [Import tool](/docs/04-production-scenarios/migrations/vs-supervisor/#import-tool-super-import-supervisor).
 
 ### `export`
 Export current state as a stack file. **Defaults to TOML** (the default stack format, round-trips cleanly with `super apply` / `[include]`); `--format json` keeps the legacy JSON shape for tooling that expects it.

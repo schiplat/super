@@ -124,6 +124,9 @@ Supervisor and Super use different configuration models. Use this table when mig
 
 | Supervisor | Super |
 | :--- | :--- |
+| `command` / `directory` / `user` | `command` (+ args) / `cwd` / `user` |
+| `environment=K="v",…` | `env` map (`%(ENV_X)s` expands at import time) |
+| `autostart` | `autostart` |
 | `numprocs` | `numprocs` (spawn N processes; see [Process Operations](/docs/02-essentials/process-control/#multi-process-programs-numprocs)) |
 | `process_name` | `process_name` (template with `{num}`; default `{name}-{num}`) |
 | `stopwaitsecs` | `stopsecs` (optional; else `[server].shutdown_timeout`) |
@@ -138,5 +141,46 @@ Supervisor and Super use different configuration models. Use this table when mig
 | Supervisor | Workaround |
 | :--- | :--- |
 | `stopsignal` (per program) | `super signal <name> <sig>` manually; default stop uses SIGTERM |
-| `redirect_stderr=true` | Not supported; stdout/stderr are separate files |
 | `[eventlistener:x]` | OSS `[[event_hooks]]` + licensed `notify.toml`; see [Event Hooks](/docs/03-orchestration/events/hooks) |
+
+## Import tool: `super import supervisor`
+
+The CLI converts an existing `supervisord.conf` (and its `[include]` files) into a Super stack automatically — parsing INI, mapping fields, and reporting everything it could not carry over:
+
+```bash
+# Preview the plan and warnings; works without a running daemon
+super import supervisor /etc/supervisor/conf.d/app.conf --dry-run
+
+# Review first, apply later: write a stack TOML draft instead of applying
+super import supervisor /etc/supervisor/conf.d/app.conf --emit-toml app-stack.toml
+super apply app-stack.toml
+
+# Import directly (connects to the daemon, asks for confirmation)
+super import supervisor /etc/supervisor/conf.d/app.conf
+```
+
+### What the importer does
+
+- **Maps 1:1** — `command` (split into args), `directory`, `user`, `autostart`, `autorestart`, `exitcodes`, `startsecs`, `stopwaitsecs`, `priority`, `startretries`, `environment`, `stdout_logfile`/`stderr_logfile`, `redirect_stderr=true` (stderr joins the stdout stream), `numprocs` + `process_name` (`%(process_num)02d` → `{num}`)
+- **Expands placeholders** — `%(here)s`, `%(program_name)s`, and `%(ENV_X)s` (the latter from the *importing shell*; each use prints a warning so you can verify the value)
+- **Follows `[include] files=`** — relative patterns resolve against the including file; missing or unreadable includes are a hard error so nothing is silently dropped
+- **Applies `[group:x] programs=`** — group membership becomes the `group` field on each member
+- **Skips daemon machinery silently** — `[supervisord]`, `[unix_http_server]`, `[supervisorctl]`, `[rpcinterface:*]` describe the source daemon itself and have no target equivalent
+- **Warns instead of guessing** — `stopsignal=QUIT` (stop always uses SIGTERM here; send QUIT manually), per-program log rotation keys (rotation is configured globally via `[child_logging]`), `umask`, and unknown sections (`[eventlistener:x]`, `[fcgi-program:x]`)
+
+### Safety behaviour
+
+- **Existing programs are never overwritten.** If a name already exists on the daemon it is skipped; interactive runs can type `override` to take the names over instead.
+- **Imports never prune.** The generated apply has `prune = false` — nothing outside the imported file is touched.
+- **`--no-start`** forces `autostart = false` on everything imported, so a later daemon restart does not launch all programs at once. Start them deliberately with `super start <name>`.
+- **`--remap-logs`** rewrites foreign absolute log paths (e.g. `/var/log/web/out.log`) to bare file names so they land inside Super's `storage.log_dir`, which is where custom log paths must live. Without the flag, foreign log paths are kept as-is and the apply-side validation will reject paths outside the log dir.
+
+### What cannot be converted
+
+| Supervisor | Why | What to do |
+| :--- | :--- | :--- |
+| `stopsignal=QUIT/HUP/…` | Stop always sends SIGTERM (then SIGKILL after `stopsecs`) | Send the signal manually (`super signal <name> quit`) or accept SIGTERM |
+| `[eventlistener:x]` | Different model: hooks + notification plugin | Re-implement with [`[[event_hooks]]`](/docs/03-orchestration/events/hooks) |
+| `[fcgi-program:x]` | No FastCGI spawner | Run the FCGI server behind its own process definition |
+| Per-program `*_logfile_maxbytes/_backups` | Rotation is global (`[child_logging]`) | Set global `max_size_mb` / `max_backups`; import reports the differences |
+| `%(process_num)02d` zero padding | Name templates use `{num}` without width | Fine for <10 procs; pad in your own naming if it matters |

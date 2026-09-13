@@ -17,6 +17,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **`super import supervisor <file>` — import an existing `supervisord.conf` as a Super stack.** Parses INI (comments, line continuations), follows `[include] files=` (glob + cycle detection), expands `%(ENV_…)`/`%(here)s`/`%(program_name)s`, and maps the shared field vocabulary (`command` args, `autorestart`, `stopwaitsecs`, `priority`, `numprocs` + `%(process_num)02d` templates, `redirect_stderr`, …). Everything that cannot map faithfully is reported as a structured warning. Safety: existing program names are skipped (never overwritten; interactive `override` to take over), imports never prune, `--no-start` imports everything stopped. `--dry-run` and `--emit-toml <file|-|>` work without a daemon. See [Import tool](/docs/04-production-scenarios/migrations/vs-supervisor/#import-tool-super-import-supervisor) and the [CLI reference](/docs/06-internals/cli-reference/#import). A PM2 `ecosystem.config.js` converter is planned; the PM2 migration page documents a manual mapping table meanwhile.
+
 ## [1.5.7] - 2026-09-12
 
 ### Changed

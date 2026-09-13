@@ -291,6 +291,34 @@ pub enum Commands {
         force_prune: bool,
     },
 
+    /// Import programs from a foreign process-manager config file
+    /// (e.g. `super import supervisor /etc/supervisor/conf.d/app.conf`).
+    /// Prints a diff-style preview and warnings, then asks for confirmation.
+    /// Use the global `--dry-run` to preview without applying.
+    Import {
+        /// Source format (supported: supervisor)
+        format: String,
+
+        /// Path to the source config file
+        file: PathBuf,
+
+        /// Remap custom log file paths into the target log dir by file name
+        /// (source daemons often log outside it). Without this flag, foreign
+        /// log paths are dropped with a warning.
+        #[arg(long)]
+        remap_logs: bool,
+
+        /// Write the imported stack as TOML to this path instead of applying
+        /// it (review-then-apply workflow)
+        #[arg(long)]
+        emit_toml: Option<PathBuf>,
+
+        /// Create programs in a stopped state (autostart=false) even if the
+        /// source config says autostart
+        #[arg(long = "no-start")]
+        no_start: bool,
+    },
+
     // --- Operations ---
     /// Start program(s). Supports `all` or `@group`
     Start {

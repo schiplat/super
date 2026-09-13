@@ -18,7 +18,7 @@ pub struct Context {
     pub auth_token: Option<String>,
 }
 
-fn api_error_from_body(status: reqwest::StatusCode, body: &str) -> anyhow::Error {
+pub(crate) fn api_error_from_body(status: reqwest::StatusCode, body: &str) -> anyhow::Error {
     if let Ok(v) = serde_json::from_str::<serde_json::Value>(body)
         && let Some(msg) = v.get("message").and_then(|m| m.as_str())
     {

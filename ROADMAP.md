@@ -13,36 +13,35 @@ Priorities: **P0** (next in line) · **P1** (soon) · **P2** (backlog) · **Dire
 
 ## P0 — Migration importers (`super import`)
 
-**Status:** agreed, not yet implemented.
+**Status:** supervisor importer **shipped** (`super import supervisor`, v1.5.7
+line); the PM2 converter is next. Track details in the internal product plan.
 
-Super's docs have dedicated PM2 / supervisor migration pages, but there is no
-tooling to actually move a config over. Adding a CLI importer lowers the
-migration barrier and is a strong onboarding hook for users coming from other
-process managers.
+Super's docs have dedicated PM2 / supervisor migration pages, but there was no
+tooling to actually move a config over. A CLI importer lowers the migration
+barrier and is a strong onboarding hook for users coming from other process
+managers.
 
-### Step 1 — Extract a stack-format parser layer
+### Step 1 — Extract a stack-format parser layer — DONE (adjusted shape)
 
-The TOML/JSON stack parsing is already funneled through a single entry point,
+The TOML/JSON stack parsing remains funneled through
 `common::parse_stack_from_str` (`common/src/program_validate.rs`), used by
-`super apply`, `super check`, `[include].files` loading, and the raw-body API
-path — parsing (text → `StackApplyRequest`) is not coupled to validation or the
-manager. Formalize this as a registry of format implementations so import
-translators plug in as just another format:
+`super apply`, `super check`, `[include].files`, and the raw-body API path —
+**unchanged**, with all existing tests green. Import formats live in a separate
+registry module, `common/src/import/`, instead of rewriting the built-in
+dispatcher:
 
 ```rust
 pub trait StackFormat: Send + Sync {
-    fn id(&self) -> &'static str; // "toml" | "json" | "supervisor" | ...
-    fn detect(&self, path: &Path, content: &str) -> bool;
-    fn parse(&self, path: &Path, content: &str) -> anyhow::Result<StackApplyRequest>;
+    fn id(&self) -> &'static str; // "supervisor" today; "pm2" next
+    fn detect(&self, content: &str) -> bool;
+    fn parse(&self, content: &str, ctx: &ParseCtx) -> anyhow::Result<StackDraft>;
 }
 ```
 
-- Built-in `toml` / `json` implementations reproduce today's behavior exactly
-  (extension-based dispatch, `file:line:col` error formatting); the existing
-  `parse_stack_from_str` tests guard the refactor.
-- Third-party formats only translate text → `StackApplyRequest`; semantic
-  validation and any manager dependency stay out of the parser layer
-  (`common` remains tokio-free).
+- `StackDraft` carries the mapped services plus a structured warning list —
+  every concept a format cannot express is reported, never silently dropped.
+- Semantic validation and any manager dependency stay out of the parser layer
+  (`common` remains tokio-free); `apply`/`import` share the same stack API.
 - Formats carry a per-format policy for foreign concepts they cannot express
   (e.g. supervisor `[include]`/`[group]`, PM2 `instances`): ignore-with-warning
   or hard error, documented per format.
@@ -51,20 +50,32 @@ pub trait StackFormat: Send + Sync {
 
 ### Step 2 — Import subcommands as `StackFormat` implementations
 
-Planned scope (MVP):
+Shipped (supervisor) / planned (pm2):
 
-- `super import supervisor supervisord.conf` — INI `[program:x]` → `ProgramConfig`
-  fields map almost 1:1 (`command` / `directory` / `user` / `environment` /
-  `autostart` / `autorestart` / `startsecs` / `stopsecs` / `numprocs` / …).
-- `super import pm2 ecosystem.config.js` — PM2's ecosystem is a **JS file**, not
-  JSON. MVP parses only **literal** `module.exports = { apps: [...] }` objects
-  (strip `module.exports =`, tolerate single quotes / trailing commas / unquoted
-  keys via a JSON5-style preprocessing). `require()` / dynamic logic → clear error
-  suggesting `pm2 save` or manual migration. No embedded JS engine.
-- Reuse the existing stack API (`POST /api/v1/stack`, cf. `super apply`) for the
-  actual write, and the batch-confirmation pattern (`--yes` / `--dry-run`) to
-  preview the program list before applying.
-- Docs: update the migration pages with the import workflow.
+- ✅ `super import supervisor supervisord.conf` — INI `[program:x]` → stack
+  services, mapping almost 1:1 (`command` / `directory` / `user` /
+  `environment` with `%(ENV_…)`/`%(here)s` expansion / `autostart` /
+  `autorestart` / `exitcodes` / `startsecs` / `stopwaitsecs` / `priority` /
+  `startretries`→`retry_limit` / `numprocs` + `%(process_num)02d`→`{num}` /
+  `redirect_stderr`). `[include] files=` recursion (glob + cycle detection),
+  `[group:x]` membership → `group` field. Names that already exist are
+  **skipped**, never overwritten (interactive `override` to take over);
+  imports never prune; `--no-start` imports everything stopped; `--dry-run`
+  and `--emit-toml <file|-|>` work without a daemon.
+- 🔲 `super import pm2 ecosystem.config.js` — PM2's ecosystem is a **JS file**,
+  not JSON. MVP parses only **literal** `module.exports = { apps: [...] }`
+  objects (strip `module.exports =`, tolerate single quotes / trailing commas /
+  unquoted keys via a JSON5-style preprocessing). `require()` / dynamic logic →
+  clear error suggesting `pm2 save` or manual migration. No embedded JS engine.
+  Scope: fork-mode plain configs map faithfully; `watch` / cluster mode /
+  `restart_delay` / `deploy` are warning-list items, not hard failures.
+- Write path reuses the existing stack API (`PUT /api/v1/stack`, same as
+  `super apply`) with the batch-confirmation pattern (`--yes` / global
+  `--dry-run`).
+- Docs: migration pages and the CLI reference already document the supervisor
+  workflow (`/docs/04-production-scenarios/migrations/vs-supervisor/`,
+  `#import`); the PM2 page states the converter status and a manual mapping
+  table.
 
 Implementation notes: lives in the OSS CLI as a normal subcommand (no plugin/ABI
 involvement — it is pure config translation, so it must stay OSS and free).

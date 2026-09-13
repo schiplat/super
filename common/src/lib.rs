@@ -7,6 +7,7 @@ use utoipa::ToSchema;
 pub mod auth;
 pub mod config;
 pub mod daemon;
+pub mod import;
 pub mod license;
 pub mod paths;
 pub mod plugin_abi;

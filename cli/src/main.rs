@@ -5,6 +5,7 @@ mod config;
 mod display;
 mod doctor;
 mod handlers;
+mod import_cmd;
 mod keyring;
 mod session;
 mod top;
@@ -182,6 +183,24 @@ async fn main() -> anyhow::Result<()> {
         Commands::Token { action } => handlers::handle_token(&ctx, action).await?,
         Commands::Apply { file, force_prune } => {
             handlers::handle_apply(&ctx, file, batch_opts, *force_prune).await?
+        }
+        Commands::Import {
+            format,
+            file,
+            remap_logs,
+            emit_toml,
+            no_start,
+        } => {
+            import_cmd::handle_import(
+                &ctx,
+                format,
+                file,
+                batch_opts,
+                *remap_logs,
+                emit_toml.as_deref(),
+                *no_start,
+            )
+            .await?
         }
         Commands::Export { format } => handlers::handle_export(&ctx, *format).await?,
         Commands::Shutdown => handlers::handle_shutdown(&ctx).await?,

@@ -91,6 +91,24 @@ super add --name worker --numprocs 4 /usr/local/bin/worker
 
 PM2 **cluster mode** (Node.js shared listen port, in-process load balancing, zero-downtime Node reloads) has **no Super equivalent**. Prefer PM2 when that Node-specific path is the reason you stay on it; use Super `numprocs` for language-agnostic multi-worker processes (queue consumers, Celery-style workers, and similar).
 
+## Import tool status
+
+`super import` today converts **Supervisor INI** configs (`super import supervisor …`); a PM2 `ecosystem.config.js` converter is planned but not built — see the [import workflow](/docs/04-production-scenarios/migrations/vs-supervisor/#import-tool-super-import-supervisor) for how the Supervisor one works and what to expect.
+
+Migrating from PM2 today is a manual, mechanical step per app. Typical fork-mode entries map like this:
+
+| PM2 `ecosystem.config.js` | Super |
+| :--- | :--- |
+| `name`, `script`, `args` | `name`, `command` (`node <script>`), `args` |
+| `cwd`, `instances` (fork) | `cwd`, `numprocs` |
+| `env` / `env_file` | `env` / `env_file` |
+| `kill_timeout` | `stopsecs` |
+| `autorestart`, `max_restarts`, `min_uptime` | `autorestart`, `retry_limit`, `startsecs` |
+| `out_file` / `error_file` | `stdout_logfile` / `stderr_logfile` |
+| `watch`, `restart_delay`, cluster mode | No equivalent — plan for it before moving |
+
+The fastest path is `super export` (after adding one app with `super add`) to generate a stack skeleton, then extend it with the rest — stack files are plain TOML, one `[[services]]` table per app.
+
 ## Summary
 
 * **Stick with PM2** if you run a Node.js stack and want **cluster mode** for zero-downtime Node reloads.
