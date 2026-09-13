@@ -4,12 +4,25 @@ use anyhow::{Context, bail};
 use std::collections::HashMap;
 use std::net::{IpAddr, ToSocketAddrs};
 use std::path::{Path, PathBuf};
+use subtle::ConstantTimeEq;
 
 /// Maximum accepted Base64 license string length.
 pub const MAX_LICENSE_B64_LEN: usize = 64 * 1024;
 
 /// Maximum decoded license JSON payload size.
 pub const MAX_LICENSE_JSON_LEN: usize = 64 * 1024;
+
+/// Constant-time equality for Bearer secrets / token hashes.
+///
+/// Length mismatch returns `false` immediately (length is not secret for our
+/// fixed-format hex hashes; for variable-length admin secrets it only leaks
+/// length, not content).
+pub fn secrets_equal(a: &str, b: &str) -> bool {
+    if a.len() != b.len() {
+        return false;
+    }
+    a.as_bytes().ct_eq(b.as_bytes()).into()
+}
 
 /// Mask inline env values that look like secrets (API/CLI display).
 pub fn mask_secret_value(key: &str, value: &str) -> String {
@@ -305,6 +318,13 @@ pub fn sanitize_ui_asset_path(path: &str) -> Option<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn secrets_equal_is_length_sensitive() {
+        assert!(secrets_equal("abc", "abc"));
+        assert!(!secrets_equal("abc", "abd"));
+        assert!(!secrets_equal("abc", "ab"));
+    }
 
     #[test]
     fn masks_secrets_in_env() {

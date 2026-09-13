@@ -96,7 +96,7 @@ The defaults are conservative: Tier 1 warning on, Tier 2 off, Tier 3 always on. 
 You can check if Cgroups are being enforced via the metrics endpoint:
 
 ```bash
-curl http://localhost:9002/metrics | grep cgroup
+curl -H "Authorization: Bearer $SUPER_TOKEN" http://localhost:9002/metrics | grep cgroup
 # super_cgroup_enforced_total 5
 ```
 

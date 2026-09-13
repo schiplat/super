@@ -47,3 +47,34 @@ If an application goes into a loop printing 100MB lines, it would otherwise cras
 | `auth_secret` disabled, Admin tokens still stored but secrets forgotten | **Filesystem rescue** (needs write access to `$SUPER_ROOT/data/`, i.e. the user running `superd`): stop `superd`, then either set `auth_secret_disabled` to `false` in `data/auth_settings.json` (or delete that file — the default is `false`), or delete `data/tokens.json` to clear all token records, then start `superd` and sign in with `auth_secret`. |
 
 See [Authentication — Optional: disable `auth_secret`](/docs/02-essentials/authentication#optional-disable-auth_secret) for the disable/recovery model.
+
+## Corrupt `tokens.json`
+
+**Q: `superd` refuses to start — “Failed to parse Access Token store …/data/tokens.json”. What now?**
+
+**A:** With the `security` plugin loaded, Access Token records live in `$SUPER_ROOT/data/tokens.json` (SHA-256 hashes only). If that file exists but is **not valid JSON** (disk full mid-write, manual edit, restore of a truncated copy, …), **startup fails closed**. Super does **not** silently replace it with `[]` — that would wipe every token and can re-enable bootstrap `auth_secret` via the “no Admin tokens left” self-heal.
+
+### Prefer: restore a good copy
+
+1. Stop `superd`.
+2. Restore `$SUPER_ROOT/data/tokens.json` from your backup (same host snapshot, config management, etc.).
+3. Ensure permissions are owner-only: `chmod 600 "$SUPER_ROOT/data/tokens.json"`.
+4. Start `superd` again.
+
+### No backup: reset the store
+
+This **deletes all Access Token records**. Anyone who only had an `sk-…` token must be issued a new one.
+
+1. Stop `superd`.
+2. Keep the bad file for forensics:
+   ```bash
+   mv "$SUPER_ROOT/data/tokens.json" "$SUPER_ROOT/data/tokens.json.corrupt"
+   ```
+3. If you previously **disabled** `auth_secret` login, re-enable it before starting (otherwise you may have no Bearer left after the empty store):
+   - Edit `$SUPER_ROOT/data/auth_settings.json` and set `"auth_secret_disabled": false`, **or**
+   - Delete `auth_settings.json` (default is enabled).
+4. Confirm `[server].auth_secret` is still set in `conf/super.toml`.
+5. Start `superd`. It creates a new empty `tokens.json`.
+6. Sign in with `auth_secret` (`super login …` or the Dashboard), then recreate Admin / Operator / Viewer tokens.
+
+Related: [Lost Admin Token](#lost-admin-token) · [Authentication](/docs/02-essentials/authentication/).

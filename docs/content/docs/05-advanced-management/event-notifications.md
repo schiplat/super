@@ -438,7 +438,7 @@ Sends a `system_startup` event with `hostname = "TEST-MODE"`.
 
 ## Metrics
 
-Prometheus metrics are exposed at `/metrics`:
+Prometheus metrics are exposed at `/metrics` (Bearer required when API auth is on):
 
 ```
 # HELP super_notify_sent_total Total number of notifications sent.

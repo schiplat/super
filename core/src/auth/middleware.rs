@@ -42,19 +42,19 @@ impl AuthState {
     }
 
     pub fn secret_matches(&self, token: &str) -> bool {
-        // Same length short-circuit; security plugin also uses plain `==`.
-        token == self.secret.as_ref()
+        common::secrets_equal(token, self.secret.as_ref())
     }
 }
 
-/// Paths that skip the Bearer check (UI discovery + probes).
+/// Paths that skip the Bearer check (UI discovery + liveness).
 pub fn is_auth_exempt(path: &str) -> bool {
     // `/auth/login` is NOT exempt: the shell sends Bearer with the typed secret
     // (same contract as the security plugin). Status is exempt so capability
-    // discovery works before login.
+    // discovery works before login. `/metrics` requires Bearer when auth is on
+    // (Prometheus: `authorization.credentials`).
     matches!(
         path,
-        "/" | "/health" | "/metrics" | "/api/v1/openapi.json" | "/api/v1/auth/status"
+        "/" | "/health" | "/api/v1/openapi.json" | "/api/v1/auth/status"
     ) || path.starts_with("/api/docs")
         || path.starts_with("/assets")
 }
@@ -135,6 +135,7 @@ mod tests {
     fn exempt_paths() {
         assert!(is_auth_exempt("/health"));
         assert!(is_auth_exempt("/api/v1/auth/status"));
+        assert!(!is_auth_exempt("/metrics"));
         assert!(!is_auth_exempt("/api/v1/auth/login"));
         assert!(!is_auth_exempt("/api/v1/programs"));
     }

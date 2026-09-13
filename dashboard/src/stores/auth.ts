@@ -53,58 +53,59 @@ export const useAuthStore = defineStore('auth', () => {
       return;
     }
 
-    // Core auth only (no token CRUD): the Bearer secret is the root admin.
+    // Core auth only (no token CRUD): verify Bearer against the server first.
     if (!caps.security) {
-      user.value = {
-        id: 'root',
-        name: 'Administrator',
-        role: 'Admin',
-        avatar: 'A',
-      };
-      return;
-    }
-
-    try {
-      // 1. Fetch all tokens
-      // RBAC allows Operator/Viewer GET on this endpoint
-      const res = await apiClient.get<any[]>('/api/v1/auth/tokens');
-      const tokens = res.data || [];
-
-      // 2. Match local token prefix (sk-xxxxxx) to a record
-      // AuthRecord includes token_prefix (first 6 chars)
-      const localPrefix = token.substring(0, 6);
-      const match = tokens.find((t) => t.token_prefix === localPrefix);
-
-      if (match) {
-        // Matched: regular access token
-        // Capitalize role for display consistency (e.g. "operator" -> "Operator")
-        const displayRole = match.role.charAt(0).toUpperCase() + match.role.slice(1).toLowerCase();
-
-        user.value = {
-          id: match.id,
-          name: match.name, // Token display name from API
-          role: displayRole as UserRole,
-          avatar: match.name.charAt(0).toUpperCase(),
-        };
-      } else {
-        // No match: root secret (not in DB) or incomplete token list
-        // Default to root administrator
+      try {
+        await apiClient.post('/api/v1/auth/login', {});
         user.value = {
           id: 'root',
           name: 'Administrator',
           role: 'Admin',
           avatar: 'A',
         };
+      } catch {
+        await logout();
       }
-    } catch (e) {
-      console.error('Failed to fetch profile details:', e);
-      // Fallback: keep session but profile may be inaccurate
-      user.value = {
-        id: 'unknown',
-        name: 'Unknown User',
-        role: 'Viewer',
-        avatar: '?',
-      };
+      return;
+    }
+
+    try {
+      // 1. Fetch tokens visible to this Bearer (Admin: all; others: self)
+      const res = await apiClient.get<any[]>('/api/v1/auth/tokens');
+      const tokens = res.data || [];
+
+      // 2. Match local Access Token prefix (sk-… → first 6 chars)
+      const localPrefix = token.substring(0, 6);
+      const match = tokens.find((t) => t.token_prefix === localPrefix);
+
+      if (match) {
+        const displayRole =
+          match.role.charAt(0).toUpperCase() + match.role.slice(1).toLowerCase();
+
+        user.value = {
+          id: match.id,
+          name: match.name,
+          role: displayRole as UserRole,
+          avatar: match.name.charAt(0).toUpperCase(),
+        };
+        return;
+      }
+
+      // Bootstrap auth_secret is not in the token store (no sk- prefix).
+      if (!token.startsWith('sk-')) {
+        user.value = {
+          id: 'root',
+          name: 'Administrator',
+          role: 'Admin',
+          avatar: 'A',
+        };
+        return;
+      }
+
+      // sk-… that did not resolve — drop the session; do not render as Admin/Viewer.
+      await logout();
+    } catch {
+      await logout();
     }
   }
 

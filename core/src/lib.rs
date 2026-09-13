@@ -151,6 +151,13 @@ pub async fn bootstrap(extension: Box<dyn Extension>) -> anyhow::Result<SystemCo
 
     if !paths.config_file.exists() {
         tracing::warn!("Config file not found, using defaults");
+    } else if server_config
+        .server
+        .auth_secret
+        .as_deref()
+        .is_some_and(|s| !s.trim().is_empty())
+    {
+        warn_if_config_world_readable(&paths.config_file).await;
     }
 
     // 4. Load persisted runtime snapshot
@@ -223,4 +230,37 @@ pub async fn bootstrap(extension: Box<dyn Extension>) -> anyhow::Result<SystemCo
         paths,
         _log_guard: Some(guard), // main must hold guard
     })
+}
+
+/// When `[server].auth_secret` is set, conf/super.toml holds a live credential —
+/// warn if the file is group/world-readable (prefer `chmod 600`).
+async fn warn_if_config_world_readable(path: &std::path::Path) {
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        match tokio::fs::metadata(path).await {
+            Ok(meta) => {
+                let mode = meta.permissions().mode() & 0o777;
+                if mode & 0o077 != 0 {
+                    tracing::warn!(
+                        config = %path.display(),
+                        mode = format!("0{:o}", mode),
+                        "[server].auth_secret is set but conf/super.toml is group/world-readable; \
+                         run `chmod 600` on the config file"
+                    );
+                }
+            }
+            Err(e) => {
+                tracing::debug!(
+                    config = %path.display(),
+                    error = %e,
+                    "could not stat config for auth_secret permission check"
+                );
+            }
+        }
+    }
+    #[cfg(not(unix))]
+    {
+        let _ = path;
+    }
 }

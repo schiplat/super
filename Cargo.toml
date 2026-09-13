@@ -45,6 +45,7 @@ tokio-tungstenite = { version = "0.20", features = ["native-tls"] }
 futures-util = "0.3"
 toml = "0.8"
 rust-embed = "8.11"
+subtle = "2.6"
 
 # Signal handling (Unix only)
 nix = { version = "0.27", features = ["signal", "process", "user", "fs"] }

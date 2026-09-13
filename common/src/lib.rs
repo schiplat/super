@@ -27,7 +27,7 @@ pub use paths::{resolve_storage_path, resolve_super_root, resolve_super_root_for
 pub use security::{
     DEFAULT_SOCKET_MODE, FetchUrlPolicy, MAX_LICENSE_B64_LEN, MAX_LICENSE_JSON_LEN,
     is_loopback_bind_host, mask_env_map, mask_secret_value, parse_socket_mode,
-    resolve_confined_log_path, resolve_plugin_library, sanitize_ui_asset_path,
+    resolve_confined_log_path, resolve_plugin_library, sanitize_ui_asset_path, secrets_equal,
     validate_license_grant_ids, validate_outbound_url,
 };
 

@@ -12,8 +12,16 @@ Super eliminates this friction by providing a **built-in Prometheus metrics endp
 
 As soon as `superd` starts, metrics are available. No plugins, no configuration needed.
 
+When API auth is **off** (default loopback OSS without `auth_secret`):
+
 ```bash
 $ curl http://localhost:9002/metrics
+```
+
+When auth is **on** (`auth_secret` or the `security` plugin), scrape with Bearer:
+
+```bash
+$ curl -H "Authorization: Bearer $SUPER_TOKEN" http://localhost:9002/metrics
 ```
 
 **Sample Output:**
@@ -30,11 +38,25 @@ super_process_restart_count{id="...",name="api-server",group="backend"} 0
 
 ## Integrating with Prometheus
 
-Add Super to your `prometheus.yml` scrape configs:
+Add Super to your `prometheus.yml` scrape configs.
+
+Without auth (loopback OSS, no `auth_secret`):
 
 ```yaml
 scrape_configs:
   - job_name: 'super'
+    static_configs:
+      - targets: ['127.0.0.1:9002']
+```
+
+With auth enabled, pass the same Bearer secret / Access Token:
+
+```yaml
+scrape_configs:
+  - job_name: 'super'
+    authorization:
+      type: Bearer
+      credentials: 'your-auth-secret-or-sk-token'
     static_configs:
       - targets: ['127.0.0.1:9002']
 ```

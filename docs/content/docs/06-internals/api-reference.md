@@ -12,7 +12,7 @@ Super exposes a RESTful API on port `9002` (default). All responses are in JSON 
 
 **Licensed (`[license].key` valid):** `security` is bundled with every subscription and **must load** — otherwise `superd` refuses startup. API auth is always active when licensed. See [Authentication — Licensed deployments require security](/docs/02-essentials/authentication#licensed-deployments-require-security).
 
-**With `security` plugin loaded:** All API requests require `Authorization: Bearer <token>` (except `/health`, `/metrics`, and docs whitelist). Config `auth_secret` bootstraps Access Tokens and stays usable until an Admin explicitly disables it. Core auth stays off so there is one gate. See [Authentication](/docs/02-essentials/authentication/).
+**With `security` plugin loaded:** All API requests require `Authorization: Bearer <token>` (except `/health` and the docs whitelist: `/api/docs`, `/api/v1/openapi.json`, SPA `/` + `/assets`). **`/metrics` requires Bearer** when auth is on. Config `auth_secret` bootstraps Access Tokens and stays usable until an Admin explicitly disables it. Core auth stays off so there is one gate. See [Authentication](/docs/02-essentials/authentication/).
 
 ## Health & docs
 
@@ -328,7 +328,7 @@ Host-level CPU and memory snapshot (refreshed every ~3s by the monitor thread).
 ### Prometheus Metrics
 Export metrics in Prometheus text format.
 
-*   **GET** `/metrics`
+*   **GET** `/metrics` — Prometheus text format. **Requires Bearer** when API auth is enabled (same credential as other APIs).
 
 ### Log Stream (WebSocket)
 Stream stdout/stderr.

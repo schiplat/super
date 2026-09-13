@@ -19,6 +19,7 @@ base64 = { workspace = true }
 hostname = "0.3"
 utoipa = { version = "5.3", features = ["uuid", "chrono", "preserve_order"] }
 tokio = { version = "1.35", features = ["rt", "rt-multi-thread", "sync"] }
+subtle = { workspace = true }
 
 [target.'cfg(unix)'.dependencies]
 libc = "0.2"

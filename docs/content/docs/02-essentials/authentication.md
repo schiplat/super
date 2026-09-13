@@ -43,7 +43,13 @@ super --token 'your-auth-secret' list
 | Non-loopback TCP **without** `auth_secret` (and without the `security` plugin) | **Refuse to start** |
 | Unix socket only (`socket_only`) | Open (filesystem ACLs); set `auth_secret` if you want Bearer auth anyway |
 
-There is **no** on-disk `auth.key`. The only OSS secret is `auth_secret` in config.
+There is **no** on-disk `auth.key`. The only OSS secret is `auth_secret` in config. Because the file holds a live credential, keep it owner-readable only:
+
+```bash
+chmod 600 conf/super.toml
+```
+
+`superd` warns at startup if `auth_secret` is set and the config is group/world-readable.
 
 ```toml
 # conf/super.toml — enable auth (also required for non-loopback binds)
@@ -143,7 +149,7 @@ auth_secret = "my-super-secure-root-password"
 
 Once the `security` plugin is active:
 
-1. All API requests require an `Authorization: Bearer <token>` header (except `/health`, `/metrics`, and docs whitelist).
+1. All API requests require an `Authorization: Bearer <token>` header (except `/health` and the docs whitelist: `/api/docs`, `/api/v1/openapi.json`, SPA `/` + `/assets`). **`/metrics` requires Bearer** when auth is on — configure Prometheus with `authorization.credentials`.
 2. The Dashboard prompts for an **Access Token** when auth is required (or the admin/`auth_secret` string for bootstrap).
 
 ## Bootstrap with `auth_secret`
@@ -171,6 +177,8 @@ An **Admin** (including a root session still using `auth_secret`) can explicitly
 State is persisted in `$SUPER_ROOT/data/auth_settings.json`. While disabled, Bearer/`auth_secret` login is rejected.
 
 **Recovery:** revoke **all Admin** Access Tokens — `auth_secret` is re-enabled automatically. Startup still requires `auth_secret` to be set in `super.toml`.
+
+If `data/tokens.json` is **corrupt** (parse error), `superd` **refuses to start** instead of wiping tokens — see [FAQ — Corrupt tokens.json](/docs/06-internals/faq#corrupt-tokensjson).
 
 > [!WARNING]
 > Without `auth_secret` and without the `security` plugin, OSS `superd` has no `/api/v1/auth/*` routes (loopback stays open). Set `auth_secret` for a single admin Bearer, or load the `security` plugin for multi-user Access Tokens.
