@@ -17,10 +17,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.6.0] - 2026-09-14
+
 ### Added
 
 - **Program provenance labels (`source`).** Every program now carries a `source` label recording the write path that last created or updated it: `cli:add`, `cli:update`, `stack:<file>` (`super apply`), `include:<file>` (`[include]` stacks at boot/reload), `import:<format>` (`super import supervisor`), or any caller-supplied value on direct API use. Shown in the program detail view — `super info` (`Source:` line) and the program detail API (`config.source`); it is intentionally not part of the list summary. Empty string clears, omit leaves unchanged (max 128 chars, no control characters). Makes "where did this program come from?" answerable during migrations and audits.
-- **`super import supervisor <file>` — import an existing `supervisord.conf` as a Super stack.** Parses INI (comments, line continuations), follows `[include] files=` (glob + cycle detection), expands `%(ENV_…)`/`%(here)s`/`%(program_name)s`, and maps the shared field vocabulary (`command` args, `autorestart`, `stopwaitsecs`, `priority`, `numprocs` + `%(process_num)02d` templates, `redirect_stderr`, …). Everything that cannot map faithfully is reported as a structured warning (rotation-related keys collapse into one warning per program). Safety: imports never prune, `--no-start` imports everything stopped, `--dry-run` and `--emit-toml <file|-|>` work without a daemon. **Name collisions are now a three-way choice** via `--on-collision skip|rename|override`: `skip` (default) leaves existing programs untouched, `rename` imports side by side under `{name}-{suffix}` (random hex or `--collision-suffix <text>`, unique against daemon and batch, old→new mapping shown in plan and report — the gray-release path), `override` updates in place behind a typed confirmation (`--yes` alone never escalates). The interactive prompt (`[y/r/o/N]`) offers the same choice when no flag is given. See [Import tool](/docs/04-production-scenarios/migrations/vs-supervisor/#import-tool-super-import-supervisor) and the [CLI reference](/docs/06-internals/cli-reference/#import). A PM2 `ecosystem.config.js` converter remains **deferred** (manual mapping on the [PM2 migration page](/docs/04-production-scenarios/migrations/vs-pm2/#import-tool-status)).
+- **`super import supervisor <file>` — import an existing `supervisord.conf` as a Super stack.** Parses INI (comments, line continuations), follows `[include] files=` (glob + cycle detection), expands `%(ENV_…)`/`%(here)s`/`%(program_name)s`, and maps the shared field vocabulary (`command` args, `autorestart`, `stopwaitsecs`, `priority`, `numprocs` + `%(process_num)02d` templates, `redirect_stderr`, …). Everything that cannot map faithfully is reported as a structured warning (rotation-related keys collapse into one warning per program). Safety: imports never prune, `--no-start` imports everything stopped, `--dry-run` and `--emit-toml <file|-|>` work without a daemon. **Name collisions are a three-way choice** via `--on-collision skip|rename|override`: `skip` (default) leaves existing programs untouched, `rename` imports side by side under `{name}-{suffix}` (random hex or `--collision-suffix <text>`, unique against daemon and batch, old→new mapping shown in plan and report — the gray-release path), `override` updates in place behind a typed confirmation (`--yes` alone never escalates). The interactive prompt (`[y/r/o/N]`) offers the same choice when no flag is given. Apply re-checks names after confirmation to avoid mid-prompt races. See [Import tool](/docs/04-production-scenarios/migrations/vs-supervisor/#import-tool-super-import-supervisor) and the [CLI reference](/docs/06-internals/cli-reference/#import). A PM2 `ecosystem.config.js` converter remains **deferred** (manual mapping on the [PM2 migration page](/docs/04-production-scenarios/migrations/vs-pm2/#import-tool-status)).
+
+### Security
+
+- **Constant-time Bearer compare** for OSS `auth_secret` and the security plugin token path.
+- **Corrupt `tokens.json` refuses to start** (fail-closed) with recovery steps in the [FAQ](/docs/06-internals/faq/).
+- **`/metrics` requires Bearer** when API auth is enabled (no longer scrape-exempt).
+- **Dashboard session**: profile/token mismatch logs out instead of showing a fallback identity.
+- **Startup warning** when `conf/super.toml` is world-readable and contains `auth_secret`.
+
+### Notes
+
+- Workspace **1.6.0**; pair with commercial plugin packages `super-plugins-1.6.0-…`.
+
+---
 
 ## [1.5.7] - 2026-09-12
 
