@@ -3484,6 +3484,7 @@ dependencies = [
  "hyper-util",
  "hyperlocal",
  "libc",
+ "rand 0.8.8",
  "ratatui",
  "reqwest",
  "serde",

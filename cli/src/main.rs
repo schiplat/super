@@ -190,6 +190,8 @@ async fn main() -> anyhow::Result<()> {
             remap_logs,
             emit_toml,
             no_start,
+            on_collision,
+            collision_suffix,
         } => {
             import_cmd::handle_import(
                 &ctx,
@@ -199,6 +201,8 @@ async fn main() -> anyhow::Result<()> {
                 *remap_logs,
                 emit_toml.as_deref(),
                 *no_start,
+                *on_collision,
+                collision_suffix.as_deref(),
             )
             .await?
         }

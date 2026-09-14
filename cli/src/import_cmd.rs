@@ -15,9 +15,11 @@ use std::io::Read;
 use common::CreateProgramRequest;
 use common::import::{ParseCtx, StackDraft, stack_format_by_id, supported_format_ids};
 
+use crate::args::CollisionMode;
 use crate::display;
 use crate::handlers::{BatchOptions, Context, api_error_from_body};
 
+#[allow(clippy::too_many_arguments)]
 pub async fn handle_import(
     ctx: &Context,
     format_id: &str,
@@ -26,6 +28,8 @@ pub async fn handle_import(
     remap_logs: bool,
     emit_toml: Option<&std::path::Path>,
     no_start: bool,
+    mut on_collision: CollisionMode,
+    collision_suffix: Option<&str>,
 ) -> anyhow::Result<()> {
     let Some(format) = stack_format_by_id(format_id) else {
         anyhow::bail!(
@@ -54,11 +58,18 @@ pub async fn handle_import(
         remap_logs,
     };
     let draft: StackDraft = format.parse(&content, &parse_ctx)?;
-    let draft = if no_start {
+    let mut draft = if no_start {
         stop_autostart(draft)
     } else {
         draft
     };
+    // Provenance: every service created/updated by this import carries the
+    // source format label (e.g. `import:supervisor`).
+    for svc in &mut draft.services {
+        if svc.source.is_none() {
+            svc.source = Some(format!("import:{format_id}"));
+        }
+    }
 
     print_warnings(&draft);
 
@@ -66,9 +77,9 @@ pub async fn handle_import(
         return emit_stack_toml(&draft, out);
     }
 
-    // Name-level diff against the live daemon: existing names are skipped
-    // (unless explicitly confirmed), so an import never silently overwrites.
-    // A dry-run works without a daemon: preview shows everything as new.
+    // Name-level diff against the live daemon: collisions get the
+    // `--on-collision` treatment (skip / rename / override). A dry-run works
+    // without a daemon: preview shows everything as new.
     let (current_res, was_dry_run) = (fetch_program_names(ctx).await, opts.dry_run);
     let current = match current_res {
         Ok(names) => names,
@@ -78,23 +89,29 @@ pub async fn handle_import(
         }
         Err(e) => return Err(e),
     };
-    let new_names: Vec<String> = draft
-        .services
-        .iter()
-        .filter_map(|s| s.name.clone())
-        .collect();
-    let collisions: Vec<String> = new_names
-        .iter()
-        .filter(|n| current.contains(*n))
-        .cloned()
-        .collect();
-    let fresh: Vec<&CreateProgramRequest> = draft
-        .services
-        .iter()
-        .filter(|s| s.name.as_ref().is_none_or(|n| !current.contains(n)))
-        .collect();
 
-    print_preview(&draft, &collisions, &fresh);
+    // Resolve collisions BEFORE preview so dry-run, emit-toml and the real
+    // apply all show the exact same names (renames included).
+    let (mut fresh, mut renamed_map, mut collisions): (
+        Vec<CreateProgramRequest>,
+        Vec<(String, String)>,
+        Vec<String>,
+    ) = resolve_collisions(&draft, &current, on_collision, collision_suffix);
+
+    // Interactive confirmation may still change the mode when the flag was
+    // left at the default `skip`: offer rename/override at the prompt.
+    if on_collision == CollisionMode::Skip
+        && !collisions.is_empty()
+        && let Some(mode) = confirm_collision_mode(&collisions, opts.assume_yes)?
+    {
+        on_collision = mode;
+        let (f, r, s) = resolve_collisions(&draft, &current, on_collision, collision_suffix);
+        fresh = f;
+        renamed_map = r;
+        collisions = s;
+    }
+
+    print_preview(&draft, &collisions, &fresh, &renamed_map, on_collision);
 
     if opts.dry_run {
         println!("DRY RUN: nothing applied. Re-run without --dry-run to import.");
@@ -111,7 +128,14 @@ pub async fn handle_import(
 
     let proceed = if opts.assume_yes {
         true
-    } else if collisions.is_empty() {
+    } else if on_collision == CollisionMode::Override && !collisions.is_empty() {
+        // Override of existing names is a real in-place update: keep the
+        // "typed word" bar, mirroring `super apply --force-prune` for
+        // non-reversible-ish actions. Must be checked BEFORE the generic
+        // no-collision branch — in override mode collided services are part
+        // of `fresh`, so `collisions` carries the in-place-update names.
+        confirm_override(&collisions)
+    } else if renamed_map.is_empty() {
         display::confirm_batch(
             fresh.len(),
             "import (create)",
@@ -121,10 +145,20 @@ pub async fn handle_import(
                 .collect::<Vec<_>>(),
         )
     } else {
-        // Collisions present: require explicit typed confirmation for the
-        // update-in-place decision, mirroring `super apply --force-prune`'s
-        // "typed word" bar for non-reversible-ish actions.
-        confirm_collision_takeover(&collisions)
+        // Rename mode: new names never touch existing programs, but show the
+        // mapping and get a plain yes/no.
+        println!("Renamed imports (existing programs stay untouched):");
+        for (from, to) in &renamed_map {
+            println!("  {from} -> {to}");
+        }
+        display::confirm_batch(
+            fresh.len(),
+            "import (rename)",
+            &fresh
+                .iter()
+                .filter_map(|s| s.name.clone())
+                .collect::<Vec<_>>(),
+        )
     };
     if !proceed {
         println!("Aborted — nothing was imported.");
@@ -132,7 +166,7 @@ pub async fn handle_import(
     }
 
     let request = common::StackApplyRequest {
-        services: fresh.iter().map(|s| (*s).clone()).collect(),
+        services: fresh.clone(),
         prune: false,
     };
     println!("Importing {} service(s)...", request.services.len());
@@ -149,14 +183,32 @@ pub async fn handle_import(
     }
 
     println!();
-    println!(
-        "Import finished: {} created/updated, {} skipped (already exist), {} warning(s).",
-        request.services.len(),
-        collisions.len(),
-        draft.warnings.len()
-    );
-    if !collisions.is_empty() {
-        println!("Skipped (already exist): {}", collisions.join(", "));
+    if !renamed_map.is_empty() {
+        println!("Renamed on collision:");
+        for (from, to) in &renamed_map {
+            println!("  {from} -> {to}");
+        }
+    }
+    match on_collision {
+        CollisionMode::Override if !collisions.is_empty() => {
+            println!(
+                "Import finished: {} created/updated ({} overridden in place), {} warning(s).",
+                request.services.len(),
+                collisions.len(),
+                draft.warnings.len()
+            );
+        }
+        _ => {
+            println!(
+                "Import finished: {} created/updated, {} skipped (already exist), {} warning(s).",
+                request.services.len(),
+                collisions.len(),
+                draft.warnings.len()
+            );
+            if !collisions.is_empty() {
+                println!("Skipped (already exist): {}", collisions.join(", "));
+            }
+        }
     }
     println!("Next steps:");
     println!("  super list            # verify imported programs");
@@ -168,6 +220,159 @@ pub async fn handle_import(
         );
     }
     Ok(())
+}
+
+/// What to do with names that already exist on the daemon.
+///
+/// Returns the modified service list (`fresh`), the rename map (old -> new)
+/// and the names skipped under the chosen mode.
+fn resolve_collisions(
+    draft: &StackDraft,
+    current: &[String],
+    mode: CollisionMode,
+    suffix: Option<&str>,
+) -> (
+    Vec<CreateProgramRequest>,
+    Vec<(String, String)>,
+    Vec<String>,
+) {
+    let mut fresh = Vec::new();
+    let mut renamed = Vec::new();
+    let mut skipped = Vec::new();
+    // Names already claimed inside this batch (daemon + earlier services +
+    // earlier renames) so two services never resolve to the same target.
+    let mut taken: Vec<String> = current.to_vec();
+
+    for svc in &draft.services {
+        let Some(name) = &svc.name else {
+            fresh.push(svc.clone());
+            continue;
+        };
+        if current.contains(name) {
+            match mode {
+                CollisionMode::Skip => {
+                    skipped.push(name.clone());
+                    continue;
+                }
+                CollisionMode::Rename => {
+                    let new_name = pick_renamed(name, &taken, suffix);
+                    // Register the target so a later duplicate source name
+                    // (or fixed-suffix re-run within the batch) stays unique.
+                    taken.push(new_name.clone());
+                    renamed.push((name.clone(), new_name.clone()));
+                    let mut svc2 = svc.clone();
+                    svc2.name = Some(new_name);
+                    fresh.push(svc2);
+                    continue;
+                }
+                CollisionMode::Override => {
+                    // Keep the original name; stack apply updates in place.
+                    fresh.push(svc.clone());
+                    continue;
+                }
+            }
+        }
+        taken.push(name.clone());
+        fresh.push(svc.clone());
+    }
+    // Override mode: collided names were folded into `fresh` above; report
+    // them so the typed confirmation lists exactly what gets updated.
+    if mode == CollisionMode::Override {
+        for svc in &draft.services {
+            if let Some(name) = &svc.name
+                && current.contains(name)
+            {
+                skipped.push(name.clone());
+            }
+        }
+    }
+    skipped.sort();
+    skipped.dedup();
+    (fresh, renamed, skipped)
+}
+
+/// Generate a collision-free `{name}-{suffix}` name. Uses a random 6-char
+/// lowercase-hex suffix by default; `suffix` pins it (scripted reproducibility).
+fn pick_renamed(base: &str, taken: &[String], suffix: Option<&str>) -> String {
+    if let Some(s) = suffix {
+        let candidate = format!("{base}-{s}");
+        if !taken.iter().any(|t| t == &candidate) {
+            return candidate;
+        }
+        // Fixed suffix taken: fall through to random to stay collision-free.
+    }
+    use rand::Rng as _;
+    let mut rng = rand::thread_rng();
+    loop {
+        let hex: String = (0..6)
+            .map(|_| format!("{:x}", rng.gen_range(0..16)))
+            .collect();
+        let candidate = format!("{base}-{hex}");
+        if !taken.iter().any(|t| t == &candidate) {
+            return candidate;
+        }
+    }
+}
+
+/// Interactive prompt when collisions were found and the flag stayed `skip`.
+/// Returns `Some(mode)` if the user chose to switch modes at the prompt.
+fn confirm_collision_mode(
+    skipped: &[String],
+    assume_yes: bool,
+) -> anyhow::Result<Option<CollisionMode>> {
+    if assume_yes || skipped.is_empty() {
+        return Ok(None);
+    }
+    use std::io::Write;
+    println!(
+        "WARNING: {} program(s) already exist and will be SKIPPED (their current config is kept):",
+        skipped.len()
+    );
+    for s in skipped {
+        println!("  = {s}");
+    }
+    println!(
+        "Options: [y] proceed skipping these, [r] import renamed side-by-side, [o] override existing, [N] abort"
+    );
+    print!("Proceed? [y/r/o/N] ");
+    let _ = std::io::stdout().flush();
+    let mut answer = String::new();
+    std::io::stdin().read_line(&mut answer)?;
+    match answer.trim().to_ascii_lowercase().as_str() {
+        "y" | "yes" => Ok(None),
+        "r" | "rename" => Ok(Some(CollisionMode::Rename)),
+        "o" | "override" => Ok(Some(CollisionMode::Override)),
+        _ => {
+            println!("Aborted — nothing was imported.");
+            std::process::exit(0);
+        }
+    }
+}
+
+/// Typed confirmation for the destructive-ish override mode.
+fn confirm_override(collisions: &[String]) -> bool {
+    use std::io::Write;
+    println!(
+        "WARNING: {} existing program(s) will be UPDATED IN PLACE with the imported config:",
+        collisions.len()
+    );
+    for c in collisions {
+        println!("  ! {c}");
+    }
+    println!("Their current configuration will be replaced. This cannot be undone.");
+    print!("Type 'override' to confirm, anything else to abort: ");
+    let _ = std::io::stdout().flush();
+    let mut answer = String::new();
+    if std::io::stdin().read_to_string(&mut answer).is_err() {
+        return false;
+    }
+    let a = answer.trim();
+    if a.eq_ignore_ascii_case("override") {
+        println!("Override confirmed — existing programs will be updated in place.");
+        true
+    } else {
+        false
+    }
 }
 
 fn stop_autostart(mut d: StackDraft) -> StackDraft {
@@ -195,8 +400,16 @@ fn print_warnings(d: &StackDraft) {
     println!();
 }
 
-fn print_preview(d: &StackDraft, collisions: &[String], fresh: &[&CreateProgramRequest]) {
+fn print_preview(
+    _draft: &StackDraft,
+    collisions: &[String],
+    fresh: &[CreateProgramRequest],
+    renamed: &[(String, String)],
+    mode: CollisionMode,
+) {
     println!("Import plan:");
+    let overridden: std::collections::HashSet<&str> =
+        collisions.iter().map(String::as_str).collect();
     for s in fresh {
         let name = s.name.as_deref().unwrap_or("(auto)");
         let mut strs: Vec<String> = Vec::new();
@@ -214,45 +427,26 @@ fn print_preview(d: &StackDraft, collisions: &[String], fresh: &[&CreateProgramR
         } else {
             format!(" [{}]", strs.join(", "))
         };
-        println!("  + {name}: {} {}{}", s.command, s.args.join(" "), flag_str);
+        let marker = if overridden.contains(name) { "~" } else { "+" };
+        println!(
+            "  {marker} {name}: {} {}{}",
+            s.command,
+            s.args.join(" "),
+            flag_str
+        );
+    }
+    for (from, to) in renamed {
+        println!("  ~ {from}: exists -> will import as {to} (renamed)");
     }
     for c in collisions {
-        println!("  ~ {c}: already exists — skipped (not overwritten)");
-    }
-    if d.services.len() != fresh.len() + collisions.len() {
-        println!(
-            "  ! {} service(s) without a name could not be diffed and will be created",
-            d.services.len() - fresh.len() - collisions.len()
-        );
+        let note = if mode == CollisionMode::Override {
+            "exists -> will UPDATE IN PLACE"
+        } else {
+            "already exists — skipped (not overwritten)"
+        };
+        println!("  ~ {c}: {note}");
     }
     println!();
-}
-
-fn confirm_collision_takeover(collisions: &[String]) -> bool {
-    use std::io::Write;
-    println!(
-        "WARNING: {} program(s) already exist and will be SKIPPED (their current config is kept):",
-        collisions.len()
-    );
-    for c in collisions {
-        println!("  = {c}");
-    }
-    println!("To instead take over these names with the imported config, type 'override'.");
-    print!("Proceed with import (skipping existing)? [y/N/override] ");
-    let _ = std::io::stdout().flush();
-    let mut answer = String::new();
-    if std::io::stdin().read_to_string(&mut answer).is_err() {
-        return false;
-    }
-    let a = answer.trim();
-    if a.eq_ignore_ascii_case("override") {
-        println!(
-            "Override requested — existing programs with matching names will be updated in place."
-        );
-        true
-    } else {
-        matches!(a, "y" | "Y" | "yes" | "Yes")
-    }
 }
 
 async fn fetch_program_names(ctx: &Context) -> anyhow::Result<Vec<String>> {
@@ -310,19 +504,105 @@ mod tests {
     fn preview_partitions_services_and_collisions() {
         let d = sample();
         let current = ["web".to_string()];
-        let collisions: Vec<String> = d
-            .services
-            .iter()
-            .filter_map(|s| s.name.clone())
-            .filter(|n| current.contains(n))
-            .collect();
-        let fresh: Vec<&CreateProgramRequest> = d
-            .services
-            .iter()
-            .filter(|s| s.name.as_ref().is_none_or(|n| !current.contains(n)))
-            .collect();
-        assert_eq!(collisions, vec!["web"]);
+        let (fresh, renamed, skipped) = resolve_collisions(&d, &current, CollisionMode::Skip, None);
+        assert_eq!(skipped, vec!["web".to_string()]);
         assert!(fresh.is_empty());
+        assert!(renamed.is_empty());
+    }
+
+    #[test]
+    fn rename_mode_generates_unique_suffixed_names() {
+        let d = sample(); // program:web
+        let current = ["web".to_string()];
+        let (fresh, renamed, skipped) =
+            resolve_collisions(&d, &current, CollisionMode::Rename, None);
+        assert!(skipped.is_empty());
+        assert_eq!(renamed.len(), 1);
+        let (from, to) = &renamed[0];
+        assert_eq!(from, "web");
+        assert!(to.starts_with("web-") && to.len() == "web-XXXXXX".len());
+        assert_ne!(fresh[0].name.as_deref(), Some("web"));
+        assert_eq!(fresh[0].name.as_deref(), Some(to.as_str()));
+    }
+
+    #[test]
+    fn rename_with_fixed_suffix_and_fallback() {
+        let d = sample();
+        let current = ["web".to_string()];
+        let (_, renamed, _) =
+            resolve_collisions(&d, &current, CollisionMode::Rename, Some("staging"));
+        assert_eq!(renamed[0].1, "web-staging");
+        // Fixed suffix already taken on the daemon -> falls back to random.
+        let current2 = ["web".to_string(), "web-staging".to_string()];
+        let (_, renamed2, _) =
+            resolve_collisions(&d, &current2, CollisionMode::Rename, Some("staging"));
+        assert_eq!(renamed2[0].0, "web");
+        assert_ne!(renamed2[0].1, "web-staging");
+        assert!(renamed2[0].1.starts_with("web-"));
+    }
+
+    #[test]
+    fn override_mode_keeps_name_and_includes_service() {
+        // The override bug: collided services must stay IN the apply set
+        // AND be reported as the names being overridden.
+        let d = sample(); // program:web collides
+        let current = ["web".to_string()];
+        let (fresh, renamed, skipped) =
+            resolve_collisions(&d, &current, CollisionMode::Override, None);
+        assert!(renamed.is_empty());
+        assert_eq!(skipped, vec!["web".to_string()], "override names reported");
+        assert_eq!(fresh.len(), 1, "override keeps service in apply set");
+        assert_eq!(fresh[0].name.as_deref(), Some("web"));
+    }
+
+    #[test]
+    fn non_colliding_services_pass_through_all_modes() {
+        let d = sample(); // web
+        let current = ["other".to_string()];
+        for mode in [
+            CollisionMode::Skip,
+            CollisionMode::Rename,
+            CollisionMode::Override,
+        ] {
+            let (fresh, renamed, skipped) = resolve_collisions(&d, &current, mode, None);
+            assert_eq!(fresh.len(), 1, "mode {mode:?}");
+            assert_eq!(fresh[0].name.as_deref(), Some("web"));
+            assert!(renamed.is_empty());
+            assert!(skipped.is_empty());
+        }
+    }
+
+    #[test]
+    fn duplicate_names_within_batch_rename_consistently() {
+        let d = StackDraft {
+            services: vec![svc_named("web"), svc_named("web")],
+            warnings: Vec::new(),
+        };
+        let current: Vec<String> = vec![];
+        // No daemon collision: both pass through untouched.
+        let (fresh, _, _) = resolve_collisions(&d, &current, CollisionMode::Skip, None);
+        assert_eq!(fresh.len(), 2);
+        // Rename with a daemon collision: batch-internal names stay unique.
+        let current2 = ["web".to_string()];
+        let (fresh2, renamed2, _) =
+            resolve_collisions(&d, &current2, CollisionMode::Rename, Some("x"));
+        assert_eq!(renamed2.len(), 2);
+        assert_ne!(renamed2[0].1, renamed2[1].1, "renamed targets must differ");
+        let names: Vec<_> = fresh2.iter().filter_map(|s| s.name.clone()).collect();
+        assert_ne!(names[0], names[1]);
+    }
+
+    fn svc_named(name: &str) -> CreateProgramRequest {
+        CreateProgramRequest {
+            name: Some(name.to_string()),
+            command: "/bin/sleep".to_string(),
+            args: vec!["1".to_string()],
+            retry_limit: 3,
+            startsecs: 10,
+            exitcodes: vec![0],
+            numprocs: 1,
+            ..Default::default()
+        }
     }
 
     // The `ApiClient` type alias is re-exported for signature clarity only.

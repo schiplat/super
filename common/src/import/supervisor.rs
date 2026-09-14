@@ -630,21 +630,30 @@ fn map_program(
     {
         req.stderr_logfile = Some(out);
     }
-    for key in [
+    // Rotation-related keys collapse into ONE warning per section (they all
+    // point at the same global [child_logging] answer; one per key floods
+    // the report).
+    let rotation_keys = [
         "stdout_logfile_maxbytes",
         "stdout_logfile_backups",
         "stderr_logfile_maxbytes",
         "stderr_logfile_backups",
         "stdout_logfile_datefmt",
         "stderr_logfile_datefmt",
-    ] {
-        if let Some(e) = entry(key) {
-            draft.warnings.push(warn(
-                &name,
-                format!("{key}={}: rotation is global here ([child_logging] in conf/super.toml), not per program", e.value),
-                Some("tune [child_logging] max_size_mb / max_backups".to_string()),
-            ));
-        }
+    ];
+    let rotation_hits: Vec<String> = rotation_keys
+        .iter()
+        .filter_map(|k| entry(k).map(|e| format!("{k}={}", e.value)))
+        .collect();
+    if !rotation_hits.is_empty() {
+        draft.warnings.push(warn(
+            &name,
+            format!(
+                "log rotation keys ({}): rotation is global here ([child_logging] in conf/super.toml), not per program",
+                rotation_hits.join(", ")
+            ),
+            Some("tune [child_logging] max_size_mb / max_backups".to_string()),
+        ));
     }
 
     // numprocs + process_name.
@@ -863,7 +872,7 @@ mod tests {
     }
 
     #[test]
-    fn log_rotation_keys_warn_once_each() {
+    fn log_rotation_keys_collapse_to_one_warning() {
         let d = parse(
             "[program:a]\n\
              command=/bin/sleep 1\n\
@@ -871,14 +880,14 @@ mod tests {
              stdout_logfile_backups=10\n\
              stdout_logfile_datefmt=%%Y-%%m-%%d\n",
         );
-        assert_eq!(d.warnings.len(), 3);
+        assert_eq!(d.warnings.len(), 1);
+        assert!(d.warnings[0].message.contains("rotation is global"));
         assert!(
-            d.warnings
-                .iter()
-                .all(|w| w.message.contains("rotation is global")
-                    || w.message.contains("rotation is configured")
-                    || w.message.contains("rotation"))
+            d.warnings[0]
+                .message
+                .contains("stdout_logfile_maxbytes=50MB")
         );
+        assert!(d.warnings[0].message.contains("stdout_logfile_datefmt"));
     }
 
     #[test]

@@ -317,6 +317,20 @@ pub enum Commands {
         /// source config says autostart
         #[arg(long = "no-start")]
         no_start: bool,
+
+        /// What to do when a program name already exists on the daemon:
+        /// skip (keep the existing one), rename (import under a new name
+        /// `{name}-{suffix}`, default: random 6-char hex), override
+        /// (update the existing program in place)
+        #[arg(long = "on-collision", default_value_t = CollisionMode::Skip)]
+        on_collision: CollisionMode,
+
+        /// With `--on-collision rename`: fixed suffix instead of a random
+        /// one (e.g. `--collision-suffix staging` → `web-staging`). Fixed
+        /// suffixes make scripted re-runs reproducible but collide with
+        /// themselves if repeated twice
+        #[arg(long = "collision-suffix")]
+        collision_suffix: Option<String>,
     },
 
     // --- Operations ---
@@ -473,6 +487,29 @@ pub enum ExportFormat {
     Toml,
     /// Legacy JSON shape (tooling compatibility)
     Json,
+}
+
+/// What `super import` does when a program name already exists on the daemon.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum, Default)]
+pub enum CollisionMode {
+    /// Keep the existing program untouched; skip the imported one (default)
+    #[default]
+    Skip,
+    /// Import under a fresh name: `{name}-{suffix}` (random 6-char hex by
+    /// default, or `--collision-suffix <text>`). Old and new run side by side
+    Rename,
+    /// Update the existing program in place with the imported config
+    Override,
+}
+
+impl std::fmt::Display for CollisionMode {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(match self {
+            CollisionMode::Skip => "skip",
+            CollisionMode::Rename => "rename",
+            CollisionMode::Override => "override",
+        })
+    }
 }
 
 #[derive(Subcommand)]
