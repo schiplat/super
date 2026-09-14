@@ -350,6 +350,14 @@ pub struct ProgramConfig {
     #[serde(default)]
     pub resource_limits: Option<ResourceLimits>,
 
+    /// Provenance label stamped automatically by the write path that last
+    /// created/updated the program: `cli:add`, `cli:update`,
+    /// `stack:<file>` (super apply), `include:<file>` ([include] at boot /
+    /// reload), `import:<format>` (super import supervisor|pm2|…), or a
+    /// caller-supplied value on direct API use.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub source: Option<String>,
+
     // Metadata
     pub created_at: u64,
     pub updated_at: u64,
@@ -714,6 +722,12 @@ pub struct CreateProgramRequest {
     /// Linux cgroup resource limits (requires isolation plugin on Linux).
     #[serde(default)]
     pub resource_limits: Option<ResourceLimits>,
+
+    /// Provenance label of the writer (`cli:add`, `stack:<file>`,
+    /// `import:<format>`, …). Callers normally let the CLI stamp this;
+    /// direct API users may set it or leave it unset.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub source: Option<String>,
 }
 
 /// API request: update program (partial)
@@ -767,6 +781,15 @@ pub struct UpdateProgramRequest {
     /// Linux cgroup resource limits (requires isolation plugin on Linux).
     #[serde(default)]
     pub resource_limits: Option<ResourceLimits>,
+
+    /// Provenance label stamped automatically by the write path that last
+    /// created/updated the program: `cli:add`, `cli:update`,
+    /// `stack:<file>` (super apply), `include:<file>` ([include] at boot /
+    /// reload), `import:<format>` (super import supervisor|pm2|…), or a
+    /// caller-supplied value on direct API use. Empty string clears it on
+    /// update; `None` on create leaves it unset.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub source: Option<String>,
 }
 
 /// API response: list summary

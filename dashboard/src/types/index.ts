@@ -161,6 +161,8 @@ export interface ProgramConfig {
     download_timeout?: number;
     verify_timeout?: number;
   };
+  /** Provenance label of the last write path (cli:add, stack:file, import:format, …). */
+  source?: string | null;
   /** Set while an OTA swap is verifying / pending rollback (WAL). */
   restore_path?: string | null;
 }
@@ -233,6 +235,9 @@ export interface CreateProgramRequest {
     download_timeout?: number;
     verify_timeout?: number;
   };
+
+  /** Provenance label of the writer (cli:add, stack:file, import:format, …). */
+  source?: string;
 }
 
 // Update request body (UpdateProgramRequest)
@@ -302,4 +307,7 @@ export interface UpdateProgramRequest {
     memory_warn_headroom?: number;
     memory_high?: number;
   };
+
+  /** Provenance label of the last write path (cli:add, stack:file, import:format, …). */
+  source?: string;
 }

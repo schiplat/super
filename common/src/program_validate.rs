@@ -77,6 +77,7 @@ pub fn validate_create_program_request(
     req: &CreateProgramRequest,
     log_dir: &Path,
 ) -> anyhow::Result<()> {
+    validate_source_label(req.source.as_deref())?;
     if req.command.trim().is_empty() {
         bail!("command: must not be empty");
     }
@@ -107,6 +108,7 @@ pub fn validate_update_program_request(
     req: &UpdateProgramRequest,
     log_dir: &Path,
 ) -> anyhow::Result<()> {
+    validate_source_label(req.source.as_deref())?;
     if let Some(command) = &req.command
         && command.trim().is_empty()
     {
@@ -322,6 +324,23 @@ pub fn validate_dependency_cycles(graph: &[(String, &[String])]) -> anyhow::Resu
         );
     }
 
+    Ok(())
+}
+
+/// Provenance label sanity: non-empty when present, bounded length, and no
+/// newlines/control characters (it is echoed in CLI output and stored in the
+/// snapshot). Format is free-form `<kind>:<detail>` by convention, not
+/// enforced — callers may use any short opaque label.
+fn validate_source_label(source: Option<&str>) -> anyhow::Result<()> {
+    const MAX_SOURCE_LEN: usize = 128;
+    if let Some(s) = source {
+        if s.chars().count() > MAX_SOURCE_LEN {
+            bail!("source: must be at most {MAX_SOURCE_LEN} characters");
+        }
+        if s.chars().any(|c| c.is_control()) {
+            bail!("source: must not contain control characters or newlines");
+        }
+    }
     Ok(())
 }
 
@@ -557,6 +576,43 @@ mod tests {
     fn create_accepts_minimal() {
         let dir = tmp_logs();
         validate_create_program_request(&minimal_create("/bin/true"), dir.path()).unwrap();
+    }
+
+    #[test]
+    fn source_label_roundtrip_and_clear_sentinel() {
+        // Missing field deserializes to None (old snapshot / old clients).
+        let req: CreateProgramRequest = serde_json::from_str(r#"{"command":"/bin/true"}"#).unwrap();
+        assert!(req.source.is_none());
+        // Present field round-trips.
+        let req: CreateProgramRequest =
+            serde_json::from_str(r#"{"command":"/bin/true","source":"import:supervisor"}"#)
+                .unwrap();
+        assert_eq!(req.source.as_deref(), Some("import:supervisor"));
+        // Serde omits the field when unset (clean old-format output).
+        let json = serde_json::to_string(&CreateProgramRequest {
+            command: "/bin/true".into(),
+            source: None,
+            ..Default::default()
+        })
+        .unwrap();
+        assert!(!json.contains("\"source\""), "{json}");
+    }
+
+    #[test]
+    fn source_label_validation() {
+        let dir = tmp_logs();
+        // Accepted: short, printable, with the kind:detail convention.
+        let mut req = minimal_create("/bin/true");
+        req.source = Some("import:supervisor".into());
+        validate_create_program_request(&req, dir.path()).unwrap();
+        // Rejected: control characters / newline.
+        req.source = Some("bad\nlabel".into());
+        let err = validate_create_program_request(&req, dir.path()).unwrap_err();
+        assert!(err.to_string().contains("source:"), "{err}");
+        // Rejected: over-long.
+        req.source = Some("x".repeat(129));
+        let err = validate_create_program_request(&req, dir.path()).unwrap_err();
+        assert!(err.to_string().contains("source:"), "{err}");
     }
 
     #[test]

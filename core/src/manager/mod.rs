@@ -1245,6 +1245,12 @@ impl Manager {
                 apply_resource_limits_patch(&mut config.resource_limits, new_limits);
             }
 
+            // Provenance: last writer wins; empty string is the clear sentinel
+            // (same convention as cwd/user/group).
+            if let Some(v) = req.source {
+                config.source = if v.trim().is_empty() { None } else { Some(v) };
+            }
+
             config.updated_at = chrono::Utc::now().timestamp() as u64;
             _task_name = config.name.clone();
         }
@@ -2490,6 +2496,10 @@ impl Manager {
                     };
 
                     update_req.resource_limits = config.resource_limits;
+                    // Stack apply overrides in place: carry the service's
+                    // provenance (last writer wins) — create path gets it
+                    // via expand_request already.
+                    update_req.source = config.source;
 
                     if let Err(e) = self.handle_update(id, update_req).await {
                         logs.push(format!("Failed to update {}: {}", name, e));
@@ -3218,8 +3228,20 @@ impl Manager {
             if let Ok(paths) = glob(&full_pattern) {
                 for entry in paths.flatten() {
                     if let Ok(content) = tokio::fs::read_to_string(&entry).await
-                        && let Ok(stack) = common::parse_stack_from_str(&content, &entry)
+                        && let Ok(mut stack) = common::parse_stack_from_str(&content, &entry)
                     {
+                        // Stamp provenance with the include file (relative to
+                        // SUPER_ROOT when possible) unless the service already
+                        // carries an explicit source.
+                        let label = std::path::Path::new(&entry)
+                            .strip_prefix(&root)
+                            .map(|p| p.to_string_lossy().into_owned())
+                            .unwrap_or_else(|_| entry.to_string_lossy().into_owned());
+                        for svc in &mut stack.services {
+                            if svc.source.is_none() {
+                                svc.source = Some(format!("include:{label}"));
+                            }
+                        }
                         match self.handle_apply_stack(stack, false).await {
                             Ok((_logs, ids)) => affected.extend(ids),
                             Err(e) => {
@@ -3537,6 +3559,7 @@ impl Manager {
                 created_at: chrono::Utc::now().timestamp() as u64,
                 updated_at: chrono::Utc::now().timestamp() as u64,
                 restore_path: None,
+                source: req.source.clone(),
 
                 ..Default::default()
             };

@@ -314,6 +314,9 @@ pub fn print_info(info: ProgramInfo) {
     if let Some(u) = &info.config.user {
         println!("User:      {}", u);
     }
+    if let Some(src) = &info.config.source {
+        println!("Source:    {}", src);
+    }
     if let Some(cron) = &info.config.cron {
         println!("Cron:      {}", cron);
         if let Some(o) = &info.config.on_overlap {

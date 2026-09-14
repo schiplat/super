@@ -591,6 +591,7 @@ pub async fn handle_add(ctx: &Context, cmd: &args::Commands) -> anyhow::Result<(
             exitcodes: exitcodes.clone().unwrap_or(vec![0]),
             startsecs: startsecs.unwrap_or(10),
             stopsecs: *stopsecs,
+            source: Some("cli:add".to_string()),
             ..Default::default()
         };
 
@@ -796,6 +797,7 @@ pub async fn handle_update(ctx: &Context, cmd: &args::Commands) -> anyhow::Resul
             max_concurrent: *max_concurrent,
             max_queued: *max_queued,
             resource_limits: limits,
+            source: Some("cli:update".to_string()),
             ..Default::default()
         };
 
@@ -980,7 +982,7 @@ pub async fn handle_apply(
     force_prune: bool,
 ) -> anyhow::Result<()> {
     let content = tokio::fs::read_to_string(file).await?;
-    let request = common::parse_stack_from_str(&content, file)?;
+    let mut request = common::parse_stack_from_str(&content, file)?;
 
     let file_label = file.display().to_string();
 
@@ -1044,6 +1046,20 @@ pub async fn handle_apply(
                 request.services.len()
             );
             return Ok(());
+        }
+    }
+
+    // Stamp provenance with the applied file name unless the service already
+    // carries an explicit source label.
+    let stack_label = format!(
+        "stack:{}",
+        file.file_name()
+            .map(|n| n.to_string_lossy().into_owned())
+            .unwrap_or_else(|| file_label.clone())
+    );
+    for svc in &mut request.services {
+        if svc.source.is_none() {
+            svc.source = Some(stack_label.clone());
         }
     }
 
