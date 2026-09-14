@@ -10,8 +10,6 @@
 //! - `--no-start` forces `autostart = false` so a later daemon restart does
 //!   not suddenly launch every imported program.
 
-use std::io::Read;
-
 use common::CreateProgramRequest;
 use common::import::{ParseCtx, StackDraft, stack_format_by_id, supported_format_ids};
 
@@ -100,15 +98,22 @@ pub async fn handle_import(
 
     // Interactive confirmation may still change the mode when the flag was
     // left at the default `skip`: offer rename/override at the prompt.
-    if on_collision == CollisionMode::Skip
-        && !collisions.is_empty()
-        && let Some(mode) = confirm_collision_mode(&collisions, opts.assume_yes)?
-    {
-        on_collision = mode;
-        let (f, r, s) = resolve_collisions(&draft, &current, on_collision, collision_suffix);
-        fresh = f;
-        renamed_map = r;
-        collisions = s;
+    if on_collision == CollisionMode::Skip && !collisions.is_empty() && !opts.assume_yes {
+        match confirm_collision_mode(&collisions)? {
+            CollisionPrompt::KeepSkip => {}
+            CollisionPrompt::Switch(mode) => {
+                on_collision = mode;
+                let (f, r, s) =
+                    resolve_collisions(&draft, &current, on_collision, collision_suffix);
+                fresh = f;
+                renamed_map = r;
+                collisions = s;
+            }
+            CollisionPrompt::Abort => {
+                println!("Aborted — nothing was imported.");
+                return Ok(());
+            }
+        }
     }
 
     print_preview(&draft, &collisions, &fresh, &renamed_map, on_collision);
@@ -163,6 +168,28 @@ pub async fn handle_import(
     if !proceed {
         println!("Aborted — nothing was imported.");
         return Ok(());
+    }
+
+    // TOCTOU guard: the name snapshot was taken before the preview/confirm
+    // prompts. Re-check now so a program created in the meantime cannot turn
+    // a promised create into an in-place update via stack apply's
+    // create-or-update semantics. (Override mode updates in place by
+    // definition; rename targets are unguessable.)
+    if on_collision != CollisionMode::Override {
+        let now_names = fetch_program_names(ctx).await?;
+        let raced: Vec<String> = fresh
+            .iter()
+            .filter_map(|s| s.name.clone())
+            .filter(|n| now_names.contains(n))
+            .collect();
+        if let Some(first) = raced.first() {
+            return Err(anyhow::anyhow!(
+                "program '{first}' appeared on the daemon while the import was \
+                 being confirmed (name changed state between check and apply). \
+                 Nothing was imported — re-run `super import` to see the \
+                 current state and decide again."
+            ));
+        }
     }
 
     let request = common::StackApplyRequest {
@@ -242,6 +269,16 @@ fn resolve_collisions(
     // Names already claimed inside this batch (daemon + earlier services +
     // earlier renames) so two services never resolve to the same target.
     let mut taken: Vec<String> = current.to_vec();
+    if mode == CollisionMode::Rename {
+        // A rename target must also avoid names claimed by LATER services
+        // in this batch (they pass through untouched): with a fixed suffix,
+        // `web` must not rename onto a file sibling named `web-staging`.
+        for svc in &draft.services {
+            if let Some(name) = &svc.name {
+                taken.push(name.clone());
+            }
+        }
+    }
 
     for svc in &draft.services {
         let Some(name) = &svc.name else {
@@ -258,6 +295,7 @@ fn resolve_collisions(
                     let new_name = pick_renamed(name, &taken, suffix);
                     // Register the target so a later duplicate source name
                     // (or fixed-suffix re-run within the batch) stays unique.
+                    // (The source name itself is already in `taken`.)
                     taken.push(new_name.clone());
                     renamed.push((name.clone(), new_name.clone()));
                     let mut svc2 = svc.clone();
@@ -314,15 +352,18 @@ fn pick_renamed(base: &str, taken: &[String], suffix: Option<&str>) -> String {
     }
 }
 
-/// Interactive prompt when collisions were found and the flag stayed `skip`.
-/// Returns `Some(mode)` if the user chose to switch modes at the prompt.
-fn confirm_collision_mode(
-    skipped: &[String],
-    assume_yes: bool,
-) -> anyhow::Result<Option<CollisionMode>> {
-    if assume_yes || skipped.is_empty() {
-        return Ok(None);
-    }
+/// Outcome of the interactive collision prompt (only called when `!assume_yes`
+/// and collisions are non-empty).
+enum CollisionPrompt {
+    /// User answered `y` — keep the default skip behaviour.
+    KeepSkip,
+    /// User switched modes at the prompt (`r` / `o`).
+    Switch(CollisionMode),
+    /// User aborted (`N` / empty / EOF).
+    Abort,
+}
+
+fn confirm_collision_mode(skipped: &[String]) -> anyhow::Result<CollisionPrompt> {
     use std::io::Write;
     println!(
         "WARNING: {} program(s) already exist and will be SKIPPED (their current config is kept):",
@@ -337,16 +378,18 @@ fn confirm_collision_mode(
     print!("Proceed? [y/r/o/N] ");
     let _ = std::io::stdout().flush();
     let mut answer = String::new();
-    std::io::stdin().read_line(&mut answer)?;
-    match answer.trim().to_ascii_lowercase().as_str() {
-        "y" | "yes" => Ok(None),
-        "r" | "rename" => Ok(Some(CollisionMode::Rename)),
-        "o" | "override" => Ok(Some(CollisionMode::Override)),
-        _ => {
-            println!("Aborted — nothing was imported.");
-            std::process::exit(0);
-        }
+    let n = std::io::stdin().read_line(&mut answer)?;
+    if n == 0 {
+        // EOF (piped/closed stdin): fail closed like the other prompts.
+        println!();
+        return Ok(CollisionPrompt::Abort);
     }
+    Ok(match answer.trim().to_ascii_lowercase().as_str() {
+        "y" | "yes" => CollisionPrompt::KeepSkip,
+        "r" | "rename" => CollisionPrompt::Switch(CollisionMode::Rename),
+        "o" | "override" => CollisionPrompt::Switch(CollisionMode::Override),
+        _ => CollisionPrompt::Abort,
+    })
 }
 
 /// Typed confirmation for the destructive-ish override mode.
@@ -363,7 +406,7 @@ fn confirm_override(collisions: &[String]) -> bool {
     print!("Type 'override' to confirm, anything else to abort: ");
     let _ = std::io::stdout().flush();
     let mut answer = String::new();
-    if std::io::stdin().read_to_string(&mut answer).is_err() {
+    if std::io::stdin().read_line(&mut answer).is_err() {
         return false;
     }
     let a = answer.trim();
@@ -590,6 +633,31 @@ mod tests {
         assert_ne!(renamed2[0].1, renamed2[1].1, "renamed targets must differ");
         let names: Vec<_> = fresh2.iter().filter_map(|s| s.name.clone()).collect();
         assert_ne!(names[0], names[1]);
+    }
+
+    #[test]
+    fn rename_target_avoids_later_batch_sibling() {
+        // Regression: file = [web, web-staging], daemon = [web]. With a fixed
+        // suffix "staging" the renamed target for `web` would have been
+        // `web-staging` — clobbering the sibling `web-staging` service that
+        // passes through untouched. The target must fall back to random.
+        let d = StackDraft {
+            services: vec![svc_named("web"), svc_named("web-staging")],
+            warnings: Vec::new(),
+        };
+        let current = ["web".to_string()];
+        let (fresh, renamed, skipped) =
+            resolve_collisions(&d, &current, CollisionMode::Rename, Some("staging"));
+        assert_eq!(skipped, Vec::<String>::new());
+        assert_eq!(renamed.len(), 1, "only `web` collides with the daemon");
+        assert_eq!(renamed[0].0, "web");
+        assert_ne!(
+            renamed[0].1, "web-staging",
+            "rename target must not equal the batch sibling name"
+        );
+        let names: Vec<_> = fresh.iter().filter_map(|s| s.name.clone()).collect();
+        assert_eq!(names.len(), 2);
+        assert!(names.contains(&"web-staging".to_string()));
     }
 
     fn svc_named(name: &str) -> CreateProgramRequest {
