@@ -93,7 +93,7 @@ PM2 **cluster mode** (Node.js shared listen port, in-process load balancing, zer
 
 ## Import tool status
 
-`super import` today converts **Supervisor INI** configs (`super import supervisor …`); a PM2 `ecosystem.config.js` converter is planned but not built — see the [import workflow](/docs/04-production-scenarios/migrations/vs-supervisor/#import-tool-super-import-supervisor) for how the Supervisor one works and what to expect.
+`super import` today converts **Supervisor INI** configs (`super import supervisor …`). A converter for PM2 `ecosystem.config.js` is **deferred**: the formats diverge enough (watch, cluster mode, deploy blocks, dynamic JS) that a half-done importer would be more harmful than helpful. Use the mapping table below and the [Supervisor import workflow](/docs/04-production-scenarios/migrations/vs-supervisor/#import-tool-super-import-supervisor) as a reference for how a high-fidelity import looks when one exists.
 
 Migrating from PM2 today is a manual, mechanical step per app. Typical fork-mode entries map like this:
 

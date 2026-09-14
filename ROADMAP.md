@@ -11,15 +11,16 @@ shell in **1.5.7**) — not as lingering P0 entries here.
 
 Priorities: **P0** (next in line) · **P1** (soon) · **P2** (backlog) · **Directions** (multi-release horizons).
 
-## P0 — Migration importers (`super import`)
+## P0 — Migration importers (`super import`) — supervisor **done**
 
-**Status:** supervisor importer **shipped** (`super import supervisor`, v1.5.7
-line); the PM2 converter is next. Track details in the internal product plan.
+**Status:** supervisor importer **shipped** (`super import supervisor`). A
+JS-ecosystem converter is **deferred** (large semantic gaps vs fork-only
+configs; manual mapping on the migration page is enough for now). Track
+details in the internal product plan.
 
-Super's docs have dedicated PM2 / supervisor migration pages, but there was no
-tooling to actually move a config over. A CLI importer lowers the migration
-barrier and is a strong onboarding hook for users coming from other process
-managers.
+Super's docs have dedicated migration pages. The Supervisor CLI importer
+lowers the migration barrier for the high-fidelity path; other formats stay
+manual until there is clear demand for a narrow, warning-heavy draft tool.
 
 ### Step 1 — Extract a stack-format parser layer — DONE (adjusted shape)
 
@@ -32,7 +33,7 @@ dispatcher:
 
 ```rust
 pub trait StackFormat: Send + Sync {
-    fn id(&self) -> &'static str; // "supervisor" today; "pm2" next
+    fn id(&self) -> &'static str; // "supervisor" today; other formats later
     fn detect(&self, content: &str) -> bool;
     fn parse(&self, content: &str, ctx: &ParseCtx) -> anyhow::Result<StackDraft>;
 }
@@ -50,7 +51,7 @@ pub trait StackFormat: Send + Sync {
 
 ### Step 2 — Import subcommands as `StackFormat` implementations
 
-Shipped (supervisor) / planned (pm2):
+Shipped / deferred:
 
 - ✅ `super import supervisor supervisord.conf` — INI `[program:x]` → stack
   services, mapping almost 1:1 (`command` / `directory` / `user` /
@@ -58,30 +59,27 @@ Shipped (supervisor) / planned (pm2):
   `autorestart` / `exitcodes` / `startsecs` / `stopwaitsecs` / `priority` /
   `startretries`→`retry_limit` / `numprocs` + `%(process_num)02d`→`{num}` /
   `redirect_stderr`). `[include] files=` recursion (glob + cycle detection),
-  `[group:x]` membership → `group` field. Names that already exist are
-  **skipped**, never overwritten (interactive `override` to take over);
-  imports never prune; `--no-start` imports everything stopped; `--dry-run`
-  and `--emit-toml <file|-|>` work without a daemon.
-- 🔲 `super import pm2 ecosystem.config.js` — PM2's ecosystem is a **JS file**,
-  not JSON. MVP parses only **literal** `module.exports = { apps: [...] }`
-  objects (strip `module.exports =`, tolerate single quotes / trailing commas /
-  unquoted keys via a JSON5-style preprocessing). `require()` / dynamic logic →
-  clear error suggesting `pm2 save` or manual migration. No embedded JS engine.
-  Scope: fork-mode plain configs map faithfully; `watch` / cluster mode /
-  `restart_delay` / `deploy` are warning-list items, not hard failures.
+  `[group:x]` membership → `group` field. Name collisions:
+  `--on-collision skip|rename|override` (default skip; rename is the
+  side-by-side path; override needs typed confirmation — `--yes` alone never
+  escalates); imports never prune; `--no-start` imports everything stopped;
+  `--dry-run` and `--emit-toml <file|-|>` work without a daemon. Programs are
+  stamped `source = import:supervisor` (detail views only).
+- ⏸ JS ecosystem converter (`ecosystem.config.js` style) — **deferred**.
+  Semantic gaps (file watch, cluster / shared-listen, deploy blocks, dynamic
+  `require()`) make a half-done importer harmful. Migrate manually with the
+  mapping table on the migration docs page until demand justifies a
+  **narrow fork-mode draft + strong warnings** tool (not a full migrator).
 - Write path reuses the existing stack API (`PUT /api/v1/stack`, same as
   `super apply`) with the batch-confirmation pattern (`--yes` / global
   `--dry-run`).
-- Docs: migration pages and the CLI reference already document the supervisor
+- Docs: migration pages and the CLI reference document the supervisor
   workflow (`/docs/04-production-scenarios/migrations/vs-supervisor/`,
-  `#import`); the PM2 page states the converter status and a manual mapping
-  table.
+  `#import`); the other migration page states the converter is deferred and
+  keeps a manual mapping table.
 
 Implementation notes: lives in the OSS CLI as a normal subcommand (no plugin/ABI
 involvement — it is pure config translation, so it must stay OSS and free).
-Rough estimate 0.5–1.5 dev-days for the CLI + literal parser, 2–3 with tests and
-docs. The PM2 JS-literal preprocessing is the main cost driver; do not escalate
-to a full JS engine.
 
 ## P1 — AI edge gateway & container scenarios
 

@@ -19,6 +19,7 @@ Super is a modern replacement for tools like [Supervisor](https://supervisord.or
 
 * **Single binary** — Rust `superd` process manager; TOML or REST config; CLI, HTTP API, and an **embedded Dashboard** (subscription `ui` plugin adds Tokens, notifications UI, and related Pro surfaces)
 * **Ordered orchestration** — `depends_on` + health gates for startup; group/batch start·stop·restart follow dependency order (reverse on stop); declarative stacks
+* **Migration import** — `super import supervisor <conf>` turns an existing Supervisor INI into a Super stack (preview / dry-run / collision modes); see the [Supervisor migration guide](https://super.docs.sconts.com/docs/04-production-scenarios/migrations/vs-supervisor/#import-tool-super-import-supervisor)
 * **Multi-process programs** — `numprocs` starts N workers from one definition (`process_name`, `SUPER_PROCESS_NUM` / `SUPER_PROCESS_TOTAL`); not Node cluster / zero-downtime reload
 * **Lifecycle hooks** — `pre_start`, `post_start`, `post_stop`, and global event hooks
 * **Observability** — WebSocket logs, historical logs API, system metrics
@@ -78,6 +79,8 @@ make build
 super add --name redis --autostart /usr/bin/redis-server
 super list
 super logs <id> --tail
+# From Supervisor: preview then import
+# super import supervisor /etc/supervisor/conf.d/app.conf --dry-run
 super shutdown                       # stop superd (foreground or --daemon)
 ```
 

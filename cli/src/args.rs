@@ -304,7 +304,8 @@ pub enum Commands {
 
         /// Remap custom log file paths into the target log dir by file name
         /// (source daemons often log outside it). Without this flag, foreign
-        /// log paths are dropped with a warning.
+        /// absolute paths are kept as-is and rejected by apply-side
+        /// validation when they fall outside `storage.log_dir`.
         #[arg(long)]
         remap_logs: bool,
 

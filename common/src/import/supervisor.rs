@@ -591,10 +591,10 @@ fn map_program(
         }
     }
 
-    // Logs. Custom log paths are security-confined to the target log dir, so
-    // foreign absolute paths are remapped to their file name (keeps the
-    // stream alive inside the target's spool) or, without remapping, dropped
-    // with a warning.
+    // Logs. Custom log paths are security-confined to the target log dir.
+    // With `--remap-logs`, foreign absolute paths become bare file names so
+    // they land inside the spool; without it they are kept as-is and the
+    // apply-side validator rejects anything outside the log dir.
     let map_log = |raw: &str, stream: &str, warnings: &mut Vec<ImportWarning>| -> Option<String> {
         let raw = raw.trim();
         if raw.is_empty() || raw.eq_ignore_ascii_case("none") || raw == "/dev/null" {
