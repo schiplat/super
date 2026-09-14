@@ -110,6 +110,7 @@ Partially update an existing program. Only fields present in the body are change
 | `max_concurrent` | Max overlapping cron runs at once (default `1`, 1–64) |
 | `max_queued` | Cap on queued cron firings when at `max_concurrent` (default `100`; `0` = default) — firings beyond the cap are dropped and recorded as `queue_full` events |
 | `resource_limits` | 💎 Requires `isolation` plugin on Linux — stored in config always; enforced only when plugin is loaded |
+| `source` | Provenance label of the last write path (`cli:add`, `cli:update`, `stack:<file>`, `include:<file>`, `import:<format>`, or any caller-supplied value, max 128 chars, no control characters). Empty string clears it; omit for no change. Shown by `super info` and in the program detail response (`config.source`); not part of the list summary. |
 
 > [!IMPORTANT] Update persists config only
 > Updating `command`, `env`, etc. **persists config only** — it does **not** restart a running process. Call `POST /api/v1/programs/{id}/restart` explicitly, or change `artifact.checksum` to trigger an automatic OTA restart.

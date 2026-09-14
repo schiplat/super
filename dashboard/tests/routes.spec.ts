@@ -5,7 +5,7 @@
 import { describe, expect, it } from 'vitest';
 import { createMemoryHistory, createRouter } from 'vue-router';
 import { defineComponent, h } from 'vue';
-import { bindRouter, registerRoute } from './routes';
+import { bindRouter, registerRoute } from '../src/slots/routes';
 
 const Page = defineComponent({
   render: () => h('div', 'plugin-page'),

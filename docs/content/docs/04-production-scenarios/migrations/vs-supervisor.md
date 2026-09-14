@@ -157,7 +157,25 @@ super apply app-stack.toml
 
 # Import directly (connects to the daemon, asks for confirmation)
 super import supervisor /etc/supervisor/conf.d/app.conf
+
+# Name collisions — pick a mode up front, or decide at the prompt
+super import supervisor /etc/supervisor/conf.d/app.conf --on-collision rename                      # import as web-c41f9a, side by side
+super import supervisor /etc/supervisor/conf.d/app.conf --on-collision rename --collision-suffix staging  # fixed name: web-staging
+super import supervisor /etc/supervisor/conf.d/app.conf --on-collision override                    # replace existing programs in place
+super import supervisor /etc/supervisor/conf.d/app.conf                                            # no flag -> prompt asks [y/r/o/N]
 ```
+
+### Name collisions: skip / rename / override
+
+When a program name in the file already exists on the daemon, `--on-collision` decides what happens:
+
+| Mode | Behaviour | Typical use |
+| :--- | :--- | :--- |
+| `skip` *(default)* | Existing program untouched, imported entry left out | Idempotent re-runs; fill in only what is missing |
+| `rename` | Imports under `{name}-{suffix}` (random 6-char hex, or `--collision-suffix`); prints the old→new mapping | **Gray-release migration**: old program keeps running while you verify the imported copy, then stop/remove the old one |
+| `override` | Existing program updated in place with the imported config (typed confirmation: `override` / prompt `o`) | You know the live copy is stale and want the file to win |
+
+`rename` is unique against both the daemon and the rest of the batch, so reruns and duplicate names in one file never collide. `--yes` never escalates to `override` — an in-place takeover always needs the flag or an explicit interactive answer.
 
 ### What the importer does
 
@@ -170,10 +188,11 @@ super import supervisor /etc/supervisor/conf.d/app.conf
 
 ### Safety behaviour
 
-- **Existing programs are never overwritten.** If a name already exists on the daemon it is skipped; interactive runs can type `override` to take the names over instead.
+- **Collisions follow `--on-collision`.** `skip` (default) leaves existing programs untouched; `rename` imports side by side under a fresh `{name}-{suffix}` name; `override` updates in place after typed confirmation. See [Name collisions](#name-collisions-skip--rename--override).
 - **Imports never prune.** The generated apply has `prune = false` — nothing outside the imported file is touched.
 - **`--no-start`** forces `autostart = false` on everything imported, so a later daemon restart does not launch all programs at once. Start them deliberately with `super start <name>`.
 - **`--remap-logs`** rewrites foreign absolute log paths (e.g. `/var/log/web/out.log`) to bare file names so they land inside Super's `storage.log_dir`, which is where custom log paths must live. Without the flag, foreign log paths are kept as-is and the apply-side validation will reject paths outside the log dir.
+- **Every imported program is stamped `source = import:supervisor`.** The label travels with the program config (snapshot, detail API, `super info`) so you can always tell imported programs apart from hand-created ones — useful during the verify phase of a gray-release migration and when auditing what an import touched. Other write paths stamp their own labels (`cli:add`, `cli:update`, `stack:<file>`, `include:<file>`); a direct API create/update may set `source` explicitly.
 
 ### What cannot be converted
 

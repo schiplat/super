@@ -90,7 +90,7 @@ function handleLogout() {
           Account
         </div>
 
-        <!-- STABLE: nav.account — plugins need navigate/close. Do not change :context without slots.spec.ts review. -->
+        <!-- STABLE: nav.account — plugins need navigate/close. Do not change :context without tests/slots.spec.ts review. -->
         <Slot
           name="nav.account"
           :context="{ navigate: navigateTo, close: closeUserMenu }"

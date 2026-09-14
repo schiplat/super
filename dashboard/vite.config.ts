@@ -36,7 +36,7 @@ export default defineConfig({
 
   test: {
     environment: 'jsdom',
-    include: ['src/**/*.{spec,test}.{ts,tsx}'],
+    include: ['tests/**/*.{spec,test}.{ts,tsx}'],
   },
 
   // Build optimization

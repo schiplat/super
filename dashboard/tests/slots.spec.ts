@@ -19,11 +19,11 @@ import { fileURLToPath } from 'node:url';
 import { describe, expect, it, vi } from 'vitest';
 import { mount } from '@vue/test-utils';
 import { defineComponent, h } from 'vue';
-import { registerSlot, slotExtensions, type ProcessContext } from './registry';
-import Slot from './Slot.vue';
+import { registerSlot, slotExtensions, type ProcessContext } from '../src/slots/registry';
+import Slot from '../src/slots/Slot.vue';
 
 const here = dirname(fileURLToPath(import.meta.url));
-const srcRoot = join(here, '..');
+const srcRoot = join(here, '..', 'src');
 
 function readSrc(rel: string): string {
   return readFileSync(join(srcRoot, rel), 'utf8');

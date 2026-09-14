@@ -41,7 +41,7 @@ superd ── verifies ──► [license].key   signed key from your vendor
 
 ### Dashboard slot contract (do not change casually)
 
-The shell exposes named UI slots (`process.actions`, `process.detail.tabs`, `nav.*`) and `context.process` fields (`id`, `name`, `status`, `pid`, …) consumed by subscription UI plugins. **Do not rename slots, drop context fields, or rewrite `:context="{ … }"` at mount sites unless you know exactly what you are doing** — that breaks paid plugins without failing this repo’s TypeScript build. CI runs `cd dashboard && npm test` (see `dashboard/src/slots/slots.spec.ts` and `ui-bridge.d.ts`). Extending with new optional fields / new slot names is fine; removals need maintainer review.
+The shell exposes named UI slots (`process.actions`, `process.detail.tabs`, `nav.*`) and `context.process` fields (`id`, `name`, `status`, `pid`, …) consumed by subscription UI plugins. **Do not rename slots, drop context fields, or rewrite `:context="{ … }"` at mount sites unless you know exactly what you are doing** — that breaks paid plugins without failing this repo’s TypeScript build. CI runs `cd dashboard && npm test` (see `dashboard/tests/slots.spec.ts` and `ui-bridge.d.ts`). Extending with new optional fields / new slot names is fine; removals need maintainer review.
 
 Licensed-plugin fields in config and API are documented with a 💎 marker; see the public [Feature matrix](https://super.docs.sconts.com/docs/07-editions/feature-matrix/) on the docs site.
 

@@ -19,7 +19,7 @@ The `super` binary is the primary way to interact with the daemon. Commands are 
 | :--- | :--- | :--- | :--- |
 | `--server <URL>` / `-s` | string | `http://127.0.0.1:9002` | Override the server endpoint. Accepts an HTTP(S) URL or a Unix socket (`unix:///path/to/superd.sock`). Relative socket paths resolve under `SUPER_ROOT`; auto-discovery may prefer the socket (see below) |
 | `--token <TOKEN>` | string | — | Bearer for authenticated daemons (falls back to `SUPER_TOKEN`). Works with OSS core auth admin secret or licensed Access Tokens (`sk-…`; `security` plugin) |
-| `--yes` / `-y` | bool | `false` | Skip batch confirmation prompts. Also drives `super import`'s collision prompt (there, `y` keeps the skip-existing behaviour; typing `override` interactively takes existing names over) |
+| `--yes` / `-y` | bool | `false` | Skip batch confirmation prompts. Also drives `super import`'s collision prompt (there, `y` keeps the chosen `--on-collision` behaviour — `override` additionally needs the flag or an interactive `o` answer, `--yes` alone never escalates) |
 | `--dry-run` | bool | `false` | Preview which programs a batch operation would affect, without executing. [`super import`](#import) also honors it: prints the import plan and warnings, no daemon changes |
 
 **Endpoint selection** (how `super` picks a daemon to talk to):
@@ -101,7 +101,7 @@ super list
 ```
 
 ### `info`
-Show detailed JSON/Table information about a specific program.
+Show detailed JSON/Table information about a specific program. When the program has a provenance label (see [`import`](#import) — **Provenance**), the table includes a `Source:` line such as `Source: import:supervisor` or `Source: stack:app.toml`.
 
 ```bash
 super info <name|id>
@@ -367,18 +367,38 @@ Convert a foreign process-manager config file into Super stack services: parse, 
 ```bash
 super import supervisor /etc/supervisor/conf.d/app.conf --dry-run
 super import supervisor /etc/supervisor/conf.d/app.conf --emit-toml app-stack.toml
+# Name-collision handling — three ways to choose the mode:
+super import supervisor /etc/supervisor/conf.d/app.conf --on-collision rename                       # flag (scripted)
+super import supervisor /etc/supervisor/conf.d/app.conf --on-collision rename --collision-suffix staging   # fixed suffix -> web-staging
+super import supervisor /etc/supervisor/conf.d/app.conf          # interactive prompt offers [y/r/o/N]
+super import supervisor /etc/supervisor/conf.d/app.conf --yes --on-collision override                # scripted override (update in place)
 super import supervisor /etc/supervisor/conf.d/app.conf [--yes] [--no-start] [--remap-logs]
 ```
 
 | Flag | Type | Default | Description |
 | :--- | :--- | :--- | :--- |
-| `--dry-run` | bool | `false` | Print the import plan (warnings + what would be created/skipped) and exit. Works without a running daemon (skips the name-collision check) |
+| `--dry-run` | bool | `false` | Print the import plan (warnings + what would be created/renamed/skipped) and exit. Works without a running daemon (skips the name-collision check) |
 | `--emit-toml <path>` | path | — | Write the converted stack as TOML instead of applying (`-` = stdout). Review it, then `super apply` |
 | `--no-start` | bool | `false` | Force `autostart = false` on everything imported so a daemon restart does not launch them; start deliberately with `super start` |
+| `--on-collision <MODE>` | `skip` \| `rename` \| `override` | `skip` | What to do when a program name already exists: **skip** keeps the existing program untouched; **rename** imports under a fresh name (`{name}-{suffix}`) so old and new run side by side (gray-release migration); **override** updates the existing program in place |
+| `--collision-suffix <TEXT>` | string | random 6-char hex | With `--on-collision rename`: fixed suffix instead of a random one (e.g. `--collision-suffix staging` → `web-staging`). Reproducible for scripts, but a fixed suffix collides with itself if the same import runs twice (random suffixes never do) |
 | `--remap-logs` | bool | `false` | Rewrite foreign absolute log paths to bare file names so they resolve under `storage.log_dir` (custom log paths must live there). Without it, foreign paths are kept and rejected by apply-side validation |
-| `--yes` / `-y` | bool | `false` | Skip the confirmation prompt |
+| `--yes` / `-y` | bool | `false` | Skip the confirmation prompt (`y` keeps the chosen `--on-collision` behaviour; it never escalates to override) |
 
-**Safety:** names that already exist on the daemon are **skipped** (kept as-is); interactive runs may type `override` to take them over with the imported config. Imports are always `prune = false`. Anything the converter could not map faithfully — `stopsignal=QUIT`, per-program log-rotation keys, `[eventlistener:*]`, `[fcgi-program:*]` — is reported as a warning, never silently dropped. Full field mapping: [Import tool](/docs/04-production-scenarios/migrations/vs-supervisor/#import-tool-super-import-supervisor).
+**Collision modes in detail.** `skip` (default) is idempotent — rerunning the same import only fills in missing programs. `rename` picks `{name}-{6-char hex}` (e.g. `web-c41f9a`), guarantees the target is unique against the daemon **and** the rest of the batch, and prints the old→new mapping in both the plan and the final report — use it to run the imported copy next to the live one, verify, then retire the old program manually. `override` feeds the collided services through the stack API's create-or-update semantics so the existing program's config is replaced; interactive runs must type `override` (or answer `o` at the prompt) — it is never triggered by `--yes` alone.
+
+**Three ways to choose a mode:** the `--on-collision` flag, the interactive prompt (`[y] skip / [r] rename / [o] override / [N] abort` — shown whenever collisions exist and no explicit mode was given), or `--dry-run` + re-run with the chosen flag. The preview always shows the exact outcome before anything is applied:
+
+```text
+Import plan:
+  + web-worker: /usr/bin/python3 manage.py celery_worker … [autostart, x3, @webapp]
+  ~ web: exists -> will import as web-c41f9a (renamed)
+  ~ db: already exists — skipped (not overwritten)
+```
+
+**Safety:** imports are always `prune = false`. Anything the converter could not map faithfully — `stopsignal=QUIT`, per-program log-rotation keys, `[eventlistener:*]`, `[fcgi-program:*]` — is reported as a warning, never silently dropped. Full field mapping: [Import tool](/docs/04-production-scenarios/migrations/vs-supervisor/#import-tool-super-import-supervisor).
+
+**Provenance:** every program created or overridden by an import is stamped `source = import:<format>` (e.g. `import:supervisor`), visible via `super info` (line `Source:`) and the program detail API. Other write paths stamp similarly: `super add` → `cli:add`, `super update` → `cli:update`, `super apply <file>` → `stack:<file>`, and `[include]` stacks → `include:<file>`. This makes "where did this program come from?" answerable months later — for example when auditing what an import touched before retiring the old setup.
 
 ### `export`
 Export current state as a stack file. **Defaults to TOML** (the default stack format, round-trips cleanly with `super apply` / `[include]`); `--format json` keeps the legacy JSON shape for tooling that expects it.

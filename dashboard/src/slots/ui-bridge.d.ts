@@ -6,7 +6,7 @@
  * Renaming slots, dropping ProcessContext fields (e.g. `pid`), or altering
  * SuperCoreBridge methods will break those plugins without a compile error in
  * this repo. Extend only; removals need an intentional ABI/docs bump.
- * CI: `dashboard` vitest (`slots.spec.ts`) asserts this surface — do not delete
+ * CI: `dashboard` vitest (`tests/slots.spec.ts`) asserts this surface — do not delete
  * or skip those tests to “make the PR green”.
  *
  * Zero runtime code: both sides `import type` from here so a plugin can be
