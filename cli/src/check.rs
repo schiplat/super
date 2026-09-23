@@ -18,8 +18,8 @@ use std::path::{Path, PathBuf};
 #[cfg(unix)]
 use std::os::unix::fs::PermissionsExt;
 
-/// Run configuration check command
-pub fn run(file_path: Option<PathBuf>) -> anyhow::Result<()> {
+/// Run configuration check command, including whether the configured TCP port is free.
+pub fn run(file_path: Option<PathBuf>, check_port_availability: bool) -> anyhow::Result<()> {
     // 1. Locate config file
     let path = resolve_config_path(file_path)?;
     println!(
@@ -63,6 +63,11 @@ pub fn run(file_path: Option<PathBuf>) -> anyhow::Result<()> {
         );
     }
 
+    // Resolve relative storage paths against the instance root exactly as superd
+    // does. `doctor` may be invoked from any working directory after install.
+    let root = resolve_super_root_for_config(&path);
+    let storage = config.storage.resolve_under_root(&root);
+
     // 3. Check server config (port availability and privileges)
     let socket_only = config.server.socket_only;
 
@@ -78,24 +83,28 @@ pub fn run(file_path: Option<PathBuf>) -> anyhow::Result<()> {
         println!("{}", "(TCP disabled)".green());
     } else {
         let bind_addr = format!("{}:{}", config.server.host, config.server.port);
-        print!("   Server Addr: {} ... ", bind_addr);
+        if check_port_availability {
+            print!("   Server Addr: {} ... ", bind_addr);
 
-        // Try binding the port to detect conflicts
-        match TcpListener::bind(&bind_addr) {
-            Ok(_) => {
-                print!("{}", "Available".green());
+            // Try binding the port to detect conflicts. This is a configuration
+            // check, not a daemon check; `doctor` targets a potentially live listener.
+            match TcpListener::bind(&bind_addr) {
+                Ok(_) => print!("{}", "Available".green()),
+                Err(e) => {
+                    print!("{}", "Occupied".red());
+                    errors.push(format!(
+                        "Port {} is likely in use: {}",
+                        config.server.port, e
+                    ));
+                }
             }
-            Err(e) => {
-                print!("{}", "Occupied".red());
-                errors.push(format!(
-                    "Port {} is likely in use: {}",
-                    config.server.port, e
-                ));
-            }
+            println!();
+        } else {
+            println!("   Server Addr: {} (port probe skipped)", bind_addr);
         }
 
         // Privileged ports (<1024) require root
-        if config.server.port < 1024 && config.server.port != 0 {
+        if check_port_availability && config.server.port < 1024 && config.server.port != 0 {
             #[cfg(unix)]
             if unsafe { libc::geteuid() } != 0 {
                 print!(" {}", "(Non-Root Warning)".yellow());
@@ -110,7 +119,6 @@ pub fn run(file_path: Option<PathBuf>) -> anyhow::Result<()> {
 
     // Unix socket endpoint (permission-controlled transport).
     if let Some(sock) = &config.server.socket {
-        let root = resolve_super_root_for_config(&path);
         let resolved = if sock.is_absolute() {
             sock.clone()
         } else {
@@ -186,7 +194,7 @@ pub fn run(file_path: Option<PathBuf>) -> anyhow::Result<()> {
     }
 
     // 4. Check log directory (write permission)
-    let log_dir = &config.storage.log_dir;
+    let log_dir = &storage.log_dir;
     print!("   Log Dir:     {:?} ... ", log_dir);
 
     if log_dir.exists() {
@@ -219,7 +227,7 @@ pub fn run(file_path: Option<PathBuf>) -> anyhow::Result<()> {
     }
 
     // 5. Check data file (snapshot storage)
-    let data_file = &config.storage.data_file;
+    let data_file = &storage.data_file;
     print!("   Data File:   {:?} ... ", data_file);
 
     if data_file.exists() {
@@ -271,7 +279,7 @@ pub fn run(file_path: Option<PathBuf>) -> anyhow::Result<()> {
     check_include_stacks(
         &root,
         &config.include.files,
-        &config.storage.log_dir,
+        log_dir,
         &mut errors,
         &mut warnings,
     );

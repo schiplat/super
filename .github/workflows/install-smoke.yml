@@ -1,8 +1,8 @@
 name: Install smoke
 
-# Smoke-test install paths (manual only):
+# Smoke-test install paths in isolation (manual only):
 # - Unix: install.sh against a locally built fake release (--base-url)
-# - macOS: native runner; FreeBSD: vmactions/freebsd-vm
+# - Never register system/user services or modify the invoking user's login files.
 # Docker image build/publish is separate (tags only — see docker-publish.yml).
 
 on:
@@ -27,9 +27,10 @@ jobs:
         with:
           key: install-smoke-${{ matrix.os }}
 
-      # tools/scripts/install-smoke.sh is bash (arrays); do not invoke with dash/sh.
-      - name: Install smoke (--user)
-        run: bash tools/scripts/install-smoke.sh --user
+      # The smoke script isolates HOME and always uses --no-service; it exercises
+      # install/start/doctor/CLI without registering launchd/systemd services.
+      - name: Isolated install smoke
+        run: bash tools/scripts/install-smoke.sh --no-service
 
   smoke-freebsd:
     runs-on: ubuntu-latest
@@ -52,5 +53,5 @@ jobs:
             curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain stable
             . "$HOME/.cargo/env"
             export RUSTFLAGS=""
-            # FreeBSD has no systemd/launchd; --user path uses superd --daemon.
-            bash tools/scripts/install-smoke.sh --user
+            # Isolated install smoke uses --no-service; does not create an rc.d entry.
+            bash tools/scripts/install-smoke.sh --no-service

@@ -144,6 +144,7 @@ SUMS_URL="${BASE_URL}/SHA256SUMS"
 
 # --- Download to a temp dir ---------------------------------------------------
 TMP="$(mktemp -d 2>/dev/null || mktemp -d -t super-install)"
+BIN_TX_ID="$(basename "$TMP")"
 trap 'rm -rf "$TMP"' EXIT
 
 log "Downloading $ARCHIVE..."
@@ -238,6 +239,50 @@ run_for() {
   fi
 }
 
+BIN_TX_ACTIVE=0
+BIN_TX_DIR=""
+BIN_TX_HAD_SUPERD=0
+BIN_TX_HAD_SUPER=0
+
+rollback_binary_install() {
+  [ "$BIN_TX_ACTIVE" -eq 1 ] || return 0
+  info "Restoring previous binaries after incomplete install..."
+  if [ -e "$BIN_TX_DIR/.superd.old.$BIN_TX_ID" ]; then
+    run_for "$BIN_TX_DIR" rm -f "$BIN_TX_DIR/superd" || true
+    run_for "$BIN_TX_DIR" mv -f "$BIN_TX_DIR/.superd.old.$BIN_TX_ID" "$BIN_TX_DIR/superd" || true
+  elif [ "$BIN_TX_HAD_SUPERD" -eq 0 ] && [ ! -e "$BIN_TX_DIR/.superd.new.$BIN_TX_ID" ]; then
+    run_for "$BIN_TX_DIR" rm -f "$BIN_TX_DIR/superd" || true
+  fi
+  if [ -e "$BIN_TX_DIR/.super.old.$BIN_TX_ID" ]; then
+    run_for "$BIN_TX_DIR" rm -f "$BIN_TX_DIR/super" || true
+    run_for "$BIN_TX_DIR" mv -f "$BIN_TX_DIR/.super.old.$BIN_TX_ID" "$BIN_TX_DIR/super" || true
+  elif [ "$BIN_TX_HAD_SUPER" -eq 0 ] && [ ! -e "$BIN_TX_DIR/.super.new.$BIN_TX_ID" ]; then
+    run_for "$BIN_TX_DIR" rm -f "$BIN_TX_DIR/super" || true
+  fi
+  BIN_TX_ACTIVE=0
+}
+
+install_exit_cleanup() {
+  _cleanup_status="$1"
+  if [ "$_cleanup_status" -eq 0 ]; then
+    BIN_TX_ACTIVE=0
+    if [ -n "$BIN_TX_DIR" ]; then
+      run_for "$BIN_TX_DIR" rm -f \
+        "$BIN_TX_DIR/.superd.old.$BIN_TX_ID" "$BIN_TX_DIR/.super.old.$BIN_TX_ID" 2>/dev/null || true
+    fi
+  else
+    rollback_binary_install
+  fi
+  if [ -n "$BIN_TX_DIR" ]; then
+    run_for "$BIN_TX_DIR" rm -f \
+      "$BIN_TX_DIR/.superd.new.$BIN_TX_ID" "$BIN_TX_DIR/.super.new.$BIN_TX_ID" 2>/dev/null || true
+  fi
+  rm -rf "$TMP"
+  return "$_cleanup_status"
+}
+# Preserve the original exit code before cleanup commands change `$?`.
+trap 'INSTALL_EXIT_STATUS=$?; install_exit_cleanup "$INSTALL_EXIT_STATUS"' EXIT
+
 write_file() {
   # write_file <dest>  (contents on stdin)
   _wf_dest="$1"
@@ -274,8 +319,24 @@ fi
 # --- Install binaries ---------------------------------------------------------
 log "Installing binaries to $BIN_DIR..."
 run_for "$BIN_DIR" mkdir -p "$BIN_DIR"
-run_for "$BIN_DIR" cp "$ROOT_DIR/bin/superd" "$ROOT_DIR/bin/super" "$BIN_DIR/"
-run_for "$BIN_DIR" chmod +x "$BIN_DIR/superd" "$BIN_DIR/super"
+BIN_TX_DIR="$BIN_DIR"
+if [ -e "$BIN_DIR/superd" ]; then BIN_TX_HAD_SUPERD=1; fi
+if [ -e "$BIN_DIR/super" ]; then BIN_TX_HAD_SUPER=1; fi
+
+# Stage binaries beside their destinations, then promote with same-filesystem
+# renames. Keep the previous pair until both new names are live.
+run_for "$BIN_DIR" cp "$ROOT_DIR/bin/superd" "$BIN_DIR/.superd.new.$BIN_TX_ID"
+run_for "$BIN_DIR" cp "$ROOT_DIR/bin/super" "$BIN_DIR/.super.new.$BIN_TX_ID"
+run_for "$BIN_DIR" chmod +x "$BIN_DIR/.superd.new.$BIN_TX_ID" "$BIN_DIR/.super.new.$BIN_TX_ID"
+BIN_TX_ACTIVE=1
+if [ "$BIN_TX_HAD_SUPERD" -eq 1 ]; then
+  run_for "$BIN_DIR" mv "$BIN_DIR/superd" "$BIN_DIR/.superd.old.$BIN_TX_ID"
+fi
+if [ "$BIN_TX_HAD_SUPER" -eq 1 ]; then
+  run_for "$BIN_DIR" mv "$BIN_DIR/super" "$BIN_DIR/.super.old.$BIN_TX_ID"
+fi
+run_for "$BIN_DIR" mv "$BIN_DIR/.superd.new.$BIN_TX_ID" "$BIN_DIR/superd"
+run_for "$BIN_DIR" mv "$BIN_DIR/.super.new.$BIN_TX_ID" "$BIN_DIR/super"
 
 # Prefer absolute paths in service files.
 SUPERD_BIN="$BIN_DIR/superd"

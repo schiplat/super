@@ -150,7 +150,7 @@ jobs:
               chmod 755 "${root}/contrib/rc.d/superd" 2>/dev/null || true
             fi
             bash .github/scripts/write-release-readme.sh "${ver}" "freebsd-amd64" "${root}"
-            tar -czf "${root}.tar.gz" "${root}"
+            tar --exclude='.DS_Store' --exclude='._*' -czf "${root}.tar.gz" "${root}"
             echo "Created ${root}.tar.gz"
 
       - name: Upload archive

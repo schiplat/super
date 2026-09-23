@@ -43,5 +43,11 @@ fi
 
 bash .github/scripts/write-release-readme.sh "${version}" "${platform}" "${root}"
 
-tar -czf "${root}.tar.gz" "${root}"
+# GitHub's macOS runners use bsdtar; disable Apple metadata explicitly. Linux
+# runners use GNU tar, and FreeBSD archives are produced on Linux above.
+if [[ "$(uname -s)" == "Darwin" ]]; then
+  COPYFILE_DISABLE=1 tar --no-xattrs --no-mac-metadata --exclude='.DS_Store' --exclude='._*' -czf "${root}.tar.gz" "${root}"
+else
+  tar --exclude='.DS_Store' --exclude='._*' -czf "${root}.tar.gz" "${root}"
+fi
 echo "Created ${root}.tar.gz"

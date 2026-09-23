@@ -24,7 +24,7 @@ async fn main() -> anyhow::Result<()> {
 
     // Handle Check command (no HTTP client required)
     if let Commands::Check { file } = &args.command {
-        return check::run(file.clone());
+        return check::run(file.clone(), true);
     }
 
     if let Commands::Keyring { json } = &args.command {

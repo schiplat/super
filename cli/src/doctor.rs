@@ -17,14 +17,13 @@ pub async fn run(base_url: &str, token: Option<&String>) -> anyhow::Result<()> {
     println!("{}", "Super Doctor".bold());
     println!("   CLI version:     {}", env!("CARGO_PKG_VERSION"));
     println!("   Verifying keys:  {}", embedded_keyring_summary().cyan());
+    let mut diagnostics_ok = true;
 
     // 1. Config file validation (reuse `super check`; it prints its own report).
     println!("\n{}", "== Configuration ==".bold());
-    match check::run(None) {
-        Ok(()) => {}
-        Err(e) => {
-            println!("   {}", format!("config check reported: {e}").yellow());
-        }
+    if let Err(e) = check::run(None, false) {
+        diagnostics_ok = false;
+        println!("   {}", format!("config check reported: {e}").yellow());
     }
     report_daemon_config();
 
@@ -38,7 +37,7 @@ pub async fn run(base_url: &str, token: Option<&String>) -> anyhow::Result<()> {
         Ok(c) => c,
         Err(e) => {
             println!("   {}", format!("cannot build API client: {e}").red());
-            return Ok(());
+            return Err(e);
         }
     };
 
@@ -50,7 +49,7 @@ pub async fn run(base_url: &str, token: Option<&String>) -> anyhow::Result<()> {
             println!(
                 "   Hint: start the daemon (`superd`) or pass --server / edit ~/.super/cli.json"
             );
-            return Ok(());
+            return Err(anyhow::anyhow!("Daemon health endpoint is unreachable"));
         }
     };
 
@@ -63,11 +62,15 @@ pub async fn run(base_url: &str, token: Option<&String>) -> anyhow::Result<()> {
                 other => other.red(),
             };
             println!("   Status:          {status_colored} (HTTP {http_status})");
+            if !http_status.is_success() || h.status != "healthy" {
+                diagnostics_ok = false;
+            }
             for (k, v) in &h.components {
                 println!("     - {k}: {v}");
             }
         }
         Err(e) => {
+            diagnostics_ok = false;
             println!(
                 "   Status:          {}",
                 format!("HTTP {http_status}, unreadable health body: {e}").yellow()
@@ -82,6 +85,7 @@ pub async fn run(base_url: &str, token: Option<&String>) -> anyhow::Result<()> {
     match client.get(&license_url).send().await {
         Ok(r) if r.status() == reqwest::StatusCode::NOT_FOUND => match &config_license {
             ConfigLicenseStatus::Invalid { reason } => {
+                diagnostics_ok = false;
                 println!(
                     "   Mode:            {}",
                     "OSS (license verification failed)".yellow()
@@ -95,6 +99,7 @@ pub async fn run(base_url: &str, token: Option<&String>) -> anyhow::Result<()> {
                 );
             }
             ConfigLicenseStatus::Valid => {
+                diagnostics_ok = false;
                 println!(
                     "   Mode:            {}",
                     "OSS (daemon license endpoint unavailable)".yellow()
@@ -138,15 +143,24 @@ pub async fn run(base_url: &str, token: Option<&String>) -> anyhow::Result<()> {
                     }
                 }
             }
-            Err(e) => println!("   {}", format!("unreadable license body: {e}").yellow()),
+            Err(e) => {
+                diagnostics_ok = false;
+                println!("   {}", format!("unreadable license body: {e}").yellow());
+            }
         },
         Ok(r) => {
+            if !r.status().is_success() {
+                diagnostics_ok = false;
+            }
             println!(
                 "   {}",
                 format!("license endpoint returned HTTP {}", r.status()).yellow()
             );
         }
         Err(e) => {
+            if matches!(&config_license, ConfigLicenseStatus::Valid) {
+                diagnostics_ok = false;
+            }
             println!(
                 "   {}",
                 format!("license endpoint unreachable: {e}").yellow()
@@ -154,7 +168,11 @@ pub async fn run(base_url: &str, token: Option<&String>) -> anyhow::Result<()> {
         }
     }
 
-    Ok(())
+    if diagnostics_ok {
+        Ok(())
+    } else {
+        Err(anyhow::anyhow!("One or more diagnostics failed"))
+    }
 }
 
 enum ConfigLicenseStatus {
