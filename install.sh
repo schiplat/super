@@ -243,23 +243,46 @@ BIN_TX_ACTIVE=0
 BIN_TX_DIR=""
 BIN_TX_HAD_SUPERD=0
 BIN_TX_HAD_SUPER=0
+BIN_TX_ROLLBACK_FAILED=0
+
+report_restore_failure() {
+  _restore_backup="$1"
+  _restore_target="$2"
+  BIN_TX_ROLLBACK_FAILED=1
+  printf 'install.sh: rollback failed: could not restore %s to %s.\n' "$_restore_backup" "$_restore_target" >&2
+  printf '  The previous binary is preserved at %s. Restore it with:\n' "$_restore_backup" >&2
+  printf '  mv -f "%s" "%s"\n' "$_restore_backup" "$_restore_target" >&2
+}
 
 rollback_binary_install() {
   [ "$BIN_TX_ACTIVE" -eq 1 ] || return 0
+  BIN_TX_ROLLBACK_FAILED=0
   info "Restoring previous binaries after incomplete install..."
+
+  # Rename backups directly over promoted binaries. If restoration fails, the
+  # old file remains at its backup path and the current destination is untouched.
   if [ -e "$BIN_TX_DIR/.superd.old.$BIN_TX_ID" ]; then
-    run_for "$BIN_TX_DIR" rm -f "$BIN_TX_DIR/superd" || true
-    run_for "$BIN_TX_DIR" mv -f "$BIN_TX_DIR/.superd.old.$BIN_TX_ID" "$BIN_TX_DIR/superd" || true
+    if ! run_for "$BIN_TX_DIR" mv -f "$BIN_TX_DIR/.superd.old.$BIN_TX_ID" "$BIN_TX_DIR/superd"; then
+      report_restore_failure "$BIN_TX_DIR/.superd.old.$BIN_TX_ID" "$BIN_TX_DIR/superd"
+    fi
   elif [ "$BIN_TX_HAD_SUPERD" -eq 0 ] && [ ! -e "$BIN_TX_DIR/.superd.new.$BIN_TX_ID" ]; then
-    run_for "$BIN_TX_DIR" rm -f "$BIN_TX_DIR/superd" || true
+    if ! run_for "$BIN_TX_DIR" rm -f "$BIN_TX_DIR/superd"; then
+      BIN_TX_ROLLBACK_FAILED=1
+      printf 'install.sh: rollback failed: could not remove incomplete binary %s.\n' "$BIN_TX_DIR/superd" >&2
+    fi
   fi
   if [ -e "$BIN_TX_DIR/.super.old.$BIN_TX_ID" ]; then
-    run_for "$BIN_TX_DIR" rm -f "$BIN_TX_DIR/super" || true
-    run_for "$BIN_TX_DIR" mv -f "$BIN_TX_DIR/.super.old.$BIN_TX_ID" "$BIN_TX_DIR/super" || true
+    if ! run_for "$BIN_TX_DIR" mv -f "$BIN_TX_DIR/.super.old.$BIN_TX_ID" "$BIN_TX_DIR/super"; then
+      report_restore_failure "$BIN_TX_DIR/.super.old.$BIN_TX_ID" "$BIN_TX_DIR/super"
+    fi
   elif [ "$BIN_TX_HAD_SUPER" -eq 0 ] && [ ! -e "$BIN_TX_DIR/.super.new.$BIN_TX_ID" ]; then
-    run_for "$BIN_TX_DIR" rm -f "$BIN_TX_DIR/super" || true
+    if ! run_for "$BIN_TX_DIR" rm -f "$BIN_TX_DIR/super"; then
+      BIN_TX_ROLLBACK_FAILED=1
+      printf 'install.sh: rollback failed: could not remove incomplete binary %s.\n' "$BIN_TX_DIR/super" >&2
+    fi
   fi
   BIN_TX_ACTIVE=0
+  return "$BIN_TX_ROLLBACK_FAILED"
 }
 
 install_exit_cleanup() {
@@ -271,7 +294,9 @@ install_exit_cleanup() {
         "$BIN_TX_DIR/.superd.old.$BIN_TX_ID" "$BIN_TX_DIR/.super.old.$BIN_TX_ID" 2>/dev/null || true
     fi
   else
-    rollback_binary_install
+    if ! rollback_binary_install; then
+      printf 'install.sh: installation failed and rollback was incomplete. Review the recovery commands above before retrying the install.\n' >&2
+    fi
   fi
   if [ -n "$BIN_TX_DIR" ]; then
     run_for "$BIN_TX_DIR" rm -f \

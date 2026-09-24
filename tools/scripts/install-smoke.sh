@@ -250,6 +250,68 @@ if [ "${#LEFTOVERS[@]}" -ne 0 ]; then
 fi
 echo "==> failed upgrade left no transaction files"
 
+# Inject a second failure while restoring the daemon backup. The installer must
+# report the exact preserved backup and recovery command instead of deleting it.
+FAIL_ROLLBACK_MV_DIR="$STAGE/fail-rollback-mv-bin"
+mkdir -p "$FAIL_ROLLBACK_MV_DIR"
+cat > "$FAIL_ROLLBACK_MV_DIR/mv" <<'EOF'
+#!/bin/sh
+if [ "${1-}" = "-f" ]; then
+  shift
+fi
+case "${1-}" in
+  "$PREFIX/bin"/.super.new.*)
+    if [ "${2-}" = "$PREFIX/bin/super" ] && [ ! -e "$STAGE/promotion-failed-once" ]; then
+      : > "$STAGE/promotion-failed-once"
+      echo 'injected promotion failure before rollback-error case' >&2
+      exit 97
+    fi
+    ;;
+  "$PREFIX/bin"/.superd.old.*)
+    if [ "${2-}" = "$PREFIX/bin/superd" ] && [ ! -e "$STAGE/restore-failed-once" ]; then
+      : > "$STAGE/restore-failed-once"
+      echo 'injected rollback restore failure' >&2
+      exit 98
+    fi
+    ;;
+esac
+exec /bin/mv "$@"
+EOF
+chmod +x "$FAIL_ROLLBACK_MV_DIR/mv"
+if PATH="$FAIL_ROLLBACK_MV_DIR:$PATH" sh "$ROOT/install.sh" "${INSTALL_ARGS[@]}" > "$TMPDIR/failed-rollback.log" 2>&1; then
+  echo "upgrade with injected rollback failure unexpectedly succeeded" >&2
+  exit 1
+fi
+if ! grep -q 'rollback failed: could not restore' "$TMPDIR/failed-rollback.log"; then
+  cat "$TMPDIR/failed-rollback.log" >&2
+  echo "rollback failure was not reported" >&2
+  exit 1
+fi
+shopt -s nullglob
+ROLLBACK_BACKUPS=("$PREFIX/bin/.superd.old."*)
+shopt -u nullglob
+if [ "${#ROLLBACK_BACKUPS[@]}" -ne 1 ]; then
+  printf 'expected one preserved superd backup, found %s\n' "${#ROLLBACK_BACKUPS[@]}" >&2
+  cat "$TMPDIR/failed-rollback.log" >&2
+  exit 1
+fi
+cmp "$TMPDIR/superd.good" "${ROLLBACK_BACKUPS[0]}"
+grep -F "mv -f \"${ROLLBACK_BACKUPS[0]}\" \"$PREFIX/bin/superd\"" "$TMPDIR/failed-rollback.log" >/dev/null
+grep -F "The previous binary is preserved at ${ROLLBACK_BACKUPS[0]}" "$TMPDIR/failed-rollback.log" >/dev/null
+echo "==> failed rollback reported and preserved the old superd binary"
+# Exercise the emitted recovery action, then verify a clean restored pair.
+/bin/mv -f "${ROLLBACK_BACKUPS[0]}" "$PREFIX/bin/superd"
+cmp "$TMPDIR/superd.good" "$PREFIX/bin/superd"
+cmp "$TMPDIR/super.good" "$PREFIX/bin/super"
+shopt -s nullglob
+LEFTOVERS=("$PREFIX/bin/.superd.new."* "$PREFIX/bin/.super.new."* "$PREFIX/bin/.superd.old."* "$PREFIX/bin/.super.old."*)
+shopt -u nullglob
+if [ "${#LEFTOVERS[@]}" -ne 0 ]; then
+  printf 'leftover transaction files after manual recovery: %s\n' "${LEFTOVERS[@]}" >&2
+  exit 1
+fi
+echo "==> reported rollback recovery restored binaries and cleared transaction files"
+
 # Install without a service, then launch a foreground daemon only inside the
 # temporary SUPER_ROOT. Its lifecycle is tied to this script's EXIT trap.
 export PATH="$PREFIX/bin:$PATH"
