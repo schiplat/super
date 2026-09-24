@@ -152,6 +152,46 @@ if [ "$PROFILE_HOOKS" -ne 1 ]; then
 fi
 echo "==> repeat install profile hook remained unique"
 
+# Fail before binary replacement at each artifact-validation boundary. Existing
+# binaries and user config must remain byte-for-byte unchanged.
+cp "$PREFIX/bin/superd" "$TMPDIR/superd.before-invalid-releases"
+cp "$PREFIX/bin/super" "$TMPDIR/super.before-invalid-releases"
+cp "$ROOT_DIR/conf/super.toml" "$TMPDIR/config.before-invalid-releases"
+mkdir -p "$SRV/fail-download/v${VER}" "$SRV/fail-checksum/v${VER}" "$SRV/fail-extract/v${VER}"
+cp "$SRV/v${VER}/${NAME}.tar.gz" "$SRV/fail-checksum/v${VER}/${NAME}.tar.gz"
+printf '%064d  %s\n' 0 "$NAME.tar.gz" > "$SRV/fail-checksum/v${VER}/SHA256SUMS"
+printf 'not a gzip archive\n' > "$SRV/fail-extract/v${VER}/${NAME}.tar.gz"
+if command -v sha256sum >/dev/null 2>&1; then
+  (cd "$SRV/fail-extract/v${VER}" && sha256sum "$NAME.tar.gz" > SHA256SUMS)
+else
+  (cd "$SRV/fail-extract/v${VER}" && shasum -a 256 "$NAME.tar.gz" > SHA256SUMS)
+fi
+
+expect_preinstall_failure() {
+  _scenario="$1"
+  _expected="$2"
+  _base_url="http://127.0.0.1:${PORT}/fail-${_scenario}"
+  _fail_args=(--user --version "$VER" --base-url "$_base_url" --prefix "$PREFIX" --root "$ROOT_DIR" --no-sudo --no-service)
+  if sh "$ROOT/install.sh" "${_fail_args[@]}" > "$TMPDIR/failure-${_scenario}.log" 2>&1; then
+    cat "$TMPDIR/failure-${_scenario}.log" >&2
+    echo "installer unexpectedly succeeded for $_scenario failure" >&2
+    exit 1
+  fi
+  if ! grep -qiE "$_expected" "$TMPDIR/failure-${_scenario}.log"; then
+    cat "$TMPDIR/failure-${_scenario}.log" >&2
+    echo "installer failure did not report expected $_scenario diagnostic" >&2
+    exit 1
+  fi
+  cmp "$TMPDIR/superd.before-invalid-releases" "$PREFIX/bin/superd"
+  cmp "$TMPDIR/super.before-invalid-releases" "$PREFIX/bin/super"
+  cmp "$TMPDIR/config.before-invalid-releases" "$ROOT_DIR/conf/super.toml"
+  echo "==> $_scenario failure preserved installed binaries and config"
+}
+
+expect_preinstall_failure download 'download failed'
+expect_preinstall_failure checksum 'checksum mismatch'
+expect_preinstall_failure extract 'gzip|tar|archive'
+
 # Add markers to the previous binaries, then fail while promoting the second
 # new executable. The installer must restore this exact prior pair.
 cp "$PREFIX/bin/superd" "$TMPDIR/superd.unmarked"
