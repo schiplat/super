@@ -124,7 +124,3 @@ Want your AI assistant (Cursor, Claude, Copilot, …) to configure and troublesh
 ## Contributing
 
 See [CONTRIBUTING.md](CONTRIBUTING.md). Security issues: [SECURITY.md](SECURITY.md). Community standards: [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md).
-
-<p align="center">
-  <a href="https://www.producthunt.com/products/super-6?embed=true&amp;utm_source=badge-featured&amp;utm_medium=badge&amp;utm_campaign=badge-super-1676e3d2-6bd0-404e-a9a8-836eac3cb0dd" target="_blank" rel="noopener noreferrer"><img alt="Super - API-First, Rust-Powered Process Orchestration for the Edge. | Product Hunt" width="250" height="54" src="https://api.producthunt.com/widgets/embed-image/v1/featured.svg?post_id=1240340&amp;theme=light&amp;t=1788854702558"></a>
-</p>
