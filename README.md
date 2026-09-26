@@ -16,7 +16,7 @@ Super is a modern replacement for tools like [Supervisor](https://supervisord.or
 * **Observability** — WebSocket logs, historical logs API, system metrics
 * **Auto-recovery** — Supervisor-compatible `autorestart`, `exitcodes`, `startsecs`
 
-Licensed under the **[MIT License](LICENSE)**. `superd` can load optional runtime plugins (`.so` / `.dylib` under `$SUPER_ROOT/plugins/`) after signature and license verification, extending the same binary — no separate build. See the [feature matrix](https://super.docs.sconts.com/docs/07-editions/feature-matrix/) for what plugins can add.
+Licensed under the **[MIT License](LICENSE)**.
 
 ## Quick Start
 
@@ -103,7 +103,6 @@ Notable changes land in the [changelog](https://super.docs.sconts.com/docs/08-ch
 | Configuration | [Config reference](https://super.docs.sconts.com/docs/06-internals/config-reference/) |
 | API | [API reference](https://super.docs.sconts.com/docs/06-internals/api-reference/) |
 | Changelog | [Changelog](https://super.docs.sconts.com/docs/08-changelog/) |
-| Editions / Pro plugins | [Feature matrix](https://super.docs.sconts.com/docs/07-editions/feature-matrix/) |
 
 ### AI skills
 
