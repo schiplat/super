@@ -17,6 +17,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **Installer honors `--no-start` on macOS.** The launchd path bootstrapped the job before looking at the flag, and `RunAtLoad` + `KeepAlive` started superd immediately despite the message claiming otherwise. The daemon plist is now only written; superd starts at the next login/boot, matching the systemd enable-only path and the documented flag semantics.
+- **Installer runs on a pristine FreeBSD base system.** Downloads fall back from `curl` to base `fetch(1)`, and checksum verification accepts base `sha256 -q` alongside `sha256sum`/`shasum`; missing-tool errors name the accepted alternatives. The install smoke also passes its fake `service` command through the documented `SUPER_INSTALL_SMOKE_SERVICE_CMD` variable (it previously set a name the installer never read) and asserts that `--no-start` never registers the launchd job.
+
 ## [1.6.0] - 2026-09-14
 
 ### Added

@@ -143,6 +143,8 @@ curl -fsSL https://github.com/schiplat/super/releases/latest/download/install.sh
 Bleeding-edge script from `master` (may download a different release than the script revision):  
 `curl -fsSL https://raw.githubusercontent.com/schiplat/super/master/install.sh | sh`
 
+Requirements: POSIX `sh`, `tar`, and `curl` — or on a pristine FreeBSD base system, base `fetch` alone is enough (`fetch -o - <url> | sh`); checksums verify with `sha256sum`, `shasum`, or the FreeBSD base `sha256`.
+
 What it does by default:
 
 1. Downloads the matching release archive and verifies `SHA256SUMS`
