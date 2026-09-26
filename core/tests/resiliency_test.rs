@@ -57,7 +57,8 @@ async fn test_strict_policy_kills_process() {
         log_tx,
         extension,
         event_db,
-    );
+    )
+    .expect("Manager::new should not fail");
 
     tokio::spawn(async move {
         manager.run().await;

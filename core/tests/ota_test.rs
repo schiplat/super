@@ -77,7 +77,8 @@ async fn setup_system_full() -> (
         log_tx,
         Box::new(NoOpExtension),
         event_db,
-    );
+    )
+    .expect("Manager::new should not fail");
 
     tokio::spawn(async move {
         manager.run().await;

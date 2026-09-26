@@ -42,7 +42,8 @@ async fn setup_manager() -> (ManagerHandle, tempfile::TempDir) {
         log_tx,
         Box::new(NoopExtension),
         event_db,
-    );
+    )
+    .expect("Manager::new should not fail");
     tokio::spawn(async move {
         manager.run().await;
     });

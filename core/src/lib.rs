@@ -214,7 +214,7 @@ pub async fn bootstrap(extension: Box<dyn Extension>) -> anyhow::Result<SystemCo
         log_tx.clone(),
         extension,
         event_db,
-    );
+    )?;
     let manager_handle = ManagerHandle::new(tx.clone());
 
     tokio::spawn(async move {

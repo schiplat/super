@@ -63,13 +63,17 @@ async fn check_http(url: &str, method: Option<&str>, timeout: Duration) -> Check
     }
 
     // Rebuild per probe so the timeout matches the configured `timeout_secs`.
-    let client = reqwest::Client::builder()
+    // An init failure (e.g. TLS backend) fails the probe instead of panicking.
+    let client = match reqwest::Client::builder()
         .timeout(timeout)
         .user_agent("Superd-HealthCheck/1.0")
         // Health checks hit localhost/LAN; disable proxy to skip extra hops
         .no_proxy()
         .build()
-        .expect("Failed to initialize HealthCheck HTTP Client");
+    {
+        Ok(client) => client,
+        Err(e) => return CheckOutcome::fail(format!("HTTP client init failed: {e}")),
+    };
 
     let method_str = method.unwrap_or("GET");
     let method = match method_str.to_uppercase().as_str() {

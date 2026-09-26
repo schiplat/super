@@ -18,9 +18,10 @@ fn test_stopsecs_fallback_to_server_default() {
         tx,
         log_tx,
         std::sync::Arc::new(super_core::extension::NoOpExtension),
-        std::sync::Arc::new(super_core::monitor::ResourceMonitor::new(
-            mpsc::channel(1).0,
-        )),
+        std::sync::Arc::new(
+            super_core::monitor::ResourceMonitor::new(mpsc::channel(1).0)
+                .expect("ResourceMonitor::new should not fail"),
+        ),
     );
 
     let id = Uuid::new_v4();

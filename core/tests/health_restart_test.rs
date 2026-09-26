@@ -33,7 +33,8 @@ async fn manager_with_temp(log_dir: std::path::PathBuf) -> (ManagerHandle, tempf
         log_tx,
         Box::new(NoopExtension),
         event_db,
-    );
+    )
+    .expect("Manager::new should not fail");
     tokio::spawn(async move {
         manager.run().await;
     });

@@ -36,7 +36,8 @@ async fn cron_job_exempt_from_flapping_detection() {
         log_tx,
         Box::new(NoopExtension),
         event_db,
-    );
+    )
+    .expect("Manager::new should not fail");
     tokio::spawn(async move {
         manager.run().await;
     });

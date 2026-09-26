@@ -68,7 +68,8 @@ async fn setup_manager() -> (ManagerHandle, TempDir, MockExtension) {
         log_tx,
         Box::new(extension.clone()),
         event_db,
-    );
+    )
+    .expect("Manager::new should not fail");
 
     tokio::spawn(async move {
         manager.run().await;
@@ -452,7 +453,8 @@ autostart = false
         log_tx,
         Box::new(extension.clone()),
         event_db,
-    );
+    )
+    .expect("Manager::new should not fail");
     tokio::spawn(async move {
         manager.run().await;
     });

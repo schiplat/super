@@ -175,7 +175,7 @@ impl Manager {
         log_tx: broadcast::Sender<WsMessage>,
         extension: Box<dyn Extension>,
         event_db: crate::event_db::EventDb,
-    ) -> Self {
+    ) -> anyhow::Result<Self> {
         // Persistence heartbeat (debounced flush)
         let tx_persist = tx_self.clone();
         tokio::spawn(async move {
@@ -243,7 +243,7 @@ impl Manager {
         });
 
         let scheduler = CronScheduler::new();
-        let monitor = Arc::new(ResourceMonitor::new(tx_self.clone()));
+        let monitor = Arc::new(ResourceMonitor::new(tx_self.clone())?);
         let extension: Arc<dyn Extension> = Arc::from(extension);
 
         // Expose the daemon event pipeline to plugins (plugin→host `emit_event`).
@@ -258,7 +258,7 @@ impl Manager {
             monitor.clone(),
         );
 
-        Self {
+        Ok(Self {
             config,
             config_path,
             log_reloader,
@@ -274,7 +274,7 @@ impl Manager {
             event_db,
             event_tx,
             last_event_prune: 0,
-        }
+        })
     }
 
     /// Prune retained events once per UTC day when `events_keep_days` is set.

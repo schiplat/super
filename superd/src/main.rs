@@ -218,41 +218,54 @@ fn inject_ui_config_with_plugins(
     bytes::Bytes::from(injected.into_bytes())
 }
 
-async fn shutdown_signal(mut rx: tokio::sync::broadcast::Receiver<()>, manager: ManagerHandle) {
-    let ctrl_c = async {
-        signal::ctrl_c()
-            .await
-            .expect("failed to install Ctrl+C handler");
-    };
-
+/// Pre-register the shutdown signal handlers and return a future that
+/// completes when the internal channel, Ctrl+C, or SIGTERM fires. On Unix the
+/// handlers are registered here, so an installation failure surfaces as a
+/// startup error (`?`) instead of a panic inside the shutdown future.
+fn shutdown_signal(
+    mut rx: tokio::sync::broadcast::Receiver<()>,
+    manager: ManagerHandle,
+) -> anyhow::Result<impl std::future::Future<Output = ()>> {
     #[cfg(unix)]
-    let terminate = async {
-        signal::unix::signal(signal::unix::SignalKind::terminate())
-            .expect("failed to install signal handler")
-            .recv()
-            .await;
-    };
-
+    let mut terminate = signal::unix::signal(signal::unix::SignalKind::terminate())
+        .context("failed to install SIGTERM handler")?;
+    #[cfg(unix)]
+    let mut interrupt = signal::unix::signal(signal::unix::SignalKind::interrupt())
+        .context("failed to install Ctrl+C (SIGINT) handler")?;
     #[cfg(not(unix))]
-    let terminate = std::future::pending::<()>();
+    let ctrl_c = signal::ctrl_c();
 
-    tokio::select! {
-        _ = rx.recv() => {
-            tracing::info!("Internal shutdown signal received. Web server stopping.");
-        },
-        _ = ctrl_c => {
-            tracing::info!("Received Ctrl+C. Initiating graceful shutdown...");
-            if let Err(e) = manager.shutdown().await {
-                tracing::error!("Manager shutdown failed: {}", e);
-            }
-        },
-        _ = terminate => {
-            tracing::info!("Received SIGTERM. Initiating graceful shutdown...");
-            if let Err(e) = manager.shutdown().await {
-                tracing::error!("Manager shutdown failed: {}", e);
-            }
-        },
-    }
+    Ok(async move {
+        tokio::select! {
+            _ = rx.recv() => {
+                tracing::info!("Internal shutdown signal received. Web server stopping.");
+            },
+            _ = async move {
+                #[cfg(unix)]
+                interrupt.recv().await;
+                #[cfg(not(unix))]
+                if let Err(e) = ctrl_c.await {
+                    tracing::error!("Ctrl+C handler failed to install (shutting down): {e}");
+                }
+            } => {
+                tracing::info!("Received Ctrl+C. Initiating graceful shutdown...");
+                if let Err(e) = manager.shutdown().await {
+                    tracing::error!("Manager shutdown failed: {}", e);
+                }
+            },
+            _ = async move {
+                #[cfg(unix)]
+                terminate.recv().await;
+                #[cfg(not(unix))]
+                std::future::pending::<()>().await;
+            } => {
+                tracing::info!("Received SIGTERM. Initiating graceful shutdown...");
+                if let Err(e) = manager.shutdown().await {
+                    tracing::error!("Manager shutdown failed: {}", e);
+                }
+            },
+        }
+    })
 }
 
 fn main() -> anyhow::Result<()> {
@@ -412,8 +425,13 @@ async fn async_main() -> anyhow::Result<()> {
              Ensure security.so exports authenticate and re-check superd logs."
         );
     } else if auth::core_auth_should_activate(core.config.server.auth_secret.as_deref(), false) {
-        let secret = auth::non_empty_auth_secret(core.config.server.auth_secret.as_deref())
-            .expect("core_auth_should_activate implies non-empty auth_secret");
+        let Some(secret) = auth::non_empty_auth_secret(core.config.server.auth_secret.as_deref())
+        else {
+            anyhow::bail!(
+                "[server].auth_secret activated core auth but the value is empty; \
+                 set a non-empty secret in conf/super.toml"
+            );
+        };
         tracing::info!("API auth using [server].auth_secret from conf/super.toml");
         let state = auth::AuthState::new(secret);
         api_router = auth::install_core_auth(api_router, state);
@@ -499,8 +517,8 @@ async fn async_main() -> anyhow::Result<()> {
     // Serve TCP and/or Unix socket. Both share the same graceful shutdown signal.
     let serve_result: anyhow::Result<()> = match (tcp_listener, unix_socket) {
         (Some(tcp), Some((unix, sock_path))) => {
-            let s1 = shutdown_signal(core.shutdown_rx, core.manager_handle.clone());
-            let s2 = shutdown_signal(extra_shutdown_tx.subscribe(), core.manager_handle);
+            let s1 = shutdown_signal(core.shutdown_rx, core.manager_handle.clone())?;
+            let s2 = shutdown_signal(extra_shutdown_tx.subscribe(), core.manager_handle)?;
             let app2 = app.clone();
             let t1 = tokio::spawn(async move {
                 axum::serve(
@@ -525,13 +543,13 @@ async fn async_main() -> anyhow::Result<()> {
                 tcp,
                 app.into_make_service_with_connect_info::<std::net::SocketAddr>(),
             )
-            .with_graceful_shutdown(shutdown_signal(core.shutdown_rx, core.manager_handle))
+            .with_graceful_shutdown(shutdown_signal(core.shutdown_rx, core.manager_handle)?)
             .await?;
             Ok(())
         }
         (None, Some((unix, sock_path))) => {
             axum::serve(unix, app.into_make_service())
-                .with_graceful_shutdown(shutdown_signal(core.shutdown_rx, core.manager_handle))
+                .with_graceful_shutdown(shutdown_signal(core.shutdown_rx, core.manager_handle)?)
                 .await?;
             cleanup_unix_socket(&sock_path).await;
             Ok(())

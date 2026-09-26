@@ -325,3 +325,7 @@ const hasActiveFilters = computed(() => activeFilter.value !== 'ALL' || !!select
     <ProcessDetailDrawer v-model="showDrawer" :process-id="selectedProcessId" @change-process="(id: string) => selectedProcessId = id" />
   </div>
 </template>
+
+
+
+

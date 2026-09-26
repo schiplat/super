@@ -18,7 +18,7 @@ pub struct ResourceMonitor {
 }
 
 impl ResourceMonitor {
-    pub fn new(tx_manager: mpsc::Sender<Command>) -> Self {
+    pub fn new(tx_manager: mpsc::Sender<Command>) -> std::io::Result<Self> {
         let pid_mapping = Arc::new(RwLock::new(HashMap::new()));
         let system_stats = Arc::new(RwLock::new(SystemStats::default()));
 
@@ -29,13 +29,12 @@ impl ResourceMonitor {
             .name("super-monitor".to_string())
             .spawn(move || {
                 Self::run_loop(mapping_clone, stats_clone, tx_manager);
-            })
-            .expect("Failed to spawn monitor thread");
+            })?;
 
-        Self {
+        Ok(Self {
             pid_mapping,
             system_stats,
-        }
+        })
     }
 
     pub fn watch(&self, id: Uuid, pid: u32) {
