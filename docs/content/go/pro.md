@@ -20,11 +20,11 @@ Compare editions in the [feature matrix](/docs/07-editions/feature-matrix/).
 
 ## Free 90-day trial
 
-During the public beta you can request a **free 90-day Super Pro trial** (no payment). We email the plugin archive for your platform, a license key, and a short config snippet (`[license].key` + `auth_secret`).
+You can request a **free 90-day Super Pro trial** (no payment). We email the plugin archive for your platform, a license key, and a short config snippet (`[license].key` + `auth_secret`).
 
 <p><a class="super-purchase-cta" href="https://platform.ddl.sconts.com/portal/claim?product=super-pro&plan=first-trials-001" rel="noopener noreferrer" target="_blank">Request a free 90-day trial</a></p>
 
-Open the [Super Pro Portal claim page](https://platform.ddl.sconts.com/portal/claim?product=super-pro&plan=first-trials-001), leave a real email, and complete the form. Staging and non-critical workloads are recommended until GA.
+Open the [Super Pro Portal claim page](https://platform.ddl.sconts.com/portal/claim?product=super-pro&plan=first-trials-001), leave a real email, and complete the form.
 
 ## Support the project (optional)
 

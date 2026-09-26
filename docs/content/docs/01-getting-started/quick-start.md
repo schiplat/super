@@ -236,4 +236,4 @@ super token create admin --role admin
 super token list
 ```
 
-**Next.** Day-to-day topics (config, auth, Dashboard) are under **[Essentials](/docs/02-essentials/)**. Licensed governance (RBAC, audit, isolation, notify) is under **[Advanced Management](/docs/05-advanced-management/)**. During the public beta you can request a **free 90-day Super Pro trial** ([Portal claim](https://platform.ddl.sconts.com/portal/claim?product=super-pro&plan=first-trials-001)); compare editions in the [feature matrix](/docs/07-editions/feature-matrix/).
+**Next.** Day-to-day topics (config, auth, Dashboard) are under **[Essentials](/docs/02-essentials/)**. Licensed governance (RBAC, audit, isolation, notify) is under **[Advanced Management](/docs/05-advanced-management/)**. You can request a **free 90-day Super Pro trial** ([Portal claim](https://platform.ddl.sconts.com/portal/claim?product=super-pro&plan=first-trials-001)); compare editions in the [feature matrix](/docs/07-editions/feature-matrix/).

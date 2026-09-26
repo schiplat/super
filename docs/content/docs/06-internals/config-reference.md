@@ -11,8 +11,8 @@ description: "Complete schema for super.toml."
 | **💎 Subscription** | Requires valid `[license].key` in `conf/super.toml` and matching authorized plugin libraries. Single-admin [core auth](/docs/02-essentials/authentication/) and the embedded Dashboard are OSS (no 💎). |
 | *(no mark)* | Available in OSS (with or without plugins). |
 
-> [!TIP] Free 90-day beta trial
-> Licensed plugins (Super Pro) are available with a **free 90-day trial license** ([Portal claim](https://platform.ddl.sconts.com/portal/claim?product=super-pro&plan=first-trials-001)). We recommend staging and non-critical workloads until GA; see the [feature matrix](/docs/07-editions/feature-matrix/). Day-to-day auth and Dashboard: [Essentials](/docs/02-essentials/). Licensed plugins: [Advanced Management](/docs/05-advanced-management/).
+> [!TIP] Free 90-day trial
+> Licensed plugins (Super Pro) are available with a **free 90-day trial license** ([Portal claim](https://platform.ddl.sconts.com/portal/claim?product=super-pro&plan=first-trials-001)). See the [feature matrix](/docs/07-editions/feature-matrix/). Day-to-day auth and Dashboard: [Essentials](/docs/02-essentials/). Licensed plugins: [Advanced Management](/docs/05-advanced-management/).
 
 **Licensed-plugin fields in this reference** (quick index):
 

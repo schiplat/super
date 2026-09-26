@@ -4,12 +4,6 @@
 
 Super is a modern replacement for tools like [Supervisor](https://supervisord.org/) or [PM2](https://pm2.keymetrics.io/), built with **Rust**. It is designed for edge computing, cloud-edge collaboration, and high-performance servers.
 
-> **Public beta**
->
-> Super `1.x` is feature-complete and in active hardening. The core process-management paths (start/stop/restart, auto-recovery, health checks, OTA rollback) are covered by integration tests and run in the maintainers' own deployments. We recommend it for staging and non-critical workloads today; see [below](#toward-ga) for what we require before calling it production-ready (GA).
->
-> The **OSS core** (`superd` + `super`) is free under MIT — install and try anytime.
-
 > **Documentation:** [https://super.docs.sconts.com/docs/](https://super.docs.sconts.com/docs/)
 
 ## Core Features
@@ -89,9 +83,9 @@ super doctor
 
 See [Installation](https://super.docs.sconts.com/docs/01-getting-started/installation/) for `install.sh` (systemd / launchd / rc.d), manual units (`superd --foreground`), and optional `--daemon`.
 
-## Toward GA
+## Production readiness
 
-We will call Super production-ready (GA) when the following are true. If you rely on Super today, this is the contract we are working against — feedback on any of these is the most valuable contribution right now.
+Super `1.x` is production-ready. Every release is held to the same public contract:
 
 - **Stability** — no known panic paths in the daemon on malformed config or API input; graceful degradation when a plugin fails.
 - **Upgrade safety** — OTA updates are transactional (backup → verify → commit/rollback) and covered by integration tests.
@@ -99,7 +93,7 @@ We will call Super production-ready (GA) when the following are true. If you rel
 - **Operability** — `super doctor` diagnoses a deployment end-to-end; logs and metrics are sufficient to triage without a debugger.
 - **API stability** — the REST API and the plugin C ABI (`PLUGIN_API_VERSION`) are versioned; breaking changes ship only with a major bump and migration notes.
 
-Track progress in the [changelog](https://super.docs.sconts.com/docs/08-changelog/).
+Notable changes land in the [changelog](https://super.docs.sconts.com/docs/08-changelog/).
 
 ## Documentation
 

@@ -34,7 +34,7 @@ Checkout and payment are completed on a **third-party platform** (currently **Af
 
 The public Afdian checkout linked from [Get Super Pro](/go/pro/) is currently an **open-source supporter tip** (**¥10 / month**). **Tips do not include** official plugins or a license key.
 
-**Super Pro** licenses (when sold) use **annual coverage**: one annual payment maps to a **365-day** license term. After that term, you may **continue using** Pro plugins on the Super version scope signed into your key; renewal is for following newer releases beyond that scope (see [Get Super Pro](/go/pro/#license-version-coverage)). During the public beta, free **90-day** trials are offered via the [Super Pro Portal claim](https://platform.ddl.sconts.com/portal/claim?product=super-pro&plan=first-trials-001) page.
+**Super Pro** licenses (when sold) use **annual coverage**: one annual payment maps to a **365-day** license term. After that term, you may **continue using** Pro plugins on the Super version scope signed into your key; renewal is for following newer releases beyond that scope (see [Get Super Pro](/go/pro/#license-version-coverage)). Free **90-day** trials are offered via the [Super Pro Portal claim](https://platform.ddl.sconts.com/portal/claim?product=super-pro&plan=first-trials-001) page.
 
 ## 4. Delivery
 

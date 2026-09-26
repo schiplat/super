@@ -17,6 +17,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **Project Super is production-ready; the public beta is concluded.** The public GA checklist is met in full: panic-free handling of malformed config and API input (the remaining startup `expect`s are removed), transactional OTA and installs, fail-closed security defaults, `super doctor` operability, and a versioned REST API / plugin C ABI — with `cargo audit` clean on the release branch. The free 90-day Super Pro trial continues unchanged.
+
+### Security
+
+- Updated `rustls` to 0.23.45 (RUSTSEC-2026-0285, TLS 1.3 handshake message validation).
+
 ### Fixed
 
 - **Installer honors `--no-start` on macOS.** The launchd path bootstrapped the job before looking at the flag, and `RunAtLoad` + `KeepAlive` started superd immediately despite the message claiming otherwise. The daemon plist is now only written; superd starts at the next login/boot, matching the systemd enable-only path and the documented flag semantics.
