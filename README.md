@@ -8,16 +8,13 @@ Super is a modern replacement for tools like [Supervisor](https://supervisord.or
 >
 > Super `1.x` is feature-complete and in active hardening. The core process-management paths (start/stop/restart, auto-recovery, health checks, OTA rollback) are covered by integration tests and run in the maintainers' own deployments. We recommend it for staging and non-critical workloads today; see [below](#toward-ga) for what we require before calling it production-ready (GA).
 >
-> - **OSS core** (`superd` + `super`) is free under MIT — install and try anytime.
-> - **Super Pro plugins** (multi-user tokens/RBAC/audit, notifications with storm suppression, Linux cgroup isolation, Dashboard Pro extensions via `ui`) are available with a **free 90-day license** during the beta. No payment required.
->
-> **Request a free Pro trial:** open the [Super Pro Portal claim page](https://platform.ddl.sconts.com/portal/claim?product=super-pro&plan=first-trials-001). Leave a contact email — we issue the license key and plugin package to that address.
+> The **OSS core** (`superd` + `super`) is free under MIT — install and try anytime.
 
 > **Documentation:** [https://super.docs.sconts.com/docs/](https://super.docs.sconts.com/docs/)
 
 ## Core Features
 
-* **Single binary** — Rust `superd` process manager; TOML or REST config; CLI, HTTP API, and an **embedded Dashboard** (subscription `ui` plugin adds Tokens, notifications UI, and related Pro surfaces)
+* **Single binary** — Rust `superd` process manager; TOML or REST config; CLI, HTTP API, and an **embedded Dashboard**
 * **Ordered orchestration** — `depends_on` + health gates for startup; group/batch start·stop·restart follow dependency order (reverse on stop); declarative stacks
 * **Migration import** — `super import supervisor <conf>` turns an existing Supervisor INI into a Super stack (preview / dry-run / collision modes); see the [Supervisor migration guide](https://super.docs.sconts.com/docs/04-production-scenarios/migrations/vs-supervisor/#import-tool-super-import-supervisor)
 * **Multi-process programs** — `numprocs` starts N workers from one definition (`process_name`, `SUPER_PROCESS_NUM` / `SUPER_PROCESS_TOTAL`); not Node cluster / zero-downtime reload
@@ -25,7 +22,7 @@ Super is a modern replacement for tools like [Supervisor](https://supervisord.or
 * **Observability** — WebSocket logs, historical logs API, system metrics
 * **Auto-recovery** — Supervisor-compatible `autorestart`, `exitcodes`, `startsecs`
 
-Licensed under the **[MIT License](LICENSE)**. Optional **licensed plugins** (`.so` / `.dylib` under `$SUPER_ROOT/plugins/`) add multi-user tokens / RBAC / audit, notifications ([storm suppression](https://super.docs.sconts.com/docs/05-advanced-management/event-notifications/#storm-suppression)), **Linux cgroup CPU/memory limits** via per-program `resource_limits` ([resource isolation](https://super.docs.sconts.com/docs/05-advanced-management/resource-isolation/); OSS stores the fields, the `isolation` plugin enforces them), and Dashboard Pro extensions — same `superd` binary, no separate commercial build. Compare editions in the [feature matrix](https://super.docs.sconts.com/docs/07-editions/feature-matrix/).
+Licensed under the **[MIT License](LICENSE)**. `superd` can load optional runtime plugins (`.so` / `.dylib` under `$SUPER_ROOT/plugins/`) after signature and license verification, extending the same binary — no separate build. See the [feature matrix](https://super.docs.sconts.com/docs/07-editions/feature-matrix/) for what plugins can add.
 
 ## Quick Start
 
