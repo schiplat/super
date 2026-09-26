@@ -150,7 +150,245 @@ if [ "$PROFILE_HOOKS" -ne 1 ]; then
   cat "$HOME/.profile" >&2
   exit 1
 fi
-echo "==> repeat install profile hook remained unique"
+  echo "==> repeat install profile hook remained unique"
+
+# Linux systemd is exercised through a fake systemctl in PATH; avoid touching
+# the host's launchd/rc.d service manager on other smoke platforms.
+if [[ "$OS" == "Linux" ]]; then
+  # Fail after initialization while installing the user service. The existing
+  # config and profile must be restored exactly; newly-created env files removed.
+  cp "$ROOT_DIR/conf/super.toml" "$TMPDIR/config.before-poststep-failure"
+  cp "$HOME/.profile" "$TMPDIR/profile.before-poststep-failure"
+  cp "$ROOT_DIR/env.sh" "$TMPDIR/env.before-poststep-failure"
+  FAIL_SYSTEMCTL_DIR="$STAGE/fail-systemctl-bin"
+  SYSTEMCTL_STATE="$STAGE/fail-systemctl-state"
+  mkdir -p "$FAIL_SYSTEMCTL_DIR" "$SYSTEMCTL_STATE"
+  cat > "$FAIL_SYSTEMCTL_DIR/systemctl" <<'EOF'
+#!/bin/sh
+case "${1-}" in
+  --user) shift ;;
+esac
+case "${1-}" in
+  is-enabled|is-active) exit 1 ;;
+  daemon-reload)
+    if [ ! -e "$SYSTEMCTL_STATE/initial-reload-failed" ]; then
+      : > "$SYSTEMCTL_STATE/initial-reload-failed"
+      echo "injected systemctl failure: ${1-}" >&2
+      exit 96
+    fi
+    exit 0
+    ;;
+  enable|disable|stop|restart|start) exit 0 ;;
+esac
+exit 0
+EOF
+  chmod +x "$FAIL_SYSTEMCTL_DIR/systemctl"
+  export SYSTEMCTL_STATE
+  SERVICE_ARGS=(--user --version "$VER" --base-url "http://127.0.0.1:${PORT}" --prefix "$PREFIX" --root "$ROOT_DIR" --no-sudo)
+  if PATH="$FAIL_SYSTEMCTL_DIR:$PATH" sh "$ROOT/install.sh" "${SERVICE_ARGS[@]}" > "$TMPDIR/failed-service-install.log" 2>&1; then
+    cat "$TMPDIR/failed-service-install.log" >&2
+    echo "install unexpectedly succeeded with injected service failure" >&2
+    exit 1
+  fi
+  if ! grep -q 'systemd daemon-reload failed' "$TMPDIR/failed-service-install.log"; then
+    cat "$TMPDIR/failed-service-install.log" >&2
+    echo "systemd failure was not reported at the expected boundary" >&2
+    exit 1
+  fi
+  cmp "$TMPDIR/config.before-poststep-failure" "$ROOT_DIR/conf/super.toml"
+  cmp "$TMPDIR/profile.before-poststep-failure" "$HOME/.profile"
+  cmp "$TMPDIR/env.before-poststep-failure" "$ROOT_DIR/env.sh"
+  if [[ -e "$XDG_CONFIG_HOME/systemd/user/superd.service" ]]; then
+    echo "failed service installation left a unit file" >&2
+    exit 1
+  fi
+  echo "==> service registration failure restored config/profile and removed partial unit"
+
+  # Repeat with an existing user unit and inject a start-stage failure. The
+  # existing unit and enablement must survive; the newly-written state rolls back.
+  SERVICE_STATE="$STAGE/fake-systemd-state"
+  mkdir -p "$SERVICE_STATE" "$XDG_CONFIG_HOME/systemd/user"
+  printf '[Unit]\nDescription=old smoke unit\n' > "$XDG_CONFIG_HOME/systemd/user/superd.service"
+  cp "$XDG_CONFIG_HOME/systemd/user/superd.service" "$TMPDIR/old-user-unit"
+  cp "$HOME/.profile" "$TMPDIR/profile.before-unit-rollback"
+  cp "$ROOT_DIR/env.sh" "$TMPDIR/env.before-unit-rollback"
+  cat > "$FAIL_SYSTEMCTL_DIR/systemctl" <<'EOF'
+#!/bin/sh
+case "${1-}" in
+  --user) shift ;;
+esac
+case "${1-}" in
+  is-enabled|is-active) exit 1 ;;
+  daemon-reload|enable) exit 0 ;;
+  restart|start)
+    echo 'injected systemd start failure' >&2
+    exit 96
+    ;;
+  disable|stop) exit 0 ;;
+esac
+exit 0
+EOF
+  export SERVICE_STATE
+  if PATH="$FAIL_SYSTEMCTL_DIR:$PATH" sh "$ROOT/install.sh" "${SERVICE_ARGS[@]}" > "$TMPDIR/failed-unit-rollback.log" 2>&1; then
+    cat "$TMPDIR/failed-unit-rollback.log" >&2
+    echo "install unexpectedly succeeded with injected start failure" >&2
+    exit 1
+  fi
+  if ! grep -q 'systemd start failed' "$TMPDIR/failed-unit-rollback.log"; then
+    cat "$TMPDIR/failed-unit-rollback.log" >&2
+    echo "service start failure was not reported" >&2
+    exit 1
+  fi
+  cmp "$TMPDIR/old-user-unit" "$XDG_CONFIG_HOME/systemd/user/superd.service"
+  cmp "$TMPDIR/profile.before-unit-rollback" "$HOME/.profile"
+  cmp "$TMPDIR/env.before-unit-rollback" "$ROOT_DIR/env.sh"
+  cmp "$TMPDIR/config.before-poststep-failure" "$ROOT_DIR/conf/super.toml"
+  echo "==> service start failure restored existing unit and user state"
+fi
+
+# Exercise service registration/start failure rollback on platforms where the
+# OS service interface can be safely replaced by a PATH-local test double.
+if [[ "$OS" == "Darwin" ]]; then
+  LAUNCHCTL_DIR="$STAGE/fake-launchctl-bin"
+  LAUNCHCTL_STATE="$STAGE/fake-launchctl-state"
+  mkdir -p "$LAUNCHCTL_DIR" "$LAUNCHCTL_STATE" "$HOME/Library/LaunchAgents"
+  cat > "$LAUNCHCTL_DIR/launchctl" <<'EOF'
+#!/bin/sh
+printf '%s\n' "$*" >> "$LAUNCHCTL_STATE/calls"
+case "${1-}" in
+  print)
+    [ -e "$LAUNCHCTL_STATE/loaded" ] && exit 0
+    exit 1
+    ;;
+  print-disabled)
+    echo 'No disabled services.'
+    exit 0
+    ;;
+  bootout)
+    rm -f "$LAUNCHCTL_STATE/loaded"
+    exit 0
+    ;;
+  bootstrap|load)
+    : > "$LAUNCHCTL_STATE/loaded"
+    exit 0
+    ;;
+  enable)
+    if [ "${LAUNCHCTL_FAIL_ENABLE:-0}" = 1 ]; then exit 96; fi
+    exit 0
+    ;;
+  kickstart)
+    if [ "${LAUNCHCTL_FAIL_START:-0}" = 1 ]; then exit 97; fi
+    exit 0
+    ;;
+esac
+exit 0
+EOF
+  chmod +x "$LAUNCHCTL_DIR/launchctl"
+  LAUNCHD_PLIST="$HOME/Library/LaunchAgents/com.schiplat.superd.plist"
+  LAUNCH_SERVICE_ARGS=(--user --version "$VER" --base-url "http://127.0.0.1:${PORT}" --prefix "$PREFIX" --root "$ROOT_DIR" --no-sudo)
+  if PATH="$LAUNCHCTL_DIR:$PATH" LAUNCHCTL_STATE="$LAUNCHCTL_STATE" LAUNCHCTL_FAIL_ENABLE=1 \
+    sh "$ROOT/install.sh" "${LAUNCH_SERVICE_ARGS[@]}" > "$TMPDIR/launchd-register-failure.log" 2>&1; then
+    cat "$TMPDIR/launchd-register-failure.log" >&2
+    echo "install unexpectedly succeeded with injected launchd enable failure" >&2
+    exit 1
+  fi
+  grep -q 'launchd failed to enable' "$TMPDIR/launchd-register-failure.log"
+  if [[ -e "$LAUNCHD_PLIST" || -e "$LAUNCHCTL_STATE/loaded" ]]; then
+    echo "failed launchd registration left a plist or loaded job" >&2
+    exit 1
+  fi
+  echo "==> launchd registration failure removed partial plist and unloaded job"
+
+  printf '<plist>old user launchd definition</plist>\n' > "$LAUNCHD_PLIST"
+  cp "$LAUNCHD_PLIST" "$TMPDIR/launchd-plist.before-start-failure"
+  : > "$LAUNCHCTL_STATE/loaded"
+  if PATH="$LAUNCHCTL_DIR:$PATH" LAUNCHCTL_STATE="$LAUNCHCTL_STATE" LAUNCHCTL_FAIL_START=1 \
+    sh "$ROOT/install.sh" "${LAUNCH_SERVICE_ARGS[@]}" > "$TMPDIR/launchd-start-failure.log" 2>&1; then
+    cat "$TMPDIR/launchd-start-failure.log" >&2
+    echo "install unexpectedly succeeded with injected launchd start failure" >&2
+    exit 1
+  fi
+  grep -q 'launchd failed to start' "$TMPDIR/launchd-start-failure.log"
+  cmp "$TMPDIR/launchd-plist.before-start-failure" "$LAUNCHD_PLIST"
+  [[ -e "$LAUNCHCTL_STATE/loaded" ]]
+  echo "==> launchd start failure restored prior plist and loaded job"
+
+  # --no-start must stop at the plist: bootstrapping starts the job immediately
+  # (RunAtLoad + KeepAlive), so nothing may bootstrap, load, or kickstart it.
+  NO_START_SERVICE_ARGS=("${LAUNCH_SERVICE_ARGS[@]}" --no-start)
+  rm -f "$LAUNCHD_PLIST" "$LAUNCHCTL_STATE/calls" "$LAUNCHCTL_STATE/loaded"
+  if PATH="$LAUNCHCTL_DIR:$PATH" LAUNCHCTL_STATE="$LAUNCHCTL_STATE" \
+    sh "$ROOT/install.sh" "${NO_START_SERVICE_ARGS[@]}" > "$TMPDIR/launchd-no-start.log" 2>&1; then
+    :
+  else
+    cat "$TMPDIR/launchd-no-start.log" >&2
+    echo "--no-start launchd install failed" >&2
+    exit 1
+  fi
+  if grep -Eq '^(bootstrap|kickstart|load)( |$)' "$LAUNCHCTL_STATE/calls" 2>/dev/null; then
+    echo "--no-start launchd install registered or started the job" >&2
+    cat "$LAUNCHCTL_STATE/calls" >&2
+    exit 1
+  fi
+  grep -q 'starts at next login/boot' "$TMPDIR/launchd-no-start.log" || {
+    cat "$TMPDIR/launchd-no-start.log" >&2
+    echo "--no-start launchd install did not report the deferred start" >&2
+    exit 1
+  }
+  [[ -e "$LAUNCHD_PLIST" ]] || { echo "--no-start launchd install wrote no plist" >&2; exit 1; }
+  echo "==> --no-start launchd install only wrote the plist (starts at next login/boot)"
+fi
+
+if [[ "$OS" == "FreeBSD" ]]; then
+  RC_DIR="$STAGE/fake-rc.d"
+  RC_CONF_DIR="$STAGE/fake-rc.conf.d"
+  SERVICE_BIN="$STAGE/fake-service-bin"
+  if [[ -e /etc/rc.conf.d/superd || -e /usr/local/etc/rc.d/superd ]]; then
+    echo "refusing to run rc.d service tests against host-managed paths" >&2
+    exit 1
+  fi
+  mkdir -p "$RC_DIR" "$RC_CONF_DIR" "$SERVICE_BIN"
+  cat > "$SERVICE_BIN/service" <<'EOF'
+#!/bin/sh
+case "${2-}" in
+  status) exit 1 ;;
+  restart|start) echo 'injected rc.d startup failure' >&2; exit 96 ;;
+  stop) exit 0 ;;
+esac
+exit 0
+EOF
+  chmod +x "$SERVICE_BIN/service"
+  RC_SERVICE_ARGS=(--system --version "$VER" --base-url "http://127.0.0.1:${PORT}" --prefix "$PREFIX" --root "$ROOT_DIR" --no-sudo)
+  if PATH="$SERVICE_BIN:$PATH" SUPER_INSTALL_SMOKE=1 SUPER_INSTALL_SMOKE_RC_DIR="$RC_DIR" \
+    SUPER_INSTALL_SMOKE_RC_CONF_DIR="$RC_CONF_DIR" SUPER_INSTALL_SMOKE_SERVICE_CMD="$SERVICE_BIN/service" \
+    sh "$ROOT/install.sh" "${RC_SERVICE_ARGS[@]}" > "$TMPDIR/rc-register-failure.log" 2>&1; then
+    cat "$TMPDIR/rc-register-failure.log" >&2
+    echo "install unexpectedly succeeded with injected rc.d start failure" >&2
+    exit 1
+  fi
+  grep -q 'service superd start failed' "$TMPDIR/rc-register-failure.log"
+  if [[ -e "$RC_DIR/superd" || -e "$RC_CONF_DIR/superd" ]]; then
+    echo "failed rc.d registration left partial service files" >&2
+    exit 1
+  fi
+  echo "==> rc.d registration failure removed partial service files"
+
+  printf '# existing rc.d service\n' > "$RC_DIR/superd"
+  printf 'superd_enable="NO"\n# existing setting\n' > "$RC_CONF_DIR/superd"
+  cp "$RC_DIR/superd" "$TMPDIR/rc-script.before-start-failure"
+  cp "$RC_CONF_DIR/superd" "$TMPDIR/rc-conf.before-start-failure"
+  if PATH="$SERVICE_BIN:$PATH" SUPER_INSTALL_SMOKE=1 SUPER_INSTALL_SMOKE_RC_DIR="$RC_DIR" \
+    SUPER_INSTALL_SMOKE_RC_CONF_DIR="$RC_CONF_DIR" SUPER_INSTALL_SMOKE_SERVICE_CMD="$SERVICE_BIN/service" \
+    sh "$ROOT/install.sh" "${RC_SERVICE_ARGS[@]}" > "$TMPDIR/rc-start-failure.log" 2>&1; then
+    cat "$TMPDIR/rc-start-failure.log" >&2
+    echo "install unexpectedly succeeded with injected rc.d start failure on upgrade" >&2
+    exit 1
+  fi
+  grep -q 'service superd start failed' "$TMPDIR/rc-start-failure.log"
+  cmp "$TMPDIR/rc-script.before-start-failure" "$RC_DIR/superd"
+  cmp "$TMPDIR/rc-conf.before-start-failure" "$RC_CONF_DIR/superd"
+  echo "==> rc.d start failure restored pre-existing service files"
+fi
 
 # Fail before binary replacement at each artifact-validation boundary. Existing
 # binaries and user config must remain byte-for-byte unchanged.

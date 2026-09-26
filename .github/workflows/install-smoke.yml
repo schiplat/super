@@ -27,8 +27,8 @@ jobs:
         with:
           key: install-smoke-${{ matrix.os }}
 
-      # The smoke script isolates HOME and always uses --no-service; it exercises
-      # install/start/doctor/CLI without registering launchd/systemd services.
+      # The smoke script isolates HOME and keeps the normal install pass on
+      # --no-service. On macOS it adds PATH-local launchctl failure injection.
       - name: Isolated install smoke
         run: bash tools/scripts/install-smoke.sh --no-service
 
@@ -53,5 +53,6 @@ jobs:
             curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain stable
             . "$HOME/.cargo/env"
             export RUSTFLAGS=""
-            # Isolated install smoke uses --no-service; does not create an rc.d entry.
+            # The install pass uses --no-service; dedicated rollback cases point at
+            # temporary rc.d/config dirs and a fake service command, never host rc.d.
             bash tools/scripts/install-smoke.sh --no-service

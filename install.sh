@@ -45,6 +45,15 @@ die()  { printf 'install.sh: %s\n' "$*" >&2; exit 1; }
 have() { command -v "$1" >/dev/null 2>&1; }
 need() { have "$1" || die "required tool not found: $1"; }
 
+download() {
+  # download <url> <dest> — curl when available, else FreeBSD base fetch(1).
+  if have curl; then
+    curl -fsSL "$1" -o "$2"
+  else
+    fetch -qo "$2" "$1"
+  fi
+}
+
 usage() {
   cat <<'EOF'
 Install Project Super (superd + super CLI) from GitHub Releases.
@@ -90,11 +99,17 @@ while [ $# -gt 0 ]; do
   esac
 done
 
-need curl
 need tar
 need uname
-if ! have sha256sum && ! have shasum; then
-  die "required tool not found: sha256sum or shasum"
+# curl exists on Linux/macOS and any FreeBSD with packages, but a pristine
+# FreeBSD base system only ships fetch(1) — download() falls back to it.
+if ! have curl && ! have fetch; then
+  die "required tool not found: curl (or fetch on FreeBSD)"
+fi
+# sha256(1) is the FreeBSD base-system checksum tool; sha256sum/shasum cover
+# GNU userland and macOS.
+if ! have sha256sum && ! have shasum && ! have sha256; then
+  die "required tool not found: sha256sum, shasum, or sha256"
 fi
 
 # --- Detect platform ----------------------------------------------------------
@@ -117,16 +132,25 @@ esac
 PLATFORM="${OS_PART}-${ARCH_PART}"
 info "Detected platform: $PLATFORM"
 
+# --- Download to a temp dir ---------------------------------------------------
+TMP="$(mktemp -d 2>/dev/null || mktemp -d -t super-install)"
+BIN_TX_ID="$(basename "$TMP")"
+INSTALL_FILE_TX_JOURNAL="$TMP/install-file-journal"
+INSTALL_FILE_TX_SEEN=""
+: > "$INSTALL_FILE_TX_JOURNAL"
+trap 'rm -rf "$TMP"' EXIT
+
 # --- Resolve version ----------------------------------------------------------
 if [ -z "$VERSION" ]; then
   log "Resolving latest release..."
   if [ -n "$BASE_URL_OPT" ]; then
-    VERSION="$(curl -fsSL "${BASE_URL_OPT%/}/latest.json" \
-      | grep '"tag_name"' | head -1 | sed -E 's/.*"v?([^"]+)".*/\1/')"
+    download "${BASE_URL_OPT%/}/latest.json" "$TMP/latest.json" \
+      || die "could not download latest.json from ${BASE_URL_OPT%/}"
   else
-    VERSION="$(curl -fsSL "https://api.github.com/repos/$REPO/releases/latest" \
-      | grep '"tag_name"' | head -1 | sed -E 's/.*"v?([^"]+)".*/\1/')"
+    download "https://api.github.com/repos/$REPO/releases/latest" "$TMP/latest.json" \
+      || die "could not query the latest release; pass --version X.Y.Z"
   fi
+  VERSION="$(grep '"tag_name"' "$TMP/latest.json" | head -1 | sed -E 's/.*"v?([^"]+)".*/\1/')"
   [ -n "$VERSION" ] || die "could not determine latest release; pass --version X.Y.Z"
 fi
 # Strip a leading v if the user passed one.
@@ -142,17 +166,12 @@ fi
 ARCHIVE_URL="${BASE_URL}/${ARCHIVE}"
 SUMS_URL="${BASE_URL}/SHA256SUMS"
 
-# --- Download to a temp dir ---------------------------------------------------
-TMP="$(mktemp -d 2>/dev/null || mktemp -d -t super-install)"
-BIN_TX_ID="$(basename "$TMP")"
-trap 'rm -rf "$TMP"' EXIT
-
 log "Downloading $ARCHIVE..."
-curl -fsSL "$ARCHIVE_URL" -o "$TMP/$ARCHIVE" \
+download "$ARCHIVE_URL" "$TMP/$ARCHIVE" \
   || die "download failed (does release v$VERSION have a $PLATFORM build?): $ARCHIVE_URL"
 
 log "Downloading SHA256SUMS..."
-curl -fsSL "$SUMS_URL" -o "$TMP/SHA256SUMS" \
+download "$SUMS_URL" "$TMP/SHA256SUMS" \
   || die "could not download SHA256SUMS for verification"
 
 # --- Verify checksum ----------------------------------------------------------
@@ -162,8 +181,11 @@ EXPECTED="$(grep " ${ARCHIVE}\$" "$TMP/SHA256SUMS" | awk '{print $1}')"
 
 if have sha256sum; then
   ACTUAL="$(sha256sum "$TMP/$ARCHIVE" | awk '{print $1}')"
-else
+elif have shasum; then
   ACTUAL="$(shasum -a 256 "$TMP/$ARCHIVE" | awk '{print $1}')"
+else
+  # FreeBSD base: sha256 -q prints the bare digest.
+  ACTUAL="$(sha256 -q "$TMP/$ARCHIVE" | awk '{print $1}')"
 fi
 
 [ "$EXPECTED" = "$ACTUAL" ] || die "checksum mismatch!
@@ -244,14 +266,283 @@ BIN_TX_DIR=""
 BIN_TX_HAD_SUPERD=0
 BIN_TX_HAD_SUPER=0
 BIN_TX_ROLLBACK_FAILED=0
+SERVICE_TX_ACTIVE=0
+SERVICE_TX_KIND=""
+SERVICE_TX_ROLLBACK_FAILED=0
+SERVICE_TX_KEEP_TMP=0
+SYSTEMD_TX_UNIT=""
+SYSTEMD_TX_UNIT_DIR=""
+SYSTEMD_TX_UNIT_SUDO=""
+SYSTEMD_TX_SCOPE=""
+SYSTEMD_TX_HAD_UNIT=0
+SYSTEMD_TX_WAS_ENABLED=0
+SYSTEMD_TX_WAS_ACTIVE=0
+SYSTEMD_TX_ENABLE_ATTEMPTED=0
+INSTALL_FILE_TX_ACTIVE=0
+INSTALL_FILE_TX_COUNT=0
+SYSTEMD_TX_BACKUP=""
+SYSTEMD_TX_START_ATTEMPTED=0
+LAUNCHD_TX_ACTIVE=0
+LAUNCHD_TX_REGISTERED=0
+LAUNCHD_TX_REGISTER_ATTEMPTED=0
+LAUNCHD_TX_PLIST=""
+LAUNCHD_LABEL="com.schiplat.superd"
+LAUNCHD_TX_BACKUP=""
+LAUNCHD_TX_HAD_PLIST=0
+LAUNCHD_TX_WAS_LOADED=0
+LAUNCHD_TX_DOMAIN=""
+LAUNCHD_TX_SUDO=""
+RC_TX_ACTIVE=0
+RC_TX_SCRIPT=""
+RC_TX_CONF=""
+RC_TX_SCRIPT_BACKUP=""
+RC_TX_SERVICE_CMD="service"
+RC_TX_HAD_SCRIPT=0
+RC_TX_HAD_CONF=0
+RC_TX_WAS_ACTIVE=0
+RC_TX_START_ATTEMPTED=0
+
+rollback_install_files() {
+  [ "$INSTALL_FILE_TX_ACTIVE" -eq 1 ] || return 0
+  _files_failed=0
+  _entry=0
+  while IFS='|' read -r _target _backup _existed; do
+    _entry=$((_entry + 1))
+    [ -n "$_target" ] || continue
+    if [ "$_existed" -eq 1 ]; then
+      if [ -e "$_backup" ]; then
+        if ! run_for "$(dirname "$_target")" cp -p "$_backup" "$_target"; then
+          SERVICE_TX_KEEP_TMP=1
+          _files_failed=1
+          printf 'install.sh: configuration rollback failed: could not restore %s.\n' "$_target" >&2
+          printf '  Previous file is preserved at %s; restore it with:\n' "$_backup" >&2
+          printf '  cp -p "%s" "%s"\n' "$_backup" "$_target" >&2
+        fi
+      else
+        SERVICE_TX_KEEP_TMP=1
+        _files_failed=1
+        printf 'install.sh: configuration rollback failed: backup is missing for %s (%s).\n' "$_target" "$_backup" >&2
+      fi
+    else
+      if ! run_for "$(dirname "$_target")" rm -f "$_target"; then
+        _files_failed=1
+        printf 'install.sh: configuration rollback failed: could not remove newly created file %s. Remove it manually if appropriate.\n' "$_target" >&2
+      fi
+    fi
+  done < "$INSTALL_FILE_TX_JOURNAL"
+  INSTALL_FILE_TX_ACTIVE=0
+  return "$_files_failed"
+}
+
+record_install_file() {
+  _file_target="$1"
+  case ":$INSTALL_FILE_TX_SEEN:" in
+    *":$_file_target:"*) return 0 ;;
+  esac
+  INSTALL_FILE_TX_SEEN="${INSTALL_FILE_TX_SEEN}${INSTALL_FILE_TX_SEEN:+:}$_file_target"
+  _file_backup="$TMP/install-file.$INSTALL_FILE_TX_COUNT.before.$BIN_TX_ID"
+  if [ -e "$_file_target" ]; then
+    cp -p "$_file_target" "$_file_backup" 2>/dev/null || {
+      [ -n "$SUDO" ] && needs_elev "$_file_target" && $SUDO cp -p "$_file_target" "$_file_backup" \
+        || die "could not snapshot existing file before update: $_file_target"
+    }
+    printf '%s|%s|1\n' "$_file_target" "$_file_backup" >> "$INSTALL_FILE_TX_JOURNAL"
+  else
+    printf '%s||0\n' "$_file_target" >> "$INSTALL_FILE_TX_JOURNAL"
+  fi
+  INSTALL_FILE_TX_COUNT=$((INSTALL_FILE_TX_COUNT + 1))
+  INSTALL_FILE_TX_ACTIVE=1
+}
 
 report_restore_failure() {
   _restore_backup="$1"
   _restore_target="$2"
   BIN_TX_ROLLBACK_FAILED=1
+  SERVICE_TX_KEEP_TMP=1
   printf 'install.sh: rollback failed: could not restore %s to %s.\n' "$_restore_backup" "$_restore_target" >&2
   printf '  The previous binary is preserved at %s. Restore it with:\n' "$_restore_backup" >&2
   printf '  mv -f "%s" "%s"\n' "$_restore_backup" "$_restore_target" >&2
+}
+
+systemd_tx_call() {
+  if [ -n "$SYSTEMD_TX_UNIT_SUDO" ]; then
+    $SYSTEMD_TX_UNIT_SUDO systemctl $SYSTEMD_TX_SCOPE "$@"
+  else
+    systemctl $SYSTEMD_TX_SCOPE "$@"
+  fi
+}
+
+report_service_restore_failure() {
+  _service_target="$1"
+  _service_backup="$2"
+  SERVICE_TX_ROLLBACK_FAILED=1
+  SERVICE_TX_KEEP_TMP=1
+  printf 'install.sh: service rollback failed: could not restore %s.\n' "$_service_target" >&2
+  if [ -n "$_service_backup" ] && [ -e "$_service_backup" ]; then
+    printf '  Previous service file is preserved at %s. Restore it with:\n' "$_service_backup" >&2
+    printf '  cp -p "%s" "%s" && systemctl %s daemon-reload\n' "$_service_backup" "$_service_target" "$SYSTEMD_TX_SCOPE" >&2
+  else
+    printf '  Remove the incomplete service file at %s and run systemctl daemon-reload.\n' "$_service_target" >&2
+  fi
+}
+
+report_launchd_restore_failure() {
+  _launch_target="$1"
+  _launch_backup="$2"
+  SERVICE_TX_ROLLBACK_FAILED=1
+  SERVICE_TX_KEEP_TMP=1
+  printf 'install.sh: launchd rollback failed: could not restore %s.\n' "$_launch_target" >&2
+  if [ -n "$_launch_backup" ] && [ -e "$_launch_backup" ]; then
+    printf '  Previous plist is preserved at %s. Restore it with:\n' "$_launch_backup" >&2
+    printf '  cp -p "%s" "%s" && launchctl bootstrap %s "%s"\n' \
+      "$_launch_backup" "$_launch_target" "$LAUNCHD_TX_DOMAIN" "$_launch_target" >&2
+  else
+    printf '  Remove the incomplete plist at %s and unload %s manually.\n' "$_launch_target" "$LAUNCHD_TX_DOMAIN" >&2
+  fi
+}
+
+rollback_launchd_install() {
+  [ "$LAUNCHD_TX_ACTIVE" -eq 1 ] || return 0
+  SERVICE_TX_ROLLBACK_FAILED=0
+  LAUNCHCTL_SUDO="$LAUNCHD_TX_SUDO"
+
+  if [ "$LAUNCHD_TX_REGISTER_ATTEMPTED" -eq 1 ] || [ "$LAUNCHD_TX_WAS_LOADED" -eq 1 ]; then
+    if ! run_launchctl bootout "$LAUNCHD_TX_DOMAIN/$LAUNCHD_LABEL" >/dev/null 2>&1; then
+      if run_launchctl print "$LAUNCHD_TX_DOMAIN/$LAUNCHD_LABEL" >/dev/null 2>&1; then
+        SERVICE_TX_ROLLBACK_FAILED=1
+        printf 'install.sh: launchd rollback failed: could not unload %s before restoring its plist.\n' "$LAUNCHD_TX_DOMAIN/$LAUNCHD_LABEL" >&2
+      fi
+    fi
+  fi
+  if [ "$LAUNCHD_TX_WAS_ENABLED" -eq 0 ] && [ "$LAUNCHD_TX_ENABLE_ATTEMPTED" -eq 1 ]; then
+    run_launchctl disable "$LAUNCHD_TX_DOMAIN/$LAUNCHD_LABEL" >/dev/null 2>&1 || {
+      SERVICE_TX_ROLLBACK_FAILED=1
+      printf 'install.sh: launchd rollback failed: could not disable %s.\n' "$LAUNCHD_TX_DOMAIN/$LAUNCHD_LABEL" >&2
+    }
+  fi
+  if [ "$LAUNCHD_TX_HAD_PLIST" -eq 1 ]; then
+    if ! run_for "$(dirname "$LAUNCHD_TX_PLIST")" cp -p "$LAUNCHD_TX_BACKUP" "$LAUNCHD_TX_PLIST"; then
+      report_launchd_restore_failure "$LAUNCHD_TX_PLIST" "$LAUNCHD_TX_BACKUP"
+    fi
+  elif [ -e "$LAUNCHD_TX_PLIST" ]; then
+    if ! run_for "$(dirname "$LAUNCHD_TX_PLIST")" rm -f "$LAUNCHD_TX_PLIST"; then
+      report_launchd_restore_failure "$LAUNCHD_TX_PLIST" ""
+    fi
+  fi
+  if [ "$LAUNCHD_TX_WAS_LOADED" -eq 1 ] && [ "$LAUNCHD_TX_HAD_PLIST" -eq 1 ]; then
+    if ! run_launchctl bootstrap "$LAUNCHD_TX_DOMAIN" "$LAUNCHD_TX_PLIST" >/dev/null 2>&1; then
+      SERVICE_TX_ROLLBACK_FAILED=1
+      printf 'install.sh: launchd rollback failed: previous job %s could not be bootstrapped.\n' "$LAUNCHD_TX_DOMAIN/$LAUNCHD_LABEL" >&2
+    fi
+  fi
+  LAUNCHD_TX_REGISTERED=0
+  LAUNCHD_TX_REGISTER_ATTEMPTED=0
+  return "$SERVICE_TX_ROLLBACK_FAILED"
+}
+
+report_rc_restore_failure() {
+  _rc_target="$1"
+  _rc_backup="$2"
+  SERVICE_TX_ROLLBACK_FAILED=1
+  SERVICE_TX_KEEP_TMP=1
+  printf 'install.sh: rc.d rollback failed: could not restore %s.\n' "$_rc_target" >&2
+  if [ -n "$_rc_backup" ] && [ -e "$_rc_backup" ]; then
+    printf '  Previous file is preserved at %s. Restore it with:\n' "$_rc_backup" >&2
+    printf '  cp -p "%s" "%s"\n' "$_rc_backup" "$_rc_target" >&2
+  else
+    printf '  Remove the incomplete file at %s manually.\n' "$_rc_target" >&2
+  fi
+}
+
+rollback_rc_install() {
+  [ "$RC_TX_ACTIVE" -eq 1 ] || return 0
+  SERVICE_TX_ROLLBACK_FAILED=0
+  if [ "$RC_TX_START_ATTEMPTED" -eq 1 ] && [ "$RC_TX_WAS_ACTIVE" -eq 0 ]; then
+    if ! run_for "$RC_TX_SERVICE_PATH" "$RC_TX_SERVICE_CMD" superd stop >/dev/null 2>&1; then
+      SERVICE_TX_ROLLBACK_FAILED=1
+      printf 'install.sh: rc.d rollback failed: could not stop newly started superd.\n' >&2
+    fi
+  fi
+  if [ "$RC_TX_HAD_SCRIPT" -eq 1 ]; then
+    if ! run_for "$(dirname "$RC_TX_SCRIPT")" cp -p "$RC_TX_SCRIPT_BACKUP" "$RC_TX_SCRIPT"; then
+      report_rc_restore_failure "$RC_TX_SCRIPT" "$RC_TX_SCRIPT_BACKUP"
+    fi
+  elif [ -e "$RC_TX_SCRIPT" ]; then
+    run_for "$(dirname "$RC_TX_SCRIPT")" rm -f "$RC_TX_SCRIPT" || report_rc_restore_failure "$RC_TX_SCRIPT" ""
+  fi
+  if [ "$RC_TX_HAD_CONF" -eq 1 ]; then
+    if ! run_for "$(dirname "$RC_TX_CONF")" cp -p "$RC_TX_CONF_BACKUP" "$RC_TX_CONF"; then
+      report_rc_restore_failure "$RC_TX_CONF" "$RC_TX_CONF_BACKUP"
+    fi
+  elif [ -e "$RC_TX_CONF" ]; then
+    run_for "$(dirname "$RC_TX_CONF")" rm -f "$RC_TX_CONF" || report_rc_restore_failure "$RC_TX_CONF" ""
+  fi
+  if [ "$RC_TX_WAS_ACTIVE" -eq 1 ] && [ "$RC_TX_START_ATTEMPTED" -eq 1 ]; then
+    if ! run_for "$RC_TX_SERVICE_PATH" "$RC_TX_SERVICE_CMD" superd start >/dev/null 2>&1; then
+      SERVICE_TX_ROLLBACK_FAILED=1
+      printf 'install.sh: rc.d rollback failed: previously running superd could not be restarted.\n' >&2
+    fi
+  fi
+  RC_TX_ACTIVE=0
+  return "$SERVICE_TX_ROLLBACK_FAILED"
+}
+
+rollback_service_install() {
+  [ "$SERVICE_TX_ACTIVE" -eq 1 ] || return 0
+  case "$SERVICE_TX_KIND" in
+    systemd) rollback_systemd_install ;;
+    launchd) rollback_launchd_install ;;
+    rc.d) rollback_rc_install ;;
+    *) return 0 ;;
+  esac
+}
+
+rollback_systemd_install() {
+  [ "$SERVICE_TX_ACTIVE" -eq 1 ] && [ "$SERVICE_TX_KIND" = "systemd" ] || return 0
+  SERVICE_TX_ROLLBACK_FAILED=0
+  _service_file="$SYSTEMD_TX_UNIT_DIR/$SYSTEMD_TX_UNIT"
+
+  if [ "$SYSTEMD_TX_START_ATTEMPTED" -eq 1 ] && [ "$SYSTEMD_TX_WAS_ACTIVE" -eq 0 ]; then
+    if ! systemd_tx_call stop "$SYSTEMD_TX_UNIT" >/dev/null 2>&1; then
+      SERVICE_TX_ROLLBACK_FAILED=1
+      printf 'install.sh: service rollback failed: could not stop newly started unit %s; stop it manually before retrying.\n' "$SYSTEMD_TX_UNIT" >&2
+    fi
+  fi
+  if [ "$SYSTEMD_TX_ENABLE_ATTEMPTED" -eq 1 ] && [ "$SYSTEMD_TX_WAS_ENABLED" -eq 0 ]; then
+    systemd_tx_call disable "$SYSTEMD_TX_UNIT" >/dev/null 2>&1 || {
+      SERVICE_TX_ROLLBACK_FAILED=1
+      printf 'install.sh: service rollback failed: could not disable %s.\n' "$SYSTEMD_TX_UNIT" >&2
+    }
+  fi
+
+  if [ "$SYSTEMD_TX_HAD_UNIT" -eq 1 ]; then
+    if ! run_for "$SYSTEMD_TX_UNIT_DIR" cp -p "$SYSTEMD_TX_BACKUP" "$_service_file"; then
+      _retained_backup="$SYSTEMD_TX_UNIT_DIR/.${SYSTEMD_TX_UNIT}.super-backup.$BIN_TX_ID"
+      if run_for "$SYSTEMD_TX_UNIT_DIR" cp -p "$SYSTEMD_TX_BACKUP" "$_retained_backup"; then
+        report_service_restore_failure "$_service_file" "$_retained_backup"
+      else
+        report_service_restore_failure "$_service_file" "$SYSTEMD_TX_BACKUP"
+      fi
+    fi
+  elif [ -e "$_service_file" ]; then
+    if ! run_for "$SYSTEMD_TX_UNIT_DIR" rm -f "$_service_file"; then
+      report_service_restore_failure "$_service_file" ""
+    fi
+  fi
+
+  if ! systemd_tx_call daemon-reload; then
+    SERVICE_TX_ROLLBACK_FAILED=1
+    printf 'install.sh: service rollback failed: systemd daemon-reload failed; run it manually after restoring %s.\n' "$_service_file" >&2
+  fi
+  if [ "$SYSTEMD_TX_WAS_ACTIVE" -eq 1 ]; then
+    systemd_tx_call restart "$SYSTEMD_TX_UNIT" >/dev/null 2>&1 || {
+      SERVICE_TX_ROLLBACK_FAILED=1
+      printf 'install.sh: service rollback failed: previous active unit %s could not be restarted.\n' "$SYSTEMD_TX_UNIT" >&2
+    }
+  fi
+
+  SERVICE_TX_ACTIVE=0
+  return "$SERVICE_TX_ROLLBACK_FAILED"
 }
 
 rollback_binary_install() {
@@ -294,15 +585,29 @@ install_exit_cleanup() {
         "$BIN_TX_DIR/.superd.old.$BIN_TX_ID" "$BIN_TX_DIR/.super.old.$BIN_TX_ID" 2>/dev/null || true
     fi
   else
+    if ! rollback_service_install; then
+      printf 'install.sh: installation failed and service rollback was incomplete. Review the recovery commands above before retrying.\n' >&2
+    fi
     if ! rollback_binary_install; then
-      printf 'install.sh: installation failed and rollback was incomplete. Review the recovery commands above before retrying the install.\n' >&2
+      printf 'install.sh: installation failed and binary rollback was incomplete. Review the recovery commands above before retrying.\n' >&2
+    fi
+    if ! rollback_install_files; then
+      printf 'install.sh: installation failed and configuration/profile rollback was incomplete. Review the recovery commands above before retrying.\n' >&2
     fi
   fi
-  if [ -n "$BIN_TX_DIR" ]; then
-    run_for "$BIN_TX_DIR" rm -f \
-      "$BIN_TX_DIR/.superd.new.$BIN_TX_ID" "$BIN_TX_DIR/.super.new.$BIN_TX_ID" 2>/dev/null || true
+  if [ "$SERVICE_TX_KEEP_TMP" -eq 1 ]; then
+    if [ -n "$BIN_TX_DIR" ]; then
+      run_for "$BIN_TX_DIR" rm -f "$BIN_TX_DIR/.superd.new.$BIN_TX_ID" "$BIN_TX_DIR/.super.new.$BIN_TX_ID" || {
+        printf 'install.sh: cleanup failed: temporary binaries remain in %s.\n' "$BIN_TX_DIR" >&2
+      }
+    fi
+    printf 'install.sh: recovery backups retained in %s\n' "$TMP" >&2
+  else
+    if [ -n "$BIN_TX_DIR" ]; then
+      run_for "$BIN_TX_DIR" rm -f "$BIN_TX_DIR/.superd.new.$BIN_TX_ID" "$BIN_TX_DIR/.super.new.$BIN_TX_ID" || true
+    fi
+    rm -rf "$TMP"
   fi
-  rm -rf "$TMP"
   return "$_cleanup_status"
 }
 # Preserve the original exit code before cleanup commands change `$?`.
@@ -313,6 +618,7 @@ write_file() {
   _wf_dest="$1"
   _wf_dir="$(dirname "$_wf_dest")"
   run_for "$_wf_dir" mkdir -p "$_wf_dir"
+  record_install_file "$_wf_dest"
   if needs_elev "$_wf_dest"; then
     [ -n "$SUDO" ] || die "cannot write $_wf_dest"
     $SUDO tee "$_wf_dest" >/dev/null
@@ -393,8 +699,10 @@ init_super_root() {
   else
     # Prefer packaged default when present in the release archive.
     if [ -f "$ROOT_DIR/contrib/super.toml.default" ]; then
+      record_install_file "$CONF"
       run_for "$CONF" cp "$ROOT_DIR/contrib/super.toml.default" "$CONF"
     else
+      record_install_file "$CONF"
       write_file "$CONF" <<'EOF'
 # Project Super — generated by install.sh
 # Docs: https://super.docs.sconts.com/docs/02-essentials/configuration/
@@ -467,6 +775,7 @@ EOF
   fi
 
   EXAMPLE="$SUPER_ROOT/conf/conf.d/demo.toml.example"
+  record_install_file "$EXAMPLE"
   if [ ! -f "$EXAMPLE" ]; then
     if [ -f "$ROOT_DIR/contrib/conf.d/demo.toml.example" ]; then
       run_for "$EXAMPLE" cp "$ROOT_DIR/contrib/conf.d/demo.toml.example" "$EXAMPLE"
@@ -488,6 +797,7 @@ EOF
     fi
   fi
 
+  record_install_file "$SUPER_ROOT/env.sh"
   write_file "$SUPER_ROOT/env.sh" <<EOF
 # Project Super instance environment (sourced by login shells via install.sh hooks).
 # Manual: source $SUPER_ROOT/env.sh
@@ -510,6 +820,10 @@ upsert_shell_hook() {
   if [ ! -d "$_uh_dir" ]; then
     run_for "$_uh_dir" mkdir -p "$_uh_dir" 2>/dev/null || return 0
   fi
+  if needs_elev "$_uh_target" && [ "$(id -u)" -ne 0 ] && [ -z "$SUDO" ]; then
+    return 0
+  fi
+  record_install_file "$_uh_target"
   if [ ! -e "$_uh_target" ]; then
     if needs_elev "$_uh_target"; then
       [ -n "$SUDO" ] || [ "$(id -u)" -eq 0 ] || return 0
@@ -517,9 +831,6 @@ upsert_shell_hook() {
     else
       touch "$_uh_target" 2>/dev/null || return 0
     fi
-  fi
-  if needs_elev "$_uh_target" && [ "$(id -u)" -ne 0 ] && [ -z "$SUDO" ]; then
-    return 0
   fi
 
   _uh_tmp="$TMP/super-hook-$$"
@@ -561,6 +872,7 @@ install_login_env() {
   if [ "$INSTALL_MODE" = "system" ]; then
     # Linux (and OSes with profile.d): drop-in for /etc/profile.
     if [ "$OS" = "Linux" ] || [ -d /etc/profile.d ]; then
+      record_install_file /etc/profile.d/super.sh
       run_for /etc/profile.d mkdir -p /etc/profile.d
       write_file /etc/profile.d/super.sh <<EOF
 # Project Super — loaded by login shells (/etc/profile).
@@ -573,6 +885,7 @@ EOF
     # pam_env / display-manager sessions that read /etc/environment (SUPER_ROOT only).
     if [ "$OS" = "Linux" ]; then
       env_file="/etc/environment"
+      record_install_file "$env_file"
       tmp="$TMP/super-environment-$$"
       if [ -f "$env_file" ]; then
         if needs_elev "$env_file" && [ "$(id -u)" -ne 0 ]; then
@@ -598,6 +911,7 @@ EOF
 
     # macOS: path_helper + zsh/bash login files (no /etc/profile.d by default).
     if [ "$OS" = "Darwin" ]; then
+      record_install_file /etc/paths.d/super
       run_for /etc/paths.d mkdir -p /etc/paths.d
       write_file /etc/paths.d/super <<EOF
 $BIN_DIR
@@ -647,6 +961,7 @@ systemd_available() {
 
 install_systemd() {
   unit_name="superd.service"
+  SERVICE_TX_KIND="systemd"
   if [ "$INSTALL_MODE" = "user" ]; then
     unit_dir="${XDG_CONFIG_HOME:-$HOME/.config}/systemd/user"
     scope="--user"
@@ -658,6 +973,32 @@ install_systemd() {
     wanted_by="multi-user.target"
     unit_sudo="$SUDO"
   fi
+
+  SYSTEMD_TX_UNIT="$unit_name"
+  SYSTEMD_TX_UNIT_DIR="$unit_dir"
+  SYSTEMD_TX_UNIT_SUDO="$unit_sudo"
+  SYSTEMD_TX_SCOPE="$scope"
+  _unit_file="$unit_dir/$unit_name"
+  SYSTEMD_TX_HAD_UNIT=0
+  SYSTEMD_TX_BACKUP=""
+  SYSTEMD_TX_ENABLE_ATTEMPTED=0
+  SYSTEMD_TX_START_ATTEMPTED=0
+  SYSTEMD_TX_WAS_ENABLED=0
+  SYSTEMD_TX_WAS_ACTIVE=0
+  if systemd_tx_call is-enabled "$unit_name" >/dev/null 2>&1; then
+    SYSTEMD_TX_WAS_ENABLED=1
+  fi
+  if systemd_tx_call is-active "$unit_name" >/dev/null 2>&1; then
+    SYSTEMD_TX_WAS_ACTIVE=1
+  fi
+  if [ -e "$_unit_file" ]; then
+    SYSTEMD_TX_HAD_UNIT=1
+    SYSTEMD_TX_BACKUP="$TMP/${unit_name}.before.$BIN_TX_ID"
+    if ! run_for "$unit_dir" cp -p "$_unit_file" "$SYSTEMD_TX_BACKUP"; then
+      die "could not snapshot existing service unit before update: $_unit_file"
+    fi
+  fi
+  SERVICE_TX_ACTIVE=1
 
   log "Installing systemd unit ($INSTALL_MODE)..."
   mkdir_cmd="mkdir"
@@ -692,14 +1033,18 @@ LimitNOFILE=65536
 WantedBy=$wanted_by
 EOF
 
-  # shellcheck disable=SC2086
-  $systemctl_cmd $scope daemon-reload
-  # shellcheck disable=SC2086
-  $systemctl_cmd $scope enable "$unit_name"
+  if ! systemd_tx_call daemon-reload; then
+    die "systemd daemon-reload failed after writing $_unit_file"
+  fi
+  SYSTEMD_TX_ENABLE_ATTEMPTED=1
+  if ! systemd_tx_call enable "$unit_name"; then
+    die "systemd enable failed for $unit_name"
+  fi
   if [ "$DO_START" -eq 1 ]; then
-    # shellcheck disable=SC2086
-    $systemctl_cmd $scope restart "$unit_name" || \
-      $systemctl_cmd $scope start "$unit_name"
+    SYSTEMD_TX_START_ATTEMPTED=1
+    if ! systemd_tx_call restart "$unit_name" && ! systemd_tx_call start "$unit_name"; then
+      die "systemd start failed for $unit_name"
+    fi
     info "systemd: enabled and started ($unit_dir/$unit_name)"
   else
     info "systemd: enabled (not started; pass without --no-start to start)"
@@ -727,14 +1072,41 @@ install_launchd() {
     [ -n "$plist_sudo" ] || [ "$(id -u)" -eq 0 ] || \
       die "macOS system LaunchDaemon needs root (re-run with sudo, or pass --user)"
   fi
+  LAUNCHD_LABEL="$label"
   plist_path="$plist_dir/$label.plist"
-
-  log "Installing launchd plist ($INSTALL_MODE)..."
   if [ -n "$plist_sudo" ]; then
-    $plist_sudo mkdir -p "$plist_dir"
-  else
-    mkdir -p "$plist_dir"
+    if ! $plist_sudo mkdir -p "$plist_dir"; then
+      die "could not create launchd directory $plist_dir"
+    fi
+  elif ! mkdir -p "$plist_dir"; then
+    die "could not create launchd directory $plist_dir"
   fi
+  LAUNCHD_TX_DOMAIN="$domain"
+  LAUNCHD_TX_SUDO="$plist_sudo"
+  LAUNCHD_TX_PLIST="$plist_path"
+  LAUNCHD_TX_HAD_PLIST=0
+  LAUNCHD_TX_BACKUP=""
+  LAUNCHD_TX_WAS_LOADED=0
+  LAUNCHD_TX_WAS_ENABLED=1
+  LAUNCHD_TX_ENABLE_ATTEMPTED=0
+  LAUNCHD_TX_REGISTERED=0
+  LAUNCHD_TX_REGISTER_ATTEMPTED=0
+  if [ -e "$plist_path" ]; then
+    LAUNCHD_TX_HAD_PLIST=1
+    LAUNCHD_TX_BACKUP="$TMP/$(basename "$plist_path").before.$BIN_TX_ID"
+    cp -p "$plist_path" "$LAUNCHD_TX_BACKUP" || die "could not snapshot existing launchd plist: $plist_path"
+  fi
+  LAUNCHCTL_SUDO="$plist_sudo"
+  if run_launchctl print "$domain/$label" >/dev/null 2>&1; then
+    LAUNCHD_TX_WAS_LOADED=1
+  fi
+  _launch_disabled="$(run_launchctl print-disabled "$domain" 2>/dev/null || true)"
+  case "$_launch_disabled" in
+    *"$label"*"=> disabled"*) LAUNCHD_TX_WAS_ENABLED=0 ;;
+  esac
+  SERVICE_TX_KIND="launchd"
+  SERVICE_TX_ACTIVE=1
+  LAUNCHD_TX_ACTIVE=1
 
   # Stdout/err capture early boot failures before superd opens its own logs.
   out_log="$SUPER_ROOT/logs/launchd.out.log"
@@ -772,30 +1144,37 @@ EOF
 
   if [ -n "$plist_sudo" ]; then
     printf '%s\n' "$plist_body" | $plist_sudo tee "$plist_path" >/dev/null
-    $plist_sudo chmod 644 "$plist_path"
+    run_for "$plist_dir" chmod 644 "$plist_path"
   else
     printf '%s\n' "$plist_body" >"$plist_path"
     chmod 644 "$plist_path"
   fi
 
   # Prefer modern bootstrap API (with elevation when needed); fall back to load.
+  # With --no-start only the plist is written: bootstrapping starts the job
+  # immediately (RunAtLoad + KeepAlive), which would contradict --no-start.
+  # RunAtLoad picks the new plist up at the next login/boot instead. An old
+  # loaded job keeps running untouched, mirroring the systemd enable-only path.
   LAUNCHCTL_SUDO="$plist_sudo"
-  run_launchctl bootout "$domain/$label" >/dev/null 2>&1 || true
-  if run_launchctl bootstrap "$domain" "$plist_path" >/dev/null 2>&1; then
-    run_launchctl enable "$domain/$label" >/dev/null 2>&1 || true
-    if [ "$DO_START" -eq 1 ]; then
-      run_launchctl kickstart -k "$domain/$label" >/dev/null 2>&1 \
-        || run_launchctl kickstart "$domain/$label" >/dev/null 2>&1 \
-        || true
+  if [ "$DO_START" -eq 1 ]; then
+    if [ "$LAUNCHD_TX_WAS_LOADED" -eq 1 ]; then
+      run_launchctl bootout "$domain/$label" || die "could not unload existing launchd job $domain/$label"
+    fi
+    LAUNCHD_TX_REGISTER_ATTEMPTED=1
+    if ! run_launchctl bootstrap "$domain" "$plist_path"; then
+      # Older macOS without bootstrap/kickstart.
+      if ! run_launchctl load -w "$plist_path"; then
+        die "launchd failed to register $plist_path"
+      fi
+    fi
+    LAUNCHD_TX_REGISTERED=1
+    LAUNCHD_TX_ENABLE_ATTEMPTED=1
+    run_launchctl enable "$domain/$label" || die "launchd failed to enable $domain/$label"
+    if ! run_launchctl kickstart -k "$domain/$label" && ! run_launchctl kickstart "$domain/$label"; then
+      die "launchd failed to start $domain/$label"
     fi
   else
-    # Older macOS without bootstrap/kickstart.
-    run_launchctl unload "$plist_path" >/dev/null 2>&1 || true
-    run_launchctl load -w "$plist_path"
-    if [ "$DO_START" -eq 0 ]; then
-      run_launchctl unload "$plist_path" >/dev/null 2>&1 || true
-      info "launchd: plist installed but not running (--no-start)"
-    fi
+    info "launchd: plist installed; superd starts at next login/boot (--no-start)"
   fi
 
   info "launchd: $plist_path (RunAtLoad + KeepAlive)"
@@ -829,9 +1208,41 @@ install_freebsd_rc() {
     return
   fi
 
-  rc_dir="/usr/local/etc/rc.d"
+  if [ "${SUPER_INSTALL_SMOKE:-0}" = 1 ]; then
+    rc_dir="${SUPER_INSTALL_SMOKE_RC_DIR:-/usr/local/etc/rc.d}"
+    conf_dir="${SUPER_INSTALL_SMOKE_RC_CONF_DIR:-/etc/rc.conf.d}"
+    service_cmd="${SUPER_INSTALL_SMOKE_SERVICE_CMD:-service}"
+  else
+    rc_dir="/usr/local/etc/rc.d"
+    conf_dir="/etc/rc.conf.d"
+    service_cmd="service"
+  fi
   rc_script="$rc_dir/superd"
-  conf_d="/etc/rc.conf.d/superd"
+  conf_d="$conf_dir/superd"
+  RC_TX_SCRIPT="$rc_script"
+  RC_TX_CONF="$conf_d"
+  RC_TX_SCRIPT_BACKUP="$TMP/rc-script.before.$BIN_TX_ID"
+  RC_TX_CONF_BACKUP="$TMP/rc-conf.before.$BIN_TX_ID"
+  RC_TX_HAD_SCRIPT=0
+  RC_TX_HAD_CONF=0
+  RC_TX_WAS_ACTIVE=0
+  RC_TX_START_ATTEMPTED=0
+  RC_TX_SERVICE_CMD="$service_cmd"
+  RC_TX_SERVICE_PATH="$(command -v "$service_cmd" 2>/dev/null || printf '%s' "$service_cmd")"
+  if [ -e "$rc_script" ]; then
+    RC_TX_HAD_SCRIPT=1
+    cp -p "$rc_script" "$RC_TX_SCRIPT_BACKUP" || die "could not snapshot existing rc.d script: $rc_script"
+  fi
+  if [ -e "$conf_d" ]; then
+    RC_TX_HAD_CONF=1
+    cp -p "$conf_d" "$RC_TX_CONF_BACKUP" || die "could not snapshot existing rc config: $conf_d"
+  fi
+  if run_for "$rc_dir" "$service_cmd" superd status >/dev/null 2>&1; then
+    RC_TX_WAS_ACTIVE=1
+  fi
+  SERVICE_TX_KIND="rc.d"
+  SERVICE_TX_ACTIVE=1
+  RC_TX_ACTIVE=1
 
   log "Installing FreeBSD rc.d service..."
   run_for "$rc_dir" mkdir -p "$rc_dir"
@@ -889,7 +1300,7 @@ EOF
   info "wrote $rc_script"
 
   # Isolated enable flags (preferred over editing /etc/rc.conf).
-  run_for /etc/rc.conf.d mkdir -p /etc/rc.conf.d
+  run_for "$conf_dir" mkdir -p "$conf_dir"
   write_file "$conf_d" <<EOF
 # Project Super — managed by install.sh
 superd_enable="YES"
@@ -899,9 +1310,10 @@ EOF
   info "wrote $conf_d (superd_enable=YES)"
 
   if [ "$DO_START" -eq 1 ]; then
-    if have service; then
-      run_for /usr/sbin/service service superd restart 2>/dev/null \
-        || run_for /usr/sbin/service service superd start \
+    RC_TX_START_ATTEMPTED=1
+    if have "$service_cmd"; then
+      run_for "$(command -v "$service_cmd")" "$service_cmd" superd restart 2>/dev/null \
+        || run_for "$(command -v "$service_cmd")" "$service_cmd" superd start \
         || die "service superd start failed"
     else
       run_for "$rc_script" "$rc_script" restart 2>/dev/null \
