@@ -204,6 +204,23 @@ const cronDescription = computed(() => {
   }
 });
 
+// Next scheduled trigger as "in 42s (14:32:05)"; recalculated on refresh.
+const nextRunText = computed(() => {
+  const ts = (detailData.value as any)?.next_run as number | undefined;
+  if (!ts || !detailData.value?.config?.cron) return null;
+  const now = Math.floor(Date.now() / 1000);
+  const diff = ts - now;
+  const abs = new Date(ts * 1000).toLocaleTimeString();
+  if (diff <= 0) return abs;
+  const rel =
+    diff < 60
+      ? `${diff}s`
+      : diff < 3600
+        ? `${Math.floor(diff / 60)}m ${diff % 60}s`
+        : `${Math.floor(diff / 3600)}h ${Math.floor((diff % 3600) / 60)}m`;
+  return `in ${rel} (${abs})`;
+});
+
 // Health check tuning shown with effective (0 = default) values
 const healthTuning = computed(() => {
   const hc = detailData.value?.config.health_check;
@@ -881,8 +898,21 @@ function goToEdit() { if (props.processId) router.push(`/programs/${props.proces
               <div class="rounded-2xl bg-muted/55 overflow-hidden">
                 <div class="px-5 py-4 space-y-3">
                   <div>
-                    <div class="bg-background/60 rounded-lg px-3 py-2.5 font-mono text-sm text-foreground inline-block">{{ detailData.config.cron || '—' }}</div>
-                    <div v-if="cronDescription" class="text-xs text-muted-foreground/70 mt-1">{{ cronDescription }}</div>
+                  <div class="bg-background/60 border border-border/50 rounded-xl px-4 py-3 flex items-center gap-3">
+                    <div class="flex items-center justify-center w-9 h-9 rounded-lg bg-muted/80 shrink-0">
+                      <Clock class="w-4 h-4 text-muted-foreground" />
+                    </div>
+                    <div class="min-w-0">
+                      <div class="font-mono text-sm text-foreground truncate">{{ detailData.config.cron || '—' }}</div>
+                      <div class="text-xs text-muted-foreground/80 mt-0.5 truncate">
+                        <template v-if="cronDescription">{{ cronDescription }}</template>
+                        <template v-if="nextRunText">
+                          <span v-if="cronDescription" class="text-muted-foreground/40 mx-1.5">·</span>
+                          <span class="text-foreground/70">next run {{ nextRunText }}</span>
+                        </template>
+                      </div>
+                    </div>
+                  </div>
                   </div>
                   <div v-if="hasCronPolicy" class="grid grid-cols-2 sm:grid-cols-3 gap-x-4 gap-y-2">
                     <div class="flex justify-between gap-3"><span class="text-xs text-muted-foreground/70">Max Concurrent</span><span class="font-mono text-xs text-foreground/80">{{ cronPolicy.maxConcurrent }}</span></div>

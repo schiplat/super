@@ -849,6 +849,10 @@ pub struct ProgramInfo {
     /// Latest health_check failure while running (not yet Healthy).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub health_error: Option<String>,
+
+    /// Next scheduled cron trigger (epoch secs). Cron programs only.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub next_run: Option<u64>,
 }
 
 /// API response: readiness-aware reload (`POST /api/v1/system/reload`).

@@ -176,6 +176,7 @@ export interface ProgramDetail {
   config: ProgramConfig; // All static configuration
   last_error?: string;
   health_error?: string;
+  next_run?: number; // Next scheduled cron trigger (epoch secs)
 }
 
 // Create request body (CreateProgramRequest)

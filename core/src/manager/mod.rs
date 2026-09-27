@@ -3093,6 +3093,13 @@ impl Manager {
                 .registry
                 .get_running(&id)
                 .and_then(|s| s.health_error.clone()),
+            next_run: if config.cron.is_some() {
+                self.scheduler
+                    .get_next_run(&id)
+                    .map(|dt| dt.timestamp() as u64)
+            } else {
+                None
+            },
         })
     }
 
