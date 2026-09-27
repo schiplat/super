@@ -912,7 +912,7 @@ function goToEdit() { if (props.processId) router.push(`/programs/${props.proces
                       <span class="inline-flex items-center px-1.5 py-px rounded text-[10px] uppercase tracking-wider font-bold leading-none bg-warning/12 text-warning">next</span>
                       <span class="text-sm text-foreground/70">{{ nextRunText }}</span>
                     </span>
-                    <button class="inline-flex h-6 w-6 items-center justify-center rounded-lg opacity-0 group-hover:opacity-100 transition-opacity shrink-0" @click="copy(detailData.config.cron)" title="Copy cron expression">
+                    <button class="inline-flex h-6 w-6 items-center justify-center rounded-lg opacity-0 group-hover:opacity-100 transition-opacity shrink-0" @click="copy(detailData.config.cron ?? '')" title="Copy cron expression">
                       <Check v-if="copied" class="w-3 h-3 text-success" /><Copy v-else class="w-3 h-3 text-muted-foreground" />
                     </button>
                   </div>
