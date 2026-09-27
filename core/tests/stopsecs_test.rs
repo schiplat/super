@@ -1,5 +1,5 @@
 use common::ProgramConfig;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use super_core::config::ServerConfig;
 use super_core::manager::controller::LifecycleController;
 use super_core::manager::registry::ProcessRegistry;
@@ -25,14 +25,17 @@ fn test_stopsecs_fallback_to_server_default() {
     );
 
     let id = Uuid::new_v4();
-    let mut registry = ProcessRegistry::new(HashMap::from([(
-        id,
-        ProgramConfig {
-            name: "svc".into(),
-            command: "/bin/true".into(),
-            ..Default::default()
-        },
-    )]));
+    let mut registry = ProcessRegistry::new(
+        HashMap::from([(
+            id,
+            ProgramConfig {
+                name: "svc".into(),
+                command: "/bin/true".into(),
+                ..Default::default()
+            },
+        )]),
+        HashSet::new(),
+    );
 
     assert_eq!(controller.stop_timeout(&registry, id), 42);
 

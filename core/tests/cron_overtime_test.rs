@@ -15,6 +15,7 @@ impl Extension for NoopExtension {}
 async fn spawn_manager(
     temp_dir: &tempfile::TempDir,
 ) -> (ManagerHandle, tokio::task::JoinHandle<()>) {
+    use std::collections::HashSet;
     let (log_tx, _) = broadcast::channel(100);
     let mut config = test_helpers::test_server_config(temp_dir);
     // Aggressive flapping config: any long-running service restarting 2+ times
@@ -33,6 +34,7 @@ async fn spawn_manager(
         cmd_rx,
         cmd_tx.clone(),
         HashMap::new(),
+        HashSet::new(),
         log_tx,
         Box::new(NoopExtension),
         event_db,

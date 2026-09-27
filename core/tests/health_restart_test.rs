@@ -1,5 +1,5 @@
 use common::{CreateProgramRequest, HealthCheck, ProcessStatus, ProgramEventRecord};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::time::{Duration, Instant};
 use super_core::ManagerHandle;
 use super_core::extension::Extension;
@@ -30,6 +30,7 @@ async fn manager_with_temp(log_dir: std::path::PathBuf) -> (ManagerHandle, tempf
         cmd_rx,
         cmd_tx.clone(),
         HashMap::new(),
+        HashSet::new(),
         log_tx,
         Box::new(NoopExtension),
         event_db,

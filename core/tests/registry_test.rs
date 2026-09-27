@@ -1,5 +1,5 @@
 use common::ProgramConfig;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use super_core::manager::registry::{ProcessRegistry, RuntimeState};
 use uuid::Uuid;
 
@@ -46,7 +46,7 @@ fn running_state(pid: u32) -> RuntimeState {
 
 #[test]
 fn test_registry_crud() {
-    let mut registry = ProcessRegistry::new(HashMap::new());
+    let mut registry = ProcessRegistry::new(HashMap::new(), HashSet::new());
     let id = Uuid::new_v4();
     let config = mock_config("test-app");
 
@@ -94,7 +94,7 @@ fn test_registry_crud() {
 
 #[test]
 fn test_registry_concurrent_instances() {
-    let mut registry = ProcessRegistry::new(HashMap::new());
+    let mut registry = ProcessRegistry::new(HashMap::new(), HashSet::new());
     let id = Uuid::new_v4();
 
     for (pid, healthy) in [(1001, true), (1002, false), (1003, true)] {
@@ -143,7 +143,7 @@ fn test_registry_concurrent_instances() {
 fn remove_running_by_pid_unknown_pid_falls_back_to_primary() {
     // Documented fallback: when the reported pid no longer matches any instance
     // (a race with a restart), the primary instance is removed instead.
-    let mut registry = ProcessRegistry::new(HashMap::new());
+    let mut registry = ProcessRegistry::new(HashMap::new(), HashSet::new());
     let id = Uuid::new_v4();
     for pid in [2001u32, 2002, 2003] {
         registry.insert_running(id, running_state(pid));
@@ -168,7 +168,7 @@ fn remove_running_by_pid_unknown_pid_falls_back_to_primary() {
 fn remove_running_primary_keeps_siblings_then_drops_key() {
     // `remove_running` (single-instance exit path) only removes the primary;
     // siblings keep the program registered until the last one exits.
-    let mut registry = ProcessRegistry::new(HashMap::new());
+    let mut registry = ProcessRegistry::new(HashMap::new(), HashSet::new());
     let id = Uuid::new_v4();
     for pid in [3001u32, 3002, 3003] {
         registry.insert_running(id, running_state(pid));
@@ -191,7 +191,7 @@ fn remove_running_primary_keeps_siblings_then_drops_key() {
 
 #[test]
 fn all_running_pids_spans_programs_and_siblings() {
-    let mut registry = ProcessRegistry::new(HashMap::new());
+    let mut registry = ProcessRegistry::new(HashMap::new(), HashSet::new());
     let a = Uuid::new_v4();
     let b = Uuid::new_v4();
     registry.insert_running(a, running_state(4001));

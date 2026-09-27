@@ -176,6 +176,7 @@ impl Manager {
         rx: mpsc::Receiver<Command>,
         tx_self: mpsc::Sender<Command>,
         initial_programs: HashMap<Uuid, ProgramConfig>,
+        initial_stopped: HashSet<Uuid>,
         log_tx: broadcast::Sender<WsMessage>,
         extension: Box<dyn Extension>,
         event_db: crate::event_db::EventDb,
@@ -256,7 +257,7 @@ impl Manager {
         // Expose the daemon event pipeline to plugins (plugin→host `emit_event`).
         crate::plugin::host_emit::install(extension.clone(), config.event_hooks.clone());
 
-        let registry = ProcessRegistry::new(initial_programs);
+        let registry = ProcessRegistry::new(initial_programs, initial_stopped);
         let controller = LifecycleController::new(
             config.clone(),
             tx_self.clone(),
@@ -518,6 +519,12 @@ impl Manager {
                     .controller
                     .stop_program(&mut self.registry, id, force)
                     .await;
+                // Persist operator stop intent immediately (autostart=false +
+                // held-stopped mark) so a crash right after the stop cannot
+                // resurrect the program on the next boot.
+                if res.is_ok() {
+                    let _ = self.flush_to_disk().await;
+                }
                 let _ = reply.send(res);
             }
             Command::RestartProgram { id, reply } => {
@@ -3012,7 +3019,11 @@ impl Manager {
 
     async fn flush_to_disk(&mut self) -> anyhow::Result<()> {
         if self.registry.dirty {
-            store::save(&self.config.storage.data_file, &self.registry.programs).await?;
+            let snapshot = store::Snapshot {
+                programs: self.registry.programs.clone(),
+                stopped_by_user: self.registry.stopped_by_user.clone(),
+            };
+            store::save(&self.config.storage.data_file, &snapshot).await?;
             self.registry.dirty = false;
         }
         tracing::debug!("State persisted to disk (Debounced).");

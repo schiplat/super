@@ -1,8 +1,6 @@
-use common::{
-    ArtifactConfig, CreateProgramRequest, ProcessStatus, ProgramConfig, UpdateProgramRequest,
-};
+use common::{ArtifactConfig, CreateProgramRequest, ProcessStatus, UpdateProgramRequest};
 use sha2::{Digest, Sha256};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::io::Write;
 use std::path::PathBuf;
 use std::time::Duration;
@@ -74,6 +72,7 @@ async fn setup_system_full() -> (
         rx,
         tx.clone(),
         HashMap::new(),
+        HashSet::new(),
         log_tx,
         Box::new(NoOpExtension),
         event_db,
@@ -150,15 +149,12 @@ async fn test_ota_transaction_rollback() {
         tokio::time::sleep(Duration::from_millis(100)).await;
 
         // Check on-disk state
-        let content = std::fs::read_to_string(&data_file).unwrap_or_default();
-        if content.is_empty() {
-            continue;
-        }
+        let saved_state = match super_core::store::load_with_recovery(&data_file).await {
+            Ok(s) => s,
+            Err(_) => continue,
+        };
 
-        let saved_state: HashMap<uuid::Uuid, ProgramConfig> =
-            serde_json::from_str(&content).unwrap_or_default();
-
-        if let Some(cfg) = saved_state.get(&id) {
+        if let Some(cfg) = saved_state.programs.get(&id) {
             // Condition 1: restore_path recorded on disk (state machine entered verification)
             if cfg.restore_path.is_some() {
                 // Condition 2: process restarted (PID changed)
@@ -214,10 +210,16 @@ async fn test_ota_transaction_rollback() {
     assert!(!backup_path.exists(), "Backup file should be consumed");
 
     // C. restore_path cleared
-    let saved_state_final: HashMap<uuid::Uuid, ProgramConfig> =
-        serde_json::from_str(&std::fs::read_to_string(&data_file).unwrap()).unwrap();
+    let saved_state_final = super_core::store::load_with_recovery(&data_file)
+        .await
+        .unwrap();
     assert!(
-        saved_state_final.get(&id).unwrap().restore_path.is_none(),
+        saved_state_final
+            .programs
+            .get(&id)
+            .unwrap()
+            .restore_path
+            .is_none(),
         "restore_path should be cleared"
     );
 
@@ -301,9 +303,17 @@ async fn test_ota_transaction_commit() {
     assert!(!backup_path.exists(), "Backup file should be deleted");
 
     // C. On-disk state consistent
-    let saved_state: HashMap<uuid::Uuid, ProgramConfig> =
-        serde_json::from_str(&std::fs::read_to_string(&data_file).unwrap()).unwrap();
-    assert!(saved_state.get(&id).unwrap().restore_path.is_none());
+    let saved_state = super_core::store::load_with_recovery(&data_file)
+        .await
+        .unwrap();
+    assert!(
+        saved_state
+            .programs
+            .get(&id)
+            .unwrap()
+            .restore_path
+            .is_none()
+    );
 
     println!("Test Passed: Commit successful.");
 }
@@ -646,10 +656,11 @@ async fn test_ota_no_health_check_instant_crash_rolls_back() {
     for _ in 0..60 {
         tokio::time::sleep(Duration::from_millis(200)).await;
         let content = std::fs::read_to_string(&app).unwrap_or_default();
-        let saved: HashMap<uuid::Uuid, ProgramConfig> =
-            serde_json::from_str(&std::fs::read_to_string(&data_file).unwrap_or_default())
-                .unwrap_or_default();
+        let saved = super_core::store::load_with_recovery(&data_file)
+            .await
+            .unwrap_or_default();
         let wal_clear = saved
+            .programs
             .get(&id)
             .map(|c| c.restore_path.is_none())
             .unwrap_or(false);
@@ -832,11 +843,12 @@ async fn test_ota_manager_respects_artifact_download_timeout() {
         !target_bin.with_extension("bak").exists(),
         "no backup after failed download"
     );
-    let snap: HashMap<uuid::Uuid, ProgramConfig> =
-        serde_json::from_str(&std::fs::read_to_string(&data_file).unwrap_or_default())
-            .unwrap_or_default();
+    let snap = super_core::store::load_with_recovery(&data_file)
+        .await
+        .unwrap_or_default();
     assert!(
-        snap.get(&id)
+        snap.programs
+            .get(&id)
             .and_then(|c| c.restore_path.as_ref())
             .is_none(),
         "WAL must not be opened when download never completes"
@@ -905,10 +917,11 @@ async fn test_ota_artifact_verify_timeout_rolls_back() {
         if info.config.restore_path.is_some() || content == v2 {
             saw_pending = true;
         }
-        let snap: HashMap<uuid::Uuid, ProgramConfig> =
-            serde_json::from_str(&std::fs::read_to_string(&data_file).unwrap_or_default())
-                .unwrap_or_default();
+        let snap = super_core::store::load_with_recovery(&data_file)
+            .await
+            .unwrap_or_default();
         let wal_clear = snap
+            .programs
             .get(&id)
             .map(|c| c.restore_path.is_none())
             .unwrap_or(false);

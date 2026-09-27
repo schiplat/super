@@ -1,5 +1,5 @@
 use common::{ProcessStatus, ProgramConfig, SystemEvent};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use super_core::ManagerHandle;
@@ -65,6 +65,7 @@ async fn setup_manager() -> (ManagerHandle, TempDir, MockExtension) {
         rx,
         tx.clone(),
         HashMap::new(),
+        HashSet::new(),
         log_tx,
         Box::new(extension.clone()),
         event_db,
@@ -450,6 +451,7 @@ autostart = false
         rx,
         tx.clone(),
         HashMap::new(),
+        HashSet::new(),
         log_tx,
         Box::new(extension.clone()),
         event_db,

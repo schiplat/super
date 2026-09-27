@@ -1,6 +1,6 @@
 use anyhow::anyhow;
 use common::{ProcessStatus, ProgramConfig};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use super_core::ManagerHandle;
 use super_core::extension::Extension;
 use super_core::manager::Manager;
@@ -54,6 +54,7 @@ async fn test_strict_policy_kills_process() {
         cmd_rx,
         cmd_tx.clone(),
         HashMap::new(),
+        HashSet::new(),
         log_tx,
         extension,
         event_db,

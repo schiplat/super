@@ -1,11 +1,23 @@
 use common::ProgramConfig;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::path::Path;
 use tokio::io::AsyncWriteExt;
 use uuid::Uuid;
 
+/// Persisted daemon state.
+///
+/// `stopped_by_user` carries operator stop intent (`super stop`) across
+/// daemon restarts — without it a cron program would be re-scheduled on the
+/// next boot even though the operator held it.
+#[derive(Debug, Default, serde::Serialize, serde::Deserialize)]
+pub struct Snapshot {
+    pub programs: HashMap<Uuid, ProgramConfig>,
+    #[serde(default, skip_serializing_if = "HashSet::is_empty")]
+    pub stopped_by_user: HashSet<Uuid>,
+}
+
 /// Save with backup rotation
-pub async fn save(path: &Path, data: &HashMap<Uuid, ProgramConfig>) -> anyhow::Result<()> {
+pub async fn save(path: &Path, data: &Snapshot) -> anyhow::Result<()> {
     // 1. Backup existing file as .bak
     if path.exists() {
         let backup_path = path.with_extension("json.bak");
@@ -40,15 +52,20 @@ pub async fn save(path: &Path, data: &HashMap<Uuid, ProgramConfig>) -> anyhow::R
     Ok(())
 }
 
-/// Load with automatic recovery from backup
-pub async fn load_with_recovery(path: &Path) -> anyhow::Result<HashMap<Uuid, ProgramConfig>> {
+/// Load with automatic recovery from backup. Prefers the current wrapper
+/// format; a legacy snapshot (pre-1.7, a bare `HashMap<Uuid, ProgramConfig>`)
+/// still loads with an empty `stopped_by_user`.
+pub async fn load_with_recovery(path: &Path) -> anyhow::Result<Snapshot> {
     // A. Try primary file
     match load_internal(path).await {
         Ok(data) => return Ok(data),
         Err(e) => {
             if !path.exists() {
                 tracing::warn!("No snapshot at {:?}; starting with empty state", path);
-                return Ok(HashMap::new());
+                return Ok(Snapshot {
+                    programs: HashMap::new(),
+                    stopped_by_user: HashSet::new(),
+                });
             }
             tracing::error!("Failed to load primary config {:?}: {}", path, e);
         }
@@ -74,7 +91,10 @@ pub async fn load_with_recovery(path: &Path) -> anyhow::Result<HashMap<Uuid, Pro
     // First boot (no files) is handled inside load_internal.
     if !path.exists() && !backup_path.exists() {
         // Fresh install
-        return Ok(HashMap::new());
+        return Ok(Snapshot {
+            programs: HashMap::new(),
+            stopped_by_user: HashSet::new(),
+        });
     }
 
     Err(anyhow::anyhow!(
@@ -83,12 +103,23 @@ pub async fn load_with_recovery(path: &Path) -> anyhow::Result<HashMap<Uuid, Pro
     ))
 }
 
-// Internal load helper
-async fn load_internal(path: &Path) -> anyhow::Result<HashMap<Uuid, ProgramConfig>> {
+// Internal load helper: current wrapper format, then legacy bare program map.
+async fn load_internal(path: &Path) -> anyhow::Result<Snapshot> {
     let content = tokio::fs::read_to_string(path).await?;
     if content.trim().is_empty() {
-        return Ok(HashMap::new());
+        return Ok(Snapshot {
+            programs: HashMap::new(),
+            stopped_by_user: HashSet::new(),
+        });
     }
-    let data = serde_json::from_str(&content)?;
-    Ok(data)
+    match serde_json::from_str::<Snapshot>(&content) {
+        Ok(snapshot) => Ok(snapshot),
+        Err(wrapper_err) => match serde_json::from_str::<HashMap<Uuid, ProgramConfig>>(&content) {
+            Ok(programs) => Ok(Snapshot {
+                programs,
+                stopped_by_user: HashSet::new(),
+            }),
+            Err(_) => Err(wrapper_err.into()), // surface the current-format error
+        },
+    }
 }

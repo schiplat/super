@@ -161,8 +161,8 @@ pub async fn bootstrap(extension: Box<dyn Extension>) -> anyhow::Result<SystemCo
     }
 
     // 4. Load persisted runtime snapshot
-    let initial_programs = match store::load_with_recovery(&storage.data_file).await {
-        Ok(p) => p,
+    let initial_state = match store::load_with_recovery(&storage.data_file).await {
+        Ok(s) => s,
         Err(e) => {
             // Unrecoverable error: log fatal and exit
             tracing::error!("FATAL: Configuration corruption detected!");
@@ -171,6 +171,14 @@ pub async fn bootstrap(extension: Box<dyn Extension>) -> anyhow::Result<SystemCo
             return Err(e); // abort bootstrap
         }
     };
+    let initial_programs = initial_state.programs;
+    let initial_stopped = initial_state.stopped_by_user;
+    if !initial_stopped.is_empty() {
+        tracing::info!(
+            "Restoring {} held-stopped program(s) from previous session",
+            initial_stopped.len()
+        );
+    }
 
     // 4b. Open the SQLite-backed event history store (auxiliary; never fatal).
     let event_db = match crate::event_db::EventDb::open(&storage.events_file).await {
@@ -211,6 +219,7 @@ pub async fn bootstrap(extension: Box<dyn Extension>) -> anyhow::Result<SystemCo
         rx,
         tx.clone(),
         initial_programs,
+        initial_stopped,
         log_tx.clone(),
         extension,
         event_db,

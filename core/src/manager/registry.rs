@@ -59,15 +59,18 @@ pub struct ProcessRegistry {
 }
 
 impl ProcessRegistry {
-    pub fn new(initial_programs: HashMap<Uuid, ProgramConfig>) -> Self {
+    pub fn new(
+        initial_programs: HashMap<Uuid, ProgramConfig>,
+        stopped_by_user: HashSet<Uuid>,
+    ) -> Self {
         Self {
             programs: initial_programs,
+            stopped_by_user,
             running: HashMap::new(),
             restarting: HashSet::new(),
             waiting: HashSet::new(),
             crashed: HashSet::new(),
             startup_errors: HashMap::new(),
-            stopped_by_user: HashSet::new(),
             health_restart_count: HashMap::new(),
             dirty: false,
         }

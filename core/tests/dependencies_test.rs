@@ -1,5 +1,5 @@
 use common::{CreateProgramRequest, ProcessStatus};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::time::Duration;
 use super_core::ManagerHandle;
 use super_core::extension::Extension;
@@ -35,6 +35,7 @@ async fn setup_manager() -> (ManagerHandle, TempDir) {
         rx,
         tx.clone(),
         HashMap::new(),
+        HashSet::new(),
         log_tx,
         Box::new(NoopExtension),
         event_db,

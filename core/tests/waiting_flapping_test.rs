@@ -6,7 +6,7 @@
 //! dependency gate), so the dependent could be marked Fatal the moment its
 //! dependency finally became healthy — even though it never actually started.
 use common::{CreateProgramRequest, ProcessStatus};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::time::Duration;
 use super_core::ManagerHandle;
 use super_core::extension::Extension;
@@ -40,6 +40,7 @@ async fn setup_manager() -> (ManagerHandle, tempfile::TempDir) {
         rx,
         tx.clone(),
         HashMap::new(),
+        HashSet::new(),
         log_tx,
         Box::new(NoopExtension),
         event_db,
