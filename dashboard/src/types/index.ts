@@ -145,6 +145,7 @@ export interface ProgramConfig {
   jitter_sec?: number;
   max_concurrent?: number;
   max_queued?: number;
+  kill_after_secs?: number;
   resource_limits?: {
     cpu_quota?: number;
     memory_limit?: number;
@@ -217,6 +218,7 @@ export interface CreateProgramRequest {
   jitter_sec?: number;
   max_concurrent?: number;
   max_queued?: number;
+  kill_after_secs?: number;
   resource_limits?: {
     cpu_quota?: number;
     memory_limit?: number;
@@ -288,6 +290,7 @@ export interface UpdateProgramRequest {
   jitter_sec?: number;
   max_concurrent?: number;
   max_queued?: number;
+  kill_after_secs?: number;
 
   // Artifact is usually set by OTA; type kept for API completeness
   artifact?: {

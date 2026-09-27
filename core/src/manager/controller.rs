@@ -735,6 +735,71 @@ impl LifecycleController {
             .unwrap_or(self.config.server.shutdown_timeout)
     }
 
+    /// Gracefully stop one running instance (SIGTERM → `stopsecs` → SIGKILL)
+    /// without the manual-stop side effects of [`Self::stop_program`]:
+    /// `autostart` stays on, `stopped_by_user` is not set, and flapping
+    /// history is kept. Used by the cron overtime sweep so later schedule
+    /// ticks keep firing.
+    pub fn stop_instance_graceful(
+        &mut self,
+        registry: &mut ProcessRegistry,
+        id: Uuid,
+        target_pid: u32,
+    ) -> anyhow::Result<()> {
+        let Some(states) = registry.get_running_all_mut(&id) else {
+            anyhow::bail!("program {} has no running instances", id);
+        };
+        let Some(state) = states.iter_mut().find(|s| s.pid == target_pid) else {
+            anyhow::bail!("instance {} of program {} is not running", target_pid, id);
+        };
+        if state.stopping {
+            return Ok(()); // already being stopped; do not re-signal
+        }
+        state.stopping = true;
+
+        tracing::info!(
+            "Stopping program group: {} (PGID: {}) [graceful instance stop]",
+            id,
+            target_pid
+        );
+        if let Err(e) = signal::kill(Pid::from_raw(-(target_pid as i32)), Signal::SIGTERM) {
+            if e == nix::errno::Errno::ESRCH {
+                // Already gone: route through the normal exit/reap path.
+                let tx = self.tx_self.clone();
+                tokio::spawn(async move {
+                    let _ = tx
+                        .send(Command::ProcessExited {
+                            id,
+                            pid: target_pid,
+                            code: None,
+                            signal: None,
+                        })
+                        .await;
+                });
+                return Ok(());
+            }
+            return Err(e.into());
+        }
+
+        // Notify UI immediately: Stopping (not stuck on Healthy)
+        if let Some(config) = registry.programs.get(&id) {
+            let _ = self.log_tx.send(WsMessage::StatusChange {
+                id,
+                status: ProcessStatus::Stopping,
+                name: config.name.clone(),
+            });
+        }
+
+        // Escalation watchdog: SIGKILL after the stop grace elapses.
+        let tx = self.tx_self.clone();
+        let timeout_sec = self.stop_timeout(registry, id);
+        tokio::spawn(async move {
+            tokio::time::sleep(tokio::time::Duration::from_secs(timeout_sec)).await;
+            let _ = tx.send(Command::CheckTimeoutKill { id, target_pid }).await;
+        });
+        Ok(())
+    }
+
     pub async fn stop_program(
         &mut self,
         registry: &mut ProcessRegistry,

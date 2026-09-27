@@ -113,6 +113,10 @@ pub enum Commands {
         #[arg(long)]
         max_queued: Option<u32>,
 
+        /// Kill each cron run after this many seconds of runtime (SIGTERM, then SIGKILL after stopsecs; 0 disables)
+        #[arg(long)]
+        kill_after_secs: Option<u64>,
+
         /// CPU quota in cores (e.g. 1.5 for 1.5 cores; requires isolation plugin)
         #[arg(long, help_heading = "Resource Isolation")]
         cpu: Option<f32>,
@@ -212,6 +216,10 @@ pub enum Commands {
         /// Cap on queued cron firings when at max_concurrent (default 100; 0 means default)
         #[arg(long)]
         max_queued: Option<u32>,
+
+        /// Kill each cron run after this many seconds of runtime (SIGTERM, then SIGKILL after stopsecs; 0 disables)
+        #[arg(long)]
+        kill_after_secs: Option<u64>,
 
         /// CPU quota in cores (requires isolation plugin)
         #[arg(long, help_heading = "Resource Isolation")]

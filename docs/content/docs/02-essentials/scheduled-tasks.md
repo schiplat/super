@@ -179,6 +179,33 @@ super add --name db-backup --cron "0 0 2 * * *" --max-concurrent 2 --max-queued 
 
 `max_concurrent` is capped at `64`; `max_queued` at `10000`.
 
+### Runtime cap (`kill_after_secs`)
+
+A run that hangs forever holds its `max_concurrent` slot and blocks — or queues away — later firings. Set `kill_after_secs` to cap each run's wall-clock time, measured per run from process start:
+
+* When the cap is exceeded, the run is stopped through the standard graceful path: `SIGTERM`, then `SIGKILL` after `stopsecs`.
+* A `cron_overtime_kill` event is recorded on the program's event history (visible via `super events`).
+* The schedule keeps firing — the next tick starts a fresh run as usual. Overtime kills are not counted as failures, and cron jobs are exempt from flapping detection regardless.
+* `0` / unset disables the cap (default).
+
+```json
+{
+  "services": [
+    {
+      "name": "report-builder",
+      "command": "/scripts/report.sh",
+      "cron": "0 0 * * * *",
+      "kill_after_secs": 1800,
+      "on_overlap": "skip"
+    }
+  ]
+}
+```
+
+```bash
+super add --name report-builder --cron "0 0 * * * *" --kill-after-secs 1800 /scripts/report.sh
+```
+
 ## Flapping Detection Exemption
 
 Cron jobs are **exempt from flapping detection**. A regular (non-cron) program that exits and is restarted too frequently within `flapping_window` is flagged as `Fatal` and its `autostart` is disabled — that is the intended guard for long-running services. Short-interval cron jobs (e.g. every few seconds) intentionally start and exit on every tick, so treating them like a restart loop would permanently disable the schedule. Super skips the flapping check for any program with a `cron` expression, allowing arbitrary schedule intervals.

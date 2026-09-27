@@ -171,7 +171,8 @@ One program entry in a stack file (`stack.json` services[] or `stack.toml [[serv
   "catchup": "skip",        // skip | latest | all
   "jitter_sec": 0,
   "max_concurrent": 1,      // up to 64
-  "max_queued": 100         // cap on queue; full → dropped + queue_full event
+  "max_queued": 100,        // cap on queue; full → dropped + queue_full event
+  "kill_after_secs": 1800   // per-run wall-clock cap; over → SIGTERM (stopsecs) → SIGKILL + cron_overtime_kill event; schedule keeps firing
 }
 ```
 

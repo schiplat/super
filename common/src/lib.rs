@@ -341,6 +341,14 @@ pub struct ProgramConfig {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub max_queued: Option<u32>,
 
+    /// Per-run wall-clock cap for cron runs (seconds), measured from process
+    /// start. When a run exceeds it, the supervisor terminates the instance
+    /// (SIGTERM, then SIGKILL after `stopsecs`) and records a
+    /// `cron_overtime_kill` event; later schedule ticks keep firing. Applies
+    /// to each run individually. `0`/unset disables the cap.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub kill_after_secs: Option<u64>,
+
     /// Internal: last successful cron spawn (epoch secs). Used to detect slots
     /// missed while the daemon was down so the catchup policy can backfill them.
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -719,6 +727,10 @@ pub struct CreateProgramRequest {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub max_queued: Option<u32>,
 
+    /// Per-run wall-clock cap for cron runs (seconds); `0`/unset disables.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub kill_after_secs: Option<u64>,
+
     /// Linux cgroup resource limits (requires isolation plugin on Linux).
     #[serde(default)]
     pub resource_limits: Option<ResourceLimits>,
@@ -777,6 +789,10 @@ pub struct UpdateProgramRequest {
     /// Cap on queued cron firings when at `max_concurrent` (default 100; 0 means default).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub max_queued: Option<u32>,
+
+    /// Per-run wall-clock cap for cron runs (seconds); `0`/unset disables.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub kill_after_secs: Option<u64>,
 
     /// Linux cgroup resource limits (requires isolation plugin on Linux).
     #[serde(default)]

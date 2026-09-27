@@ -950,6 +950,60 @@ impl Manager {
                         self.pending_cron.insert(id, remaining);
                     }
                 }
+
+                // Overtime sweep: cron runs that exceeded `kill_after_secs`
+                // are terminated through the standard graceful stop path
+                // (SIGTERM → stopsecs → SIGKILL). Marking the instance
+                // `stopping` makes its exit a clean Stopped — no failure
+                // event, no autorestart — and cron never feeds the flapping
+                // tracker (guarded at the spawn path).
+                let now_secs = chrono::Utc::now().timestamp() as u64;
+                let mut overtime: Vec<(Uuid, String, u32, u64, u64)> = Vec::new();
+                for (id, cfg) in self.registry.programs.iter() {
+                    let Some(limit) = cfg.kill_after_secs else {
+                        continue;
+                    };
+                    if limit == 0 || cfg.cron.is_none() {
+                        continue;
+                    }
+                    for state in self.registry.get_running_all(id) {
+                        if state.stopping {
+                            continue;
+                        }
+                        let uptime = now_secs.saturating_sub(state.start_time);
+                        if uptime >= limit {
+                            overtime.push((*id, cfg.name.clone(), state.pid, uptime, limit));
+                        }
+                    }
+                }
+                for (id, name, pid, uptime, limit) in overtime {
+                    tracing::warn!(
+                        "Cron job {} (PID {}) exceeded kill_after_secs={} (ran {}s); terminating.",
+                        name,
+                        pid,
+                        limit,
+                        uptime
+                    );
+                    if let Err(e) =
+                        self.controller
+                            .stop_instance_graceful(&mut self.registry, id, pid)
+                    {
+                        tracing::warn!("Overtime stop failed for {} (PID {}): {}", name, pid, e);
+                        continue;
+                    }
+                    self.record_event(
+                        id,
+                        &name,
+                        "cron_overtime_kill",
+                        None,
+                        None,
+                        None,
+                        Some(uptime),
+                        format!(
+                            "Cron run exceeded kill_after_secs={limit} (ran {uptime}s); terminating"
+                        ),
+                    );
+                }
             }
             Command::PersistTick => {
                 if let Err(e) = self.flush_to_disk().await {
@@ -1160,6 +1214,7 @@ impl Manager {
                     config.jitter_sec = None;
                     config.max_concurrent = None;
                     config.max_queued = None;
+                    config.kill_after_secs = None;
                     config.cron_last_run = None;
                     self.scheduler.remove(&id);
                     self.pending_cron.remove(&id);
@@ -1188,6 +1243,10 @@ impl Manager {
             }
             if let Some(v) = req.max_queued {
                 config.max_queued = Some(v);
+            }
+            // `0` explicitly disables the cap; None leaves it unchanged.
+            if let Some(v) = req.kill_after_secs {
+                config.kill_after_secs = if v == 0 { None } else { Some(v) };
             }
 
             if let Some(v) = req.autostart {
@@ -3556,6 +3615,7 @@ impl Manager {
                 jitter_sec: req.jitter_sec,
                 max_concurrent: req.max_concurrent,
                 max_queued: req.max_queued,
+                kill_after_secs: req.kill_after_secs,
                 created_at: chrono::Utc::now().timestamp() as u64,
                 updated_at: chrono::Utc::now().timestamp() as u64,
                 restore_path: None,

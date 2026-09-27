@@ -93,6 +93,7 @@ const form = reactive({
   jitter_sec: '',
   max_concurrent: '',
   max_queued: '',
+  kill_after_secs: '',
   cpu_quota: null as number | null,
   memory_mb: null as number | null,
   memory_warn_percent: null as number | null,
@@ -252,6 +253,7 @@ async function handleSubmit() {
       jitter_sec: form.enableCron && form.cron.trim() && form.jitter_sec !== '' ? Number(form.jitter_sec) : undefined,
       max_concurrent: form.enableCron && form.cron.trim() && form.max_concurrent !== '' ? Number(form.max_concurrent) : undefined,
       max_queued: form.enableCron && form.cron.trim() && form.max_queued !== '' ? Number(form.max_queued) : undefined,
+      kill_after_secs: form.enableCron && form.cron.trim() && form.kill_after_secs !== '' ? Number(form.kill_after_secs) : undefined,
       resource_limits: undefined,
     };
 
@@ -783,6 +785,11 @@ async function handleSubmit() {
               <input v-model="form.max_queued" type="number" min="0" max="10000" placeholder="100 (default)" class="field-control" />
               <span class="text-xs text-muted-foreground mt-0.5">Cap queued firings</span>
             </div>
+          </div>
+          <div class="form-control">
+            <label class="label pt-0 pb-1.5"><span class="label-text text-xs font-medium text-foreground/75">Kill After (secs)</span></label>
+            <input v-model="form.kill_after_secs" type="number" min="0" placeholder="Disabled" class="field-control" />
+            <span class="text-xs text-muted-foreground mt-0.5">Terminate a run exceeding this wall-clock time (SIGTERM, then SIGKILL after stopsecs)</span>
           </div>
           <div class="grid grid-cols-2 gap-3">
             <div class="form-control">

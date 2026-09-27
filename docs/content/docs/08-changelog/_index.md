@@ -19,6 +19,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Cron runtime cap (`kill_after_secs`).** Scheduled runs can now be bounded in wall-clock time: when a run exceeds the cap, the supervisor terminates it through the standard graceful path (SIGTERM, then SIGKILL after `stopsecs`) and records a `cron_overtime_kill` event; the schedule keeps firing. Overtime kills are not counted as failures, and cron jobs remain exempt from flapping detection. Set per program via stack files, `super add/update --kill-after-secs`, the API, or the Dashboard cron section. `0` disables.
 - **Transactional installs with rollback.** `install.sh` stages binaries beside their destinations and promotes them with same-filesystem renames — the previous pair stays in place until both new names are live. Every config/profile write (instance root, `env.sh`, login hooks, `/etc` drop-ins) is journaled for exact restore, and systemd, launchd, and rc.d installs snapshot the prior unit / plist / rc.d state and roll back service, binary, and file changes on any failure. The install smoke injects failures through PATH-local `systemctl` / `launchctl` / `service` doubles and asserts byte-exact restoration.
 
 ### Changed
