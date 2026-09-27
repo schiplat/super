@@ -334,6 +334,9 @@ pub fn print_info(info: ProgramInfo) {
         if let Some(mq) = info.config.max_queued {
             println!("MaxQueued: {}", mq);
         }
+        if let Some(ka) = info.config.kill_after_secs {
+            println!("KillAfter: {}s", ka);
+        }
     }
 
     // Print env file reference

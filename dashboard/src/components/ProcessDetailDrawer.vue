@@ -406,6 +406,7 @@ function eventColor(event: string): string {
     case 'health_restart':
     case 'memory_pressure':
     case 'queue_full':
+    case 'cron_overtime_kill':
       return 'text-warning';
     case 'process_recovered':
     case 'process_started':
@@ -426,6 +427,7 @@ function eventLabel(event: string): string {
     case 'cron_started': return 'Cron Started';
     case 'cron_exit': return 'Cron Exit';
     case 'cron_spawn_failed': return 'Cron Spawn Failed';
+    case 'cron_overtime_kill': return 'Cron Overtime Kill';
     case 'queue_full': return 'Queue Full';
     case 'memory_pressure': return 'Memory Pressure';
     case 'memory_oom_kill': return 'OOM Kill';

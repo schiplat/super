@@ -225,6 +225,7 @@ Example: `autostart = false` with `autorestart = "true"` gives a manually starte
 | `jitter_sec` | int | `0` | Max random delay in **seconds** added to each cron trigger to spread load. `0` disables jitter. |
 | `max_concurrent` | int | `1` | Max overlapping cron runs allowed at once (1–64; `0` means the default). See [Scheduled Tasks](/docs/02-essentials/scheduled-tasks). |
 | `max_queued` | int | `100` | Cap on queued cron firings when `max_concurrent` is reached and `on_overlap` is `queue`/`kill` (0–10000; `0` means the default). Firings beyond the cap are dropped and recorded as `queue_full` events. |
+| `kill_after_secs` | int | `0` | Per-run wall-clock cap for cron runs, measured from process start. When a run exceeds it, the supervisor stops it (`SIGTERM`, then `SIGKILL` after `stopsecs`) and records a `cron_overtime_kill` event; the schedule keeps firing. `0` disables the cap. See [Scheduled Tasks](/docs/02-essentials/scheduled-tasks). |
 
 ### `artifact`
 
