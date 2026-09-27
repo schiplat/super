@@ -11,6 +11,7 @@ import { useProgramStore } from '@/stores/program';
 import { useAuthStore } from '@/stores/auth';
 import apiClient from '@/api/client';
 import { API_PATHS } from '@/api/paths';
+import cronstrue from 'cronstrue';
 import LogTerminal from '@/components/LogTerminal.vue';
 import StatusBadge from '@/components/StatusBadge.vue';
 import ActionButtons from '@/components/ActionButtons.vue';
@@ -176,21 +177,31 @@ const memoryLimitLabel = computed(() => {
   if (mb >= 1024) return `${(mb / 1024).toFixed(1)} GB`; return `${mb} MB`;
 });
 
-// Cron policy fields (present only when set)
+// Cron policy fields, shown with backend-effective defaults
+// (max_concurrent 1, max_queued 100, on_overlap/catchup skip, jitter 0).
 const cronPolicy = computed(() => {
   const c = detailData.value?.config as any;
+  const kill = c?.kill_after_secs ?? 0;
   return {
-    maxConcurrent: c?.max_concurrent ?? null,
-    maxQueued: c?.max_queued ?? null,
-    onOverlap: c?.on_overlap ?? null,
-    catchup: c?.catchup ?? null,
-    jitterSec: c?.jitter_sec ?? null,
-    killAfterSecs: c?.kill_after_secs ?? null,
+    maxConcurrent: c?.max_concurrent > 0 ? c.max_concurrent : 1,
+    maxQueued: c?.max_queued > 0 ? c.max_queued : 100,
+    onOverlap: c?.on_overlap ?? 'skip',
+    catchup: c?.catchup ?? 'skip',
+    jitterSec: c?.jitter_sec ?? 0,
+    killAfterSecs: kill > 0 ? kill : null,
   };
 });
-const hasCronPolicy = computed(() => {
-  const p = cronPolicy.value;
-  return p.maxConcurrent != null || p.maxQueued != null || p.onOverlap != null || p.catchup != null || p.jitterSec != null || p.killAfterSecs != null;
+const hasCronPolicy = computed(() => !!detailData.value?.config.cron);
+
+// Human-readable schedule description ("Every second", "At 03:00 AM", …)
+const cronDescription = computed(() => {
+  const expr = detailData.value?.config?.cron;
+  if (!expr) return null;
+  try {
+    return cronstrue.toString(expr);
+  } catch {
+    return null;
+  }
 });
 
 // Health check tuning shown with effective (0 = default) values
@@ -869,14 +880,17 @@ function goToEdit() { if (props.processId) router.push(`/programs/${props.proces
               <h3 class="text-xs font-bold text-muted-foreground/60 uppercase tracking-[0.06em] mb-3 flex items-center gap-2"><Clock class="w-3.5 h-3.5" />Cron Schedule</h3>
               <div class="rounded-2xl bg-muted/55 overflow-hidden">
                 <div class="px-5 py-4 space-y-3">
-                  <div class="bg-background/60 rounded-lg px-3 py-2.5 font-mono text-sm text-foreground inline-block">{{ detailData.config.cron || '—' }}</div>
+                  <div>
+                    <div class="bg-background/60 rounded-lg px-3 py-2.5 font-mono text-sm text-foreground inline-block">{{ detailData.config.cron || '—' }}</div>
+                    <div v-if="cronDescription" class="text-xs text-muted-foreground/70 mt-1">{{ cronDescription }}</div>
+                  </div>
                   <div v-if="hasCronPolicy" class="grid grid-cols-2 sm:grid-cols-3 gap-x-4 gap-y-2">
-                    <div v-if="cronPolicy.maxConcurrent != null" class="flex justify-between gap-3"><span class="text-xs text-muted-foreground/70">Max Concurrent</span><span class="font-mono text-xs text-foreground/80">{{ cronPolicy.maxConcurrent }}</span></div>
-                    <div v-if="cronPolicy.maxQueued != null" class="flex justify-between gap-3"><span class="text-xs text-muted-foreground/70">Max Queued</span><span class="font-mono text-xs text-foreground/80">{{ cronPolicy.maxQueued }}</span></div>
-                    <div v-if="cronPolicy.onOverlap != null" class="flex justify-between gap-3"><span class="text-xs text-muted-foreground/70">On Overlap</span><span class="font-mono text-xs text-foreground/80">{{ cronPolicy.onOverlap }}</span></div>
-                    <div v-if="cronPolicy.catchup != null" class="flex justify-between gap-3"><span class="text-xs text-muted-foreground/70">Catchup</span><span class="font-mono text-xs text-foreground/80">{{ cronPolicy.catchup }}</span></div>
-                    <div v-if="cronPolicy.jitterSec != null" class="flex justify-between gap-3"><span class="text-xs text-muted-foreground/70">Jitter</span><span class="font-mono text-xs text-foreground/80">{{ cronPolicy.jitterSec }}s</span></div>
-                    <div v-if="cronPolicy.killAfterSecs != null" class="flex justify-between gap-3"><span class="text-xs text-muted-foreground/70">Kill After</span><span class="font-mono text-xs text-foreground/80">{{ cronPolicy.killAfterSecs }}s</span></div>
+                    <div class="flex justify-between gap-3"><span class="text-xs text-muted-foreground/70">Max Concurrent</span><span class="font-mono text-xs text-foreground/80">{{ cronPolicy.maxConcurrent }}</span></div>
+                    <div class="flex justify-between gap-3"><span class="text-xs text-muted-foreground/70">Max Queued</span><span class="font-mono text-xs text-foreground/80">{{ cronPolicy.maxQueued }}</span></div>
+                    <div class="flex justify-between gap-3"><span class="text-xs text-muted-foreground/70">On Overlap</span><span class="font-mono text-xs text-foreground/80">{{ cronPolicy.onOverlap }}</span></div>
+                    <div class="flex justify-between gap-3"><span class="text-xs text-muted-foreground/70">Catchup</span><span class="font-mono text-xs text-foreground/80">{{ cronPolicy.catchup }}</span></div>
+                    <div class="flex justify-between gap-3"><span class="text-xs text-muted-foreground/70">Jitter</span><span class="font-mono text-xs text-foreground/80">{{ cronPolicy.jitterSec }}s</span></div>
+                    <div class="flex justify-between gap-3"><span class="text-xs text-muted-foreground/70">Kill After</span><span class="font-mono text-xs" :class="cronPolicy.killAfterSecs != null ? 'text-foreground/80' : 'text-muted-foreground/60'">{{ cronPolicy.killAfterSecs != null ? cronPolicy.killAfterSecs + 's' : 'Disabled' }}</span></div>
                   </div>
                 </div>
               </div>

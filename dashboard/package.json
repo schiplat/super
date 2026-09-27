@@ -17,6 +17,7 @@
     "@vue-flow/minimap": "^1.5.4",
     "@vueuse/core": "^14.1.0",
     "axios": "^1.13.2",
+    "cronstrue": "^3.27.0",
     "dagre": "^0.8.5",
     "date-fns": "^4.1.0",
     "pinia": "^3.0.4",
