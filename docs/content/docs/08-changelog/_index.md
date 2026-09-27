@@ -17,6 +17,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Transactional installs with rollback.** `install.sh` stages binaries beside their destinations and promotes them with same-filesystem renames — the previous pair stays in place until both new names are live. Every config/profile write (instance root, `env.sh`, login hooks, `/etc` drop-ins) is journaled for exact restore, and systemd, launchd, and rc.d installs snapshot the prior unit / plist / rc.d state and roll back service, binary, and file changes on any failure. The install smoke injects failures through PATH-local `systemctl` / `launchctl` / `service` doubles and asserts byte-exact restoration.
+
 ### Changed
 
 - **Project Super is production-ready; the public beta is concluded.** The public GA checklist is met in full: panic-free handling of malformed config and API input (the remaining startup `expect`s are removed), transactional OTA and installs, fail-closed security defaults, `super doctor` operability, and a versioned REST API / plugin C ABI — with `cargo audit` clean on the release branch. The free 90-day Super Pro trial continues unchanged.
@@ -27,6 +31,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **No known panic paths remain outside tests.** Remaining startup `expect`s are gone: signal-handler installation failures (SIGTERM/SIGINT) surface as a startup error instead of panicking inside the shutdown future, an empty `[server].auth_secret` bails with a clear message, health-probe HTTP client init failures fail the probe instead of the daemon, and a resource-monitor thread spawn failure aborts bootstrap with a diagnostic. Completes the Stability criterion of the [production-readiness contract](https://github.com/schiplat/super#production-readiness).
 - **Installer honors `--no-start` on macOS.** The launchd path bootstrapped the job before looking at the flag, and `RunAtLoad` + `KeepAlive` started superd immediately despite the message claiming otherwise. The daemon plist is now only written; superd starts at the next login/boot, matching the systemd enable-only path and the documented flag semantics.
 - **Installer runs on a pristine FreeBSD base system.** Downloads fall back from `curl` to base `fetch(1)`, and checksum verification accepts base `sha256 -q` alongside `sha256sum`/`shasum`; missing-tool errors name the accepted alternatives. The install smoke also passes its fake `service` command through the documented `SUPER_INSTALL_SMOKE_SERVICE_CMD` variable (it previously set a name the installer never read) and asserts that `--no-start` never registers the launchd job.
 
@@ -301,7 +306,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - CI: `cargo fmt --check`, **macOS** test matrix, `benchmark/` workspace build.
 - Docker Hub publishes **`linux/amd64`** and **`linux/arm64`** again; docs use loopback port mapping.
 - Document minimum **Rust 1.85+**; workspace `rust-version = "1.85"`.
-- License help links point to the [feature matrix](https://super.docs.sconts.com/docs/07-editions/feature-matrix/) and [Pro trial](https://github.com/schiplat/super/issues/new?template=pro-trial.yml).
+- License help links point to the [feature matrix](https://super.docs.sconts.com/docs/07-editions/feature-matrix/) and [Pro trial](https://super.docs.sconts.com/go/pro/).
 - Remove unsupported `[webhook]` from `super.toml` (use `[[event_hooks]]` or `conf/notify.toml`).
 - Invalid license: prominent startup warnings; improved `super doctor` triage.
 - `/go/pro/` license examples updated for the **1.3.x** release line.

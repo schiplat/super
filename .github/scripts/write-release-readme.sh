@@ -56,6 +56,7 @@ Contents
 Recommended install
 -------------------
   curl -fsSL https://github.com/schiplat/super/releases/latest/download/install.sh | sh
+  # FreeBSD base system (no curl): fetch -o - <same URL> | sh
 
   Creates SUPER_ROOT (/opt/super or ~/.super), writes conf/super.toml, and
   enables an OS service (systemd on Linux, launchd on macOS, rc.d on FreeBSD).
@@ -69,9 +70,7 @@ ${quick_start}
   # macOS:    see contrib/launchd/com.schiplat.superd.plist
   # FreeBSD:  see contrib/rc.d/superd
 
-Open http://127.0.0.1:9002/ for the built-in Web Dashboard (OSS). Optional
-subscription plugins add API auth/RBAC, notifications, and Linux cgroup limits
-on the same \`superd\` binary.
+Open http://127.0.0.1:9002/ for the built-in Web Dashboard (OSS).
 
 Source & documentation
 ----------------------
