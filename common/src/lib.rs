@@ -79,25 +79,8 @@ pub fn resolve_hostname() -> String {
 }
 
 #[cfg(test)]
-mod hostname_tests {
-    use super::resolve_hostname;
-    use std::sync::Mutex;
-
-    static ENV_LOCK: Mutex<()> = Mutex::new(());
-
-    #[test]
-    fn prefers_super_hostname_override() {
-        let _guard = ENV_LOCK.lock().unwrap();
-        // SAFETY: single-threaded under ENV_LOCK for this test process.
-        unsafe {
-            std::env::set_var("SUPER_HOSTNAME", "  fleet-node-a  ");
-        }
-        assert_eq!(resolve_hostname(), "fleet-node-a");
-        unsafe {
-            std::env::remove_var("SUPER_HOSTNAME");
-        }
-    }
-}
+#[path = "tests/hostname_tests.rs"]
+mod hostname_tests;
 
 // Helpers
 fn default_true() -> bool {
@@ -605,61 +588,8 @@ impl Default for ArtifactConfig {
 }
 
 #[cfg(test)]
-mod artifact_config_tests {
-    use super::ArtifactConfig;
-
-    #[test]
-    fn artifact_timeouts_default_to_60() {
-        let art = ArtifactConfig::default();
-        assert_eq!(art.download_timeout, 60);
-        assert_eq!(art.verify_timeout, 60);
-    }
-
-    #[test]
-    fn artifact_timeouts_omitted_in_json_use_defaults() {
-        let art: ArtifactConfig = serde_json::from_str(
-            r#"{
-                "source": "https://example.com/a",
-                "checksum": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-                "destination": "/tmp/a"
-            }"#,
-        )
-        .unwrap();
-        assert_eq!(art.download_timeout, 60);
-        assert_eq!(art.verify_timeout, 60);
-        assert_eq!(art.restart_policy, "immediate");
-        assert!(!art.extract);
-    }
-
-    #[test]
-    fn artifact_timeouts_explicit_zero_and_custom() {
-        let zero: ArtifactConfig = serde_json::from_str(
-            r#"{
-                "source": "https://example.com/a",
-                "checksum": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-                "destination": "/tmp/a",
-                "download_timeout": 0,
-                "verify_timeout": 0
-            }"#,
-        )
-        .unwrap();
-        assert_eq!(zero.download_timeout, 0);
-        assert_eq!(zero.verify_timeout, 0);
-
-        let custom: ArtifactConfig = serde_json::from_str(
-            r#"{
-                "source": "https://example.com/a",
-                "checksum": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-                "destination": "/tmp/a",
-                "download_timeout": 1200,
-                "verify_timeout": 90
-            }"#,
-        )
-        .unwrap();
-        assert_eq!(custom.download_timeout, 1200);
-        assert_eq!(custom.verify_timeout, 90);
-    }
-}
+#[path = "tests/artifact_config_tests.rs"]
+mod artifact_config_tests;
 
 /// API request: create program
 #[derive(Debug, Deserialize, Serialize, Default, Clone, ToSchema)]
