@@ -40,6 +40,8 @@ When you start `backend-api` (or when Super autostarts it):
 
 A dependency that is already busy in its own lifecycle (waiting for *its* dependencies, restarting, or crashed) is left alone — Super does not force-start it. A dependency you explicitly stopped with `super stop` is likewise left down: auto-start never pulls it back up, and the dependent waits (with the reason in `super status`) until you start the dependency yourself.
 
+This also holds across daemon restarts: held-stopped dependencies stay down (the hold is persisted), while `autostart = true` entry points start on boot and pull their own dependencies transitively. See [State Across Daemon Restarts](/docs/02-essentials/process-control#state-across-daemon-restarts).
+
 ## State: "Waiting"
 
 If a dependency is unhealthy or not yet running, the dependent process enters the `Waiting` state.

@@ -197,6 +197,8 @@ The keys below describe a **single program entry** — one item in a stack file'
 
 Example: `autostart = false` with `autorestart = "true"` gives a manually started service that still recovers from crashes.
 
+`super stop` and `super start` persist their effect: stop **holds** the program (and its cron schedule) down across daemon restarts; start clears the hold and sets `autostart = true`. See [State Across Daemon Restarts](/docs/02-essentials/process-control#state-across-daemon-restarts).
+
 | Key | Type | Default | Description |
 | :--- | :--- | :--- | :--- |
 | `autostart` | bool | `true` | Start on daemon boot. Cron programs skip boot-time start regardless. |

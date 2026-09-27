@@ -105,6 +105,20 @@ By default, CLI commands are async. You can use `--wait` to block until the oper
 super stop api-srv --wait --timeout 10
 ```
 
+## State Across Daemon Restarts
+
+Super persists your **intent**, not a snapshot of which processes were running:
+
+* `super stop` — the program is **held stopped**: it stays down across daemon restarts, and a cron schedule on it is held as well. The hold is flushed to disk immediately.
+* `super start` — clears the hold and persists `autostart = true`: the program starts now, and again at every daemon (re)start.
+* On daemon boot, every program with `autostart = true` (except cron programs) starts automatically; `autostart = false` programs do not.
+
+Consequences worth knowing:
+
+* A **cron program** that was manually stopped never comes back until an explicit `super start` — not when its schedule fires, and not when the daemon restarts.
+* Programs started **implicitly as dependencies** are not independently remembered. They return transitively: on boot, `autostart = true` entry points start and pull their dependencies. If an entire chain has no `autostart = true` entry point, that group stays stopped after a daemon restart — explicitly start any one of them and the chain recovers.
+* Super deliberately does **not** resurrect the exact previous process set (pm2-style). The desired state is the `autostart` flag plus the held-stopped set — both persisted and flushed immediately on every start/stop operation.
+
 ## See also
 
 - [Authentication](/docs/02-essentials/authentication/) — Bearer / `--token` when core auth or `security` is active
