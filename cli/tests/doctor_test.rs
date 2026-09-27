@@ -51,7 +51,12 @@ impl MockDaemon {
         let thread = thread::spawn(move || {
             while !thread_stop.load(Ordering::Relaxed) {
                 match listener.accept() {
-                    Ok((stream, _)) => serve(stream, &thread_degraded),
+                    Ok((stream, _)) => {
+                        // Serve each connection on its own thread: a silent
+                        // or slow client must not stall the accept loop.
+                        let degraded = Arc::clone(&thread_degraded);
+                        thread::spawn(move || serve(stream, &degraded));
+                    }
                     Err(e) if e.kind() == std::io::ErrorKind::WouldBlock => {
                         thread::sleep(Duration::from_millis(5));
                     }
@@ -83,9 +88,25 @@ impl Drop for MockDaemon {
 }
 
 fn serve(mut stream: TcpStream, degraded: &AtomicBool) {
-    let mut request = [0_u8; 2048];
-    let count = stream.read(&mut request).unwrap_or(0);
-    let request = String::from_utf8_lossy(&request[..count]);
+    let _ = stream.set_nonblocking(false);
+    // Accumulate until the end of request headers: a single read can return
+    // a partial request under load, which used to answer a healthy /health
+    // probe with 404 and fail the whole doctor run intermittently.
+    let mut request: Vec<u8> = Vec::with_capacity(2048);
+    let mut buf = [0_u8; 1024];
+    loop {
+        match stream.read(&mut buf) {
+            Ok(0) => break,
+            Ok(n) => {
+                request.extend_from_slice(&buf[..n]);
+                if request.windows(4).any(|w| w == b"\r\n\r\n") {
+                    break; // end of headers; doctor sends no body
+                }
+            }
+            Err(_) => break,
+        }
+    }
+    let request = String::from_utf8_lossy(&request);
     if request.starts_with("GET /health ") {
         let is_degraded = degraded.load(Ordering::Relaxed);
         let status = if is_degraded { "degraded" } else { "healthy" };
