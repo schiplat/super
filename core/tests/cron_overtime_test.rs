@@ -116,6 +116,59 @@ async fn cron_overtime_kill_terminates_and_reschedules() {
     handle.shutdown().await.ok();
 }
 
+/// Regression: `super stop` on a cron program must hold the schedule down —
+/// the next tick must not respawn it. `super start` clears the hold and the
+/// schedule resumes.
+#[tokio::test]
+async fn cron_stop_holds_schedule_until_start() {
+    let temp_dir = tempfile::tempdir().unwrap();
+    let (handle, _task) = spawn_manager(&temp_dir).await;
+
+    let req = CreateProgramRequest {
+        name: Some("stoppable-cron".to_string()),
+        command: "sleep".to_string(),
+        args: vec!["30".to_string()],
+        autostart: true,
+        cron: Some("* * * * * *".to_string()),
+        ..Default::default()
+    };
+    let ids = handle.create_program(req).await.expect("Create failed");
+    let id = ids[0];
+
+    // Let it spawn, then stop it.
+    tokio::time::sleep(Duration::from_secs(2)).await;
+    handle.stop_program(id, false).await.expect("Stop failed");
+
+    // The every-second schedule must NOT respawn the program while held.
+    tokio::time::sleep(Duration::from_secs(3)).await;
+    let info = handle.get_program(id).await.expect("Get failed");
+    assert_eq!(
+        info.state,
+        ProcessStatus::Stopped,
+        "manually stopped cron program must stay stopped across ticks"
+    );
+
+    // An explicit start clears the hold; the schedule resumes.
+    handle.start_program(id).await.expect("Start failed");
+    tokio::time::sleep(Duration::from_secs(2)).await;
+    let info = handle.get_program(id).await.expect("Get failed");
+    assert!(
+        matches!(
+            info.state,
+            ProcessStatus::Running | ProcessStatus::Healthy | ProcessStatus::Stopped
+        ),
+        "after start, cron runs again; got {:?}",
+        info.state
+    );
+    let events = handle.get_program_events(id).await.expect("Events failed");
+    assert!(
+        events.iter().any(|e| e.event == "cron_started"),
+        "cron_started events must resume after start"
+    );
+
+    handle.shutdown().await.ok();
+}
+
 /// Without the cap, an overrunning run is left alone (backwards compatible).
 #[tokio::test]
 async fn cron_without_cap_is_not_killed() {

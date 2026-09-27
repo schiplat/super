@@ -747,6 +747,13 @@ impl Manager {
             Command::CronTick => {
                 let triggers = self.scheduler.tick();
                 for t in triggers {
+                    // Operator held-stop (`super stop`) wins over the schedule:
+                    // firings stay suppressed until an explicit `super start`
+                    // clears the flag.
+                    if self.registry.stopped_by_user.contains(&t.id) {
+                        self.pending_cron.remove(&t.id);
+                        continue;
+                    }
                     let cfg = match self.registry.get_config(&t.id) {
                         Some(c) => c.clone(),
                         None => continue,
@@ -893,6 +900,11 @@ impl Manager {
                 let due: Vec<(Uuid, u32)> =
                     self.pending_cron.iter().map(|(id, n)| (*id, *n)).collect();
                 for (id, count) in due {
+                    // Queued firings of a held-stopped program are dropped.
+                    if self.registry.stopped_by_user.contains(&id) {
+                        self.pending_cron.remove(&id);
+                        continue;
+                    }
                     let mut remaining = count;
                     while remaining > 0 {
                         let cfg = match self.registry.get_config(&id) {
