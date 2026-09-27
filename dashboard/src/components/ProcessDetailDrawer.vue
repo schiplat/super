@@ -185,11 +185,12 @@ const cronPolicy = computed(() => {
     onOverlap: c?.on_overlap ?? null,
     catchup: c?.catchup ?? null,
     jitterSec: c?.jitter_sec ?? null,
+    killAfterSecs: c?.kill_after_secs ?? null,
   };
 });
 const hasCronPolicy = computed(() => {
   const p = cronPolicy.value;
-  return p.maxConcurrent != null || p.maxQueued != null || p.onOverlap != null || p.catchup != null || p.jitterSec != null;
+  return p.maxConcurrent != null || p.maxQueued != null || p.onOverlap != null || p.catchup != null || p.jitterSec != null || p.killAfterSecs != null;
 });
 
 // Health check tuning shown with effective (0 = default) values
@@ -873,6 +874,7 @@ function goToEdit() { if (props.processId) router.push(`/programs/${props.proces
                     <div v-if="cronPolicy.onOverlap != null" class="flex justify-between gap-3"><span class="text-xs text-muted-foreground/70">On Overlap</span><span class="font-mono text-xs text-foreground/80">{{ cronPolicy.onOverlap }}</span></div>
                     <div v-if="cronPolicy.catchup != null" class="flex justify-between gap-3"><span class="text-xs text-muted-foreground/70">Catchup</span><span class="font-mono text-xs text-foreground/80">{{ cronPolicy.catchup }}</span></div>
                     <div v-if="cronPolicy.jitterSec != null" class="flex justify-between gap-3"><span class="text-xs text-muted-foreground/70">Jitter</span><span class="font-mono text-xs text-foreground/80">{{ cronPolicy.jitterSec }}s</span></div>
+                    <div v-if="cronPolicy.killAfterSecs != null" class="flex justify-between gap-3"><span class="text-xs text-muted-foreground/70">Kill After</span><span class="font-mono text-xs text-foreground/80">{{ cronPolicy.killAfterSecs }}s</span></div>
                   </div>
                 </div>
               </div>
