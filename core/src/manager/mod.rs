@@ -499,6 +499,11 @@ impl Manager {
                     .controller
                     .spawn_program(&mut self.registry, id, 0)
                     .await;
+                // Mirror StopProgram: persist the released hold immediately
+                // so a crash right after the start cannot resurrect it.
+                if res.is_ok() {
+                    let _ = self.flush_to_disk().await;
+                }
                 let _ = reply.send(res);
             }
             Command::DependencyStart { id } => {
@@ -630,6 +635,9 @@ impl Manager {
                             affected.push(id);
                         }
                     }
+                    // Persist the holds now — a daemon restart within the
+                    // 5s heartbeat must not resurrect stopped programs.
+                    let _ = self.flush_to_disk().await;
                     let _ = reply.send(Ok(affected));
                 }
             }
@@ -3152,6 +3160,9 @@ impl Manager {
                 .stop_program(&mut self.registry, id, false)
                 .await;
         }
+        // Persist autostart=false / hold marks before the start phase —
+        // a crash here must not resurrect the stopped programs on next boot.
+        let _ = self.flush_to_disk().await;
         // Wait for all members to exit (bounded) so starts begin from a clean
         // slate. Exit events are dispatched through the shared command handler
         // so no queued command (health updates, metrics, …) is dropped while
@@ -3585,9 +3596,12 @@ impl Manager {
             }
         }
 
-        // Mark dirty if anything changed (triggers flush)
+        // Mark dirty if anything changed; flush immediately — batch stop/
+        // start flip autostart + hold marks and a restart within the
+        // heartbeat window must not undo the batch.
         if !affected.is_empty() {
             self.registry.mark_dirty();
+            let _ = self.flush_to_disk().await;
         }
 
         Ok(BatchProgramResponse { affected, failed })
