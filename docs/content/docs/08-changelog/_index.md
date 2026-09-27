@@ -17,6 +17,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.7.0] - 2026-09-27
+
 ### Added
 
 - **Cron runtime cap (`kill_after_secs`).** Scheduled runs can now be bounded in wall-clock time: when a run exceeds the cap, the supervisor terminates it through the standard graceful path (SIGTERM, then SIGKILL after `stopsecs`) and records a `cron_overtime_kill` event; the schedule keeps firing. Overtime kills are not counted as failures, and cron jobs remain exempt from flapping detection. Set per program via stack files, `super add/update --kill-after-secs`, the API, or the Dashboard cron section. `0` disables.
