@@ -895,32 +895,53 @@ function goToEdit() { if (props.processId) router.push(`/programs/${props.proces
             <!-- Cron Schedule (own section so configured cron is never buried) -->
             <section v-if="detailData.config.cron || hasCronPolicy">
               <h3 class="text-xs font-bold text-muted-foreground/60 uppercase tracking-[0.06em] mb-3 flex items-center gap-2"><Clock class="w-3.5 h-3.5" />Cron Schedule</h3>
-              <div class="rounded-2xl bg-muted/55 overflow-hidden">
-                <div class="px-5 py-4 space-y-3">
-                  <div>
-                  <div class="bg-background/60 border border-border/50 rounded-xl px-4 py-3 flex items-center gap-3">
-                    <div class="flex items-center justify-center w-9 h-9 rounded-lg bg-muted/80 shrink-0">
-                      <Clock class="w-4 h-4 text-muted-foreground" />
-                    </div>
-                    <div class="min-w-0">
-                      <div class="font-mono text-sm text-foreground truncate">{{ detailData.config.cron || '—' }}</div>
-                      <div class="text-xs text-muted-foreground/80 mt-0.5 truncate">
-                        <template v-if="cronDescription">{{ cronDescription }}</template>
-                        <template v-if="nextRunText">
-                          <span v-if="cronDescription" class="text-muted-foreground/40 mx-1.5">·</span>
-                          <span class="text-foreground/70">next run {{ nextRunText }}</span>
-                        </template>
-                      </div>
-                    </div>
+              <div class="rounded-2xl bg-muted/60 overflow-hidden">
+                <!-- Expression + period + next run (chip stack, Command-style) -->
+                <div class="px-5 py-4 bg-muted/55 group">
+                  <div class="text-xs font-medium text-muted-foreground mb-2.5">Expression</div>
+                  <div class="flex flex-wrap items-end gap-x-3 gap-y-2">
+                    <span class="inline-flex flex-col items-start gap-0.5">
+                      <span class="inline-flex items-center px-1.5 py-px rounded text-[10px] uppercase tracking-wider font-bold leading-none bg-foreground/10 text-foreground/50">cron</span>
+                      <span class="font-mono text-sm font-semibold text-foreground/90">{{ detailData.config.cron || '—' }}</span>
+                    </span>
+                    <span v-if="cronDescription" class="inline-flex flex-col items-start gap-0.5">
+                      <span class="inline-flex items-center px-1.5 py-px rounded text-[10px] uppercase tracking-wider font-bold leading-none bg-success/12 text-success">period</span>
+                      <span class="text-sm text-foreground/70">{{ cronDescription }}</span>
+                    </span>
+                    <span v-if="nextRunText" class="inline-flex flex-col items-start gap-0.5">
+                      <span class="inline-flex items-center px-1.5 py-px rounded text-[10px] uppercase tracking-wider font-bold leading-none bg-warning/12 text-warning">next</span>
+                      <span class="text-sm text-foreground/70">{{ nextRunText }}</span>
+                    </span>
+                    <button class="inline-flex h-6 w-6 items-center justify-center rounded-lg opacity-0 group-hover:opacity-100 transition-opacity shrink-0" @click="copy(detailData.config.cron)" title="Copy cron expression">
+                      <Check v-if="copied" class="w-3 h-3 text-success" /><Copy v-else class="w-3 h-3 text-muted-foreground" />
+                    </button>
                   </div>
+                </div>
+                <!-- Policy (effective values) -->
+                <div class="grid grid-cols-1 md:grid-cols-3">
+                  <div class="px-5 py-3.5 bg-muted/45">
+                    <div class="text-xs font-medium text-muted-foreground mb-1">Max Concurrent</div>
+                    <div class="font-mono text-sm text-foreground">{{ cronPolicy.maxConcurrent }}</div>
                   </div>
-                  <div v-if="hasCronPolicy" class="grid grid-cols-2 sm:grid-cols-3 gap-x-4 gap-y-2">
-                    <div class="flex justify-between gap-3"><span class="text-xs text-muted-foreground/70">Max Concurrent</span><span class="font-mono text-xs text-foreground/80">{{ cronPolicy.maxConcurrent }}</span></div>
-                    <div class="flex justify-between gap-3"><span class="text-xs text-muted-foreground/70">Max Queued</span><span class="font-mono text-xs text-foreground/80">{{ cronPolicy.maxQueued }}</span></div>
-                    <div class="flex justify-between gap-3"><span class="text-xs text-muted-foreground/70">On Overlap</span><span class="font-mono text-xs text-foreground/80">{{ cronPolicy.onOverlap }}</span></div>
-                    <div class="flex justify-between gap-3"><span class="text-xs text-muted-foreground/70">Catchup</span><span class="font-mono text-xs text-foreground/80">{{ cronPolicy.catchup }}</span></div>
-                    <div class="flex justify-between gap-3"><span class="text-xs text-muted-foreground/70">Jitter</span><span class="font-mono text-xs text-foreground/80">{{ cronPolicy.jitterSec }}s</span></div>
-                    <div class="flex justify-between gap-3"><span class="text-xs text-muted-foreground/70">Kill After</span><span class="font-mono text-xs" :class="cronPolicy.killAfterSecs != null ? 'text-foreground/80' : 'text-muted-foreground/60'">{{ cronPolicy.killAfterSecs != null ? cronPolicy.killAfterSecs + 's' : 'Disabled' }}</span></div>
+                  <div class="px-5 py-3.5 bg-muted/40">
+                    <div class="text-xs font-medium text-muted-foreground mb-1">Max Queued</div>
+                    <div class="font-mono text-sm text-foreground">{{ cronPolicy.maxQueued }}</div>
+                  </div>
+                  <div class="px-5 py-3.5 bg-muted/35">
+                    <div class="text-xs font-medium text-muted-foreground mb-1">On Overlap</div>
+                    <div class="font-mono text-sm text-foreground">{{ cronPolicy.onOverlap }}</div>
+                  </div>
+                  <div class="px-5 py-3.5 bg-muted/32">
+                    <div class="text-xs font-medium text-muted-foreground mb-1">Catchup</div>
+                    <div class="font-mono text-sm text-foreground">{{ cronPolicy.catchup }}</div>
+                  </div>
+                  <div class="px-5 py-3.5 bg-muted/30">
+                    <div class="text-xs font-medium text-muted-foreground mb-1">Jitter</div>
+                    <div class="font-mono text-sm text-foreground">{{ cronPolicy.jitterSec }}s</div>
+                  </div>
+                  <div class="px-5 py-3.5 bg-muted/25 rounded-bl-2xl rounded-br-2xl">
+                    <div class="text-xs font-medium text-muted-foreground mb-1">Kill After</div>
+                    <div class="font-mono text-sm" :class="cronPolicy.killAfterSecs != null ? 'text-foreground' : 'text-muted-foreground/60'">{{ cronPolicy.killAfterSecs != null ? cronPolicy.killAfterSecs + 's' : 'disabled' }}</div>
                   </div>
                 </div>
               </div>
