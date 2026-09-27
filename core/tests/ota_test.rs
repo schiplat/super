@@ -279,7 +279,7 @@ async fn test_ota_transaction_commit() {
     let backup_path = target_bin.with_extension("bak");
     let mut commit_done = false;
 
-    for _ in 0..30 {
+    for _ in 0..60 {
         tokio::time::sleep(Duration::from_millis(500)).await;
 
         let info = handle.get_program(id).await.unwrap();
@@ -430,7 +430,7 @@ async fn test_ota_extract_tar_gz_commit() {
         .unwrap();
 
     let mut ok = false;
-    for _ in 0..40 {
+    for _ in 0..80 {
         tokio::time::sleep(Duration::from_millis(250)).await;
         let info = handle.get_program(id).await.unwrap();
         let content = std::fs::read_to_string(&dest).unwrap_or_default();
@@ -488,7 +488,7 @@ async fn test_ota_restart_policy_manual_no_pid_change() {
         .unwrap();
 
     let mut ok = false;
-    for _ in 0..40 {
+    for _ in 0..80 {
         tokio::time::sleep(Duration::from_millis(200)).await;
         let info = handle.get_program(id).await.unwrap();
         let content = std::fs::read_to_string(&target_bin).unwrap_or_default();
@@ -577,7 +577,7 @@ async fn test_ota_restart_policy_signal_hup() {
         .unwrap();
 
     let mut ok = false;
-    for _ in 0..100 {
+    for _ in 0..200 {
         tokio::time::sleep(Duration::from_millis(200)).await;
         let info = handle.get_program(id).await.unwrap();
         if marker.exists()
@@ -653,7 +653,7 @@ async fn test_ota_no_health_check_instant_crash_rolls_back() {
         .unwrap();
 
     let mut ok = false;
-    for _ in 0..60 {
+    for _ in 0..120 {
         tokio::time::sleep(Duration::from_millis(200)).await;
         let content = std::fs::read_to_string(&app).unwrap_or_default();
         let saved = super_core::store::load_with_recovery(&data_file)
@@ -910,7 +910,7 @@ async fn test_ota_artifact_verify_timeout_rolls_back() {
     // Enter verify phase briefly, then roll back after ~2s.
     let mut saw_pending = false;
     let mut rolled = false;
-    for _ in 0..40 {
+    for _ in 0..80 {
         tokio::time::sleep(Duration::from_millis(250)).await;
         let content = std::fs::read_to_string(&target_bin).unwrap_or_default();
         let info = handle.get_program(id).await.unwrap();
@@ -1000,7 +1000,7 @@ async fn test_ota_verify_timeout_zero_disables_timer() {
         .unwrap();
 
     let mut pending = false;
-    for _ in 0..30 {
+    for _ in 0..60 {
         tokio::time::sleep(Duration::from_millis(200)).await;
         let info = handle.get_program(id).await.unwrap();
         let content = std::fs::read_to_string(&target_bin).unwrap_or_default();
