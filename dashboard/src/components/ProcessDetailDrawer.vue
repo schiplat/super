@@ -849,15 +849,15 @@ function goToEdit() { if (props.processId) router.push(`/programs/${props.proces
                 </div>
                 <!-- Meta -->
                 <div class="grid grid-cols-1 md:grid-cols-2">
-                  <div class="px-5 py-3.5 bg-muted/45 rounded-bl-2xl">
+                  <div class="min-w-0 px-5 py-3.5 bg-muted/45 rounded-bl-2xl">
                     <div class="flex items-center gap-1.5 text-xs font-medium text-muted-foreground mb-1"><Folder class="w-3 h-3" />Working Directory</div>
-                    <div class="font-mono text-sm text-foreground">
+                    <div class="font-mono text-sm text-foreground break-all">
                       {{ workingDir.path }}<span v-if="workingDir.inherited" class="text-muted-foreground/50"> (inherited from superd)</span>
                     </div>
                   </div>
-                  <div class="px-5 py-3.5 bg-muted/40 rounded-br-2xl">
+                  <div class="min-w-0 px-5 py-3.5 bg-muted/40 rounded-br-2xl">
                     <div class="flex items-center gap-1.5 text-xs font-medium text-muted-foreground mb-1"><User class="w-3 h-3" />User / Group</div>
-                    <div class="font-mono text-sm text-foreground">{{ detailData.config.user || 'root' }}<span v-if="detailData.config.group" class="text-muted-foreground/50">/ {{ detailData.config.group }}</span></div>
+                    <div class="font-mono text-sm text-foreground break-all">{{ detailData.config.user || 'root' }}<span v-if="detailData.config.group" class="text-muted-foreground/50">/ {{ detailData.config.group }}</span></div>
                   </div>
                 </div>
                 <!-- Timestamps -->
