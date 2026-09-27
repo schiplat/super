@@ -182,7 +182,7 @@ The keys below describe a **single program entry** — one item in a stack file'
 | `args` | list | `[]` | Command-line arguments. |
 | `env` | dict | `{}` | Inline environment variables (`KEY = "VAL"`). |
 | `env_file` | string | — | Path to a `.env` file loaded at spawn time. |
-| `cwd` | string | — | Working directory. |
+| `cwd` | string | — | Working directory. When unset, the program inherits superd's own working directory (the directory the daemon was started in — under systemd/launchd this is typically `/`). The effective value is shown in `super info` and the Dashboard. |
 | `user` | string | — | Run as this user (requires root). |
 | `group` | string | — | Logical group for batch control (e.g. `@backend`). |
 | `numprocs` | int | `1` | Spawn N OS processes from this program (`super add --numprocs`). For workers / queue consumers — not a rolling dual-version deploy, and not Node cluster mode. See [Process Operations](/docs/02-essentials/process-control/#multi-process-programs-numprocs). |

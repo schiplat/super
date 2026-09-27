@@ -850,6 +850,11 @@ pub struct ProgramInfo {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub health_error: Option<String>,
 
+    /// superd's own working directory. Programs without an explicit `cwd`
+    /// inherit it, so clients can show the effective value.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub daemon_cwd: Option<String>,
+
     /// Next scheduled cron trigger (epoch secs). Cron programs only.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub next_run: Option<u64>,

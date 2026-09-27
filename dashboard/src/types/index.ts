@@ -176,6 +176,7 @@ export interface ProgramDetail {
   config: ProgramConfig; // All static configuration
   last_error?: string;
   health_error?: string;
+  daemon_cwd?: string; // superd's own working directory (effective cwd when config.cwd is unset)
   next_run?: number; // Next scheduled cron trigger (epoch secs)
 }
 

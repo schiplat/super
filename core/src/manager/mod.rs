@@ -155,6 +155,10 @@ pub struct Manager {
 
     extension: Arc<dyn Extension>,
 
+    /// superd's own working directory, captured at bootstrap. Programs
+    /// without an explicit `cwd` inherit it at spawn time.
+    daemon_cwd: Option<String>,
+
     /// Persisted event history (SQLite). Writes go through `event_tx` to a
     /// background batch writer so the actor loop never blocks on disk I/O.
     event_db: crate::event_db::EventDb,
@@ -245,6 +249,9 @@ impl Manager {
         let scheduler = CronScheduler::new();
         let monitor = Arc::new(ResourceMonitor::new(tx_self.clone())?);
         let extension: Arc<dyn Extension> = Arc::from(extension);
+        let daemon_cwd = std::env::current_dir()
+            .ok()
+            .map(|p| p.to_string_lossy().to_string());
 
         // Expose the daemon event pipeline to plugins (plugin→host `emit_event`).
         crate::plugin::host_emit::install(extension.clone(), config.event_hooks.clone());
@@ -271,6 +278,7 @@ impl Manager {
             monitor,
             pending_cron: HashMap::new(),
             extension,
+            daemon_cwd,
             event_db,
             event_tx,
             last_event_prune: 0,
@@ -3105,6 +3113,7 @@ impl Manager {
                 .registry
                 .get_running(&id)
                 .and_then(|s| s.health_error.clone()),
+            daemon_cwd: self.daemon_cwd.clone(),
             next_run: if config.cron.is_some() {
                 self.scheduler
                     .get_next_run(&id)

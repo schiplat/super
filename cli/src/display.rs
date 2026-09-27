@@ -309,7 +309,18 @@ pub fn print_info(info: ProgramInfo) {
 
     println!(
         "CWD:       {}",
-        info.config.cwd.unwrap_or_else(|| "(default)".to_string())
+        info.config
+            .cwd
+            .clone()
+            .or_else(|| info.daemon_cwd.clone())
+            .map(|p| {
+                if info.config.cwd.is_some() {
+                    p
+                } else {
+                    format!("{p} (inherited from superd)")
+                }
+            })
+            .unwrap_or_else(|| "(unknown)".to_string())
     );
     if let Some(u) = &info.config.user {
         println!("User:      {}", u);

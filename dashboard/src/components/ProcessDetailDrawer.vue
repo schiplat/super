@@ -221,6 +221,15 @@ const nextRunText = computed(() => {
   return `in ${rel} (${abs})`;
 });
 
+// Effective working directory: explicit cwd wins; otherwise the program
+// inherits superd's own working directory (captured at daemon bootstrap).
+const workingDir = computed(() => {
+  const cfg = detailData.value?.config;
+  if (cfg?.cwd) return { path: cfg.cwd, inherited: false };
+  const dc = (detailData.value as any)?.daemon_cwd;
+  return { path: dc ?? '(unknown)', inherited: true };
+});
+
 // Health check tuning shown with effective (0 = default) values
 const healthTuning = computed(() => {
   const hc = detailData.value?.config.health_check;
@@ -842,7 +851,9 @@ function goToEdit() { if (props.processId) router.push(`/programs/${props.proces
                 <div class="grid grid-cols-1 md:grid-cols-2">
                   <div class="px-5 py-3.5 bg-muted/45 rounded-bl-2xl">
                     <div class="flex items-center gap-1.5 text-xs font-medium text-muted-foreground mb-1"><Folder class="w-3 h-3" />Working Directory</div>
-                    <div class="font-mono text-sm text-foreground">{{ detailData.config.cwd || '(default)' }}</div>
+                    <div class="font-mono text-sm text-foreground">
+                      {{ workingDir.path }}<span v-if="workingDir.inherited" class="text-muted-foreground/50"> (inherited from superd)</span>
+                    </div>
                   </div>
                   <div class="px-5 py-3.5 bg-muted/40 rounded-br-2xl">
                     <div class="flex items-center gap-1.5 text-xs font-medium text-muted-foreground mb-1"><User class="w-3 h-3" />User / Group</div>
