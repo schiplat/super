@@ -81,7 +81,7 @@ params:
   # localStorage; message supports Markdown links. Bump key on each release
   # so the banner shows again for returning visitors.
   banner:
-    key: "super-release-banner-v1-7-0"
+    key: "super-release-banner-v1-7-1"
     message: |
       **Super 1.7.0 is production-ready** — transactional installs with automatic rollback, cron runtime caps (`kill_after_secs`), and panic-free input handling. [See what's new →](/docs/08-changelog/)
   contact:
