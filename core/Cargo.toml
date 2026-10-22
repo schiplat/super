@@ -45,7 +45,7 @@ rand = "0.8"
 # OTA archive extract (`artifact.extract = true`)
 flate2 = "1"
 tar = "0.4"
-zip = "3"
+zip = "9"
 
 dotenvy = "0.15"
 
