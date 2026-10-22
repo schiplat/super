@@ -7,4 +7,12 @@
 [advisories]
 ignore = [
     "RUSTSEC-2023-0071", # rsa / Marvin timing side-channel — not in our compile graph
+    # zip 3.0.0 is only a build-dependency of utoipa-swagger-ui (extracts the
+    # crate's own bundled swagger-ui dist at build time — no untrusted input,
+    # no symlink/permission surface). Our runtime zip is 9.0.5; the fix for
+    # these three lives in the zip 9.x line, and utoipa-swagger-ui 9.0.x has
+    # no release that bumps its build-dep (10.x is a major jump).
+    "RUSTSEC-2026-0367", # SUID/SGID preservation in zip::ZipArchive::extract
+    "RUSTSEC-2026-0368", # symlink escape in zip::ZipArchive::extract
+    "RUSTSEC-2026-0369", # permissions through symlinks in zip extract
 ]

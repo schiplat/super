@@ -46,6 +46,7 @@ jobs:
             audit:
               - '**/Cargo.toml'
               - '**/Cargo.lock'
+              - '.cargo/audit.toml'
               - '.github/workflows/ci.yml'
             docker:
               - 'packaging/docker/**'
