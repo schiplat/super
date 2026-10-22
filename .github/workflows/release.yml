@@ -80,13 +80,12 @@ jobs:
       - name: Build and package
         run: bash .github/scripts/package-release-unix.sh "${{ steps.ver.outputs.version }}" "${{ matrix.name }}" "${{ matrix.target }}"
 
-      - name: Upload archive
-        uses: actions/upload-artifact@v4
+      - name: Attach archive to GitHub Release
+        uses: softprops/action-gh-release@v2
         with:
-          name: super-${{ steps.ver.outputs.version }}-${{ matrix.name }}
-          path: |
+          generate_release_notes: true
+          files: |
             super-*-${{ matrix.name }}.*
-          retention-days: 7
 
   build-freebsd:
     runs-on: ubuntu-latest
@@ -153,12 +152,12 @@ jobs:
             tar --exclude='.DS_Store' --exclude='._*' -czf "${root}.tar.gz" "${root}"
             echo "Created ${root}.tar.gz"
 
-      - name: Upload archive
-        uses: actions/upload-artifact@v4
+      - name: Attach archive to GitHub Release
+        uses: softprops/action-gh-release@v2
         with:
-          name: super-${{ steps.ver.outputs.version }}-freebsd-amd64
-          path: super-*-freebsd-amd64.tar.gz
-          retention-days: 7
+          generate_release_notes: true
+          files: |
+            super-*-freebsd-amd64.tar.gz
 
   release:
     needs: [build, build-freebsd]
@@ -167,12 +166,12 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Download all archives
-        uses: actions/download-artifact@v4
-        with:
-          path: artifacts
-          pattern: super-*
-          merge-multiple: true
+      - name: Download release archives
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p artifacts
+          gh release download "${GITHUB_REF_NAME}" --repo "$GITHUB_REPOSITORY" --dir artifacts --pattern 'super-*'
 
       - name: Generate SHA256 checksums
         run: |
@@ -180,18 +179,11 @@ jobs:
           sha256sum super-* > SHA256SUMS
           cat SHA256SUMS
 
-      - name: Upload checksums artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: SHA256SUMS
-          path: artifacts/SHA256SUMS
-
       - name: Publish GitHub Release
         if: startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v2
         with:
           generate_release_notes: true
           files: |
-            artifacts/super-*
             artifacts/SHA256SUMS
             install.sh
