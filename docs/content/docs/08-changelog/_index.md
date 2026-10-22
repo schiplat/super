@@ -17,6 +17,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.7.1] - 2026-10-22
+
+### Security
+
+- **OTA archive extraction now builds against `zip` 9.0.5** (RUSTSEC-2026-0367, -0368, -0369 — symlink and Unix-permission handling in `ZipArchive::extract`). Super's extractor never used the affected APIs — it rejects path-traversing members, never materializes symlinks, and never restores archive permission bits — so no shipped release was exploitable. The bump removes the flagged dependency from the tree, moves the archive backends to pure-Rust implementations, and keeps `cargo audit` clean including build dependencies.
+- **Lockfile refreshed to `rustls` 0.23.46 / `rustls-webpki` 0.103.16** (RUSTSEC-2026-0346, -0347, -0348, -0349, -0382). Super's TLS clients use the OS trust store via native-tls, so these crates were not part of the compiled graph; the refresh is lockfile hygiene that keeps the CI advisory gate green.
+
 ## [1.7.0] - 2026-09-27
 
 ### Added

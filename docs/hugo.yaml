@@ -83,7 +83,7 @@ params:
   banner:
     key: "super-release-banner-v1-7-1"
     message: |
-      **Super 1.7.0 is production-ready** — transactional installs with automatic rollback, cron runtime caps (`kill_after_secs`), and panic-free input handling. [See what's new →](/docs/08-changelog/)
+      **Super 1.7.1 is here** — a dependency security refresh: OTA archive handling builds against zip 9.x and the TLS lockfile moves to rustls 0.23.46. No behavior changes; upgrading is recommended. [See what's new →](/docs/08-changelog/)
   contact:
     api_url: "https://open.schiplat.com/api/v1/demands"
   externalLinkDecoration: true
