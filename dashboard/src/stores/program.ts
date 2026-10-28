@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
-import { useWebSocket } from '@vueuse/core'
+import { useIntervalFn, useWebSocket } from '@vueuse/core'
 import apiClient from '@/api/client'
 import { API_PATHS } from '@/api/paths'
 import { alertDialog } from '@/lib/app-dialog'
@@ -37,7 +37,9 @@ export const useProgramStore = defineStore('program', () => {
     autoReconnect: true,
     heartbeat: {
       message: 'ping',
-      interval: 30000,
+      // vueuse 15 dropped the `interval` option and its default scheduler
+      // ticks every 1s. Keep the previous 30s cadence explicitly.
+      scheduler: cb => useIntervalFn(cb, 30000, { immediate: false }),
     },
     onMessage: (_, event) => {
       try {
