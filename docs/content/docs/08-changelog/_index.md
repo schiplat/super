@@ -17,6 +17,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Failed-auth throttling** (`[server].auth_max_failures`, default `20`; `[server].auth_failure_window`, default `60`). Repeated 401s from one peer IP — against the OSS Bearer secret or the security plugin alike — are locked out for the rest of the window with `429` responses (`0` disables). Keyed by socket peer address; Unix-socket connections are never throttled.
+
+### Changed
+
+- **Snapshot saves now `fsync` the temp file before the atomic rename.** A power loss right after saving `data/snapshot.json` could previously leave the file empty or partial on some filesystems; the `.json.bak` recovery copy remains as a second line of defense.
+
+### Documentation
+
+- New **Transport security (TLS)** section in [Authentication](/docs/02-essentials/authentication/): superd serves plain HTTP; how to front it with a TLS-terminating reverse proxy (nginx sample with WebSocket settings), and how the auth throttle interacts with proxies.
+
 ## [1.7.1] - 2026-10-22
 
 ### Security
