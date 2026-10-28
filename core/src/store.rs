@@ -45,6 +45,10 @@ pub async fn save(path: &Path, data: &Snapshot) -> anyhow::Result<()> {
     }
 
     file.flush().await?;
+    // fsync the temp file before rename: without it a power loss right after
+    // rename can leave the main path empty or partially written on some
+    // filesystems, even though rename itself is atomic.
+    file.sync_all().await?;
 
     // 4. Atomic rename to main file
     tokio::fs::rename(tmp_path, path).await?;
