@@ -354,6 +354,12 @@ async fn async_main() -> anyhow::Result<()> {
     let core = bootstrap(extension).await?;
 
     let config_path = root.join("conf").join("super.toml");
+    // Failed-auth throttling (OSS Bearer + security plugin share one guard).
+    super_core::auth::AuthThrottle::configure_shared(
+        core.config.server.auth_max_failures,
+        std::time::Duration::from_secs(core.config.server.auth_failure_window),
+    );
+
     if let Some(reason) = plugin_host.license_degraded_reason.as_deref() {
         enforce_license_degradation_policy(
             reason,

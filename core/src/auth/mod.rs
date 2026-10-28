@@ -8,12 +8,14 @@
 
 mod middleware;
 mod routes;
+pub mod throttle;
 
 #[cfg(test)]
 #[path = "policy_tests.rs"]
 mod policy_tests;
 
 pub use middleware::{AuthState, attach_core_auth, is_auth_exempt};
+pub use throttle::AuthThrottle;
 
 use axum::Router;
 

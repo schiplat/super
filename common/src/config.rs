@@ -167,6 +167,31 @@ pub struct ServerSection {
     /// FFI calls carry their own tighter 10s budget. Default 30.
     #[serde(default = "default_request_timeout")]
     pub request_timeout_secs: u64,
+
+    /// Failed-auth (401) count per peer IP inside `auth_failure_window` that
+    /// triggers a lockout for the rest of that window. Applies to OSS Bearer
+    /// auth and the security plugin alike; keyed by socket peer address (a
+    /// reverse proxy shares one IP — see `core/src/auth/throttle.rs`).
+    /// 0 disables. Default 20.
+    #[serde(default = "default_auth_max_failures")]
+    pub auth_max_failures: u32,
+
+    /// Failure/lockout window for `auth_max_failures` in seconds. Default 60.
+    #[serde(default = "default_auth_failure_window")]
+    pub auth_failure_window: u64,
+}
+
+/// Default failed-auth threshold before a per-IP lockout.
+pub const DEFAULT_AUTH_MAX_FAILURES: u32 = 20;
+/// Default failure/lockout window in seconds.
+pub const DEFAULT_AUTH_FAILURE_WINDOW: u64 = 60;
+
+fn default_auth_max_failures() -> u32 {
+    DEFAULT_AUTH_MAX_FAILURES
+}
+
+fn default_auth_failure_window() -> u64 {
+    DEFAULT_AUTH_FAILURE_WINDOW
 }
 
 /// Default Unix socket permission mode as an octal string.
@@ -191,6 +216,8 @@ impl Default for ServerSection {
             socket_mode: default_socket_mode(),
             socket_only: false,
             request_timeout_secs: default_request_timeout(),
+            auth_max_failures: default_auth_max_failures(),
+            auth_failure_window: default_auth_failure_window(),
         }
     }
 }

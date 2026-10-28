@@ -84,6 +84,7 @@ pub fn extract_token(headers: &HeaderMap, query: Option<&str>) -> Option<String>
 
 pub async fn core_auth_middleware(
     State(state): State<AuthState>,
+    peer: Option<axum::Extension<axum::extract::ConnectInfo<std::net::SocketAddr>>>,
     req: axum::extract::Request,
     next: Next,
 ) -> Response {
@@ -92,16 +93,41 @@ pub async fn core_auth_middleware(
         return next.run(req).await;
     }
 
+    // Peer IP is absent on Unix-socket connections, which need no throttling.
+    let peer_ip = peer.map(|ci| ci.0.ip());
+    let throttle = super::throttle::AuthThrottle::shared();
+    if let Some(ip) = peer_ip
+        && !throttle.allowed(ip)
+    {
+        return (
+            StatusCode::TOO_MANY_REQUESTS,
+            Json(serde_json::json!({
+                "status": "error",
+                "message": "too many failed auth attempts; retry later",
+            })),
+        )
+            .into_response();
+    }
+
     let query = req.uri().query().map(str::to_string);
     let token = extract_token(req.headers(), query.as_deref());
 
     let Some(token) = token else {
+        if let Some(ip) = peer_ip {
+            throttle.record_failure(ip);
+        }
         return unauthorized();
     };
     if !state.secret_matches(&token) {
+        if let Some(ip) = peer_ip {
+            throttle.record_failure(ip);
+        }
         return unauthorized();
     }
 
+    if let Some(ip) = peer_ip {
+        throttle.record_success(ip);
+    }
     let mut req = req;
     req.extensions_mut().insert(AuthState::root_context());
     next.run(req).await

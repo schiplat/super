@@ -349,12 +349,30 @@ fn api_response(status: u16, body: String) -> Response {
 
 async fn plugin_auth_middleware(
     State(handle): State<Arc<HttpPluginHandle>>,
+    peer: Option<axum::Extension<axum::extract::ConnectInfo<std::net::SocketAddr>>>,
     mut req: axum::extract::Request,
     next: Next,
 ) -> Response {
     let Some(authenticate) = handle.authenticate else {
         return StatusCode::INTERNAL_SERVER_ERROR.into_response();
     };
+
+    // Same per-IP failed-auth throttle the OSS Bearer path uses (Unix-socket
+    // connections have no peer address and skip it).
+    let peer_ip = peer.map(|ci| ci.0.ip());
+    let throttle = crate::auth::AuthThrottle::shared();
+    if let Some(ip) = peer_ip
+        && !throttle.allowed(ip)
+    {
+        return (
+            StatusCode::TOO_MANY_REQUESTS,
+            Json(serde_json::json!({
+                "status": "error",
+                "message": "too many failed auth attempts; retry later",
+            })),
+        )
+            .into_response();
+    }
 
     let path = req.uri().path();
     let auth = req
@@ -407,6 +425,9 @@ async fn plugin_auth_middleware(
             let Some(json) = ctx_json else {
                 return StatusCode::INTERNAL_SERVER_ERROR.into_response();
             };
+            if let Some(ip) = peer_ip {
+                throttle.record_success(ip);
+            }
             req.extensions_mut().insert(PluginAuthContext {
                 ctx_json: json.clone(),
             });
@@ -416,6 +437,9 @@ async fn plugin_auth_middleware(
             next.run(req).await
         }
         1 => {
+            if let Some(ip) = peer_ip {
+                throttle.record_failure(ip);
+            }
             warn!("Unauthorized access to {}", path);
             (
                 StatusCode::UNAUTHORIZED,
@@ -427,6 +451,9 @@ async fn plugin_auth_middleware(
                 .into_response()
         }
         4 => {
+            if let Some(ip) = peer_ip {
+                throttle.record_failure(ip);
+            }
             let detail = ctx_json.as_deref().unwrap_or("").trim();
             let body = if detail.starts_with('{') {
                 serde_json::from_str::<serde_json::Value>(detail).unwrap_or_else(|_| {
