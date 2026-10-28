@@ -502,15 +502,17 @@ pub async fn monitor_logs(
     let ws_url = format!("{}/ws?id={}{}", ws_base, id, token_query);
 
     println!("Connecting to logs for {}...", id);
+    // Parse first so a malformed URL fails here with a clear error; tungstenite
+    // 0.29 takes `&str` (no `IntoClientRequest` for `reqwest::Url`).
     let url = Url::parse(&ws_url)?;
 
     let (ws_stream, resp) = if let Some(sock) = socket_path {
         let stream = tokio::net::UnixStream::connect(sock).await?;
-        let (s, r) = tokio_tungstenite::client_async(url.clone(), stream).await?;
+        let (s, r) = tokio_tungstenite::client_async(url.as_str(), stream).await?;
         let stream: Box<dyn Stream<Item = Result<Message, WsError>> + Send + Unpin> = Box::new(s);
         (stream, r)
     } else {
-        let (s, r) = connect_async(url).await?;
+        let (s, r) = connect_async(url.as_str()).await?;
         let stream: Box<dyn Stream<Item = Result<Message, WsError>> + Send + Unpin> = Box::new(s);
         (stream, r)
     };
