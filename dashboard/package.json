@@ -30,7 +30,7 @@
   },
   "devDependencies": {
     "@types/dagre": "^0.7.54",
-    "@types/node": "^24.10.1",
+    "@types/node": "^26.6.5",
     "@types/uuid": "^10.0.0",
     "@vitejs/plugin-vue": "^6.0.10",
     "@vue/test-utils": "^2.5.1",
