@@ -4,6 +4,14 @@ updates:
     directory: /
     schedule:
       interval: weekly
+    ignore:
+      # axum 0.8's `ws` feature pins tokio-tungstenite 0.29 (0.x minor bumps
+      # are breaking), so bumping the CLI past 0.29 duplicates the crate in
+      # the lockfile. Revisit when axum moves to 0.30.
+      - dependency-name: tokio-tungstenite
+        update-types:
+          - version-update:semver-minor
+          - version-update:semver-major
     groups:
       rust-minor-patch:
         update-types:
