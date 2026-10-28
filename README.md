@@ -16,6 +16,20 @@ Super is a modern replacement for tools like [Supervisor](https://supervisord.or
 * **Observability** — WebSocket logs, historical logs API, system metrics
 * **Auto-recovery** — Supervisor-compatible `autorestart`, `exitcodes`, `startsecs`
 
+## Dashboard
+
+The binary ships with an embedded web Dashboard — no separate install:
+
+<p align="center">
+  <img src="docs/static/images/overview.png" alt="Super Dashboard — process overview" width="900" />
+</p>
+<p align="center"><sub>Process overview: state, CPU / memory, restarts, and health at a glance.</sub></p>
+
+<p align="center">
+  <img src="docs/static/images/program_logtails.png" alt="Super Dashboard — live log tails" width="900" />
+</p>
+<p align="center"><sub>Per-program live log tail and history from the same screen.</sub></p>
+
 Licensed under the **[MIT License](LICENSE)**.
 
 ## Quick Start
