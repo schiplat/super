@@ -75,6 +75,37 @@ curl -H "Authorization: Bearer $SECRET" \
 
 Dashboard: open `/`, paste the same string when prompted.
 
+## Transport security (TLS)
+
+The API serves **plain HTTP** — `superd` does not terminate TLS itself. Bearer tokens are only as private as the transport, so:
+
+| Deployment | Guidance |
+| :--- | :--- |
+| Loopback only (`127.0.0.1` / Unix socket) | No TLS needed — traffic never leaves the machine. |
+| LAN / non-loopback bind | Front `superd` with a TLS-terminating reverse proxy (nginx, Caddy, Traefik) and keep the direct port firewalled. |
+| Exposed via tunnel / public | Always TLS; never expose port 9002 directly. |
+
+```nginx
+# nginx snippet — terminate TLS, proxy to a loopback-bound superd
+server {
+    listen 443 ssl;
+    server_name super.example.com;
+    location / {
+        proxy_pass http://127.0.0.1:9002;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;      # WebSocket (/ws)
+        proxy_set_header Connection "upgrade";
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_read_timeout 3600s;                    # live log streaming
+    }
+}
+```
+
+Notes:
+
+- Failed authentication attempts are throttled per peer IP: `[server].auth_max_failures` (default `20`) failures within `auth_failure_window` seconds (default `60`) lock that IP out for the rest of the window (`0` disables). Behind a proxy all requests share the proxy's IP — size the limits with that in mind.
+- The WebSocket endpoint authenticates with `?token=` on the upgrade request; proxies commonly log query strings, so prefer the `Authorization` header for everything else and treat proxy logs as sensitive.
+
 ---
 
 > [!IMPORTANT] Licensed feature — `security` plugin

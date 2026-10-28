@@ -21,6 +21,11 @@ port = 9002
 # Optional: enable admin Bearer auth (required for non-loopback binds)
 # auth_secret = "your-own-long-random-string"
 
+# Failed-auth throttling: 20 failures within 60s lock that IP out for the
+# window. Applies to Bearer and security-plugin auth. 0 disables.
+# auth_max_failures = 20
+# auth_failure_window = 60
+
 # Graceful shutdown timeout (seconds)
 shutdown_timeout = 10
 
