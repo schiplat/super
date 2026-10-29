@@ -1,4 +1,5 @@
 use super::*;
+use clap_complete::Shell as ClapShell;
 
 #[test]
 fn add_parses_concurrency_flags() {
@@ -106,4 +107,40 @@ fn subcommand_aliases_parse() {
             _ => panic!("alias {alias:?} resolved to an unexpected command"),
         }
     }
+}
+
+#[test]
+fn completions_accepts_supported_shells() {
+    for (arg, expected) in [
+        ("bash", ClapShell::Bash),
+        ("elvish", ClapShell::Elvish),
+        ("fish", ClapShell::Fish),
+        ("powershell", ClapShell::PowerShell),
+        ("zsh", ClapShell::Zsh),
+    ] {
+        let cli = Cli::try_parse_from(["super", "completions", arg])
+            .unwrap_or_else(|e| panic!("completions {arg} must parse: {e}"));
+        match cli.command {
+            Commands::Completions { shell } => assert_eq!(shell, expected),
+            _ => panic!("expected completions command for {arg}"),
+        }
+    }
+}
+
+#[test]
+fn completions_alias_parses() {
+    let cli = Cli::try_parse_from(["super", "completion", "zsh"]).expect("completion must parse");
+    assert!(matches!(cli.command, Commands::Completions { .. }));
+}
+
+#[test]
+fn completions_rejects_unknown_shell() {
+    assert!(
+        Cli::try_parse_from(["super", "completions", "tcsh"]).is_err(),
+        "unknown shells must be rejected"
+    );
+    assert!(
+        Cli::try_parse_from(["super", "completions"]).is_err(),
+        "the shell argument is required"
+    );
 }

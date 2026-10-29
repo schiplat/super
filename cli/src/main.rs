@@ -1,6 +1,7 @@
 mod args;
 mod check;
 mod client;
+mod completions;
 mod config;
 mod display;
 mod doctor;
@@ -29,6 +30,11 @@ async fn main() -> anyhow::Result<()> {
 
     if let Commands::Keyring { json } = &args.command {
         return keyring::run(*json);
+    }
+
+    // Completion scripts are pure client-side output: no config, daemon, or auth.
+    if let Commands::Completions { shell } = &args.command {
+        return completions::run(*shell);
     }
 
     let explicit_server = args.server.is_some();

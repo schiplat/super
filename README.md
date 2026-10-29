@@ -46,9 +46,9 @@ Licensed under the **[MIT License](LICENSE)**.
 curl -fsSL https://github.com/schiplat/super/releases/latest/download/install.sh | sh
 ```
 
-Installs `superd` and `super`, creates a minimal instance root (`/opt/super` or `~/.super`), and enables an OS service (**systemd** on Linux, **launchd** on macOS, **rc.d** on FreeBSD) with boot start. Verifies the SHA-256 of the release archive.
+Installs `superd` and `super`, creates a minimal instance root (`/opt/super` or `~/.super`), installs bash/zsh/fish completions, and enables an OS service (**systemd** on Linux, **launchd** on macOS, **rc.d** on FreeBSD) with boot start. Verifies the SHA-256 of the release archive.
 
-Options: `--version`, `--prefix`, `--root`, `--user` / `--system`, `--no-service`, `--no-start`, `--no-init`, `--no-sudo`.
+Options: `--version`, `--prefix`, `--root`, `--user` / `--system`, `--no-service`, `--no-start`, `--no-init`, `--no-completions`, `--no-sudo`.
 
 Bleeding-edge (may differ from the latest tagged binaries): `curl -fsSL https://raw.githubusercontent.com/schiplat/super/master/install.sh | sh`.
 
@@ -87,6 +87,9 @@ super logs <id> --tail
 # From Supervisor: preview then import
 # super import supervisor /etc/supervisor/conf.d/app.conf --dry-run
 super shutdown                       # stop superd (foreground or --daemon)
+
+# Shell completions (bash, zsh, fish, elvish, powershell)
+# super completions zsh > "${fpath[1]}/_super"
 ```
 
 Diagnose a setup (config, daemon connectivity, license, daemon/pidfile hints) in one shot:

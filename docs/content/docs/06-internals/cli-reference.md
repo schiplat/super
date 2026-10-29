@@ -82,6 +82,7 @@ CLI overrides: `--daemon` / `--foreground` / `--pidfile <PATH>`. See [Config ref
 | [`super shutdown`](#shutdown) | — | Gracefully shut down the daemon and all children |
 | [`super doctor`](#doctor) | — | One-shot diagnostics (config, daemon, license) |
 | [`super keyring [--json]`](#keyring) | — | List embedded license verifying keys |
+| [`super completions <shell>`](#completions-alias-completion) | `completion` | Print a shell completion script (`bash`, `zsh`, `fish`, `elvish`, `powershell`) |
 
 ### Authentication
 
@@ -452,6 +453,26 @@ super keyring --json
 | Flag | Type | Default | Description |
 | :--- | :--- | :--- | :--- |
 | `--json` | bool | `false` | Output JSON (for scripts / monitoring) |
+
+### `completions` (alias `completion`)
+Print a shell completion script for `super` to stdout. The script is generated from the same argument definition as `super --help`, so subcommands, aliases (`ls`, `rs`, `rm`, `log`), and flags stay in sync with the installed binary. No daemon or credentials are needed.
+
+```bash
+super completions <bash|zsh|fish|elvish|powershell>
+```
+
+| Shell | One-time setup |
+| :--- | :--- |
+| `bash` | `super completions bash > ~/.local/share/bash-completion/completions/super` (requires the `bash-completion` package; system-wide: `/usr/share/bash-completion/completions/super`) |
+| `zsh` | `super completions zsh > "${fpath[1]}/_super"` — or write to `~/.zfunc/_super` and add `fpath+=(~/.zfunc)` to `~/.zshrc` **before** `compinit`. System-wide: `/usr/local/share/zsh/site-functions/_super` (already in `fpath` on Debian/Ubuntu and Homebrew zsh) |
+| `fish` | `super completions fish > ~/.config/fish/completions/super.fish` |
+| `elvish` | `super completions elvish >> ~/.config/elvish/rc.elv` |
+| `powershell` | `super completions powershell \| Out-String \| Invoke-Expression` (or save it and dot-source it from `$PROFILE`) |
+
+`install.sh` writes `bash`, `zsh`, and `fish` completions into `$PREFIX/share` on install (`--no-completions` skips this); they load automatically when that directory is on the shell's completion path.
+
+> [!NOTE]
+> Completions are static: program names, IDs, and groups are **not** fetched from the daemon while you type (that would put an API call on every <kbd>Tab</kbd>). Complete targets yourself — `super restart <name|@group|all>`.
 
 ## Authentication
 

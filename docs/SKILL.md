@@ -37,6 +37,9 @@ any language: Node, Python, Go, Rust, shell. Key traits:
 # Install (Linux / macOS / FreeBSD)
 curl -fsSL https://github.com/schiplat/super/releases/latest/download/install.sh | sh
 
+# Shell completions (bash / zsh / fish; install.sh does this by default)
+super completions zsh > "${fpath[1]}/_super"
+
 # Instance root: conf/, data/, logs/, run/, plugins/
 export SUPER_ROOT=/opt/super
 

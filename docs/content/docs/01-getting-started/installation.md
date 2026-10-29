@@ -149,15 +149,16 @@ What it does by default:
 
 1. Downloads the matching release archive and verifies `SHA256SUMS`
 2. Installs `superd` + `super` into `/usr/local/bin` (or `~/.local/bin` if not writable)
-3. Creates a minimal instance root:
+3. Installs **shell completions** for `bash`, `zsh`, and `fish` under `DIR/share/` (`--no-completions` skips this). They load automatically when that directory is on the shell's completion path; other shells can generate their own script later (see [CLI Reference — `completions`](/docs/06-internals/cli-reference/#completions-alias-completion))
+4. Creates a minimal instance root:
    - **System install:** `/opt/super`
    - **User install:** `~/.super`
    - Layout: `conf/super.toml`, `conf/conf.d/`, `data/`, `logs/`, `run/`, `plugins/`, plus `env.sh`
-4. Wires **login environment** so `SUPER_ROOT` (and `bin` on `PATH` when needed) is set automatically:
+5. Wires **login environment** so `SUPER_ROOT` (and `bin` on `PATH` when needed) is set automatically:
    - **Linux (system):** `/etc/profile.d/super.sh` + `SUPER_ROOT` in `/etc/environment`
    - **macOS (system):** `/etc/paths.d/super` + hooks in `/etc/zprofile` (and bash/profile)
    - **User install:** marked block in `~/.zprofile` / `~/.profile` (and existing `~/.bash_profile` when present)
-5. Enables and starts an OS service (boot-persistent):
+6. Enables and starts an OS service (boot-persistent):
    - **Linux:** `superd.service` via systemd (`enable --now`)
    - **macOS:** `com.schiplat.superd` via launchd (`RunAtLoad` + `KeepAlive`)
    - **FreeBSD:** `/usr/local/etc/rc.d/superd` + `/etc/rc.conf.d/superd` (`superd_enable=YES`); `--user` uses `superd --daemon`
@@ -173,6 +174,7 @@ Useful flags:
 | `--no-service` | Binaries + instance only (no systemd/launchd/rc.d) |
 | `--no-start` | Install/enable service but do not start yet |
 | `--no-init` | Skip creating `SUPER_ROOT` |
+| `--no-completions` | Skip bash/zsh/fish completion scripts |
 | `--no-sudo` | Never elevate |
 | `--base-url URL` | Local/CI fake release server (see `tools/scripts/install-smoke.sh`) |
 
@@ -185,6 +187,8 @@ super list
 ```
 
 In the same shell as the installer, run `source /opt/super/env.sh` (or `~/.super/env.sh`) once.
+
+Completion scripts are plain generated files, so re-run the installer (or `super completions <shell>`) after a `super` upgrade to pick up new subcommands and flags. `elvish` and `powershell` setup snippets are in [CLI Reference — `completions`](/docs/06-internals/cli-reference/#completions-alias-completion).
 
 ### Upgrade / reinstall
 

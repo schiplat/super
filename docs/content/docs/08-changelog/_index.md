@@ -20,6 +20,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - **Failed-auth throttling** (`[server].auth_max_failures`, default `20`; `[server].auth_failure_window`, default `60`). Repeated 401s from one peer IP — against the OSS Bearer secret or the security plugin alike — are locked out for the rest of the window with `429` responses (`0` disables). Keyed by socket peer address; Unix-socket connections are never throttled.
+- **Shell completions.** `super completions <bash|zsh|fish|elvish|powershell>` (alias `completion`) prints a completion script generated from the same definition as `super --help`, so subcommands, aliases (`ls`, `rs`, `rm`, `log`), and flags stay in sync with the installed binary; it needs no daemon or credentials. `install.sh` now writes bash, zsh, and fish scripts under `$PREFIX/share` (skip with `--no-completions`). See [CLI Reference — completions](/docs/06-internals/cli-reference/#completions-alias-completion).
 
 ### Changed
 

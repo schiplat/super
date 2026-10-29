@@ -30,6 +30,8 @@ base64 = "0.22"
 ed25519-dalek = { version = "2.2", features = ["rand_core"] }
 # CLI parsing
 clap = { version = "4.4", features = ["derive", "env"] }
+# Shell completion scripts (`super completions <shell>`)
+clap_complete = "4.5"
 # Logging
 tracing = "0.1"
 tracing-appender = "0.2"

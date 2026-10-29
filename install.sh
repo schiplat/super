@@ -14,6 +14,7 @@
 #   --no-service      Skip systemd / launchd setup
 #   --no-start        Install service but do not start it yet
 #   --no-init         Do not create SUPER_ROOT layout / default config
+#   --no-completions  Do not install bash/zsh/fish completion scripts
 #   --no-sudo         Do not use sudo even if the prefix is not writable
 #   --base-url URL    Download base (default: GitHub Releases). For local smoke:
 #                     URL/vX.Y.Z/ARCHIVE and URL/latest.json
@@ -21,6 +22,7 @@
 #
 # After install (default):
 #   - Writes a minimal SUPER_ROOT (conf/, data/, logs/, run/, plugins/)
+#   - Installs bash/zsh/fish completions under PREFIX/share
 #   - Wires login env (profile.d / zprofile / paths.d) so SUPER_ROOT is set
 #   - Linux: systemd unit, enabled on boot, started now
 #   - macOS: launchd plist (LaunchDaemon or LaunchAgent), RunAtLoad + KeepAlive
@@ -37,6 +39,7 @@ INSTALL_MODE=""   # system | user | "" (auto)
 DO_SERVICE=1
 DO_START=1
 DO_INIT=1
+DO_COMPLETIONS=1
 BASE_URL_OPT=""
 
 log()  { printf '%s\n' "$*"; }
@@ -71,6 +74,7 @@ Options:
   --no-service      Skip systemd / launchd setup
   --no-start        Install service but do not start it yet
   --no-init         Do not create SUPER_ROOT layout / default config
+  --no-completions  Do not install bash/zsh/fish completion scripts
   --no-sudo         Do not use sudo even if the prefix is not writable
   --base-url URL    Download base for local/CI smoke (see script header)
   -h, --help        Show this help
@@ -91,6 +95,7 @@ while [ $# -gt 0 ]; do
     --no-service) DO_SERVICE=0; shift ;;
     --no-start) DO_START=0; shift ;;
     --no-init) DO_INIT=0; shift ;;
+    --no-completions) DO_COMPLETIONS=0; shift ;;
     --no-sudo) USE_SUDO="no"; shift ;;
     --base-url) BASE_URL_OPT="${2:?--base-url needs a value}"; shift 2 ;;
     --base-url=*) BASE_URL_OPT="${1#*=}"; shift ;;
@@ -678,6 +683,32 @@ elif have realpath; then
   SUPERD_BIN="$(realpath "$BIN_DIR/superd")"
   SUPER_BIN="$(realpath "$BIN_DIR/super")"
 fi
+
+# --- Shell completions --------------------------------------------------------
+# Written into PREFIX/share so bash-completion / zsh site-functions / fish
+# vendor dirs pick them up without editing anyone's rc files.
+write_completion() {
+  _wc_shell="$1"
+  _wc_dest="$2"
+  _wc_tmp="$TMP/super-completion.$_wc_shell"
+  if "$SUPER_BIN" completions "$_wc_shell" >"$_wc_tmp" 2>/dev/null && [ -s "$_wc_tmp" ]; then
+    write_file "$_wc_dest" <"$_wc_tmp"
+    info "$_wc_shell: $_wc_dest"
+  else
+    info "$_wc_shell: skipped (could not generate completion script)"
+  fi
+}
+
+install_completions() {
+  [ "$DO_COMPLETIONS" -eq 1 ] || return 0
+  [ -x "$SUPER_BIN" ] || return 0
+  log "Installing shell completions under $PREFIX/share..."
+  write_completion bash "$PREFIX/share/bash-completion/completions/super"
+  write_completion zsh "$PREFIX/share/zsh/site-functions/_super"
+  write_completion fish "$PREFIX/share/fish/vendor_completions.d/super.fish"
+}
+
+install_completions
 
 # --- Init instance root -------------------------------------------------------
 init_super_root() {

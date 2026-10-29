@@ -486,6 +486,14 @@ pub enum Commands {
         #[arg(long)]
         json: bool,
     },
+
+    /// Print a shell completion script to stdout (redirect it into your shell's completion dir)
+    #[command(alias = "completion")]
+    Completions {
+        /// Target shell
+        #[arg(value_enum)]
+        shell: clap_complete::Shell,
+    },
 }
 
 /// Output format for `super export`
