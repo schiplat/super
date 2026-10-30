@@ -448,17 +448,33 @@ pub async fn handle_logs(
         }
     }
 
-    client::monitor_logs(
-        &ctx.base_url,
-        ctx.socket_path.as_deref(),
-        id,
-        &ctx.auth_token
-            .as_ref()
-            .map(|t| format!("&token={t}"))
-            .unwrap_or_default(),
-    )
-    .await?;
+    // Percent-encode the token exactly like the dashboard's
+    // encodeURIComponent (unreserved = ALPHA / DIGIT / - _ . ~): secrets with
+    // reserved characters must survive the query string, and the daemon
+    // percent-decodes the ?token= value.
+    let token_query = ctx
+        .auth_token
+        .as_ref()
+        .map(|t| format!("&token={}", percent_encode_component(t)))
+        .unwrap_or_default();
+
+    client::monitor_logs(&ctx.base_url, ctx.socket_path.as_deref(), id, &token_query).await?;
     Ok(())
+}
+
+/// Strict percent-encoding (matches `encodeURIComponent`): everything but
+/// ALPHA / DIGIT / `-` / `_` / `.` / `~` becomes `%XX`.
+fn percent_encode_component(value: &str) -> String {
+    let mut out = String::with_capacity(value.len());
+    for byte in value.bytes() {
+        match byte {
+            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'_' | b'.' | b'~' => {
+                out.push(byte as char);
+            }
+            other => out.push_str(&format!("%{other:02X}")),
+        }
+    }
+    out
 }
 
 pub async fn handle_add(ctx: &Context, cmd: &args::Commands) -> anyhow::Result<()> {

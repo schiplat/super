@@ -371,7 +371,14 @@ async fn plugin_auth_middleware(
         .get(header::AUTHORIZATION)
         .and_then(|v| v.to_str().ok())
         .unwrap_or("");
-    let query = req.uri().query().unwrap_or("");
+    // `?token=` is a WebSocket-only fallback (matches OSS core auth); REST
+    // requests must use the Authorization header so secrets stay out of
+    // proxy/audit logs.
+    let query = if path == "/ws" {
+        req.uri().query().unwrap_or("")
+    } else {
+        ""
+    };
 
     let Ok(path_c) = CString::new(path) else {
         return StatusCode::INTERNAL_SERVER_ERROR.into_response();

@@ -26,9 +26,11 @@ export const useProgramStore = defineStore('program', () => {
   const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
   const host = window.location.host;
 
-  // Append token from localStorage for Premium auth (empty in OSS)
+  // Append token from localStorage for the auth gate (empty in OSS open mode).
+  // Percent-encoded: secrets with reserved characters must survive the URL —
+  // the daemon percent-decodes the ?token= value.
   const token = localStorage.getItem('super_token');
-  const query = token ? `?token=${token}` : '';
+  const query = token ? `?token=${encodeURIComponent(token)}` : '';
 
   // Production connects to host/ws; dev uses Vite /ws proxy
   const wsUrl = `${protocol}//${host}/ws${query}`;

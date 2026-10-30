@@ -59,7 +59,10 @@ pub fn is_auth_exempt(path: &str) -> bool {
         || path.starts_with("/assets")
 }
 
-/// Extract Bearer token from `Authorization` or `?token=` query (WebSocket).
+/// Extract Bearer token from `Authorization`, or — WebSocket only — from the
+/// percent-encoded `?token=` query value (browser/CLI cannot set a header on
+/// the upgrade request; keeping query tokens off REST paths keeps secrets out
+/// of proxy/audit logs).
 pub fn extract_token(headers: &HeaderMap, query: Option<&str>) -> Option<String> {
     if let Some(auth) = headers
         .get(header::AUTHORIZATION)
@@ -74,12 +77,31 @@ pub fn extract_token(headers: &HeaderMap, query: Option<&str>) -> Option<String>
         if let Some(v) = pair.strip_prefix("token=")
             && !v.is_empty()
         {
-            // Query values may be percent-encoded; keep raw match for secrets
-            // that are hex/base64 without reserved chars.
-            return Some(v.to_string());
+            return Some(percent_decode(v));
         }
     }
     None
+}
+
+/// Strict percent-decoding counterpart to `encodeURIComponent` (and the CLI's
+/// identical encoder): `%XX` becomes the byte; a literal `+` stays `+`.
+fn percent_decode(value: &str) -> String {
+    let bytes = value.as_bytes();
+    let mut out = Vec::with_capacity(bytes.len());
+    let mut i = 0;
+    while i < bytes.len() {
+        if bytes[i] == b'%'
+            && let Some(hex) = bytes.get(i + 1..i + 3)
+            && let Ok(byte) = u8::from_str_radix(std::str::from_utf8(hex).unwrap_or(""), 16)
+        {
+            out.push(byte);
+            i += 3;
+        } else {
+            out.push(bytes[i]);
+            i += 1;
+        }
+    }
+    String::from_utf8(out.clone()).unwrap_or_else(|_| String::from_utf8_lossy(&out).into_owned())
 }
 
 pub async fn core_auth_middleware(
@@ -101,7 +123,10 @@ pub async fn core_auth_middleware(
     let throttle = super::throttle::AuthThrottle::shared();
 
     let query = req.uri().query().map(str::to_string);
-    if let Some(token) = extract_token(req.headers(), query.as_deref())
+    // `?token=` is a WebSocket-only fallback; REST requests must use the
+    // Authorization header so secrets stay out of proxy/audit logs.
+    let query_for_auth = if path == "/ws" { query.as_deref() } else { None };
+    if let Some(token) = extract_token(req.headers(), query_for_auth)
         && state.secret_matches(&token)
     {
         if let Some(ip) = peer_ip {
