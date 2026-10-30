@@ -26,7 +26,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - **Snapshot saves now `fsync` the temp file before the atomic rename.** A power loss right after saving `data/snapshot.json` could previously leave the file empty or partial on some filesystems; the `.json.bak` recovery copy remains as a second line of defense.
+- **`?token=` is accepted only on the WebSocket endpoint (`/ws`) and is percent-decoded.** REST calls must send `Authorization: Bearer …`, keeping secrets out of proxy/audit logs. The Dashboard and `super logs --follow` now percent-encode the token (`encodeURIComponent` semantics), so secrets containing `&`, `+`, `%` or `/` round-trip correctly instead of being truncated.
+- **`super reload` warns about settings that need a restart.** `[server].host`, `port`, `socket`, `socket_only` and `auth_secret` are read once at startup; changing them and reloading used to succeed silently without taking effect — the reload now logs a `restart required` warning naming the changed keys.
 - **Placeholder `auth_secret` values (`CHANGE-ME-…`) no longer authenticate on non-loopback binds.** The Docker image and examples ship a placeholder so superd can start out of the box; since it is public knowledge, superd now generates a random **ephemeral admin secret** instead on any non-loopback TCP bind, persists it at `data/auth_secret.generated` (mode 0600, stable across restarts) and prints it once to the log. Loopback and socket-only runtimes keep the placeholder with a startup warning, and a real configured secret always wins. `super check` warns about placeholders. See [Authentication](/docs/02-essentials/authentication/).
+
+### Fixed
+
+- **Dashboard SPA fallback only answers document requests.** Non-GET requests, `/health/`, `/healthz`, `/metrics/`, missing hashed assets and any path with a file extension now return 404 instead of `index.html` — a probe to `/health/` could previously look healthy and browsers were handed HTML where they expected a module.
+- **Plugin UI bundles are cache-busted per plugin build.** `superd` advertises `ui@<build_id>` and the shell loads `/api/v1/plugins/ui/ui.js?v=<build_id>`, so upgrading the `ui` plugin no longer leaves browsers on a year-long immutable cache of the old bundle.
 
 ### Documentation
 
