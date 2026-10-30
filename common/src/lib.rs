@@ -5,6 +5,7 @@ use uuid::Uuid;
 use utoipa::ToSchema;
 
 pub mod auth;
+pub mod auth_secret;
 pub mod config;
 pub mod daemon;
 pub mod import;

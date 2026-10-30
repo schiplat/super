@@ -54,11 +54,12 @@ Expected output includes `Super Core starting...` and the listen address.
     schiplat/super:latest
   ```
 
-  The image binds `0.0.0.0` and ships placeholder `auth_secret = "CHANGE-ME-BEFORE-EXPOSE"` in the baked `super.toml`. Core auth is **on** — every business API call needs that Bearer (Dashboard login, `super --token` / `super login`, or `Authorization: Bearer …`). `/health` stays open. Replace the placeholder before publishing beyond the host. Details: [Authentication](/docs/02-essentials/authentication/#oss-admin-secret).
+  The image binds `0.0.0.0` and ships a placeholder `auth_secret` in the baked `super.toml`. A placeholder is public knowledge and never authenticates anything: at startup superd generates a random **ephemeral admin secret** (persisted in `data/auth_secret.generated`, printed once to the container log). Core auth is **on** — every business API call needs that Bearer (Dashboard login, `super --token` / `super login`, or `Authorization: Bearer …`). `/health` stays open. Details: [Authentication](/docs/02-essentials/authentication/#oss-admin-secret).
 
   ```bash
-  # Host shell for steps 3–4 (matches the baked placeholder until you change it)
-  export SUPER_TOKEN=CHANGE-ME-BEFORE-EXPOSE
+  # Host shell for steps 3–4: read the generated secret from the container log
+  export SUPER_TOKEN=$(docker logs super 2>&1 | grep -oE '\b[a-f0-9]{48}\b' | tail -1)
+  echo "SUPER_TOKEN=$SUPER_TOKEN"
   ```
 
   **`superd` runs inside the container; the CLI does not have to.** With `-p 127.0.0.1:9002:9002`, the HTTP API is on your host — use any option below for steps 3–4:
@@ -120,27 +121,28 @@ Open a new terminal. Pick the example that matches how you run `superd`:
   {{< tab name="Docker (CLI)" >}}
   Uses the static **`busybox`** binary baked into `schiplat/super`.
 
-  **Host CLI** (recommended — install `super` once, talk to the mapped port). Bearer = baked `auth_secret` (or `export SUPER_TOKEN=…` from step 2):
+  **Host CLI** (recommended — install `super` once, talk to the mapped port). Bearer = the effective `auth_secret` (`$SUPER_TOKEN` from step 2):
 
   ```bash
   super --server http://127.0.0.1:9002 --token "$SUPER_TOKEN" add --name demo-web \
     --autostart /usr/local/bin/busybox httpd -f -p 8080
   ```
 
-  **Or via `docker exec`** (no host install; container must be named, e.g. `--name super` in step 2). Inside the container the CLI talks to the local daemon — still pass the same secret:
+  **Or via `docker exec`** (no host install; container must be named, e.g. `--name super` in step 2). Read the secret inside the container, then pass it to the CLI:
 
   ```bash
-  docker exec -e SUPER_TOKEN=CHANGE-ME-BEFORE-EXPOSE super \
+  TOKEN=$(docker exec super /usr/local/bin/busybox cat /app/super/data/auth_secret.generated)
+  docker exec -e SUPER_TOKEN="$TOKEN" super \
     /usr/local/bin/super add --name demo-web \
     --autostart /usr/local/bin/busybox httpd -f -p 8080
   ```
   {{< /tab >}}
   {{< tab name="Docker (REST API)" >}}
-  Uses the static **`busybox`** binary baked into `schiplat/super`. Include the Bearer (baked placeholder until you change `auth_secret`):
+  Uses the static **`busybox`** binary baked into `schiplat/super`. Include the Bearer (`$SUPER_TOKEN` from step 2):
 
   ```bash
   curl -X POST http://127.0.0.1:9002/api/v1/programs \
-    -H "Authorization: Bearer CHANGE-ME-BEFORE-EXPOSE" \
+    -H "Authorization: Bearer $SUPER_TOKEN" \
     -H "Content-Type: application/json" \
     -d '{
         "name": "demo-web",
@@ -166,7 +168,7 @@ super list
 ```
 
 > [!NOTE]
-> **Docker:** if `superd` runs in a container, auth is on — use `super --server http://127.0.0.1:9002 --token "$SUPER_TOKEN" list` or `docker exec -e SUPER_TOKEN=CHANGE-ME-BEFORE-EXPOSE super /usr/local/bin/super list`.
+> **Docker:** if `superd` runs in a container, auth is on — use `super --server http://127.0.0.1:9002 --token "$SUPER_TOKEN" list` or `docker exec -e SUPER_TOKEN="$TOKEN" super /usr/local/bin/super list` (`TOKEN=$(docker exec super /usr/local/bin/busybox cat /app/super/data/auth_secret.generated)`).
 
 ```bash
 curl http://127.0.0.1:8080

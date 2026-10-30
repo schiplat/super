@@ -149,13 +149,48 @@ pub async fn bootstrap(extension: Box<dyn Extension>) -> anyhow::Result<SystemCo
         logs = ?storage.log_dir,
     );
 
+    // Resolve the effective auth secret (after logging init so the ephemeral
+    // secret is visible in logs). A shipped `CHANGE-ME-…` placeholder never
+    // authenticates on a non-loopback TCP bind — see common::auth_secret.
+    let server_config = {
+        let mut c = server_config;
+        use common::auth_secret::EffectiveAuthSecret;
+        c.server.auth_secret = match common::auth_secret::effective_auth_secret(
+            c.server.auth_secret.as_deref(),
+            &root,
+            &c.server.host,
+            c.server.socket_only,
+        )? {
+            EffectiveAuthSecret::None => None,
+            EffectiveAuthSecret::Configured(secret) => Some(secret),
+            EffectiveAuthSecret::PlaceholderLocal(secret) => {
+                tracing::warn!(
+                    "[server].auth_secret is a shipped placeholder; it only guards a \
+                     loopback/socket bind — set a real secret before exposing the API \
+                     beyond this host"
+                );
+                Some(secret)
+            }
+            EffectiveAuthSecret::Ephemeral(secret) => {
+                tracing::warn!(
+                    "[server].auth_secret is a public placeholder (CHANGE-ME-…); it no \
+                     longer authenticates anything on this non-loopback bind. Generated \
+                     an ephemeral admin secret instead — printed here once and persisted \
+                     at data/auth_secret.generated (stable across restarts): {secret}"
+                );
+                Some(secret)
+            }
+        };
+        c
+    };
+
     if !paths.config_file.exists() {
         tracing::warn!("Config file not found, using defaults");
     } else if server_config
         .server
         .auth_secret
         .as_deref()
-        .is_some_and(|s| !s.trim().is_empty())
+        .is_some_and(|s| !s.trim().is_empty() && !common::auth_secret::is_placeholder_auth_secret(s))
     {
         warn_if_config_world_readable(&paths.config_file).await;
     }

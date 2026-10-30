@@ -30,7 +30,7 @@ docker buildx imagetools inspect schiplat/super:latest
 | **`docker run`** (default) | No | Uses the config **inside the image** — ready to use |
 | **`docker run`** (custom) | Optional | `-v ./my-conf:/app/super/conf` replaces the baked-in config |
 
-Verify the image starts (distroless has no shell — use the HTTP port or healthcheck). **Non-loopback bind requires `auth_secret`** (baked-in placeholder `CHANGE-ME-BEFORE-EXPOSE` — replace before publishing beyond the host). Prefer publishing on host loopback:
+Verify the image starts (distroless has no shell — use the HTTP port or healthcheck). **Non-loopback bind requires auth** — the baked-in `CHANGE-ME-BEFORE-EXPOSE` placeholder never authenticates anything: at startup superd generates a random ephemeral admin secret, persists it in `data/auth_secret.generated` (stable across restarts) and prints it to the container log. Prefer publishing on host loopback:
 
 ```bash
 docker run --rm -d -p 127.0.0.1:9002:9002 --name super-test schiplat/super:latest
@@ -71,7 +71,14 @@ docker buildx build --platform linux/amd64,linux/arm64 \
 
 ## Run
 
-The baked-in OSS config listens on `0.0.0.0` inside the container with a placeholder `auth_secret`. On the host, map **loopback only** unless you intentionally expose the admin secret:
+The baked-in OSS config listens on `0.0.0.0` inside the container with a placeholder `auth_secret`, so superd generates an **ephemeral admin secret** at startup (log line + `data/auth_secret.generated`) instead of trusting the public placeholder. Retrieve it with:
+
+```bash
+docker logs super-test 2>&1 | grep -i 'ephemeral admin secret'
+# or: docker exec super-test /usr/local/bin/busybox cat /app/super/data/auth_secret.generated
+```
+
+For a fixed credential set your own `auth_secret` (mount a custom `conf/`). On the host, map **loopback only** unless you intentionally expose the API:
 
 ```bash
 docker run --rm -p 127.0.0.1:9002:9002 schiplat/super:latest
@@ -85,7 +92,7 @@ Two reference profiles ship under `packaging/docker/conf/`:
 
 | File | Profile | Baked into image? |
 | :--- | :--- | :---: |
-| `super.toml` | **OSS** — `0.0.0.0` + placeholder `auth_secret`, no license | Yes (default) |
+| `super.toml` | **OSS** — `0.0.0.0` + placeholder `auth_secret` (→ ephemeral generated secret), no license | Yes (default) |
 | `super.subscription.example.toml` | **Subscription** — `[license].key`, `auth_secret`, security plugin required | No — copy when mounting custom `conf/` |
 
 | Path in container | Purpose |

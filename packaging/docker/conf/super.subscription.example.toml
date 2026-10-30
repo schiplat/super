@@ -15,6 +15,10 @@ strict = true
 key = "PASTE-BASE64-LICENSE-KEY"
 
 [server]
+# Placeholder values (CHANGE-ME-…) are never used as credentials: on a
+# non-loopback bind superd generates an ephemeral secret at startup
+# (data/auth_secret.generated, printed to the log). Set a real secret here
+# for a stable bootstrap credential.
 auth_secret = "CHANGE-ME-strong-random-secret"
 # 0.0.0.0 is OK when security plugin is loaded (Bearer auth on API).
 host = "0.0.0.0"

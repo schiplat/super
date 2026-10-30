@@ -193,6 +193,20 @@ pub fn run(file_path: Option<PathBuf>, check_port_availability: bool) -> anyhow:
         ));
     }
 
+    if has_auth_secret
+        && common::auth_secret::is_placeholder_auth_secret(
+            config.server.auth_secret.as_deref().unwrap_or(""),
+        )
+    {
+        warnings.push(
+            "[server].auth_secret is a shipped placeholder (CHANGE-ME-…). On non-loopback \
+             binds superd generates an ephemeral secret at startup instead (persisted at \
+             data/auth_secret.generated, printed to the log). Set a real secret for a \
+             stable credential."
+                .into(),
+        );
+    }
+
     // 4. Check log directory (write permission)
     let log_dir = &storage.log_dir;
     print!("   Log Dir:     {:?} ... ", log_dir);

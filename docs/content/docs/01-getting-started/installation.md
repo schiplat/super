@@ -34,7 +34,7 @@ The official OSS image ships `superd` and `super` (API + CLI) on a **distroless*
 
 ### Pull and run
 
-The image ships with a default config at `/app/super/conf/super.toml` (`host = "0.0.0.0"`, port `9002`, placeholder `auth_secret = "CHANGE-ME-BEFORE-EXPOSE"`). Non-loopback bind requires that secret — replace it before publishing beyond the host. Use it for Dashboard login and `super --token` / `super login` — see [Authentication](/docs/02-essentials/authentication/#oss-admin-secret). Prefer publishing only to loopback on the host (`-p 127.0.0.1:9002:9002`) unless you intentionally expose the API.
+The image ships with a default config at `/app/super/conf/super.toml` (`host = "0.0.0.0"`, port `9002`, placeholder `auth_secret = "CHANGE-ME-BEFORE-EXPOSE"`). A placeholder is public knowledge and **never authenticates anything**: on this non-loopback bind superd generates a random **ephemeral admin secret** at startup, persists it at `/app/super/data/auth_secret.generated` (stable across restarts) and prints it to the container log — retrieve it with `docker logs <container> 2>&1 | grep -i 'ephemeral admin secret'`. Use that secret for Dashboard login and `super --token` / `super login` — see [Authentication](/docs/02-essentials/authentication/#oss-admin-secret). Prefer publishing only to loopback on the host (`-p 127.0.0.1:9002:9002`) unless you intentionally expose the API.
 
 ```bash
 docker pull schiplat/super:latest
@@ -54,13 +54,13 @@ The image runs **`superd` in the foreground**; you control it over **HTTP on por
 
 ```bash
 # From GitHub Releases tarball or install.sh — you only need the `super` binary on PATH.
-# Image ships auth_secret = "CHANGE-ME-BEFORE-EXPOSE" — pass it (or export SUPER_TOKEN=…).
-export SUPER_TOKEN=CHANGE-ME-BEFORE-EXPOSE
+# Read the ephemeral admin secret superd generated at startup (48 hex chars):
+export SUPER_TOKEN=$(docker logs super 2>&1 | grep -oE '\b[a-f0-9]{48}\b' | tail -1)
 super --server http://127.0.0.1:9002 list
 super --server http://127.0.0.1:9002 add --name my-app --autostart /path/to/app
 ```
 
-If the host has **no** local `$SUPER_ROOT/run/superd.sock`, the CLI already defaults to `http://127.0.0.1:9002` — after `-p 127.0.0.1:9002:9002`, `super list` works once the binary is on `PATH` **and** `SUPER_TOKEN` / `--token` matches `auth_secret`. Use `--server` when you publish a different host/port, or when a local socket would otherwise take precedence.
+If the host has **no** local `$SUPER_ROOT/run/superd.sock`, the CLI already defaults to `http://127.0.0.1:9002` — after `-p 127.0.0.1:9002:9002`, `super list` works once the binary is on `PATH` **and** `SUPER_TOKEN` / `--token` matches the effective `auth_secret` (your own, or the generated ephemeral secret). Use `--server` when you publish a different host/port, or when a local socket would otherwise take precedence.
 
 **Option B — copy `super` out of the image** (no full install):
 
@@ -68,16 +68,16 @@ If the host has **no** local `$SUPER_ROOT/run/superd.sock`, the CLI already defa
 CID=$(docker create schiplat/super:latest)
 docker cp "$CID:/usr/local/bin/super" ./super && docker rm "$CID"
 chmod +x ./super
-./super --server http://127.0.0.1:9002 --token CHANGE-ME-BEFORE-EXPOSE list
+./super --server http://127.0.0.1:9002 --token "$SUPER_TOKEN" list
 ```
 
 **Option C — `docker exec`** (quick try; name your container, e.g. `docker run --name super …`):
 
 ```bash
-docker exec -e SUPER_TOKEN=CHANGE-ME-BEFORE-EXPOSE super /usr/local/bin/super list
+docker exec super /usr/local/bin/busybox cat /app/super/data/auth_secret.generated
 ```
 
-**Option D — REST only:** `curl -H "Authorization: Bearer CHANGE-ME-BEFORE-EXPOSE" http://127.0.0.1:9002/api/v1/…` (no CLI binary; `/health` needs no Bearer).
+**Option D — REST only:** `curl -H "Authorization: Bearer $SUPER_TOKEN" http://127.0.0.1:9002/api/v1/…` (no CLI binary; `/health` needs no Bearer).
 
 > [!NOTE]
 > Host `super` will **not** auto-discover the container's Unix socket (`run/superd.sock` lives inside the container). Always pass **`--server http://127.0.0.1:9002`** (or the host/port you published) when `superd` runs in Docker.

@@ -28,6 +28,7 @@ chrono = { version = "0.4", features = ["serde"] }
 anyhow = "1.0"
 base64 = "0.22"
 ed25519-dalek = { version = "2.2", features = ["rand_core"] }
+rand = "0.8"
 # CLI parsing
 clap = { version = "4.4", features = ["derive", "env"] }
 # Shell completion scripts (`super completions <shell>`)

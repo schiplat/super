@@ -41,7 +41,11 @@ super --token 'your-auth-secret' list
 | Default (`host = "127.0.0.1"`, no `auth_secret`) | API **open** (local CLI / scripts) |
 | Non-empty `auth_secret` | **Auth on** — Bearer = that value |
 | Non-loopback TCP **without** `auth_secret` (and without the `security` plugin) | **Refuse to start** |
+| Non-loopback TCP with a shipped **placeholder** (`CHANGE-ME-…`) | Placeholder never authenticates — superd generates a random **ephemeral secret**, persists it at `data/auth_secret.generated` (mode 0600, stable across restarts) and prints it to the log |
+| Placeholder on loopback / socket-only | Auth on with the placeholder (local exposure only); startup warning |
 | Unix socket only (`socket_only`) | Open (filesystem ACLs); set `auth_secret` if you want Bearer auth anyway |
+
+Set a real `auth_secret` for a stable credential; the generated ephemeral secret is meant for out-of-the-box starts (Docker, first run) where no secret was provisioned. Delete `data/auth_secret.generated` to force a new one.
 
 There is **no** on-disk `auth.key`. The only OSS secret is `auth_secret` in config. Because the file holds a live credential, keep it owner-readable only:
 

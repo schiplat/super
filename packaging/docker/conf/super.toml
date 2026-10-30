@@ -2,11 +2,16 @@
 # Project Super — OSS default for schiplat/super Docker image
 # =============================================================================
 # Profile: OSS (no license). Binds 0.0.0.0 so the API/Dashboard are reachable
-# from the published port. Non-loopback bind **requires** auth_secret below
-# (superd refuses to start without it).
+# from the published port. Non-loopback bind **requires** auth — superd
+# refuses to start without it.
 #
-# Replace auth_secret before exposing beyond the host. Prefer publishing on
-# host loopback: `-p 127.0.0.1:9002:9002`.
+# auth_secret below is a PLACEHOLDER: it is public knowledge and never
+# authenticates anything. On this non-loopback bind superd generates a random
+# ephemeral secret at startup, persists it in data/auth_secret.generated
+# (stable across restarts) and prints it to the container log:
+#   docker logs <container> | grep -i 'ephemeral admin secret'
+# For a fixed credential, set your own auth_secret here (or mount your own
+# conf/). Prefer publishing on host loopback: `-p 127.0.0.1:9002:9002`.
 #
 # For subscription deployments, see super.subscription.example.toml in this folder.
 # =============================================================================
@@ -21,8 +26,9 @@
 #   -v ./my-conf:/app/super/conf -v ./my-data:/app/super/data
 # =============================================================================
 
-# Placeholder so the image can start with host = 0.0.0.0.
-# Replace before publishing the API beyond the host (or mount your own conf/).
+# Public placeholder — never used as a credential. superd generates an
+# ephemeral admin secret at startup (see header comment) because this file
+# binds a non-loopback host. Set a real secret for a stable credential.
 
 [server]
 auth_secret = "CHANGE-ME-BEFORE-EXPOSE"
