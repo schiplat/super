@@ -20,11 +20,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - **Failed-auth throttling** (`[server].auth_max_failures`, default `20`; `[server].auth_failure_window`, default `60`). Repeated 401s from one peer IP — against the OSS Bearer secret or the security plugin alike — are locked out for the rest of the window with `429` responses (`0` disables). Keyed by socket peer address; Unix-socket connections are never throttled.
+- **Throttle ordering: a valid credential always authenticates.** The lockout probe now runs *after* credential verification, so a correct Bearer (or Access Token) still works — and clears the failure counter — even while its IP is locked out; only requests that failed authentication are gated. `GET /api/v1/auth/status` is now anonymous-readable under the security plugin (matching OSS core auth), so the Dashboard's capability discovery no longer produces 401s before login.
 - **Shell completions.** `super completions <bash|zsh|fish|elvish|powershell>` (alias `completion`) prints a completion script generated from the same definition as `super --help`, so subcommands, aliases (`ls`, `rs`, `rm`, `log`), and flags stay in sync with the installed binary; it needs no daemon or credentials. `install.sh` now writes bash, zsh, and fish scripts under `$PREFIX/share` (skip with `--no-completions`). See [CLI Reference — completions](/docs/06-internals/cli-reference/#completions-alias-completion).
 
 ### Changed
 
 - **Snapshot saves now `fsync` the temp file before the atomic rename.** A power loss right after saving `data/snapshot.json` could previously leave the file empty or partial on some filesystems; the `.json.bak` recovery copy remains as a second line of defense.
+- **Placeholder `auth_secret` values (`CHANGE-ME-…`) no longer authenticate on non-loopback binds.** The Docker image and examples ship a placeholder so superd can start out of the box; since it is public knowledge, superd now generates a random **ephemeral admin secret** instead on any non-loopback TCP bind, persists it at `data/auth_secret.generated` (mode 0600, stable across restarts) and prints it once to the log. Loopback and socket-only runtimes keep the placeholder with a startup warning, and a real configured secret always wins. `super check` warns about placeholders. See [Authentication](/docs/02-essentials/authentication/).
 
 ### Documentation
 

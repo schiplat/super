@@ -358,21 +358,12 @@ async fn plugin_auth_middleware(
     };
 
     // Same per-IP failed-auth throttle the OSS Bearer path uses (Unix-socket
-    // connections have no peer address and skip it).
+    // connections have no peer address and skip it). Authentication runs
+    // BEFORE the lockout probe so a valid credential still works (and clears
+    // the counter) while an IP is locked out; the throttle only gates
+    // requests the plugin rejected.
     let peer_ip = peer.map(|ci| ci.0.ip());
     let throttle = crate::auth::AuthThrottle::shared();
-    if let Some(ip) = peer_ip
-        && !throttle.allowed(ip)
-    {
-        return (
-            StatusCode::TOO_MANY_REQUESTS,
-            Json(serde_json::json!({
-                "status": "error",
-                "message": "too many failed auth attempts; retry later",
-            })),
-        )
-            .into_response();
-    }
 
     let path = req.uri().path();
     let auth = req
@@ -436,23 +427,30 @@ async fn plugin_auth_middleware(
             }
             next.run(req).await
         }
-        1 => {
+        1 | 4 => {
             if let Some(ip) = peer_ip {
+                if !throttle.allowed(ip) {
+                    return (
+                        StatusCode::TOO_MANY_REQUESTS,
+                        Json(serde_json::json!({
+                            "status": "error",
+                            "message": "too many failed auth attempts; retry later",
+                        })),
+                    )
+                        .into_response();
+                }
                 throttle.record_failure(ip);
             }
-            warn!("Unauthorized access to {}", path);
-            (
-                StatusCode::UNAUTHORIZED,
-                Json(serde_json::json!({
-                    "status": "error",
-                    "message": "unauthorized",
-                })),
-            )
-                .into_response()
-        }
-        4 => {
-            if let Some(ip) = peer_ip {
-                throttle.record_failure(ip);
+            if code == 1 {
+                warn!("Unauthorized access to {}", path);
+                return (
+                    StatusCode::UNAUTHORIZED,
+                    Json(serde_json::json!({
+                        "status": "error",
+                        "message": "unauthorized",
+                    })),
+                )
+                    .into_response();
             }
             let detail = ctx_json.as_deref().unwrap_or("").trim();
             let body = if detail.starts_with('{') {

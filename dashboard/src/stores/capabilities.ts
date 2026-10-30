@@ -93,11 +93,7 @@ export const useCapabilitiesStore = defineStore('capabilities', () => {
     licensed.value =
       edition === 'licensed' || edition.includes('premium') || edition.includes('pro');
 
-    const [authProbe, notifyStatus, lic] = await Promise.all([
-      probeAuthStatus(),
-      probeStatus('/api/v1/system/notify'),
-      probeLicense(),
-    ]);
+    const authProbe = await probeAuthStatus();
 
     // Auth gate vs token management (see AuthStatusResponse.token_management).
     if (authProbe.status === 0) {
@@ -107,7 +103,7 @@ export const useCapabilitiesStore = defineStore('capabilities', () => {
       auth.value = false;
       security.value = false;
     } else if (authProbe.status === 401) {
-      // Security plugin present but session missing — tokens are available after login.
+      // Older security plugin builds: status not whitelisted, session missing.
       auth.value = true;
       security.value = true;
     } else if (authProbe.status === 200) {
@@ -118,6 +114,24 @@ export const useCapabilitiesStore = defineStore('capabilities', () => {
       security.value = false;
     }
 
+    // Not signed in yet: skip the license/notify probes. With the auth gate on
+    // they would all answer 401 and feed the daemon's per-IP failed-auth
+    // throttle (lockout after ~20 attempts). Pro capabilities appear after
+    // login via refresh().
+    if (auth.value && !localStorage.getItem('super_token')) {
+      security.value = false;
+      notify.value = false;
+      isolation.value = false;
+      license.value = null;
+      ready.value = true;
+      return;
+    }
+
+    const [notifyStatus, lic] = await Promise.all([
+      probeStatus('/api/v1/system/notify'),
+      probeLicense(),
+    ]);
+
     if (notifyStatus === 0) {
       notify.value = false;
     } else {
@@ -127,14 +141,16 @@ export const useCapabilitiesStore = defineStore('capabilities', () => {
     if (lic) {
       license.value = lic;
       licensed.value = true;
-      const grants = Array.isArray(lic.grants) ? lic.grants : [];
+      // Capability = plugin actually LOADED (plugin_versions), not merely
+      // granted: a grant without its plugin would render half-broken UI
+      // (e.g. isolation granted but shipped only on Linux).
       const versions = lic.plugin_versions || {};
-      if (grants.includes('security') || versions.security) {
+      if (versions.security) {
         auth.value = true;
         security.value = true;
       }
-      if (grants.includes('notify') || versions.notify) notify.value = true;
-      isolation.value = !!(grants.includes('isolation') || versions.isolation);
+      if (versions.notify) notify.value = true;
+      isolation.value = !!versions.isolation;
     } else {
       license.value = null;
       // Without a license, isolation plugin cannot load.
@@ -154,6 +170,12 @@ export const useCapabilitiesStore = defineStore('capabilities', () => {
     await discoverPromise;
   }
 
+  /** Force re-discovery (after login/logout) so capabilities match the new session. */
+  async function refresh() {
+    ready.value = false;
+    await ensureDiscovered();
+  }
+
   return {
     ready,
     auth,
@@ -165,5 +187,6 @@ export const useCapabilitiesStore = defineStore('capabilities', () => {
     isOssShell,
     discover,
     ensureDiscovered,
+    refresh,
   };
 });

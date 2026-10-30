@@ -133,6 +133,8 @@ export const useAuthStore = defineStore('auth', () => {
     localStorage.removeItem('super_token');
     user.value = null;
 
+    // Re-discover without the session: Pro nav/routes must disappear.
+    await caps.refresh();
     if (!caps.auth) {
       applyLocalAdmin();
       return;

@@ -94,43 +94,38 @@ pub async fn core_auth_middleware(
     }
 
     // Peer IP is absent on Unix-socket connections, which need no throttling.
+    // A valid secret is checked BEFORE the lockout probe so a correct token
+    // still works (and clears the counter) while an IP is locked out; the
+    // throttle only gates requests that failed authentication.
     let peer_ip = peer.map(|ci| ci.0.ip());
     let throttle = super::throttle::AuthThrottle::shared();
-    if let Some(ip) = peer_ip
-        && !throttle.allowed(ip)
-    {
-        return (
-            StatusCode::TOO_MANY_REQUESTS,
-            Json(serde_json::json!({
-                "status": "error",
-                "message": "too many failed auth attempts; retry later",
-            })),
-        )
-            .into_response();
-    }
 
     let query = req.uri().query().map(str::to_string);
-    let token = extract_token(req.headers(), query.as_deref());
-
-    let Some(token) = token else {
+    if let Some(token) = extract_token(req.headers(), query.as_deref())
+        && state.secret_matches(&token)
+    {
         if let Some(ip) = peer_ip {
-            throttle.record_failure(ip);
+            throttle.record_success(ip);
         }
-        return unauthorized();
-    };
-    if !state.secret_matches(&token) {
-        if let Some(ip) = peer_ip {
-            throttle.record_failure(ip);
-        }
-        return unauthorized();
+        let mut req = req;
+        req.extensions_mut().insert(AuthState::root_context());
+        return next.run(req).await;
     }
 
     if let Some(ip) = peer_ip {
-        throttle.record_success(ip);
+        if !throttle.allowed(ip) {
+            return (
+                StatusCode::TOO_MANY_REQUESTS,
+                Json(serde_json::json!({
+                    "status": "error",
+                    "message": "too many failed auth attempts; retry later",
+                })),
+            )
+                .into_response();
+        }
+        throttle.record_failure(ip);
     }
-    let mut req = req;
-    req.extensions_mut().insert(AuthState::root_context());
-    next.run(req).await
+    unauthorized()
 }
 
 fn unauthorized() -> Response {

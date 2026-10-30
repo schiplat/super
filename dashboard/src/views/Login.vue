@@ -4,6 +4,7 @@ import { useRouter } from 'vue-router';
 import { Lock, Loader2, ArrowRight } from 'lucide-vue-next';
 import apiClient from '@/api/client';
 import { useAuthStore } from '@/stores/auth';
+import { useCapabilitiesStore } from '@/stores/capabilities';
 
 const router = useRouter();
 const authStore = useAuthStore();
@@ -19,6 +20,9 @@ async function handleLogin() {
   try {
     await apiClient.post('/api/v1/auth/login', {}, { headers: { Authorization: `Bearer ${token.value}` } });
     localStorage.setItem('super_token', token.value);
+    // Re-discover capabilities with the new session: pre-login discovery
+    // skipped the license/notify probes (they would 401 into the throttle).
+    await useCapabilitiesStore().refresh();
     await authStore.fetchProfile();
     router.push('/');
   } catch (e: any) {
