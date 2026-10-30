@@ -348,6 +348,9 @@ super reload <name|@group|id|all>         # SIGHUP to program(s) — e.g. nginx 
 | `--yes` / `-y` | bool | `false` | Batch safety on the SIGHUP target: skip confirmation (see above) |
 | `--dry-run` | bool | `false` | Batch safety on the SIGHUP target: preview only (see above) |
 
+> [!NOTE]
+> `[server].host`, `port`, `socket`, `socket_only` and `auth_secret` are read once when the daemon starts (they build the listeners and the auth gate; the `security` plugin reads them itself at load). A reload cannot apply them — superd logs a `restart required` warning naming the changed keys, and the old values stay in effect until you restart `superd`.
+
 ### `apply`
 Apply a declarative stack configuration. Stack files are **TOML by default** (`.toml` or no extension); legacy JSON (`.json`) stacks keep working.
 
