@@ -30,7 +30,7 @@ chrono = { workspace = true }
 async-trait = "0.1"
 reqwest = { workspace = true }
 
-sha2 = "0.10"
+sha2 = "0.11"
 hex = "0.4"
 tempfile = "3.8"
 hostname = "0.3"
