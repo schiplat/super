@@ -21,21 +21,21 @@ use handlers::{BatchOptions, Context};
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     let args = Cli::parse();
-    let mut config = CliConfig::load();
 
-    // Handle Check command (no HTTP client required)
+    // Purely local subcommands: no ~/.super/cli.json, daemon, or credentials.
+    // They run before CliConfig::load() so they also work without a HOME
+    // (containers, CI) and never touch the persisted endpoint choice.
     if let Commands::Check { file } = &args.command {
         return check::run(file.clone(), true);
     }
-
     if let Commands::Keyring { json } = &args.command {
         return keyring::run(*json);
     }
-
-    // Completion scripts are pure client-side output: no config, daemon, or auth.
     if let Commands::Completions { shell } = &args.command {
         return completions::run(*shell);
     }
+
+    let mut config = CliConfig::load();
 
     let explicit_server = args.server.is_some();
     if let Some(s) = args.server {
