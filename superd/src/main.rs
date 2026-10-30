@@ -481,14 +481,17 @@ async fn async_main() -> anyhow::Result<()> {
         }],
         None => Vec::new(),
     };
-    let app = Router::new().merge(api_router).fallback(move |req: Request| {
-        let ui = ui_handle.clone();
-        let ids = ui_plugin_ids.clone();
-        async move {
-            let (parts, _body) = req.into_parts();
-            ui_fallback_handler(parts.uri, parts.method, ui, auth_flag, licensed_flag, ids).await
-        }
-    });
+    let app = Router::new()
+        .merge(api_router)
+        .fallback(move |req: Request| {
+            let ui = ui_handle.clone();
+            let ids = ui_plugin_ids.clone();
+            async move {
+                let (parts, _body) = req.into_parts();
+                ui_fallback_handler(parts.uri, parts.method, ui, auth_flag, licensed_flag, ids)
+                    .await
+            }
+        });
 
     let addr = format!("{}:{}", core.config.server.host, core.config.server.port);
     let server = &core.config.server;

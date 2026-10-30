@@ -125,7 +125,11 @@ pub async fn core_auth_middleware(
     let query = req.uri().query().map(str::to_string);
     // `?token=` is a WebSocket-only fallback; REST requests must use the
     // Authorization header so secrets stay out of proxy/audit logs.
-    let query_for_auth = if path == "/ws" { query.as_deref() } else { None };
+    let query_for_auth = if path == "/ws" {
+        query.as_deref()
+    } else {
+        None
+    };
     if let Some(token) = extract_token(req.headers(), query_for_auth)
         && state.secret_matches(&token)
     {

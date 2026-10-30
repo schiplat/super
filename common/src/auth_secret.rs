@@ -98,7 +98,10 @@ pub fn load_or_generate_ephemeral_auth_secret(super_root: &Path) -> anyhow::Resu
         std::fs::create_dir_all(parent)?;
     }
     let secret = generate_secret();
-    let mut file = OpenOptions::new().write(true).create_new(true).open(&path)?;
+    let mut file = OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(&path)?;
     #[cfg(unix)]
     {
         use std::os::unix::fs::PermissionsExt;

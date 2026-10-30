@@ -190,7 +190,9 @@ pub async fn bootstrap(extension: Box<dyn Extension>) -> anyhow::Result<SystemCo
         .server
         .auth_secret
         .as_deref()
-        .is_some_and(|s| !s.trim().is_empty() && !common::auth_secret::is_placeholder_auth_secret(s))
+        .is_some_and(|s| {
+            !s.trim().is_empty() && !common::auth_secret::is_placeholder_auth_secret(s)
+        })
     {
         warn_if_config_world_readable(&paths.config_file).await;
     }
