@@ -2994,6 +2994,31 @@ impl Manager {
             );
             (self.log_reloader)(new_config.logging.log_level.clone())?;
         }
+
+        // Bind/auth settings are read once at daemon startup (listeners and
+        // auth middleware are built then, and the security plugin reads the
+        // config file itself). A reload cannot apply them — warn loudly
+        // instead of succeeding silently (logic-audit-2026-10-30 C1).
+        let old = &self.config.server;
+        let new = &new_config.server;
+        let startup_changed = [
+            ("host", old.host != new.host),
+            ("port", old.port != new.port),
+            ("socket", old.socket != new.socket),
+            ("socket_only", old.socket_only != new.socket_only),
+            ("auth_secret", old.auth_secret != new.auth_secret),
+        ]
+        .into_iter()
+        .filter(|(_, changed)| *changed)
+        .map(|(name, _)| name)
+        .collect::<Vec<_>>();
+        if !startup_changed.is_empty() {
+            tracing::warn!(
+                "[server] {} changed in super.toml but only applies after a daemon restart",
+                startup_changed.join(", ")
+            );
+        }
+
         self.config = new_config.clone();
         self.controller.config = new_config;
 
