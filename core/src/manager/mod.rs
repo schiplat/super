@@ -2998,7 +2998,7 @@ impl Manager {
         // Bind/auth settings are read once at daemon startup (listeners and
         // auth middleware are built then, and the security plugin reads the
         // config file itself). A reload cannot apply them — warn loudly
-        // instead of succeeding silently (logic-audit-2026-10-30 C1).
+        // instead of succeeding silently.
         let old = &self.config.server;
         let new = &new_config.server;
         let startup_changed = [

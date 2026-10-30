@@ -106,8 +106,7 @@ async fn ui_fallback_handler(
     // Real assets are always served when they exist. Only a MISS may fall
     // back to index.html, and only for document-style paths (extension-less,
     // outside /assets/): a stale hashed asset or /favicon.ico must 404 rather
-    // than return HTML browsers then parse as a module
-    // (logic-audit-2026-10-30 C4).
+    // than return HTML browsers then parse as a module.
     let last_segment = path.rsplit('/').next().unwrap_or("");
     let spa_fallback_allowed = !path.starts_with("/assets/") && !last_segment.contains('.');
     let file_path = normalize_ui_path(path);
@@ -473,7 +472,7 @@ async fn async_main() -> anyhow::Result<()> {
     // suffixed with the plugin build_id so the loader cache-busts the bundle
     // URL (`ui@1.7.1` → /api/v1/plugins/ui/ui.js?v=1.7.1) — the endpoint URL
     // is otherwise stable, so browsers kept serving a year-long immutable
-    // cache across plugin upgrades (logic-audit-2026-10-30 C3).
+    // cache across plugin upgrades.
     let ui_plugin_ids: Vec<String> = match ui_plugin.as_ref() {
         Some(ui) => vec![match ui.build_id() {
             Some(build_id) => format!("ui@{build_id}"),
