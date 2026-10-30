@@ -1,11 +1,13 @@
 /**
  * Plugin UI bundle loader.
  *
- * `superd` injects `window.__SUPER_PLUGINS__` (list of plugin ids with UI)
- * into index.html alongside __SUPER_CONFIG__. Each plugin serves its bundle
- * at /api/v1/plugins/{id}/ui.js (+ optional ui.css); bundles self-register
- * into slots/routes via window.__SUPER_CORE__. Failure of any single bundle
- * must not affect the shell or other plugins.
+ * `superd` injects `window.__SUPER_PLUGINS__` (list of plugin ids with UI,
+ * optionally `id@build_id`) into index.html alongside __SUPER_CONFIG__. Each
+ * plugin serves its bundle at /api/v1/plugins/{id}/ui.js (+ optional ui.css);
+ * bundles self-register into slots/routes via window.__SUPER_CORE__. The
+ * build_id is appended as `?v=` so a plugin upgrade busts the browser cache —
+ * the bundle URL itself is otherwise stable and cached immutable. Failure of
+ * any single bundle must not affect the shell or other plugins.
  */
 import { populatedSlots } from './registry';
 
@@ -38,12 +40,15 @@ function injectStylesheet(href: string): void {
 export async function loadPluginUIs(): Promise<void> {
   const ids = window.__SUPER_PLUGINS__ ?? [];
   await Promise.allSettled(
-    ids.map(async (id) => {
+    ids.map(async (raw) => {
+      const [id, buildId] = raw.split('@');
       const enc = encodeURIComponent(id);
+      // Cache-bust per plugin build so upgrades replace a stale bundle.
+      const v = buildId ? `?v=${encodeURIComponent(buildId)}` : '';
       // CSS first so first paint of plugin views has utilities available.
-      injectStylesheet(`/api/v1/plugins/${enc}/ui.css`);
+      injectStylesheet(`/api/v1/plugins/${enc}/ui.css${v}`);
       try {
-        await import(/* @vite-ignore */ `/api/v1/plugins/${enc}/ui.js`);
+        await import(/* @vite-ignore */ `/api/v1/plugins/${enc}/ui.js${v}`);
       } catch (err) {
         console.warn(`[plugins] failed to load UI bundle for "${id}":`, err);
       }

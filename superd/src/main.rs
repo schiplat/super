@@ -1,6 +1,7 @@
 use anyhow::Context;
 use axum::{
     Router,
+    extract::Request,
     http::{HeaderValue, StatusCode, Uri, header},
     response::{IntoResponse, Response},
 };
@@ -71,6 +72,7 @@ struct Cli {
 
 async fn ui_fallback_handler(
     uri: Uri,
+    method: axum::http::Method,
     ui: Option<std::sync::Arc<super_core::plugin::UiPluginHandle>>,
     auth_required: bool,
     is_licensed: bool,
@@ -78,8 +80,8 @@ async fn ui_fallback_handler(
 ) -> Response {
     let path = uri.path();
     if path.starts_with("/api/")
-        || path == "/health"
-        || path == "/metrics"
+        || path.starts_with("/health")
+        || path.starts_with("/metrics")
         || path.starts_with("/ws")
     {
         // Slot extension bundles: /api/v1/plugins/{id}/ui.js|ui.css from the
@@ -96,11 +98,25 @@ async fn ui_fallback_handler(
         return StatusCode::NOT_FOUND.into_response();
     }
 
+    // The UI is read-only: anything but GET/HEAD is a genuine miss.
+    if method != axum::http::Method::GET && method != axum::http::Method::HEAD {
+        return StatusCode::NOT_FOUND.into_response();
+    }
+
+    // Real assets are always served when they exist. Only a MISS may fall
+    // back to index.html, and only for document-style paths (extension-less,
+    // outside /assets/): a stale hashed asset or /favicon.ico must 404 rather
+    // than return HTML browsers then parse as a module
+    // (logic-audit-2026-10-30 C4).
+    let last_segment = path.rsplit('/').next().unwrap_or("");
+    let spa_fallback_allowed = !path.starts_with("/assets/") && !last_segment.contains('.');
+    let file_path = normalize_ui_path(path);
+
     // Prefer licensed ui plugin assets when loaded (optional override / hot path).
     if let Some(ui) = ui.as_ref() {
-        match serve_ui_asset(
+        if let Some(resp) = serve_ui_asset(
             ui,
-            &normalize_ui_path(path),
+            &file_path,
             auth_required,
             is_licensed,
             false,
@@ -108,20 +124,25 @@ async fn ui_fallback_handler(
         )
         .await
         {
-            Some(resp) => return resp,
-            None => {
-                return spa_fallback(ui, auth_required, is_licensed, &ui_plugin_ids).await;
-            }
+            return resp;
         }
+        if spa_fallback_allowed {
+            return spa_fallback(ui, auth_required, is_licensed, &ui_plugin_ids).await;
+        }
+        return StatusCode::NOT_FOUND.into_response();
     }
 
     // OSS default: Dashboard embedded in this binary.
-    let file_path = normalize_ui_path(path);
     let inject = |raw: &[u8], auth: bool, lic: bool| {
         inject_ui_config_with_plugins(raw, auth, lic, &ui_plugin_ids)
     };
-    embedded_ui::response(&file_path, auth_required, is_licensed, inject)
-        .unwrap_or_else(|| embedded_ui::spa_index(auth_required, is_licensed, inject))
+    if let Some(resp) = embedded_ui::response(&file_path, auth_required, is_licensed, inject) {
+        return resp;
+    }
+    if spa_fallback_allowed {
+        return embedded_ui::spa_index(auth_required, is_licensed, inject);
+    }
+    StatusCode::NOT_FOUND.into_response()
 }
 
 async fn spa_fallback(
@@ -448,16 +469,25 @@ async fn async_main() -> anyhow::Result<()> {
     let auth_flag = auth_required;
     let licensed_flag = is_licensed;
     let ui_handle = ui_plugin.clone();
-    // Plugin ids with a UI bundle the shell should import (slot extensions).
-    let ui_plugin_ids: Vec<String> = if ui_plugin.is_some() {
-        vec!["ui".to_string()]
-    } else {
-        Vec::new()
+    // Plugin ids with a UI bundle the shell should import (slot extensions),
+    // suffixed with the plugin build_id so the loader cache-busts the bundle
+    // URL (`ui@1.7.1` → /api/v1/plugins/ui/ui.js?v=1.7.1) — the endpoint URL
+    // is otherwise stable, so browsers kept serving a year-long immutable
+    // cache across plugin upgrades (logic-audit-2026-10-30 C3).
+    let ui_plugin_ids: Vec<String> = match ui_plugin.as_ref() {
+        Some(ui) => vec![match ui.build_id() {
+            Some(build_id) => format!("ui@{build_id}"),
+            None => "ui".to_string(),
+        }],
+        None => Vec::new(),
     };
-    let app = Router::new().merge(api_router).fallback(move |uri: Uri| {
+    let app = Router::new().merge(api_router).fallback(move |req: Request| {
         let ui = ui_handle.clone();
         let ids = ui_plugin_ids.clone();
-        async move { ui_fallback_handler(uri, ui, auth_flag, licensed_flag, ids).await }
+        async move {
+            let (parts, _body) = req.into_parts();
+            ui_fallback_handler(parts.uri, parts.method, ui, auth_flag, licensed_flag, ids).await
+        }
     });
 
     let addr = format!("{}:{}", core.config.server.host, core.config.server.port);
