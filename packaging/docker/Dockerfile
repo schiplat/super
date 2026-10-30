@@ -75,8 +75,11 @@ WORKDIR /app/super
 VOLUME ["/app/super/conf", "/app/super/data", "/app/super/logs"]
 EXPOSE 9002
 
+# /health is auth-exempt and reports manager/persistence/web readiness. `super
+# list` was a weaker probe: it needs the admin Bearer, and the CLI exits 0 even
+# on a 401, so it only ever proved the port was open.
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
-  CMD ["/usr/local/bin/super", "list"]
+  CMD ["/usr/local/bin/busybox", "wget", "-qO-", "http://127.0.0.1:9002/health"]
 
 ENTRYPOINT ["/usr/bin/tini", "--"]
 CMD ["/usr/local/bin/superd"]
