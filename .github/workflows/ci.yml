@@ -139,7 +139,10 @@ jobs:
 
   audit:
     needs: changes
-    if: needs.changes.outputs.audit == 'true'
+    # Dependabot PRs run with a read-only GITHUB_TOKEN, so the checks/issues
+    # write grants below cannot be honoured and audit-check fails before it
+    # scans anything; the merge to master re-runs the audit with full rights.
+    if: needs.changes.outputs.audit == 'true' && github.actor != 'dependabot[bot]'
     runs-on: ubuntu-latest
     # rustsec/audit-check posts Checks API annotations (and may open/update
     # tracking issues). Without these, the job fails with
