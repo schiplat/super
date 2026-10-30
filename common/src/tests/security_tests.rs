@@ -44,6 +44,28 @@ fn ota_blocks_metadata_and_http() {
 }
 
 #[test]
+fn webhook_blocks_loopback_and_metadata_allows_public() {
+    use FetchUrlPolicy::Webhook;
+    // Daemon's own API and localhost must not be webhook targets.
+    assert!(validate_outbound_url("http://127.0.0.1:9002/api/v1/programs", Webhook).is_err());
+    assert!(validate_outbound_url("http://localhost:9002/hook", Webhook).is_err());
+    assert!(validate_outbound_url("http://[::1]:9002/hook", Webhook).is_err());
+    // Cloud metadata.
+    assert!(validate_outbound_url("http://169.254.169.254/latest/meta-data", Webhook).is_err());
+    assert!(
+        validate_outbound_url(
+            "http://metadata.google.internal/computeMetadata/v1",
+            Webhook
+        )
+        .is_err()
+    );
+    // Plain http to a public host stays allowed (self-hosted IM gateways);
+    // private LAN ranges are operator-configured and not resolved here.
+    assert!(validate_outbound_url("https://hooks.example.com/services/x", Webhook).is_ok());
+    assert!(validate_outbound_url("http://hooks.example.com/hook", Webhook).is_ok());
+}
+
+#[test]
 fn health_allows_loopback() {
     assert!(
         validate_outbound_url("http://127.0.0.1:8080/health", FetchUrlPolicy::HealthCheck).is_ok()

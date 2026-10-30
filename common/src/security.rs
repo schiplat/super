@@ -75,6 +75,11 @@ pub enum FetchUrlPolicy {
     HealthCheck,
     /// OTA artifact downloads — HTTPS for remote hosts; loopback HTTP allowed for dev/tests.
     OtaArtifact,
+    /// Notification webhooks — http(s) allowed, but cloud metadata endpoints
+    /// and the daemon's own loopback API are rejected: an Operator-level
+    /// account must not be able to turn webhook delivery into an internal
+    /// network scanner or replay credentials at the local superd API.
+    Webhook,
 }
 
 /// Validate a URL before superd performs an outbound HTTP request.
@@ -110,11 +115,16 @@ pub fn validate_outbound_url(url: &str, policy: FetchUrlPolicy) -> anyhow::Resul
         (FetchUrlPolicy::OtaArtifact, "https", _) => {}
         (FetchUrlPolicy::OtaArtifact, "http", true) => {}
         (FetchUrlPolicy::HealthCheck, "http" | "https", _) => {}
+        (FetchUrlPolicy::Webhook, "http" | "https", _) => {}
         _ => bail!("URL scheme is not allowed for this operation"),
     }
 
     if policy == FetchUrlPolicy::OtaArtifact && !loopback && host_is_private_or_link_local(host)? {
         bail!("OTA artifact URL must not target private, link-local, or loopback addresses");
+    }
+
+    if policy == FetchUrlPolicy::Webhook && (loopback || is_blocked_metadata_host(host)) {
+        bail!("webhook URL must not target loopback or cloud metadata addresses (got {host})");
     }
 
     Ok(())
