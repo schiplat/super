@@ -21,7 +21,7 @@ uuid = { workspace = true }
 tokio-tungstenite = { workspace = true }
 futures-util = { workspace = true }
 url = "2.5"
-toml = "0.8"
+toml = "1.1"
 colored = "2.0"
 glob = "0.3"
 # Unix socket transport for the API (unix:// server URLs)
