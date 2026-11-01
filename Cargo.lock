@@ -498,6 +498,7 @@ dependencies = [
  "tempfile",
  "tokio",
  "toml",
+ "url",
  "utoipa",
  "uuid",
 ]

@@ -2,7 +2,7 @@
 
 use anyhow::{Context, bail};
 use std::collections::HashMap;
-use std::net::{IpAddr, ToSocketAddrs};
+use std::net::{IpAddr, Ipv6Addr, ToSocketAddrs};
 use std::path::{Path, PathBuf};
 use subtle::ConstantTimeEq;
 
@@ -75,10 +75,11 @@ pub enum FetchUrlPolicy {
     HealthCheck,
     /// OTA artifact downloads — HTTPS for remote hosts; loopback HTTP allowed for dev/tests.
     OtaArtifact,
-    /// Notification webhooks — http(s) allowed, but cloud metadata endpoints
-    /// and the daemon's own loopback API are rejected: an Operator-level
-    /// account must not be able to turn webhook delivery into an internal
-    /// network scanner or replay credentials at the local superd API.
+    /// Notification webhooks — http(s) allowed, but the daemon's own loopback
+    /// API and cloud metadata endpoints are rejected so an Operator-level
+    /// account cannot aim webhook delivery at superd itself or harvest cloud
+    /// credentials. Private LAN ranges stay operator-configured (self-hosted
+    /// gateways legitimately live there).
     Webhook,
 }
 
@@ -89,29 +90,23 @@ pub fn validate_outbound_url(url: &str, policy: FetchUrlPolicy) -> anyhow::Resul
         bail!("URL must not be empty");
     }
 
-    let (scheme, rest) = url
-        .split_once("://")
-        .context("URL must include a scheme (http:// or https://)")?;
-    let scheme = scheme.to_ascii_lowercase();
+    // Parse with the WHATWG URL parser — the same rules the HTTP client
+    // applies when it connects — so host checks see the canonical address:
+    // `2130706433`, `0x7f000001`, and `0177.0.0.1` all normalize to 127.0.0.1
+    // here, and IPv6 literals arrive typed instead of hand-split strings.
+    let parsed = url::Url::parse(url).context("URL must be a valid absolute http(s) URL")?;
+    let scheme = parsed.scheme();
+    let host = parsed.host().context("URL missing host")?;
 
-    let host = rest
-        .split(&['/', '?', '#'][..])
-        .next()
-        .and_then(|authority| authority.rsplit('@').next())
-        .and_then(|hostport| hostport.split(':').next())
-        .unwrap_or("")
-        .trim_matches(|c| c == '[' || c == ']');
-
-    if host.is_empty() {
-        bail!("URL missing host");
-    }
-
-    if is_blocked_metadata_host(host) {
+    // Hostname denylist applies to every policy.
+    if let url::Host::Domain(domain) = host
+        && is_blocked_metadata_host(domain)
+    {
         bail!("URL host is not allowed: {host}");
     }
 
-    let loopback = is_loopback_host(host);
-    match (policy, scheme.as_str(), loopback) {
+    let loopback = host_is_loopback(&host);
+    match (policy, scheme, loopback) {
         (FetchUrlPolicy::OtaArtifact, "https", _) => {}
         (FetchUrlPolicy::OtaArtifact, "http", true) => {}
         (FetchUrlPolicy::HealthCheck, "http" | "https", _) => {}
@@ -119,11 +114,11 @@ pub fn validate_outbound_url(url: &str, policy: FetchUrlPolicy) -> anyhow::Resul
         _ => bail!("URL scheme is not allowed for this operation"),
     }
 
-    if policy == FetchUrlPolicy::OtaArtifact && !loopback && host_is_private_or_link_local(host)? {
+    if policy == FetchUrlPolicy::OtaArtifact && !loopback && host_is_private_or_link_local(&host)? {
         bail!("OTA artifact URL must not target private, link-local, or loopback addresses");
     }
 
-    if policy == FetchUrlPolicy::Webhook && (loopback || is_blocked_metadata_host(host)) {
+    if policy == FetchUrlPolicy::Webhook && (loopback || webhook_targets_blocked_address(&host)) {
         bail!("webhook URL must not target loopback or cloud metadata addresses (got {host})");
     }
 
@@ -131,12 +126,78 @@ pub fn validate_outbound_url(url: &str, policy: FetchUrlPolicy) -> anyhow::Resul
 }
 
 fn is_blocked_metadata_host(host: &str) -> bool {
-    let h = host.to_ascii_lowercase();
+    let h = host.trim_end_matches('.').to_ascii_lowercase();
     h == "metadata.google.internal"
         || h.ends_with(".metadata.google.internal")
         || h == "169.254.169.254"
 }
 
+/// Typed-host counterpart of [`is_loopback_host`] for parsed URLs: IPv6
+/// literals (including IPv4-mapped spellings) are judged numerically.
+fn host_is_loopback(host: &url::Host<&str>) -> bool {
+    match host {
+        url::Host::Ipv4(v4) => v4.is_loopback(),
+        url::Host::Ipv6(v6) => {
+            v6.is_loopback() || v6.to_ipv4_mapped().is_some_and(|v4| v4.is_loopback())
+        }
+        url::Host::Domain(d) => {
+            let d = d.trim_end_matches('.');
+            d.eq_ignore_ascii_case("localhost") || d.to_ascii_lowercase().ends_with(".localhost")
+        }
+    }
+}
+
+/// Alibaba Cloud metadata server (outside link-local).
+const ALIBABA_METADATA_V4: std::net::Ipv4Addr = std::net::Ipv4Addr::new(100, 100, 100, 200);
+
+/// GCP's IPv6 metadata server (`fd00:ec2::254`), the one metadata endpoint
+/// that is neither loopback nor IPv4 link-local.
+const GCP_METADATA_V6: Ipv6Addr = Ipv6Addr::new(0xfd00, 0x0ec2, 0, 0, 0, 0, 0, 0x0254);
+
+/// Webhook targets get a narrower denylist than OTA (private LAN stays
+/// operator-configurable): loopback, unspecified (`0.0.0.0` reaches the local
+/// host), IPv4/IPv6 link-local (169.254.0.0/16 carries AWS/GCP/Azure/DO
+/// metadata and ECS task credentials), and the Alibaba/GCP metadata endpoints.
+/// Hostnames are resolved best-effort so a name pointing at a blocked address
+/// cannot slip past the literal checks; resolution failures are left to
+/// connect time, as in the OTA check.
+fn webhook_targets_blocked_address(host: &url::Host<&str>) -> bool {
+    match host {
+        url::Host::Ipv4(v4) => is_webhook_blocked_ip(&IpAddr::V4(*v4)),
+        url::Host::Ipv6(v6) => is_webhook_blocked_ip(&IpAddr::V6(*v6)),
+        url::Host::Domain(d) => match (*d, 0).to_socket_addrs() {
+            Ok(addrs) => addrs.map(|a| a.ip()).any(|ip| is_webhook_blocked_ip(&ip)),
+            Err(_) => false,
+        },
+    }
+}
+
+fn is_webhook_blocked_ip(ip: &IpAddr) -> bool {
+    match ip {
+        IpAddr::V4(v4) => {
+            *v4 == ALIBABA_METADATA_V4
+                || v4.is_loopback()
+                || v4.is_link_local()
+                || v4.is_unspecified()
+        }
+        IpAddr::V6(v6) => {
+            v6.is_loopback()
+                || v6.is_unspecified()
+                || (v6.segments()[0] & 0xffc0) == 0xfe80 // link-local
+                || *v6 == GCP_METADATA_V6
+                || v6.to_ipv4_mapped().is_some_and(|v4| {
+                    v4.is_loopback() || v4.is_link_local() || v4.is_unspecified()
+                })
+        }
+    }
+}
+
+/// True when binding to this address keeps the API on loopback only.
+pub fn is_loopback_bind_host(host: &str) -> bool {
+    is_loopback_host(host)
+}
+
+/// String-form loopback check for bind hosts and config values.
 fn is_loopback_host(host: &str) -> bool {
     let h = host.trim();
     if h.eq_ignore_ascii_case("localhost") {
@@ -146,11 +207,6 @@ fn is_loopback_host(host: &str) -> bool {
         return ip.is_loopback();
     }
     h.to_ascii_lowercase().ends_with(".localhost")
-}
-
-/// True when binding to this address keeps the API on loopback only.
-pub fn is_loopback_bind_host(host: &str) -> bool {
-    is_loopback_host(host)
 }
 
 /// Resolve a custom program log path and confine it under `log_dir`.
@@ -213,32 +269,37 @@ fn canonicalize_or_create_dir(dir: &Path) -> anyhow::Result<PathBuf> {
     }
 }
 
-fn host_is_private_or_link_local(host: &str) -> anyhow::Result<bool> {
-    if let Ok(ip) = host.parse::<IpAddr>() {
-        return Ok(is_non_public_ip(&ip));
+fn host_is_private_or_link_local(host: &url::Host<&str>) -> anyhow::Result<bool> {
+    match host {
+        url::Host::Ipv4(v4) => Ok(is_non_public_ip(&IpAddr::V4(*v4))),
+        url::Host::Ipv6(v6) => Ok(is_non_public_ip(&IpAddr::V6(*v6))),
+        // Best-effort: resolve hostname once; ignore resolution failures (handled at connect time).
+        url::Host::Domain(d) => {
+            if let Ok(mut addrs) = (*d, 0).to_socket_addrs()
+                && let Some(addr) = addrs.next()
+            {
+                return Ok(is_non_public_ip(&addr.ip()));
+            }
+            Ok(false)
+        }
     }
-
-    // Best-effort: resolve hostname once; ignore resolution failures (handled at connect time).
-    if let Ok(mut addrs) = (host, 0).to_socket_addrs()
-        && let Some(addr) = addrs.next()
-    {
-        return Ok(is_non_public_ip(&addr.ip()));
-    }
-    Ok(false)
 }
 
 fn is_non_public_ip(ip: &IpAddr) -> bool {
-    match ip {
-        IpAddr::V4(v4) => {
-            v4.is_private() || v4.is_link_local() || v4.is_loopback() || v4.is_unspecified()
-        }
-        IpAddr::V6(v6) => {
-            v6.is_loopback()
-                || v6.is_unspecified()
-                || (v6.segments()[0] & 0xfe00) == 0xfc00 // unique local
-                || (v6.segments()[0] & 0xffc0) == 0xfe80 // link-local
-        }
-    }
+    // IPv4-mapped v6 (::ffff:a.b.c.d) is checked as the v4 it really is.
+    let v4 = match ip {
+        IpAddr::V4(v4) => *v4,
+        IpAddr::V6(v6) => match v6.to_ipv4_mapped() {
+            Some(v4) => v4,
+            None => {
+                return v6.is_loopback()
+                    || v6.is_unspecified()
+                    || (v6.segments()[0] & 0xfe00) == 0xfc00 // unique local
+                    || (v6.segments()[0] & 0xffc0) == 0xfe80; // link-local
+            }
+        },
+    };
+    v4.is_private() || v4.is_link_local() || v4.is_loopback() || v4.is_unspecified()
 }
 
 /// Resolve a plugin library path and ensure it stays under `plugins_dir`.

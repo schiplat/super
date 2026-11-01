@@ -41,6 +41,22 @@ fn ota_blocks_metadata_and_http() {
         )
         .is_ok()
     );
+    // Private ranges stay blocked through the mapped spelling…
+    assert!(
+        validate_outbound_url(
+            "https://[::ffff:10.0.0.5]/app.tar.gz",
+            FetchUrlPolicy::OtaArtifact
+        )
+        .is_err()
+    );
+    // …while loopback dev targets stay allowed in either spelling.
+    assert!(
+        validate_outbound_url(
+            "https://[::ffff:127.0.0.1]/app.tar.gz",
+            FetchUrlPolicy::OtaArtifact
+        )
+        .is_ok()
+    );
 }
 
 #[test]
@@ -63,6 +79,36 @@ fn webhook_blocks_loopback_and_metadata_allows_public() {
     // private LAN ranges are operator-configured and not resolved here.
     assert!(validate_outbound_url("https://hooks.example.com/services/x", Webhook).is_ok());
     assert!(validate_outbound_url("http://hooks.example.com/hook", Webhook).is_ok());
+}
+
+/// Regression: the hand-rolled host extraction compared raw spellings, so
+/// WHATWG-legal IPv4 encodings slipped past the loopback/metadata checks
+/// while the HTTP client still connected to 127.0.0.1 / 169.254.169.254.
+/// Hosts are now canonicalized with the url crate before any check.
+#[test]
+fn webhook_rejects_obfuscated_and_metadata_targets() {
+    use FetchUrlPolicy::Webhook;
+    // Decimal/hex/octal IPv4 encodings of 127.0.0.1 and 169.254.169.254.
+    for host in ["2130706433", "0x7f000001", "0177.0.0.1", "2852039166"] {
+        let url = format!("http://{host}/hook");
+        assert!(
+            validate_outbound_url(&url, Webhook).is_err(),
+            "obfuscated host must be rejected: {url}"
+        );
+    }
+    // Trailing-dot hostname tricks.
+    assert!(validate_outbound_url("http://localhost./hook", Webhook).is_err());
+    assert!(validate_outbound_url("http://metadata.google.internal./x", Webhook).is_err());
+    // Metadata endpoints outside the canonical two.
+    assert!(validate_outbound_url("http://100.100.100.200/latest/meta-data/", Webhook).is_err());
+    assert!(validate_outbound_url("http://169.254.170.2/v2/credentials", Webhook).is_err());
+    assert!(validate_outbound_url("http://[fd00:ec2::254]/computeMetadata/v1", Webhook).is_err());
+    // 0.0.0.0 reaches the local host on Linux.
+    assert!(validate_outbound_url("http://0.0.0.0:9002/hook", Webhook).is_err());
+    // IPv6-mapped loopback.
+    assert!(validate_outbound_url("http://[::ffff:127.0.0.1]/hook", Webhook).is_err());
+    // Public IPv6 literals stay reachable (previously rejected as "missing host").
+    assert!(validate_outbound_url("https://[2001:db8::1]/hook", Webhook).is_ok());
 }
 
 #[test]
