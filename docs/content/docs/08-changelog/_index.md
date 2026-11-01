@@ -15,7 +15,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-## [Unreleased]
+## [1.8.0] - 2026-11-02
+
+### Security
+
+- **Outbound URL hardening.** Every URL superd fetches (OTA artifacts, health probes, notification webhooks) is now parsed with the WHATWG URL parser — the same rules the HTTP client applies — before the policy check, so the host that is *checked* is the host that is *connected to*. Previously the hand-rolled host extraction compared raw spellings: `2130706433`, `0x7f000001`, or `0177.0.0.1` slipped past the loopback block and `2852039166` past the metadata block while the client still connected to `127.0.0.1` / `169.254.169.254`; bracketed IPv6 literals were rejected wholesale as "missing host". OTA now also judges IPv4-mapped IPv6 literals as the IPv4 they reach.
+- **Webhook targets are policed (`notify` plugin).** Channel URLs are validated when saved **and re-validated on every send**: loopback (`localhost`, `127.0.0.0/8`, `::1`), unspecified, and cloud-metadata targets — `169.254.0.0/16` (AWS/GCP/Azure/DigitalOcean metadata, ECS task credentials), `metadata.google.internal`, Alibaba Cloud `100.100.100.200`, GCP IPv6 `fd00:ec2::254` — are rejected, and hostnames are resolved and held to the same rules. A compromised `conf/notify.toml` can no longer aim deliveries at the daemon's own API or the host's cloud credentials. LAN and public addresses stay allowed. See [Event Notifications — webhook URL policy](/docs/05-advanced-management/event-notifications/#webhook-url-policy).
+- **`ctutils` bumped to 0.4.6** (RUSTSEC-2026-0385, non-constant-time comparisons in the previous release).
 
 ### Added
 
@@ -34,10 +40,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **Dashboard SPA fallback only answers document requests.** Non-GET requests, `/health/`, `/healthz`, `/metrics/`, missing hashed assets and any path with a file extension now return 404 instead of `index.html` — a probe to `/health/` could previously look healthy and browsers were handed HTML where they expected a module.
 - **Plugin UI bundles are cache-busted per plugin build.** `superd` advertises `ui@<build_id>` and the shell loads `/api/v1/plugins/ui/ui.js?v=<build_id>`, so upgrading the `ui` plugin no longer leaves browsers on a year-long immutable cache of the old bundle.
+- **`ui` plugin release builds embed the Pro UI bundle again.** The 1.7.x release artifact served 404 for the plugin's own UI assets because the bundle was only picked up in debug builds; debug builds also handed an owned buffer across the C ABI (use-after-free, served as zero-filled HTML) — only borrowed `'static` data crosses the boundary now.
+- **`security` plugin token store: disk and memory always agree.** The store used to mutate memory first and save second, so a failed write left a revoked token gone from memory but still on disk — resurrected after a restart — while a freshly created token could vanish. Writes now persist to a 0600 temp file, `fsync`, and rename before the in-memory swap.
+- **`super check`, `super keyring`, and `super completions` run before `~/.super/cli.json` is loaded.** A missing or malformed CLI config no longer blocks commands that need neither a daemon nor credentials.
+- **Docker image `HEALTHCHECK` works on the distroless runtime.** It now probes `http://127.0.0.1:9002/health` with the bundled `busybox wget` (there is no `curl` in the image), so `docker ps` and Compose health conditions report `healthy` once superd is serving.
 
 ### Documentation
 
 - New **Transport security (TLS)** section in [Authentication](/docs/02-essentials/authentication/): superd serves plain HTTP; how to front it with a TLS-terminating reverse proxy (nginx sample with WebSocket settings), and how the auth throttle interacts with proxies.
+
+### Dependencies
+
+- **Rust:** `toml` 1.1 (TOML 1.1 spec), `reqwest` 0.13 — **native-tls is pinned**, so TLS keeps using the OS trust store exactly as before (0.13 defaults to rustls otherwise), `ed25519-dalek` 3 (license verification only; signatures and key formats are unchanged), `utoipa` 6 with Swagger UI 10 behind `enable_docs`, `comfy-table` 8, `tower-http` 0.7, `sysinfo` 0.39, `base64` 0.23, `sha2` 0.11, `zip` 9.2. `cargo audit` is clean.
+- **Dashboard:** Vite 8, vue-router 5, Pinia 4, `@vueuse/core` 15, `uuid` 14; `npm audit` reports no runtime findings.
 
 ## [1.7.1] - 2026-10-22
 

@@ -75,9 +75,24 @@ headers = { Authorization = "Bearer token" }  # Optional: custom HTTP headers
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
-| `url` | string | Yes | Webhook endpoint URL. |
+| `url` | string | Yes | Webhook endpoint URL. Loopback and cloud-metadata targets are **rejected** — see the [webhook URL policy](#webhook-url-policy). |
 | `secret` | string | No | Signing secret for payload verification. Adds an `X-Super-Signature: sha256=<hex>` header to every request — see [Payload Signing](#payload-signing). |
 | `headers` | table | No | Custom HTTP headers sent with every notification. Example: `{ Authorization = "Bearer token", X-Custom = "value" }` |
+
+#### Webhook URL policy
+
+> [!NOTE]
+> Webhook targets are validated when the channel is saved **and re-validated on
+> every send** (a stale config or hand-edited `conf/notify.toml` cannot slip past).
+> Rejected: **loopback** targets (`localhost`, `127.0.0.0/8`, `::1`, and
+> IPv4-mapped spellings of them) and **cloud metadata endpoints**
+> (`169.254.0.0/16` — which covers AWS/GCP/Azure/DigitalOcean metadata and ECS
+> task credentials — plus `metadata.google.internal`, Alibaba Cloud's
+> `100.100.100.200`, and GCP's IPv6 `fd00:ec2::254`). A compromised config must
+> not turn notifications into a probe of the daemon's own API or the host's
+> cloud credentials. **LAN and public addresses are accepted** — self-hosted
+> gateways on `10.x` / `172.16.x` / `192.168.x` work out of the box, and
+> hostnames are resolved and checked against the same rules.
 
 ---
 

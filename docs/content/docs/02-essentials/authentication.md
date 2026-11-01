@@ -108,7 +108,7 @@ server {
 Notes:
 
 - Failed authentication attempts are throttled per peer IP: `[server].auth_max_failures` (default `20`) failures within `auth_failure_window` seconds (default `60`) lock that IP out for the rest of the window (`0` disables). Behind a proxy all requests share the proxy's IP — size the limits with that in mind.
-- The WebSocket endpoint authenticates with `?token=` on the upgrade request; proxies commonly log query strings, so prefer the `Authorization` header for everything else and treat proxy logs as sensitive.
+- The WebSocket endpoint (`/ws`) is the **only** route that accepts `?token=`; REST endpoints reject query-string tokens outright — send `Authorization: Bearer …` instead. Tokens placed in URLs must be percent-encoded (the bundled Dashboard and `super logs --follow` do this), so secrets containing `&`, `+`, `%`, or `/` survive the trip. Proxies commonly log query strings, so treat proxy logs as sensitive.
 
 ---
 

@@ -127,7 +127,7 @@ super restart my-app    # required to run the new command
 
 | Field | Required | Description |
 | :--- | :--- | :--- |
-| `source` | Yes | Download URL. **Remote hosts must use HTTPS** (HTTP allowed on loopback for dev). Cloud metadata endpoints are blocked. |
+| `source` | Yes | Download URL. **Remote hosts must use HTTPS** (HTTP allowed on loopback for dev). Private, link-local, loopback, and cloud-metadata targets are rejected; hosts are canonicalized before the check, so `2130706433` / `0x7f000001` spellings or IPv4-mapped IPv6 cannot masquerade as a public host. |
 | `checksum` | Yes | SHA256 hex of the **downloaded bytes** (the archive when `extract` is true, otherwise the bare binary) |
 | `destination` | Yes | Absolute path of the **final binary** on disk (not an extract root) |
 | `extract` | No (default `false`) | `false` for a single binary; `true` to unpack `.tar.gz` / `.tgz` / `.tar` / `.zip` and stage one payload file (member matching the destination basename, else the sole regular file) |

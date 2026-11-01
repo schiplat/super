@@ -46,6 +46,8 @@ Open **http://127.0.0.1:9002** for the **embedded Dashboard** and HTTP API. Foll
 
 Images are published for **linux/amd64** and **linux/arm64**. Docker picks the matching manifest for your host (`docker buildx imagetools inspect schiplat/super:latest`).
 
+The image declares a `HEALTHCHECK` (every 30 s, 10 s start period, 3 retries) that fetches `http://127.0.0.1:9002/health` with the bundled `busybox wget` — the distroless runtime has no `curl` — so `docker ps`, Compose `depends_on: condition: service_healthy`, and orchestrators see `healthy` once superd is serving.
+
 ### CLI on the host (containerized superd)
 
 The image runs **`superd` in the foreground**; you control it over **HTTP on port 9002**. After `-p 127.0.0.1:9002:9002`, you do **not** need a shell inside the container for routine ops.

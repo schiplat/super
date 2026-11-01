@@ -60,12 +60,18 @@ Global settings for the daemon.
 | `socket_mode` | string | `0600` | Unix socket file permission mode as an octal string (`0600` = owner read/write, `0660` = owner + group, `0640` = owner read/write + group read). **World-writable modes (`0666`) are refused** — a world-writable socket would let any local user drive the control API. |
 | `socket_only` | bool | `false` | When `true`, bind **only** the Unix socket and skip the TCP listener entirely (zero network exposure). Requires `socket` to be set. The non-loopback bind check no longer applies because no TCP port is opened. |
 | `request_timeout_secs` | int | `30` | Whole-request wall-clock budget for the API in seconds. A request that does not finish in time is answered with `408` (`{"status":"error","message":"request timeout"}`). `0` disables the limit. Plugin HTTP hooks carry their own tighter 10-second budget inside this. Note for control routes (`/stop`, `/system/shutdown`, …): a `408` means the **response** timed out, not that the operation failed — stop/shutdown work continues in the background; re-query status instead of retrying the request. |
+| `auth_max_failures` | int | `20` | Failed-authentication throttle: after this many failed auth attempts from one peer IP within `auth_failure_window` seconds, further unauthenticated requests from that IP are answered with `429` for the rest of the window. Keyed by socket peer address; Unix-socket connections are never throttled. A valid credential always authenticates (and clears the counter) even while its IP is locked out. `0` disables. See [Authentication](/docs/02-essentials/authentication/). |
+| `auth_failure_window` | int | `60` | Sliding window in seconds for the failed-auth throttle above. |
 
 ```toml
 # super.toml — [server]
 [server]
 # Enable API auth (required when binding beyond loopback):
 # auth_secret = "your-own-long-random-string"
+
+# Failed-auth throttle (0 disables):
+# auth_max_failures = 20
+# auth_failure_window = 60
 
 # Optional self-daemonize when not using systemd/Docker:
 # daemon = true
