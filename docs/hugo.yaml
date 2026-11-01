@@ -83,7 +83,7 @@ params:
   banner:
     key: "super-release-banner-v1-8-0"
     message: |
-      **Super 1.8.0 is here** — a security-hardening release: failed-auth throttling, an ephemeral admin secret replaces the placeholder on exposed binds, outbound URLs are canonicalized before policy checks, and `super completions` for your shell. Two behavior changes to review: `?token=` is accepted only on `/ws`, and webhooks can no longer target loopback or cloud-metadata addresses. [See what's new →](/docs/08-changelog/)
+      **Super 1.8.0 is here** — security hardening: failed-auth throttling, ephemeral admin secret on exposed binds, outbound URL canonicalization, shell completions… Note: `?token=` now only on `/ws`; webhooks can't target loopback/metadata. [See what's new →](/docs/08-changelog/)
   contact:
     api_url: "https://open.schiplat.com/api/v1/demands"
   externalLinkDecoration: true
