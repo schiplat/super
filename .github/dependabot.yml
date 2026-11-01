@@ -25,6 +25,18 @@ updates:
     directory: /dashboard
     schedule:
       interval: weekly
+    ignore:
+      # vue-tsc resolves `typescript/lib/tsc`, which TypeScript 7 (the Go
+      # compiler) no longer exports — stay on the 5.x line until vue-tsc
+      # supports 7.
+      - dependency-name: typescript
+        update-types:
+          - version-update:semver-major
+      # Tailwind 4 is a migration (new config model, PostCSS plugin split),
+      # not a bump — schedule it deliberately.
+      - dependency-name: tailwindcss
+        update-types:
+          - version-update:semver-major
     groups:
       npm-minor-patch:
         update-types:
