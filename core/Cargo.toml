@@ -52,7 +52,7 @@ dotenvy = "0.15"
 # OpenAPI doc generation
 utoipa = { version = "5.3", features = ["axum_extras", "uuid", "chrono"] }
 # Swagger UI integration
-utoipa-swagger-ui = { version = "9.0.2", features = ["axum"] }
+utoipa-swagger-ui = { version = "10.0.2", features = ["axum"] }
 # SQLite event history
 sqlx = { workspace = true }
 
