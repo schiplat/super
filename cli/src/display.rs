@@ -218,7 +218,7 @@ pub fn print_list_table(mut programs: Vec<ProgramSummary>) {
     });
 
     let mut table = Table::new();
-    table.load_preset(UTF8_FULL);
+    table.load_style(UTF8_FULL);
     table.set_header(vec![
         "ID", "Name", "Group", "Status", "PID", "CPU", "Mem", "Uptime", "Updated",
     ]);
@@ -461,7 +461,7 @@ pub fn print_events(events: &[common::ProgramEventRecord], limit: Option<usize>)
     };
 
     let mut table = Table::new();
-    table.load_preset(UTF8_FULL);
+    table.load_style(UTF8_FULL);
     table.set_header(vec!["Time", "Event", "Exit", "Signal", "Retry", "Message"]);
 
     for e in iter {
@@ -518,7 +518,7 @@ pub fn print_event_stats(stats: &common::EventStats) {
         return;
     }
     let mut table = Table::new();
-    table.load_preset(UTF8_FULL);
+    table.load_style(UTF8_FULL);
     table.set_header(vec!["Event", "Count"]);
     for t in &stats.by_type {
         table.add_row(vec![t.event.clone(), t.count.to_string()]);
@@ -528,7 +528,7 @@ pub fn print_event_stats(stats: &common::EventStats) {
 
 pub fn print_token_table(tokens: Vec<common::AuthTokenInfo>) {
     let mut table = Table::new();
-    table.load_preset(UTF8_FULL);
+    table.load_style(UTF8_FULL);
     table.set_header(vec!["ID", "Name", "Prefix", "Role", "Created"]);
 
     for t in tokens {

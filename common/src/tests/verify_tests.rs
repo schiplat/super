@@ -1,7 +1,13 @@
 use super::*;
 use crate::license::claims::LicenseClaims;
 use ed25519_dalek::{Signer, SigningKey};
-use rand::rngs::OsRng;
+
+fn random_signing_key() -> SigningKey {
+    use rand::RngCore;
+    let mut seed = [0u8; 32];
+    rand::rngs::OsRng.fill_bytes(&mut seed);
+    SigningKey::from_bytes(&seed)
+}
 
 fn sign_claims(signing_key: &SigningKey, claims: &LicenseClaims) -> String {
     let claims_bytes = serde_json::to_vec(claims).unwrap();
@@ -21,7 +27,7 @@ fn parse_major_version_works() {
 
 #[test]
 fn expired_license_still_loads_for_superd() {
-    let signing_key = SigningKey::generate(&mut OsRng);
+    let signing_key = random_signing_key();
     let claims = LicenseClaims {
         product_id: None,
         kid: None,
@@ -47,7 +53,7 @@ fn expired_license_still_loads_for_superd() {
 
 #[test]
 fn rejects_expired_license() {
-    let signing_key = SigningKey::generate(&mut OsRng);
+    let signing_key = random_signing_key();
     let verifying_key = signing_key.verifying_key();
     let claims = LicenseClaims {
         product_id: None,
@@ -70,7 +76,7 @@ fn rejects_expired_license() {
 
 #[test]
 fn verify_signature_requires_kid() {
-    let signing_key = SigningKey::generate(&mut OsRng);
+    let signing_key = random_signing_key();
     let claims = LicenseClaims {
         product_id: Some("super-pro".into()),
         kid: None,
@@ -93,7 +99,7 @@ fn verify_signature_requires_kid() {
 
 #[test]
 fn claims_without_kid_still_verify_with_explicit_key() {
-    let signing_key = SigningKey::generate(&mut OsRng);
+    let signing_key = random_signing_key();
     let verifying_key = signing_key.verifying_key();
     let claims = LicenseClaims {
         product_id: None,
@@ -116,7 +122,7 @@ fn claims_without_kid_still_verify_with_explicit_key() {
 
 #[test]
 fn superd_rejects_expired_when_claim_says_so() {
-    let signing_key = SigningKey::generate(&mut OsRng);
+    let signing_key = random_signing_key();
     let claims = LicenseClaims {
         product_id: None,
         kid: None,
@@ -139,7 +145,7 @@ fn superd_rejects_expired_when_claim_says_so() {
 
 #[test]
 fn unknown_kid_suggests_upgrade_or_keep_license() {
-    let signing_key = SigningKey::generate(&mut OsRng);
+    let signing_key = random_signing_key();
     let claims = LicenseClaims {
         product_id: Some("super-pro".into()),
         kid: Some("future-k".into()),

@@ -34,7 +34,7 @@ bytes = "1"
 # Root privilege check (geteuid)
 libc = "0.2"
 # Table formatting
-comfy-table = "7.0"
+comfy-table = "8.0"
 dirs = "7.0"
 dotenvy = "0.15"
 ratatui = "0.30"

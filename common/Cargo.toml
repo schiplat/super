@@ -19,7 +19,7 @@ base64 = { workspace = true }
 rand = { workspace = true }
 hostname = "0.3"
 glob = "0.3"
-utoipa = { version = "5.3", features = ["uuid", "chrono", "preserve_order"] }
+utoipa = { version = "6.0", features = ["uuid", "chrono", "preserve_order"] }
 tokio = { version = "1.35", features = ["rt", "rt-multi-thread", "sync"] }
 subtle = { workspace = true }
 url = { workspace = true }
