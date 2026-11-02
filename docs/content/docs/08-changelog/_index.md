@@ -15,6 +15,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.8.1] - 2026-11-02
+
+### Changed
+
+- **Observability for the auth behaviors introduced in 1.8.0.** A lockout by the failed-auth throttle now logs `warn` (peer, threshold, window) — until now it only produced 429s with no server-side trace; REST requests that still carry `?token=` get a 401 whose message says where the token belongs, plus a server-side `warn`, instead of a bare 401; and every state-persistence failure (`flush_to_disk`, which includes the new fsync) logs an `error` instead of being discarded at nine call sites — including the start/stop/hold paths that promise a crash cannot resurrect a stopped program.
+- Test reliability: `test_webhook_hook_posts_json` ran on a single-threaded runtime and could starve its own HTTP client behind a blocking join — flaky on slow runners. It now uses a multi-thread runtime and joins off-thread (~0.2 s instead of ~5 s).
+
 ## [1.8.0] - 2026-11-02
 
 ### ⚠ Breaking & behavior changes — read before upgrading
