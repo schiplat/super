@@ -17,6 +17,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [1.8.0] - 2026-11-02
 
+### ⚠ Breaking & behavior changes — read before upgrading
+
+- **`?token=` is no longer accepted on REST endpoints** (only on `/ws`). Scripts and cron jobs that passed the Bearer secret as a query parameter now get `401` — switch them to the `Authorization: Bearer …` header. See [Changed](#changed).
+- **Webhook channels can no longer target loopback or cloud-metadata addresses** (`notify` plugin). Existing `conf/notify.toml` channels pointing at `localhost` fail validation on save and on every send — move self-hosted receivers to a LAN address (`10.x` / `172.16.x` / `192.168.x` keep working). See [Security](#security) and the [webhook URL policy](/docs/05-advanced-management/event-notifications/#webhook-url-policy).
+- **The placeholder `auth_secret` (`CHANGE-ME-BEFORE-EXPOSE`) no longer authenticates on non-loopback binds.** Exposed deployments that kept the placeholder must configure a real secret, or read the generated one from `data/auth_secret.generated` / `docker logs`. See [Changed](#changed) and [Authentication](/docs/02-essentials/authentication/).
+
+Behavior notes (configurable, not breaking):
+
+- Failed-auth throttling can lock out an IP that shares a NAT or proxy with an offender — tune `[server].auth_max_failures` / `auth_failure_window`, or set `auth_max_failures = 0` to disable.
+- The Dashboard SPA answers only document requests: probes to `/health/`, `/metrics/`, or extension-bearing paths return `404` — point monitors at the real endpoints.
+- **Compatibility is preserved otherwise:** the plugin C ABI, the REST API shape, the snapshot format, and 1.7.x licenses and plugins are all unchanged — superd 1.8.0 loads 1.7.1 plugins, and existing licenses keep verifying.
+
 ### Security
 
 - **Outbound URL hardening.** Every URL superd fetches (OTA artifacts, health probes, notification webhooks) is now parsed with the WHATWG URL parser — the same rules the HTTP client applies — before the policy check, so the host that is *checked* is the host that is *connected to*. Previously the hand-rolled host extraction compared raw spellings: `2130706433`, `0x7f000001`, or `0177.0.0.1` slipped past the loopback block and `2852039166` past the metadata block while the client still connected to `127.0.0.1` / `169.254.169.254`; bracketed IPv6 literals were rejected wholesale as "missing host". OTA now also judges IPv4-mapped IPv6 literals as the IPv4 they reach.
