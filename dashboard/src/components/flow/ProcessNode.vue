@@ -72,7 +72,7 @@ const limitsLabel = computed(() => {
 
 <template>
   <div
-    class="process-node-card relative box-border rounded-2xl shadow-sm transition-all duration-200"
+    class="process-node-card relative box-border rounded-2xl shadow-xs transition-all duration-200"
     :class="[
       isFullscreen
         ? 'bg-card border border-solid border-border shadow-md hover:shadow-lg'

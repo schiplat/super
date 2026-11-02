@@ -36,7 +36,7 @@ function handleRetry() {
   <div class="min-h-screen bg-background flex items-center justify-center p-4">
     <div class="text-center space-y-6 max-w-md">
       <div class="relative inline-block">
-        <div class="w-24 h-24 bg-card border border-border rounded-full flex items-center justify-center shadow-sm mx-auto">
+        <div class="w-24 h-24 bg-card border border-border rounded-full flex items-center justify-center shadow-xs mx-auto">
           <component :is="config.icon" class="w-12 h-12 text-muted-foreground" />
         </div>
         <div class="absolute -top-2 -right-2 w-4 h-4 bg-foreground/20 rounded-full animate-bounce"></div>
@@ -47,11 +47,11 @@ function handleRetry() {
         <p class="text-muted-foreground">{{ config.msg }}</p>
       </div>
       <div class="flex flex-wrap items-center justify-center gap-3">
-        <UiButton v-if="isServiceError" @click="handleRetry" class="shadow-sm">
+        <UiButton v-if="isServiceError" @click="handleRetry" class="shadow-xs">
           <RefreshCw class="w-4 h-4" />
           Try again
         </UiButton>
-        <UiButton :variant="isServiceError ? 'outline' : undefined" @click="goHome" class="shadow-sm">
+        <UiButton :variant="isServiceError ? 'outline' : undefined" @click="goHome" class="shadow-xs">
           <Home class="w-4 h-4" />
           Back to Dashboard
         </UiButton>

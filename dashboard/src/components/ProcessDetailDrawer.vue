@@ -656,18 +656,18 @@ function goToEdit() { if (props.processId) router.push(`/programs/${props.proces
           <div class="px-4 py-2.5 border-b border-border bg-card shrink-0 space-y-2">
             <div class="flex items-center justify-between gap-3">
               <div class="bg-muted/80 p-0.5 rounded-lg inline-flex border border-border/40">
-                <button type="button" class="px-3 py-1.5 rounded-md text-xs font-medium transition-all" :class="logMode === 'live' ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'" @click="logMode = 'live'">Live stream</button>
-                <button type="button" class="px-3 py-1.5 rounded-md text-xs font-medium transition-all" :class="logMode === 'history' ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'" @click="logMode = 'history'">Log history</button>
+                <button type="button" class="px-3 py-1.5 rounded-md text-xs font-medium transition-all" :class="logMode === 'live' ? 'bg-card text-foreground shadow-xs' : 'text-muted-foreground hover:text-foreground'" @click="logMode = 'live'">Live stream</button>
+                <button type="button" class="px-3 py-1.5 rounded-md text-xs font-medium transition-all" :class="logMode === 'history' ? 'bg-card text-foreground shadow-xs' : 'text-muted-foreground hover:text-foreground'" @click="logMode = 'history'">Log history</button>
               </div>
               <span v-if="logMode === 'live'" class="text-xs text-muted-foreground/50 hidden sm:inline">WebSocket tail</span>
             </div>
             <div v-if="logMode === 'history'" class="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-3">
               <div class="bg-muted/80 p-0.5 rounded-lg inline-flex border border-border/40 shrink-0">
-                <button v-for="opt in streamOptions" :key="opt.value" type="button" class="px-2.5 py-1 rounded-md text-xs font-medium transition-all" :class="historySource === opt.value ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'" @click="historySource = opt.value">{{ opt.label }}</button>
+                <button v-for="opt in streamOptions" :key="opt.value" type="button" class="px-2.5 py-1 rounded-md text-xs font-medium transition-all" :class="historySource === opt.value ? 'bg-card text-foreground shadow-xs' : 'text-muted-foreground hover:text-foreground'" @click="historySource = opt.value">{{ opt.label }}</button>
               </div>
               <div class="flex items-center gap-2 shrink-0">
                 <div class="bg-muted/80 p-0.5 rounded-lg inline-flex border border-border/40">
-                  <button v-for="n in tailOptions" :key="n" type="button" class="min-w-[2.25rem] px-2 py-1 rounded-md text-xs font-medium font-mono transition-all" :class="historyLines === n ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'" @click="historyLines = n; processId && fetchHistory(processId)">{{ n }}</button>
+                  <button v-for="n in tailOptions" :key="n" type="button" class="min-w-[2.25rem] px-2 py-1 rounded-md text-xs font-medium font-mono transition-all" :class="historyLines === n ? 'bg-card text-foreground shadow-xs' : 'text-muted-foreground hover:text-foreground'" @click="historyLines = n; processId && fetchHistory(processId)">{{ n }}</button>
                 </div>
                 <span class="text-xs text-muted-foreground/50">lines</span>
               </div>

@@ -18,7 +18,7 @@ defineEmits(['click']);
       compact ? 'p-3' : 'p-5',
       isActive
         ? 'border-foreground/20 ring-1 ring-foreground/10 shadow-md'
-        : 'border-border hover:border-border hover:shadow-sm'
+        : 'border-border hover:border-border hover:shadow-xs'
     ]"
     @click="$emit('click')"
   >

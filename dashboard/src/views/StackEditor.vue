@@ -207,7 +207,7 @@ async function confirmPruneApply() {
 
 <template>
   <div class="max-w-5xl mx-auto py-6 pb-20">
-  <div class="h-[calc(100vh-8rem)] flex flex-col bg-card border border-border rounded-xl shadow-sm overflow-hidden">
+  <div class="h-[calc(100vh-8rem)] flex flex-col bg-card border border-border rounded-xl shadow-xs overflow-hidden">
 
     <!-- Toolbar Area -->
     <div class="border-b border-border bg-muted/30">
@@ -249,7 +249,7 @@ async function confirmPruneApply() {
 
       <!-- Bottom Row: Warning (100% Width) -->
       <div class="px-6 pb-5 w-full">
-        <div class="flex items-start sm:items-center gap-3 px-4 py-3 rounded-r-lg border border-l-4 border-border border-l-warning bg-card shadow-sm w-full">
+        <div class="flex items-start sm:items-center gap-3 px-4 py-3 rounded-r-lg border border-l-4 border-border border-l-warning bg-card shadow-xs w-full">
           <AlertTriangle class="w-5 h-5 shrink-0 text-warning mt-0.5 sm:mt-0" />
           <span class="text-sm leading-relaxed font-medium text-foreground/80">
             <span class="font-bold text-foreground">Caution:</span>

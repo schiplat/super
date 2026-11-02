@@ -336,7 +336,7 @@ async function handleSubmit() {
           <p class="text-sm text-foreground/60">Define a new service or worker process.</p>
         </div>
       </div>
-      <button class="h-9 gap-2 shadow-sm shadow-foreground/20 whitespace-nowrap inline-flex items-center justify-center rounded-xl font-medium px-3.5 text-sm bg-primary text-primary-foreground hover:bg-primary/90 transition-colors disabled:opacity-50" :disabled="submitting" @click="handleSubmit">
+      <button class="h-9 gap-2 shadow-xs shadow-foreground/20 whitespace-nowrap inline-flex items-center justify-center rounded-xl font-medium px-3.5 text-sm bg-primary text-primary-foreground hover:bg-primary/90 transition-colors disabled:opacity-50" :disabled="submitting" @click="handleSubmit">
         <span v-if="submitting" class="inline-block w-3 h-3 border-2 border-foreground/20 border-t-foreground/50 rounded-full animate-spin"></span>
         <Save v-else class="w-4 h-4" />
         Create Program
@@ -353,7 +353,7 @@ async function handleSubmit() {
       <div class="lg:col-span-8 space-y-6">
 
         <!-- 1. Essentials -->
-        <div class="surface-card border border-border shadow-sm overflow-visible">
+        <div class="surface-card border border-border shadow-xs overflow-visible">
           <div class="p-6">
             <h3 class="text-xs font-semibold uppercase tracking-[0.08em] text-muted-foreground mb-4 flex items-center gap-2">
               <Box class="w-4 h-4" /> Essentials
@@ -433,7 +433,7 @@ async function handleSubmit() {
         </div>
 
         <!-- 2. Environment Variables -->
-        <div class="surface-card border border-border shadow-sm overflow-visible">
+        <div class="surface-card border border-border shadow-xs overflow-visible">
           <div class="p-6">
             <h3 class="text-xs font-semibold uppercase tracking-[0.08em] text-muted-foreground mb-4 flex items-center gap-2">
               <Layers class="w-4 h-4" /> Environment Variables
@@ -606,7 +606,7 @@ async function handleSubmit() {
             <div class="form-control">
               <label class="label pt-0 pb-1.5"><span class="label-text text-xs font-medium text-foreground/75">Restart Policy</span></label>
               <div class="relative">
-                <select v-model="form.artifact_restart_policy" class="appearance-none bg-muted/60 hover:bg-border/60 focus:bg-border/60 focus:outline-none cursor-pointer text-sm font-medium h-9 min-h-0 w-full pl-3 pr-8 rounded-md border border-transparent">
+                <select v-model="form.artifact_restart_policy" class="appearance-none bg-muted/60 hover:bg-border/60 focus:bg-border/60 focus:outline-hidden cursor-pointer text-sm font-medium h-9 min-h-0 w-full pl-3 pr-8 rounded-md border border-transparent">
                   <option value="immediate">immediate — restart process (SIGTERM), then verify</option>
                   <option value="manual">manual — commit swap only (no restart / no verify)</option>
                   <option value="signal:hup">signal:hup — in-place reload (requires health check)</option>
@@ -695,7 +695,7 @@ async function handleSubmit() {
       <div class="lg:col-span-4 space-y-6">
 
         <!-- Control + Lifecycle (merged) -->
-        <div class="surface-card border border-border shadow-sm p-5 space-y-5">
+        <div class="surface-card border border-border shadow-xs p-5 space-y-5">
           <h3 class="text-xs font-semibold uppercase tracking-[0.08em] text-muted-foreground flex items-center gap-2">
             Control & Lifecycle
             <a :href="docRef('restart--stop-behaviour')" target="_blank" class="inline-flex text-foreground/25 hover:text-primary transition-colors" title="Docs"><ExternalLink class="w-3 h-3" /></a>
@@ -721,7 +721,7 @@ async function handleSubmit() {
           <div class="form-control">
             <label class="label pt-0 pb-1.5"><span class="label-text text-xs font-medium text-foreground/75">Autorestart Policy</span></label>
             <div class="relative">
-              <select v-model="form.autorestart" class="appearance-none bg-muted/60 hover:bg-border/60 focus:bg-border/60 focus:outline-none cursor-pointer text-sm font-medium h-9 min-h-0 w-full pl-3 pr-8 rounded-md border border-transparent">
+              <select v-model="form.autorestart" class="appearance-none bg-muted/60 hover:bg-border/60 focus:bg-border/60 focus:outline-hidden cursor-pointer text-sm font-medium h-9 min-h-0 w-full pl-3 pr-8 rounded-md border border-transparent">
                 <option value="unexpected">unexpected — only on non-zero / unknown exits</option>
                 <option value="true">true — always restart</option>
                 <option value="false">false — never restart</option>
@@ -795,7 +795,7 @@ async function handleSubmit() {
             <div class="form-control">
               <label class="label pt-0 pb-1.5"><span class="label-text text-xs font-medium text-foreground/75">On Overlap</span></label>
               <div class="relative">
-                <select v-model="form.on_overlap" class="appearance-none bg-muted/60 hover:bg-border/60 focus:bg-border/60 focus:outline-none cursor-pointer text-sm font-medium h-9 min-h-0 w-full pl-3 pr-8 rounded-md border border-transparent">
+                <select v-model="form.on_overlap" class="appearance-none bg-muted/60 hover:bg-border/60 focus:bg-border/60 focus:outline-hidden cursor-pointer text-sm font-medium h-9 min-h-0 w-full pl-3 pr-8 rounded-md border border-transparent">
                   <option value="skip">skip — drop tick</option>
                   <option value="queue">queue — run after exit</option>
                   <option value="kill">kill — terminate running</option>
@@ -808,7 +808,7 @@ async function handleSubmit() {
             <div class="form-control">
               <label class="label pt-0 pb-1.5"><span class="label-text text-xs font-medium text-foreground/75">Catchup</span></label>
               <div class="relative">
-                <select v-model="form.catchup" class="appearance-none bg-muted/60 hover:bg-border/60 focus:bg-border/60 focus:outline-none cursor-pointer text-sm font-medium h-9 min-h-0 w-full pl-3 pr-8 rounded-md border border-transparent">
+                <select v-model="form.catchup" class="appearance-none bg-muted/60 hover:bg-border/60 focus:bg-border/60 focus:outline-hidden cursor-pointer text-sm font-medium h-9 min-h-0 w-full pl-3 pr-8 rounded-md border border-transparent">
                   <option value="skip">skip — no backfill</option>
                   <option value="latest">latest — last missed</option>
                   <option value="all">all — every missed slot</option>

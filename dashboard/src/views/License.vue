@@ -136,7 +136,7 @@ onMounted(fetchLicense);
   <div class="max-w-5xl mx-auto py-6 flex flex-col gap-5">
     <div class="flex items-start gap-4">
       <div
-        class="w-12 h-12 rounded-xl flex items-center justify-center text-white shadow-sm shrink-0"
+        class="w-12 h-12 rounded-xl flex items-center justify-center text-white shadow-xs shrink-0"
         :class="isOssNoLicense ? 'bg-primary' : (statusTone === 'amber' ? 'bg-amber-500' : 'bg-emerald-500')"
       >
         <ShieldCheck class="w-6 h-6" />
@@ -157,7 +157,7 @@ onMounted(fetchLicense);
       <span class="inline-block w-6 h-6 border-2 border-foreground/20 border-t-foreground/50 rounded-full animate-spin"></span>
     </div>
 
-    <div v-else-if="isOssNoLicense" class="surface-card border border-border shadow-sm overflow-hidden">
+    <div v-else-if="isOssNoLicense" class="surface-card border border-border shadow-xs overflow-hidden">
       <div class="px-5 py-5 space-y-3">
         <p class="text-sm text-foreground/75 leading-relaxed">
           You are running the open-source single-host shell. Process control, stack apply,
@@ -197,7 +197,7 @@ onMounted(fetchLicense);
     </div>
 
     <template v-else-if="licenseData">
-      <div class="surface-card border border-border shadow-sm overflow-hidden">
+      <div class="surface-card border border-border shadow-xs overflow-hidden">
         <!-- status + meta -->
         <div class="px-5 py-4 border-b border-border flex flex-wrap items-center gap-x-4 gap-y-2">
           <span

@@ -117,7 +117,7 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div class="surface-card border border-border shadow-sm">
+  <div class="surface-card border border-border shadow-xs">
     <div class="p-5 md:p-6">
       <h3 class="text-xs font-semibold uppercase tracking-[0.08em] text-muted-foreground mb-1.5 flex items-center gap-2">
         <Link2 class="w-3.5 h-3.5" /> Dependencies

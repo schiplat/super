@@ -32,10 +32,10 @@ function toggleFilter(key: string) {
         :key="item.key"
         type="button" role="tab"
         :aria-selected="activeFilter === item.key"
-        class="inline-flex items-center gap-1.5 px-2.5 sm:px-3 py-1 rounded-md text-xs font-medium transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-ring/30"
+        class="inline-flex items-center gap-1.5 px-2.5 sm:px-3 py-1 rounded-md text-xs font-medium transition-all focus:outline-hidden focus-visible:ring-2 focus-visible:ring-ring/30"
         :class="[
           activeFilter === item.key
-            ? `ring-1 shadow-sm ${item.active}`
+            ? `ring-1 shadow-xs ${item.active}`
             : 'text-muted-foreground/60 hover:text-foreground/80 hover:bg-card/60',
           item.warn && stats[item.valueKey] > 0 && activeFilter !== item.key ? 'text-destructive hover:text-destructive' : '',
         ]"

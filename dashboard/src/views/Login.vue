@@ -40,11 +40,11 @@ async function handleLogin() {
 
 <template>
   <div class="min-h-screen flex items-center justify-center bg-muted p-4">
-    <div class="w-full max-w-sm bg-card rounded-2xl overflow-hidden border border-border shadow-sm">
+    <div class="w-full max-w-sm bg-card rounded-2xl overflow-hidden border border-border shadow-xs">
       <div class="h-1.5 w-full bg-gradient-to-r from-stone-500 to-stone-700"></div>
       <div class="p-8 sm:p-10">
         <div class="flex justify-center mb-6">
-          <div class="w-14 h-14 bg-muted rounded-2xl flex items-center justify-center text-muted-foreground shadow-sm ring-1 ring-border">
+          <div class="w-14 h-14 bg-muted rounded-2xl flex items-center justify-center text-muted-foreground shadow-xs ring-1 ring-border">
             <Lock class="w-7 h-7" />
           </div>
         </div>
@@ -56,7 +56,7 @@ async function handleLogin() {
             <label class="text-xs font-semibold uppercase tracking-wider text-muted-foreground/60 pl-1">Bearer credential</label>
             <input
               v-model="token" type="password" placeholder="auth_secret or sk-…"
-              class="w-full px-4 py-3 rounded-xl bg-muted border border-border text-foreground font-mono text-sm focus:outline-none focus:ring-2 focus:ring-ring/30 focus:border-foreground/35 transition-all placeholder:text-muted-foreground/50"
+              class="w-full px-4 py-3 rounded-xl bg-muted border border-border text-foreground font-mono text-sm focus:outline-hidden focus:ring-2 focus:ring-ring/30 focus:border-foreground/35 transition-all placeholder:text-muted-foreground/50"
               :class="{ 'bg-destructive/5 border-destructive focus:border-destructive focus:ring-destructive/20': error }"
               @keyup.enter="handleLogin" autofocus
             />

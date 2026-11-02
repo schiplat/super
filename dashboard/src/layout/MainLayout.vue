@@ -119,7 +119,7 @@ onMounted(() => {
             :href="href"
             class="flex items-center gap-2.5 px-4 py-2 rounded-xl text-sm font-medium transition-all duration-200"
             :class="isExactActive
-              ? 'bg-primary text-primary-foreground shadow-sm'
+              ? 'bg-primary text-primary-foreground shadow-xs'
               : 'text-muted-foreground hover:text-foreground hover:bg-muted'"
             @click="navigate"
           >
@@ -134,7 +134,7 @@ onMounted(() => {
             type="button"
             class="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium transition-colors"
             :class="manageRouteActive || manageDropdownOpen
-              ? 'bg-primary text-primary-foreground shadow-sm'
+              ? 'bg-primary text-primary-foreground shadow-xs'
               : 'text-muted-foreground hover:text-foreground hover:bg-muted'"
             @click="toggleManageDropdown"
           >

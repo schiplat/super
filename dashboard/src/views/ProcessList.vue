@@ -182,7 +182,7 @@ const hasActiveFilters = computed(() => activeFilter.value !== 'ALL' || !!select
 
     <EmptyProgramsState v-if="!store.isLoading && store.programs.length === 0" :can-create="authStore.canOperate" premium />
 
-    <div v-else class="surface-card shadow-sm overflow-visible">
+    <div v-else class="surface-card shadow-xs overflow-visible">
       <OverviewHeader :stats="stats" :active-filter="activeFilter" class="border-b border-border/70 mx-3 sm:mx-4 mt-3 mb-0" @filter="setFilter" />
 
       <!-- Toolbar -->
@@ -195,13 +195,13 @@ const hasActiveFilters = computed(() => activeFilter.value !== 'ALL' || !!select
 
         <div class="flex flex-col sm:flex-row items-center gap-3 w-full xl:w-auto">
           <div class="bg-muted p-1 rounded-lg flex items-center gap-1 border border-border/40 hidden sm:flex">
-            <button class="flex items-center justify-center w-9 h-7 rounded-md transition-all duration-200" :class="viewMode === 'list' ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'" @click="viewMode = 'list'" title="List View"><LayoutList class="w-4 h-4" /></button>
-            <button class="flex items-center justify-center w-9 h-7 rounded-md transition-all duration-200" :class="viewMode === 'graph' ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'" @click="viewMode = 'graph'" title="Topology View"><Network class="w-4 h-4" /></button>
+            <button class="flex items-center justify-center w-9 h-7 rounded-md transition-all duration-200" :class="viewMode === 'list' ? 'bg-card text-foreground shadow-xs' : 'text-muted-foreground hover:text-foreground'" @click="viewMode = 'list'" title="List View"><LayoutList class="w-4 h-4" /></button>
+            <button class="flex items-center justify-center w-9 h-7 rounded-md transition-all duration-200" :class="viewMode === 'graph' ? 'bg-card text-foreground shadow-xs' : 'text-muted-foreground hover:text-foreground'" @click="viewMode = 'graph'" title="Topology View"><Network class="w-4 h-4" /></button>
           </div>
           <div class="w-px h-6 bg-border hidden sm:block"></div>
 
           <router-link v-if="authStore.canOperate" to="/programs/new">
-            <UiButton size="sm" class="gap-2 shadow-sm whitespace-nowrap">
+            <UiButton size="sm" class="gap-2 shadow-xs whitespace-nowrap">
               <Plus class="w-4 h-4" />
               <span class="hidden md:inline">New Program</span><span class="md:hidden">New</span>
             </UiButton>

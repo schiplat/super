@@ -1,6 +1,9 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import "tailwindcss";
+/* Successor of the tailwindcss-animate plugin (animate-in / fade-in /
+   slide-in-from-*). */
+@import "tw-animate-css";
+/* class-based dark mode: the .dark root token block plus `dark:` variants. */
+@custom-variant dark (&:where(.dark, .dark *));
 
 :root {
   --background: 210 20% 98%;
@@ -67,6 +70,45 @@
   --notice-foreground: 265 30% 95%;
 }
 
+/* Tailwind v4: expose the shadcn-style tokens as utilities. `inline` keeps
+   hsl(var(--…)) so /opacity modifiers resolve via color-mix at use time.
+   lg/md/sm radii mirror the v3 tailwind.config.js overrides; xl/2xl stay on
+   the v4 defaults, identical to v3. */
+@theme inline {
+  --color-background: hsl(var(--background));
+  --color-foreground: hsl(var(--foreground));
+  --color-card: hsl(var(--card));
+  --color-card-foreground: hsl(var(--card-foreground));
+  --color-primary: hsl(var(--primary));
+  --color-primary-foreground: hsl(var(--primary-foreground));
+  --color-secondary: hsl(var(--secondary));
+  --color-secondary-foreground: hsl(var(--secondary-foreground));
+  --color-muted: hsl(var(--muted));
+  --color-muted-foreground: hsl(var(--muted-foreground));
+  --color-accent: hsl(var(--accent));
+  --color-accent-foreground: hsl(var(--accent-foreground));
+  --color-border: hsl(var(--border));
+  --color-input: hsl(var(--input));
+  --color-ring: hsl(var(--ring));
+  --color-sidebar: hsl(var(--sidebar));
+  --color-sidebar-foreground: hsl(var(--sidebar-foreground));
+  --color-sidebar-border: hsl(var(--sidebar-border));
+  --color-sidebar-accent: hsl(var(--sidebar-accent));
+  --color-destructive: hsl(var(--destructive));
+  --color-destructive-foreground: hsl(var(--destructive-foreground));
+  --color-success: hsl(var(--success));
+  --color-success-foreground: hsl(var(--success-foreground));
+  --color-warning: hsl(var(--warning));
+  --color-warning-foreground: hsl(var(--warning-foreground));
+  --color-info: hsl(var(--info));
+  --color-info-foreground: hsl(var(--info-foreground));
+  --color-notice: hsl(var(--notice));
+  --color-notice-foreground: hsl(var(--notice-foreground));
+  --radius-lg: var(--radius);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-sm: calc(var(--radius) - 4px);
+}
+
 @layer base {
   * {
     @apply border-border;
@@ -127,12 +169,12 @@
     @apply shadow-[inset_0_1px_1px_rgba(28,25,23,0.04)];
     @apply placeholder:text-muted-foreground;
     @apply transition-[border-color,box-shadow,background-color];
-    @apply focus-visible:outline-none focus-visible:border-foreground/35 focus-visible:ring-2 focus-visible:ring-ring/30;
+    @apply focus-visible:outline-hidden focus-visible:border-foreground/35 focus-visible:ring-2 focus-visible:ring-ring/30;
     @apply disabled:cursor-not-allowed disabled:bg-muted disabled:text-muted-foreground disabled:opacity-70;
   }
 
   select.field-control {
-    @apply appearance-none bg-[length:1rem] bg-[right_0.65rem_center] bg-no-repeat pr-9;
+    @apply appearance-none bg-size-[1rem] bg-position-[right_0.65rem_center] bg-no-repeat pr-9;
     background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%235a534d' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
   }
 

@@ -13,7 +13,7 @@ const enabled = defineModel<boolean>({ required: true });
 </script>
 
 <template>
-  <div class="surface-card border border-border shadow-sm">
+  <div class="surface-card border border-border shadow-xs">
     <!-- Collapsed height is identical across optional sections -->
     <div class="flex items-center justify-between gap-3 px-5 min-h-[3.25rem]">
       <div class="flex items-center gap-2 min-w-0">
