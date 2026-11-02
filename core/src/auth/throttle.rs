@@ -119,6 +119,13 @@ impl AuthThrottle {
             entry.locked_until = Some(now + window);
             entry.failures = 0;
             entry.window_started = now;
+            // The only server-side trace of a lockout: clients just see 429.
+            tracing::warn!(
+                peer = %ip,
+                max_failures = self.max_failures(),
+                window_secs = window.as_secs(),
+                "auth throttle: peer locked out after repeated failed authentication"
+            );
         }
     }
 

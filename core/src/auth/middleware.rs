@@ -154,7 +154,34 @@ pub async fn core_auth_middleware(
         }
         throttle.record_failure(ip);
     }
+    // REST requests that still carry `?token=` (accepted only on /ws since
+    // 1.8.0) get an actionable hint instead of a bare 401, plus a server-side
+    // trace so the upgrade regression shows up in logs instead of only in a
+    // client's silent failure.
+    if path != "/ws" && query_has_token(query.as_deref()) {
+        tracing::warn!(
+            peer = ?peer_ip,
+            %path,
+            "query-string token ignored on REST path; send Authorization: Bearer instead"
+        );
+        return (
+            StatusCode::UNAUTHORIZED,
+            Json(serde_json::json!({
+                "status": "error",
+                "message": "unauthorized: query-string tokens are accepted only on /ws; send Authorization: Bearer <secret>",
+            })),
+        )
+            .into_response();
+    }
     unauthorized()
+}
+
+/// True when the query string carries a `token` parameter.
+fn query_has_token(query: Option<&str>) -> bool {
+    query.is_some_and(|q| {
+        q.split('&')
+            .any(|kv| kv == "token" || kv.starts_with("token="))
+    })
 }
 
 fn unauthorized() -> Response {

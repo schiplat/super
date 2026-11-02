@@ -501,8 +501,10 @@ impl Manager {
                     .await;
                 // Mirror StopProgram: persist the released hold immediately
                 // so a crash right after the start cannot resurrect it.
-                if res.is_ok() {
-                    let _ = self.flush_to_disk().await;
+                if res.is_ok()
+                    && let Err(e) = self.flush_to_disk().await
+                {
+                    tracing::error!("Failed to persist program state: {e}");
                 }
                 let _ = reply.send(res);
             }
@@ -527,8 +529,10 @@ impl Manager {
                 // Persist operator stop intent immediately (autostart=false +
                 // held-stopped mark) so a crash right after the stop cannot
                 // resurrect the program on the next boot.
-                if res.is_ok() {
-                    let _ = self.flush_to_disk().await;
+                if res.is_ok()
+                    && let Err(e) = self.flush_to_disk().await
+                {
+                    tracing::error!("Failed to persist program state: {e}");
                 }
                 let _ = reply.send(res);
             }
@@ -637,7 +641,9 @@ impl Manager {
                     }
                     // Persist the holds now — a daemon restart within the
                     // 5s heartbeat must not resurrect stopped programs.
-                    let _ = self.flush_to_disk().await;
+                    if let Err(e) = self.flush_to_disk().await {
+                        tracing::error!("Failed to persist program state: {e}");
+                    }
                     let _ = reply.send(Ok(affected));
                 }
             }
@@ -1480,7 +1486,9 @@ impl Manager {
                     cfg.restore_path = None;
                 }
                 self.registry.mark_dirty();
-                let _ = self.flush_to_disk().await;
+                if let Err(e) = self.flush_to_disk().await {
+                    tracing::error!("Failed to persist program state: {e}");
+                }
                 tokio::spawn(async move {
                     artifact::commit(&bak).await;
                 });
@@ -1765,7 +1773,9 @@ impl Manager {
                         cfg.restore_path = None;
                     }
                     self.registry.mark_dirty();
-                    let _ = self.flush_to_disk().await;
+                    if let Err(e) = self.flush_to_disk().await {
+                        tracing::error!("Failed to persist program state: {e}");
+                    }
 
                     // Do not return: exit 0 continues to normal-exit path -> Stopped
                 }
@@ -1825,7 +1835,9 @@ impl Manager {
                             cfg.restore_path = None;
                         }
                         self.registry.mark_dirty();
-                        let _ = self.flush_to_disk().await;
+                        if let Err(e) = self.flush_to_disk().await {
+                            tracing::error!("Failed to persist program state: {e}");
+                        }
 
                         // B3. Notify
                         self.record_event(
@@ -2317,8 +2329,9 @@ impl Manager {
             if let Some(backup) = backup_to_delete {
                 // Persist clean state (restore_path removed)
                 self.registry.mark_dirty();
-                let _ = self.flush_to_disk().await;
-
+                if let Err(e) = self.flush_to_disk().await {
+                    tracing::error!("Failed to persist program state: {e}");
+                }
                 // Async delete backup
                 tokio::spawn(async move {
                     use crate::artifact;
@@ -3187,7 +3200,9 @@ impl Manager {
         }
         // Persist autostart=false / hold marks before the start phase —
         // a crash here must not resurrect the stopped programs on next boot.
-        let _ = self.flush_to_disk().await;
+        if let Err(e) = self.flush_to_disk().await {
+            tracing::error!("Failed to persist program state: {e}");
+        }
         // Wait for all members to exit (bounded) so starts begin from a clean
         // slate. Exit events are dispatched through the shared command handler
         // so no queued command (health updates, metrics, …) is dropped while
@@ -3626,7 +3641,9 @@ impl Manager {
         // heartbeat window must not undo the batch.
         if !affected.is_empty() {
             self.registry.mark_dirty();
-            let _ = self.flush_to_disk().await;
+            if let Err(e) = self.flush_to_disk().await {
+                tracing::error!("Failed to persist program state: {e}");
+            }
         }
 
         Ok(BatchProgramResponse { affected, failed })

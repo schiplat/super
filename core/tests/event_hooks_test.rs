@@ -82,7 +82,11 @@ async fn test_emit_notifies_extension_and_runs_hook() {
     assert_eq!(ext.events.lock().unwrap().len(), 1);
 }
 
-#[tokio::test]
+// multi_thread: `dispatch` spawns the POST onto the runtime, and the test
+// must then wait for the capture thread. On the default current-thread
+// runtime a blocking join starved that task and the probe timed out
+// (flaky on slow CI runners).
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_webhook_hook_posts_json() {
     // Minimal HTTP server capturing one POST request
     let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
@@ -143,9 +147,12 @@ async fn test_webhook_hook_posts_json() {
     };
 
     event_hooks::dispatch(&[hook], &event);
-    tokio::time::sleep(std::time::Duration::from_millis(300)).await;
 
-    let request = handle.join().unwrap();
+    // Join off the runtime so the spawned POST keeps making progress; the
+    // capture thread returns as soon as the request body has arrived.
+    let request = tokio::task::spawn_blocking(move || handle.join().unwrap())
+        .await
+        .unwrap();
     assert!(request.contains("POST /hook"), "request={request}");
     assert!(
         request.contains("\"event\":\"process_started\""),
