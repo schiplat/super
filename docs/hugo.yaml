@@ -83,7 +83,7 @@ params:
   banner:
     key: "super-release-banner-v1-8-1"
     message: |
-      **Super 1.8.1 is here** — a security-hardening release with failed-auth throttling, an ephemeral admin secret on exposed binds, canonicalized outbound URLs, shell completions, and two behavior changes to review (`?token=` only on `/ws`; webhooks no longer reach loopback or cloud metadata)… [See what's new →](/docs/08-changelog/)
+      **Super 1.8.1 is here** — an observability patch on top of 1.8.0's security hardening: auth-throttle lockouts, rejected `?token=` query tokens, and state-persistence failures are now logged with actionable detail, with no behavior change beyond a clearer 401 message… [See what's new →](/docs/08-changelog/)
   contact:
     api_url: "https://open.schiplat.com/api/v1/demands"
   externalLinkDecoration: true
