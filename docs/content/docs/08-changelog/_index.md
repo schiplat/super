@@ -15,6 +15,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [Unreleased]
+
+### Changed
+
+- **Dashboard internals move to Tailwind CSS v4 and reka-ui primitives** for `UiDialog`/`UiSwitch` (the shadcn-style component layer). Visual design is unchanged; dialogs gain focus trapping, initial focus, and full ARIA wiring, and switches gain keyboard toggling (Space). Shadow scale renames (`shadow-sm` → `shadow-xs`, bare `shadow` → `shadow-sm`) were applied across templates — rendering is unchanged. `tailwindcss-animate` is replaced by `tw-animate-css`.
+
 ## [1.8.1] - 2026-11-02
 
 ### Changed
