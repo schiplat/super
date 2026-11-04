@@ -3,6 +3,9 @@ name: CI
 on:
   push:
     branches: [master, main]
+    # Tag pushes (v*) also run CI as a pre-release gate. Path filters are not
+    # evaluated for tag pushes, so tags trigger regardless of paths-ignore.
+    tags: ['v*']
     # Docs-only pushes: Deploy Documentation only (deploy-docs.yml).
     paths-ignore:
       - 'docs/**'
@@ -65,11 +68,14 @@ jobs:
 
   rust:
     needs: changes
-    # Nightly/manual runs re-check the full workspace even without fresh changes.
+    # Nightly/manual/tag runs re-check the full workspace even without fresh
+    # changes (tag pushes bypass the paths filter anyway; this keeps the job
+    # independent of dorny/paths-filter's zero-before behavior on new refs).
     if: >-
       needs.changes.outputs.rust == 'true' ||
       github.event_name == 'schedule' ||
-      github.event_name == 'workflow_dispatch'
+      github.event_name == 'workflow_dispatch' ||
+      startsWith(github.ref, 'refs/tags/')
     runs-on: ubuntu-latest
     steps:
       - uses: ./.github/actions/rust-checks
@@ -78,16 +84,17 @@ jobs:
 
   # macOS arm64 hosted runners are capacity-constrained: a starved leg waits
   # ~15 minutes and dies with "The job was not acquired by Runner of type
-  # hosted" — wasted wall-clock on every push. Pushes therefore get the fast
-  # ubuntu signal only; macOS runs on PRs, the nightly schedule, and on demand
-  # (workflow_dispatch).
+  # hosted" — wasted wall-clock on every push. Push runs therefore get the
+  # fast ubuntu signal only; macOS runs on PRs, tags (pre-release gate), the
+  # nightly schedule, and on demand (workflow_dispatch).
   rust-macos:
     needs: changes
     if: >-
       (needs.changes.outputs.rust == 'true' ||
        github.event_name == 'schedule' ||
-       github.event_name == 'workflow_dispatch') &&
-      github.event_name != 'push'
+       github.event_name == 'workflow_dispatch' ||
+       startsWith(github.ref, 'refs/tags/')) &&
+      (github.event_name != 'push' || startsWith(github.ref, 'refs/tags/'))
     runs-on: macos-latest
     steps:
       - uses: ./.github/actions/rust-checks
