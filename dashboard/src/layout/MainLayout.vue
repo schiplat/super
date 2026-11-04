@@ -238,8 +238,11 @@ onMounted(() => {
 
     <!-- Main Content -->
     <main class="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8 scroll-smooth" @click="mobileMenuOpen = false">
-      <div class="max-w-[1600px] mx-auto">
-        <RouterView />
+      <!-- flex column + min-h-full pins the footer to the bottom on short pages -->
+      <div class="mx-auto flex min-h-full w-full max-w-[1600px] flex-col">
+        <div class="flex-1">
+          <RouterView />
+        </div>
         <AppFooter />
       </div>
     </main>
