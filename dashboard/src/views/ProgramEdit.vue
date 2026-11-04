@@ -486,7 +486,7 @@ async function handleSubmit() {
       <!-- Header -->
       <div class="flex items-center justify-between mb-6">
         <div class="flex items-center gap-4">
-          <button class="inline-flex h-9 w-9 items-center justify-center rounded-xl text-muted-foreground hover:text-foreground hover:bg-muted transition-colors" @click="router.push({ path: '/', query: { detail: programId } })">
+          <button class="inline-flex h-9 w-9 items-center justify-center rounded-[9px] text-muted-foreground hover:text-foreground hover:bg-muted transition-colors" @click="router.push({ path: '/', query: { detail: programId } })">
             <ArrowLeft class="w-5 h-5" />
           </button>
           <div>
@@ -496,7 +496,7 @@ async function handleSubmit() {
             <p class="text-sm text-foreground/60 font-mono">{{ programId }}</p>
           </div>
         </div>
-        <button class="h-9 gap-2 shadow-xs shadow-foreground/20 whitespace-nowrap inline-flex items-center justify-center rounded-xl font-medium px-3.5 text-sm bg-primary text-primary-foreground hover:bg-primary/90 transition-colors disabled:opacity-50" :disabled="submitting" @click="handleSubmit">
+        <button class="h-9 gap-2 shadow-xs shadow-foreground/20 whitespace-nowrap inline-flex items-center justify-center rounded-[9px] font-medium px-3.5 text-sm bg-primary text-primary-foreground hover:bg-primary/90 transition-colors disabled:opacity-50" :disabled="submitting" @click="handleSubmit">
           <span v-if="submitting" class="inline-block w-3 h-3 border-2 border-foreground/20 border-t-foreground/50 rounded-full animate-spin"></span>
           <Save v-else class="w-4 h-4" />
           Update Configuration
@@ -543,7 +543,7 @@ async function handleSubmit() {
                   </div>
                   <button
                     v-if="commandHasArgs"
-                    class="inline-flex items-center justify-center rounded-lg font-medium text-xs h-10 px-2 text-warning/70 hover:text-warning hover:bg-warning/10 transition-colors"
+                    class="inline-flex items-center justify-center rounded-[10px] font-medium text-xs h-10 px-2 text-warning/70 hover:text-warning hover:bg-warning/10 transition-colors"
                     title="Split command into command + arguments"
                     @click="autoSplitCommand"
                   >
@@ -571,10 +571,10 @@ async function handleSubmit() {
                       placeholder="--flag"
                       @keydown="onArgKeydown(idx, $event)"
                     />
-                    <button type="button" class="inline-flex h-7 w-7 items-center justify-center rounded-lg text-muted-foreground hover:text-destructive hover:bg-destructive/5 transition-colors" @click="removeArg(idx)"><Trash2 class="w-3.5 h-3.5" /></button>
+                    <button type="button" class="inline-flex h-7 w-7 items-center justify-center rounded-[7px] text-muted-foreground hover:text-destructive hover:bg-destructive/5 transition-colors" @click="removeArg(idx)"><Trash2 class="w-3.5 h-3.5" /></button>
                   </div>
                 </div>
-                <button type="button" class="inline-flex items-center px-2.5 py-1.5 rounded-lg text-xs border border-dashed border-border text-muted-foreground hover:text-foreground hover:bg-muted transition-colors w-full mt-3" @click="addArg">+ Add Argument</button>
+                <button type="button" class="inline-flex items-center px-2.5 py-1.5 rounded-[7px] text-xs border border-dashed border-border text-muted-foreground hover:text-foreground hover:bg-muted transition-colors w-full mt-3" @click="addArg">+ Add Argument</button>
               </div>
               <!-- Full command preview -->
               <div v-if="form.command.trim()" class="mt-3 p-3 rounded-lg bg-muted/60 border border-border/50">
@@ -606,9 +606,9 @@ async function handleSubmit() {
                 <div v-for="(item, idx) in form.env" :key="idx" class="grid grid-cols-[1fr_1fr_auto] gap-2">
                   <input v-model="item.key" placeholder="KEY" class="field-control font-mono" />
                   <input v-model="item.value" placeholder="VALUE" class="field-control font-mono" />
-                  <button class="inline-flex h-7 w-7 items-center justify-center rounded-lg text-muted-foreground hover:text-destructive hover:bg-destructive/5 transition-colors" @click="removeEnv(idx)"><Trash2 class="w-3.5 h-3.5" /></button>
+                  <button class="inline-flex h-7 w-7 items-center justify-center rounded-[7px] text-muted-foreground hover:text-destructive hover:bg-destructive/5 transition-colors" @click="removeEnv(idx)"><Trash2 class="w-3.5 h-3.5" /></button>
                 </div>
-                <button class="inline-flex items-center px-2.5 py-1 rounded-lg text-xs border border-dashed border-border text-muted-foreground hover:text-foreground hover:bg-muted transition-colors w-full" @click="addEnv">+ Add Variable</button>
+                <button class="inline-flex items-center px-2.5 py-1 rounded-[6px] text-xs border border-dashed border-border text-muted-foreground hover:text-foreground hover:bg-muted transition-colors w-full" @click="addEnv">+ Add Variable</button>
               </div>
             </div>
           </div>
@@ -903,9 +903,9 @@ async function handleSubmit() {
               <div class="space-y-2">
                 <div v-for="(ec, idx) in form.exitcodes" :key="idx" class="flex gap-2">
                   <input v-model.number="ec.value" type="number" class="field-control font-mono" placeholder="0" />
-                  <button class="inline-flex h-7 w-7 items-center justify-center rounded-lg text-muted-foreground hover:text-destructive hover:bg-destructive/5 transition-colors" @click="removeExitcode(idx)"><Trash2 class="w-3.5 h-3.5" /></button>
+                  <button class="inline-flex h-7 w-7 items-center justify-center rounded-[7px] text-muted-foreground hover:text-destructive hover:bg-destructive/5 transition-colors" @click="removeExitcode(idx)"><Trash2 class="w-3.5 h-3.5" /></button>
                 </div>
-                <button class="inline-flex items-center px-2.5 py-1 rounded-lg text-xs border border-dashed border-border text-muted-foreground hover:text-foreground hover:bg-muted transition-colors w-full" @click="addExitcode">+ Add Exit Code</button>
+                <button class="inline-flex items-center px-2.5 py-1 rounded-[6px] text-xs border border-dashed border-border text-muted-foreground hover:text-foreground hover:bg-muted transition-colors w-full" @click="addExitcode">+ Add Exit Code</button>
               </div>
             </div>
           </div>

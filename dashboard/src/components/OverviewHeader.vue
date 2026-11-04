@@ -26,13 +26,13 @@ function toggleFilter(key: string) {
 
     <div class="hidden sm:block w-px h-5 bg-border/60 shrink-0" aria-hidden="true" />
 
-    <div class="flex flex-wrap items-center gap-1 p-1 rounded-lg bg-muted/50 sm:ml-auto" role="tablist" aria-label="Filter by status">
+    <div class="flex flex-wrap items-center gap-1 p-1 rounded-[9px] bg-muted/50 sm:ml-auto" role="tablist" aria-label="Filter by status">
       <button
         v-for="item in filters"
         :key="item.key"
         type="button" role="tab"
         :aria-selected="activeFilter === item.key"
-        class="inline-flex items-center gap-1.5 px-2.5 sm:px-3 py-1 rounded-md text-xs font-medium transition-all focus:outline-hidden focus-visible:ring-2 focus-visible:ring-ring/30"
+        class="inline-flex items-center gap-1.5 px-2.5 sm:px-3 py-1 rounded-[6px] text-xs font-medium transition-all focus:outline-hidden focus-visible:ring-2 focus-visible:ring-ring/30"
         :class="[
           activeFilter === item.key
             ? `ring-1 shadow-xs ${item.active}`

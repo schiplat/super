@@ -118,6 +118,12 @@
     font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11';
   }
 
+  /* Apple-style continuous corner curvature on buttons; progressive
+     enhancement — browsers without corner-shape support ignore it. */
+  button {
+    corner-shape: squircle;
+  }
+
   body {
     @apply bg-background text-sm leading-normal text-foreground antialiased;
     margin: 0;

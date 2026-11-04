@@ -194,9 +194,9 @@ const hasActiveFilters = computed(() => activeFilter.value !== 'ALL' || !!select
         </div>
 
         <div class="flex flex-col sm:flex-row items-center gap-3 w-full xl:w-auto">
-          <div class="bg-muted p-1 rounded-lg flex items-center gap-1 border border-border/40 hidden sm:flex">
-            <button class="flex items-center justify-center w-9 h-7 rounded-md transition-all duration-200" :class="viewMode === 'list' ? 'bg-card text-foreground shadow-xs' : 'text-muted-foreground hover:text-foreground'" @click="viewMode = 'list'" title="List View"><LayoutList class="w-4 h-4" /></button>
-            <button class="flex items-center justify-center w-9 h-7 rounded-md transition-all duration-200" :class="viewMode === 'graph' ? 'bg-card text-foreground shadow-xs' : 'text-muted-foreground hover:text-foreground'" @click="viewMode = 'graph'" title="Topology View"><Network class="w-4 h-4" /></button>
+          <div class="bg-muted p-1 rounded-[9px] flex items-center gap-1 border border-border/40 hidden sm:flex">
+            <button class="flex items-center justify-center w-9 h-7 rounded-[7px] transition-all duration-200" :class="viewMode === 'list' ? 'bg-card text-foreground shadow-xs' : 'text-muted-foreground hover:text-foreground'" @click="viewMode = 'list'" title="List View"><LayoutList class="w-4 h-4" /></button>
+            <button class="flex items-center justify-center w-9 h-7 rounded-[7px] transition-all duration-200" :class="viewMode === 'graph' ? 'bg-card text-foreground shadow-xs' : 'text-muted-foreground hover:text-foreground'" @click="viewMode = 'graph'" title="Topology View"><Network class="w-4 h-4" /></button>
           </div>
           <div class="w-px h-6 bg-border hidden sm:block"></div>
 
@@ -277,7 +277,7 @@ const hasActiveFilters = computed(() => activeFilter.value !== 'ALL' || !!select
                   </div>
                 </td>
                 <td class="py-3">
-                  <span v-if="proc.group" class="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-medium bg-muted text-muted-foreground hover:bg-accent hover:text-accent-foreground cursor-pointer transition-colors" :class="{ 'bg-primary text-primary-foreground hover:bg-primary hover:text-primary-foreground': selectedGroup === proc.group }" @click="toggleGroupFilter(proc.group)" title="Filter by this group">{{ proc.group }}</span>
+                  <span v-if="proc.group" class="inline-flex items-center px-2 py-0.5 rounded-[5px] text-xs font-medium bg-muted text-muted-foreground hover:bg-accent hover:text-accent-foreground cursor-pointer transition-colors" :class="{ 'bg-primary text-primary-foreground hover:bg-primary hover:text-primary-foreground': selectedGroup === proc.group }" @click="toggleGroupFilter(proc.group)" title="Filter by this group">{{ proc.group }}</span>
                   <span v-else class="text-muted-foreground/20">-</span>
                 </td>
                 <td class="py-3">

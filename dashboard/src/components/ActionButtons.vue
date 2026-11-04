@@ -107,7 +107,7 @@ const programLabel = computed(() => {
     <!-- Start -->
     <button
       v-if="showLifecycle"
-      class="inline-flex items-center gap-1.5 text-xs font-medium h-7 px-2.5 rounded-lg transition-colors"
+      class="inline-flex items-center gap-1.5 text-xs font-medium h-7 px-2.5 rounded-[7px] transition-colors"
       :class="canStart ? 'text-success hover:bg-success/10' : 'text-muted-foreground/25 pointer-events-none'"
       :disabled="!canStart"
       @click="openDialog('start')"
@@ -119,7 +119,7 @@ const programLabel = computed(() => {
     <!-- Stop -->
     <button
       v-if="showLifecycle"
-      class="inline-flex items-center gap-1.5 text-xs font-medium h-7 px-2.5 rounded-lg transition-colors"
+      class="inline-flex items-center gap-1.5 text-xs font-medium h-7 px-2.5 rounded-[7px] transition-colors"
       :class="canStop ? 'text-destructive hover:bg-destructive/10' : 'text-muted-foreground/25 pointer-events-none'"
       :disabled="!canStop"
       @click="openDialog('stop')"
@@ -133,7 +133,7 @@ const programLabel = computed(() => {
     <div v-if="showOverflow" class="relative">
       <button
         ref="overflowBtnRef"
-        class="inline-flex h-7 w-7 items-center justify-center rounded-lg text-muted-foreground/40 hover:text-muted-foreground hover:bg-muted transition-colors"
+        class="inline-flex h-7 w-7 items-center justify-center rounded-[7px] text-muted-foreground/40 hover:text-muted-foreground hover:bg-muted transition-colors"
         @click="toggleDropdown"
       >
         <MoreHorizontal class="w-3.5 h-3.5" />
@@ -148,7 +148,7 @@ const programLabel = computed(() => {
           <!-- Restart -->
           <button
             v-if="showLifecycle && isRunning"
-            class="flex items-center gap-2 px-3 py-2 rounded-lg text-sm text-muted-foreground hover:text-foreground hover:bg-muted/80 transition-colors"
+            class="flex items-center gap-2 px-3 py-2 rounded-[9px] text-sm text-muted-foreground hover:text-foreground hover:bg-muted/80 transition-colors"
             :class="!canRestart ? 'opacity-20 pointer-events-none' : ''"
             :disabled="!canRestart"
             @click="openDialog('restart')"
@@ -160,7 +160,7 @@ const programLabel = computed(() => {
           <!-- Delete -->
           <div v-if="showDelete" class="relative group/delete">
             <button
-              class="flex items-center gap-2 px-3 py-2 rounded-lg text-sm w-full transition-colors"
+              class="flex items-center gap-2 px-3 py-2 rounded-[9px] text-sm w-full transition-colors"
               :class="canDelete ? 'text-destructive hover:bg-destructive/10' : 'text-muted-foreground/15 pointer-events-none'"
               :disabled="!canDelete"
               @click="openDialog('remove')"

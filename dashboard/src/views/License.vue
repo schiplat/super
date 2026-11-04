@@ -172,7 +172,7 @@ onMounted(fetchLicense);
             :href="UPGRADE_URL"
             target="_blank"
             rel="noopener noreferrer"
-            class="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium bg-primary text-primary-foreground hover:opacity-90 transition-opacity"
+            class="inline-flex items-center gap-1.5 px-3 py-2 rounded-[9px] text-sm font-medium bg-primary text-primary-foreground hover:opacity-90 transition-opacity"
           >
             Get Super Pro
             <ExternalLink class="w-3.5 h-3.5" />

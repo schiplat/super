@@ -228,14 +228,14 @@ async function confirmPruneApply() {
 
         <!-- Right: Action Buttons -->
         <div class="flex items-center gap-3">
-          <button class="inline-flex items-center gap-2 px-3 py-1.5 rounded-xl text-sm font-medium text-muted-foreground hover:text-foreground hover:bg-muted transition-colors" @click="loadCurrentStack" :disabled="loading">
+          <button class="inline-flex items-center gap-2 px-3 py-1.5 rounded-[7px] text-sm font-medium text-muted-foreground hover:text-foreground hover:bg-muted transition-colors" @click="loadCurrentStack" :disabled="loading">
             <Download class="w-4 h-4" />
             Load Current
           </button>
 
           <button
             v-if="canApply"
-            class="inline-flex items-center justify-center gap-2 rounded-xl font-medium px-3.5 text-sm h-9 bg-primary text-primary-foreground hover:bg-primary/90 transition-colors disabled:opacity-50"
+            class="inline-flex items-center justify-center gap-2 rounded-[9px] font-medium px-3.5 text-sm h-9 bg-primary text-primary-foreground hover:bg-primary/90 transition-colors disabled:opacity-50"
             :disabled="applying"
             @click="applyStack"
           >

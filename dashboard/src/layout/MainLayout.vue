@@ -94,7 +94,7 @@ onMounted(() => {
     <nav class="relative h-16 shrink-0 z-50 bg-card border-b border-border flex items-center justify-between px-4 sm:px-6 lg:px-8">
       <!-- Left: Logo & Mobile Toggle -->
       <div class="flex items-center gap-3 z-10 w-[250px]">
-        <button class="md:hidden inline-flex h-8 w-8 items-center justify-center rounded-xl text-muted-foreground hover:bg-muted hover:text-foreground transition-colors" @click="toggleMobileMenu">
+        <button class="md:hidden inline-flex h-8 w-8 items-center justify-center rounded-[8px] text-muted-foreground hover:bg-muted hover:text-foreground transition-colors" @click="toggleMobileMenu">
           <Menu v-if="!mobileMenuOpen" class="w-5 h-5" />
           <X v-else class="w-5 h-5" />
         </button>
@@ -117,7 +117,7 @@ onMounted(() => {
         >
           <a
             :href="href"
-            class="flex items-center gap-2.5 px-4 py-2 rounded-xl text-sm font-medium transition-all duration-200"
+            class="flex items-center gap-2.5 px-4 py-2 rounded-[9px] text-sm font-medium transition-all duration-200 [corner-shape:squircle]"
             :class="isExactActive
               ? 'bg-primary text-primary-foreground shadow-xs'
               : 'text-muted-foreground hover:text-foreground hover:bg-muted'"
@@ -132,7 +132,7 @@ onMounted(() => {
         <div class="relative" @focusout="onManageFocusOut">
           <button
             type="button"
-            class="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium transition-colors"
+            class="flex items-center gap-2 px-4 py-2 rounded-[9px] text-sm font-medium transition-colors"
             :class="manageRouteActive || manageDropdownOpen
               ? 'bg-primary text-primary-foreground shadow-xs'
               : 'text-muted-foreground hover:text-foreground hover:bg-muted'"
@@ -153,7 +153,7 @@ onMounted(() => {
             />
             <a
               href="/stack"
-              class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors"
+              class="flex items-center gap-3 px-3 py-2.5 rounded-[10px] text-sm font-medium transition-colors"
               :class="route.path === '/stack'
                 ? 'bg-muted text-foreground'
                 : 'text-muted-foreground hover:text-foreground hover:bg-muted/80'"
@@ -166,7 +166,7 @@ onMounted(() => {
             <button
               v-if="authStore.canManage"
               type="button"
-              class="flex w-full items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-muted-foreground hover:text-destructive hover:bg-muted/80 font-medium transition-colors cursor-pointer text-left"
+              class="flex w-full items-center gap-3 px-3 py-2.5 rounded-[10px] text-sm text-muted-foreground hover:text-destructive hover:bg-muted/80 font-medium transition-colors cursor-pointer text-left"
               @click="requestReload"
             >
               <RefreshCw class="w-4 h-4" />
@@ -179,7 +179,7 @@ onMounted(() => {
       <!-- Right: Actions -->
       <div class="flex items-center justify-end gap-3 z-10 w-[250px]">
         <button
-          class="inline-flex h-8 w-8 items-center justify-center rounded-xl text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
+          class="inline-flex h-8 w-8 items-center justify-center rounded-[8px] text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
           @click="toggleDark()"
           title="Toggle Theme"
         >
@@ -198,14 +198,14 @@ onMounted(() => {
     >
       <RouterLink
         to="/"
-        class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-foreground hover:bg-muted transition-colors"
+        class="flex items-center gap-3 px-3 py-2.5 rounded-[10px] text-sm font-medium text-foreground hover:bg-muted transition-colors"
         @click="mobileMenuOpen = false"
       >
         <LayoutDashboard class="w-4 h-4" />
         Overview
       </RouterLink>
 
-      <button class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-muted-foreground hover:bg-muted transition-colors" @click="toggleDark()">
+      <button class="flex items-center gap-3 px-3 py-2.5 rounded-[10px] text-sm font-medium text-muted-foreground hover:bg-muted transition-colors" @click="toggleDark()">
         <component :is="isDark ? Moon : Sun" class="w-4 h-4" />
         {{ isDark ? 'Light Mode' : 'Dark Mode' }}
       </button>
@@ -213,7 +213,7 @@ onMounted(() => {
       <button
         v-if="authStore.canManage"
         type="button"
-        class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-muted-foreground hover:text-destructive hover:bg-muted/80 transition-colors text-left"
+        class="flex items-center gap-3 px-3 py-2.5 rounded-[10px] text-sm font-medium text-muted-foreground hover:text-destructive hover:bg-muted/80 transition-colors text-left"
         @click="requestReload"
       >
         <RefreshCw class="w-4 h-4" />
@@ -229,7 +229,7 @@ onMounted(() => {
       />
       <a
         href="/stack"
-        class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-muted-foreground hover:bg-muted transition-colors"
+        class="flex items-center gap-3 px-3 py-2.5 rounded-[10px] text-sm text-muted-foreground hover:bg-muted transition-colors"
         @click.prevent="navigateTo('/stack'); mobileMenuOpen = false"
       >
         <Layers class="w-4 h-4" /> Stack Editor

@@ -89,7 +89,7 @@ function changePage(newPage: number) {
       <nav class="flex items-center gap-0.5" aria-label="Pagination">
         <button
           type="button"
-          class="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-border bg-card hover:bg-muted transition-colors disabled:opacity-30"
+          class="inline-flex h-8 w-8 items-center justify-center rounded-[8px] border border-border bg-card hover:bg-muted transition-colors disabled:opacity-30"
           :disabled="page === 1 || disabled"
           aria-label="Previous page"
           @click="changePage(page - 1)"
@@ -106,7 +106,7 @@ function changePage(newPage: number) {
           <button
             v-else
             type="button"
-            class="inline-flex h-8 min-w-8 items-center justify-center rounded-lg border text-xs font-semibold tabular-nums transition-colors disabled:opacity-30 px-1.5"
+            class="inline-flex h-8 min-w-8 items-center justify-center rounded-[8px] border text-xs font-semibold tabular-nums transition-colors disabled:opacity-30 px-1.5"
             :class="item === page
               ? 'border-primary/40 bg-primary/10 text-primary'
               : 'border-border bg-card text-muted-foreground hover:bg-muted hover:text-foreground'"
@@ -121,7 +121,7 @@ function changePage(newPage: number) {
 
         <button
           type="button"
-          class="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-border bg-card hover:bg-muted transition-colors disabled:opacity-30"
+          class="inline-flex h-8 w-8 items-center justify-center rounded-[8px] border border-border bg-card hover:bg-muted transition-colors disabled:opacity-30"
           :disabled="page === totalPages || disabled"
           aria-label="Next page"
           @click="changePage(page + 1)"

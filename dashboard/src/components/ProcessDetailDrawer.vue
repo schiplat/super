@@ -567,7 +567,7 @@ function goToEdit() { if (props.processId) router.push(`/programs/${props.proces
               <button
                 v-if="summaryData?.name"
                 type="button"
-                class="inline-flex h-7 w-7 items-center justify-center rounded-lg text-muted-foreground/50 hover:text-foreground hover:bg-muted transition-colors shrink-0"
+                class="inline-flex h-7 w-7 items-center justify-center rounded-[7px] text-muted-foreground/50 hover:text-foreground hover:bg-muted transition-colors shrink-0"
                 :title="nameCopied ? 'Copied' : 'Copy name'"
                 @click="copyProgramName"
               >
@@ -597,7 +597,7 @@ function goToEdit() { if (props.processId) router.push(`/programs/${props.proces
           </div>
           <div class="flex items-center gap-1 shrink-0 -mt-0.5">
             <button
-              class="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+              class="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-[7px] text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
               :disabled="refreshingDetail"
               :title="activeTab === 'events' ? 'Refresh status and events' : activeTab === 'logs' && logMode === 'history' ? 'Refresh status and log history' : 'Refresh status'"
               @click="refreshDetailNow"
@@ -605,10 +605,10 @@ function goToEdit() { if (props.processId) router.push(`/programs/${props.proces
               <RefreshCw class="w-3.5 h-3.5" :class="{ 'animate-spin': refreshingDetail }" />
               <span class="hidden sm:inline">Refresh</span>
             </button>
-            <button v-if="authStore.canManage" class="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-muted transition-colors" @click="goToEdit">
+            <button v-if="authStore.canManage" class="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-[7px] text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-muted transition-colors" @click="goToEdit">
               <Edit class="w-3.5 h-3.5" /><span class="hidden sm:inline">Edit</span>
             </button>
-            <button class="inline-flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground/50 hover:text-foreground hover:bg-muted transition-colors ml-1" @click="close"><X class="w-4 h-4" /></button>
+            <button class="inline-flex h-8 w-8 items-center justify-center rounded-[8px] text-muted-foreground/50 hover:text-foreground hover:bg-muted transition-colors ml-1" @click="close"><X class="w-4 h-4" /></button>
           </div>
         </div>
         <div class="py-3 border-t border-border/60"><ActionButtons :id="processId" :status="programStatus || 'Stopped'" :name="summaryData?.name" /></div>
@@ -624,7 +624,7 @@ function goToEdit() { if (props.processId) router.push(`/programs/${props.proces
             <template v-if="isHealthCheckError">Check <strong>Configuration → health_check</strong>. Use the button below to open stderr file history.</template>
             <template v-else>superd keeps only the most recent error in memory. Use file logs below for full history.</template>
           </p>
-          <button type="button" class="inline-flex items-center gap-1 mt-2 px-2.5 py-1 rounded-lg text-xs font-medium border transition-colors" :class="isHealthCheckError ? 'border-warning/30 text-warning hover:bg-warning/10' : 'border-destructive/30 text-destructive hover:bg-destructive/10'" @click="viewErrorLogs">
+          <button type="button" class="inline-flex items-center gap-1 mt-2 px-2.5 py-1 rounded-[6px] text-xs font-medium border transition-colors" :class="isHealthCheckError ? 'border-warning/30 text-warning hover:bg-warning/10' : 'border-destructive/30 text-destructive hover:bg-destructive/10'" @click="viewErrorLogs">
             {{ isHealthCheckError ? 'View stderr diagnostics' : 'View file log history' }}
           </button>
         </div>
@@ -656,22 +656,22 @@ function goToEdit() { if (props.processId) router.push(`/programs/${props.proces
           <div class="px-4 py-2.5 border-b border-border bg-card shrink-0 space-y-2">
             <div class="flex items-center justify-between gap-3">
               <div class="bg-muted/80 p-0.5 rounded-lg inline-flex border border-border/40">
-                <button type="button" class="px-3 py-1.5 rounded-md text-xs font-medium transition-all" :class="logMode === 'live' ? 'bg-card text-foreground shadow-xs' : 'text-muted-foreground hover:text-foreground'" @click="logMode = 'live'">Live stream</button>
-                <button type="button" class="px-3 py-1.5 rounded-md text-xs font-medium transition-all" :class="logMode === 'history' ? 'bg-card text-foreground shadow-xs' : 'text-muted-foreground hover:text-foreground'" @click="logMode = 'history'">Log history</button>
+                <button type="button" class="px-3 py-1.5 rounded-[7px] text-xs font-medium transition-all" :class="logMode === 'live' ? 'bg-card text-foreground shadow-xs' : 'text-muted-foreground hover:text-foreground'" @click="logMode = 'live'">Live stream</button>
+                <button type="button" class="px-3 py-1.5 rounded-[7px] text-xs font-medium transition-all" :class="logMode === 'history' ? 'bg-card text-foreground shadow-xs' : 'text-muted-foreground hover:text-foreground'" @click="logMode = 'history'">Log history</button>
               </div>
               <span v-if="logMode === 'live'" class="text-xs text-muted-foreground/50 hidden sm:inline">WebSocket tail</span>
             </div>
             <div v-if="logMode === 'history'" class="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-3">
               <div class="bg-muted/80 p-0.5 rounded-lg inline-flex border border-border/40 shrink-0">
-                <button v-for="opt in streamOptions" :key="opt.value" type="button" class="px-2.5 py-1 rounded-md text-xs font-medium transition-all" :class="historySource === opt.value ? 'bg-card text-foreground shadow-xs' : 'text-muted-foreground hover:text-foreground'" @click="historySource = opt.value">{{ opt.label }}</button>
+                <button v-for="opt in streamOptions" :key="opt.value" type="button" class="px-2.5 py-1 rounded-[6px] text-xs font-medium transition-all" :class="historySource === opt.value ? 'bg-card text-foreground shadow-xs' : 'text-muted-foreground hover:text-foreground'" @click="historySource = opt.value">{{ opt.label }}</button>
               </div>
               <div class="flex items-center gap-2 shrink-0">
                 <div class="bg-muted/80 p-0.5 rounded-lg inline-flex border border-border/40">
-                  <button v-for="n in tailOptions" :key="n" type="button" class="min-w-[2.25rem] px-2 py-1 rounded-md text-xs font-medium font-mono transition-all" :class="historyLines === n ? 'bg-card text-foreground shadow-xs' : 'text-muted-foreground hover:text-foreground'" @click="historyLines = n; processId && fetchHistory(processId)">{{ n }}</button>
+                  <button v-for="n in tailOptions" :key="n" type="button" class="min-w-[2.25rem] px-2 py-1 rounded-[6px] text-xs font-medium font-mono transition-all" :class="historyLines === n ? 'bg-card text-foreground shadow-xs' : 'text-muted-foreground hover:text-foreground'" @click="historyLines = n; processId && fetchHistory(processId)">{{ n }}</button>
                 </div>
                 <span class="text-xs text-muted-foreground/50">lines</span>
               </div>
-              <button type="button" class="inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-medium border border-border text-muted-foreground hover:text-foreground hover:bg-muted transition-colors shrink-0 self-start sm:self-auto" :disabled="historyLoading || !processId" @click="processId && fetchHistory(processId)">Refresh</button>
+              <button type="button" class="inline-flex items-center px-2.5 py-1 rounded-[6px] text-xs font-medium border border-border text-muted-foreground hover:text-foreground hover:bg-muted transition-colors shrink-0 self-start sm:self-auto" :disabled="historyLoading || !processId" @click="processId && fetchHistory(processId)">Refresh</button>
             </div>
           </div>
           <div v-if="logMode === 'live'" class="flex-1 p-0 bg-[#1e1e1e] min-h-0"><LogTerminal ref="terminalRef" :logs="[]" /></div>
@@ -729,7 +729,7 @@ function goToEdit() { if (props.processId) router.push(`/programs/${props.proces
                 </select>
                 <button
                   type="button"
-                  class="inline-flex h-7 w-7 items-center justify-center rounded-md border border-border disabled:opacity-30 hover:bg-muted"
+                  class="inline-flex h-7 w-7 items-center justify-center rounded-[7px] border border-border disabled:opacity-30 hover:bg-muted"
                   :disabled="!eventsHasPrev || eventsLoading"
                   @click="eventsPrevPage"
                 >
@@ -738,7 +738,7 @@ function goToEdit() { if (props.processId) router.push(`/programs/${props.proces
                 <span class="font-mono tabular-nums min-w-[3rem] text-center">p.{{ eventsPage }}</span>
                 <button
                   type="button"
-                  class="inline-flex h-7 w-7 items-center justify-center rounded-md border border-border disabled:opacity-30 hover:bg-muted"
+                  class="inline-flex h-7 w-7 items-center justify-center rounded-[7px] border border-border disabled:opacity-30 hover:bg-muted"
                   :disabled="!eventsHasNext || eventsLoading"
                   @click="eventsNextPage"
                 >
@@ -842,7 +842,7 @@ function goToEdit() { if (props.processId) router.push(`/programs/${props.proces
                       </span>
                     </template>
                     <span v-if="commandArgs.length === 0" class="text-xs text-muted-foreground/30 italic">(no arguments)</span>
-                    <button class="inline-flex h-6 w-6 items-center justify-center rounded-lg opacity-0 group-hover:opacity-100 transition-opacity shrink-0" @click="copy(fullCommand)" title="Copy full command">
+                    <button class="inline-flex h-6 w-6 items-center justify-center rounded-[6px] opacity-0 group-hover:opacity-100 transition-opacity shrink-0" @click="copy(fullCommand)" title="Copy full command">
                       <Check v-if="copied" class="w-3 h-3 text-success" /><Copy v-else class="w-3 h-3 text-muted-foreground" />
                     </button>
                   </div>
@@ -926,7 +926,7 @@ function goToEdit() { if (props.processId) router.push(`/programs/${props.proces
                       <span class="inline-flex items-center px-1.5 py-px rounded text-[10px] uppercase tracking-wider font-bold leading-none bg-warning/12 text-warning">next</span>
                       <span class="text-sm text-foreground/70">{{ nextRunText }}</span>
                     </span>
-                    <button class="inline-flex h-6 w-6 items-center justify-center rounded-lg opacity-0 group-hover:opacity-100 transition-opacity shrink-0" @click="copy(detailData.config.cron ?? '')" title="Copy cron expression">
+                    <button class="inline-flex h-6 w-6 items-center justify-center rounded-[6px] opacity-0 group-hover:opacity-100 transition-opacity shrink-0" @click="copy(detailData.config.cron ?? '')" title="Copy cron expression">
                       <Check v-if="copied" class="w-3 h-3 text-success" /><Copy v-else class="w-3 h-3 text-muted-foreground" />
                     </button>
                   </div>
@@ -977,7 +977,7 @@ function goToEdit() { if (props.processId) router.push(`/programs/${props.proces
                   <div v-if="detailData.config.depends_on.length > 0" class="px-5 py-4 bg-muted/40">
                     <div class="text-xs font-bold text-muted-foreground/50 uppercase tracking-[0.06em] mb-2.5 flex items-center gap-1.5"><Link2 class="w-3 h-3" />Depends On</div>
                     <div class="flex flex-wrap gap-2">
-                      <span v-for="dep in detailData.config.depends_on" :key="dep" class="inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-medium bg-background/60 text-foreground/70 cursor-pointer hover:bg-primary/10 hover:text-primary transition-colors" @click="jumpToDependency(dep)">{{ dep }}</span>
+                      <span v-for="dep in detailData.config.depends_on" :key="dep" class="inline-flex items-center px-2.5 py-1 rounded-[6px] text-xs font-medium bg-background/60 text-foreground/70 cursor-pointer hover:bg-primary/10 hover:text-primary transition-colors" @click="jumpToDependency(dep)">{{ dep }}</span>
                     </div>
                   </div>
                 </div>

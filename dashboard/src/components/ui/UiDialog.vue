@@ -60,7 +60,7 @@ const widthClass = computed(() =>
           </div>
           <button
             type="button"
-            class="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-xl text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+            class="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-[8px] text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
             aria-label="Close"
             @click="open = false"
           >

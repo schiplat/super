@@ -68,7 +68,7 @@ async function handleLogin() {
             </div>
           </div>
           <button
-            class="w-full py-3 px-4 bg-primary text-primary-foreground hover:bg-primary/90 font-medium rounded-xl transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+            class="w-full py-3 px-4 bg-primary text-primary-foreground hover:bg-primary/90 font-medium rounded-[11px] transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
             :disabled="loading || !token"
             @click="handleLogin"
           >

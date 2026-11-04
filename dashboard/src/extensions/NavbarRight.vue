@@ -60,7 +60,7 @@ function handleLogout() {
     <!-- User menu -->
     <div v-if="authStore.user" class="relative">
       <button
-        class="flex items-center gap-3 pl-2 pr-1 py-1 rounded-xl hover:bg-muted/60 transition-colors cursor-pointer group"
+        class="flex items-center gap-3 pl-2 pr-1 py-1 rounded-[10px] hover:bg-muted/60 transition-colors cursor-pointer group"
         :class="userMenuOpen ? 'bg-muted' : ''"
         @click="toggleUserMenu"
         @blur="handleBlur"
@@ -98,7 +98,7 @@ function handleLogout() {
 
         <a
           href="/license"
-          class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-muted-foreground hover:text-foreground hover:bg-muted/80 font-medium transition-colors"
+          class="flex items-center gap-3 px-3 py-2.5 rounded-[10px] text-sm text-muted-foreground hover:text-foreground hover:bg-muted/80 font-medium transition-colors"
           @click.prevent="navigateTo('/license')"
         >
           <ShieldCheck class="w-4 h-4 opacity-50" />
@@ -110,7 +110,7 @@ function handleLogout() {
 
           <a
             @click="handleLogout"
-            class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-destructive hover:bg-destructive/10 font-medium transition-colors cursor-pointer"
+            class="flex items-center gap-3 px-3 py-2.5 rounded-[10px] text-sm text-destructive hover:bg-destructive/10 font-medium transition-colors cursor-pointer"
           >
             <LogOut class="w-4 h-4 opacity-50" />
             Sign out

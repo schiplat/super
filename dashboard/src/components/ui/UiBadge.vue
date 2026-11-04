@@ -33,7 +33,7 @@ const variantClass = computed(() => {
   <span
     :class="
       cn(
-        'inline-flex items-center gap-1 rounded-md font-medium',
+        'inline-flex items-center gap-1 rounded-[5px] font-medium',
         size === 'sm' ? 'px-1.5 py-0.5 text-[0.6875rem]' : 'px-2 py-0.5 text-xs',
         variantClass,
       )
