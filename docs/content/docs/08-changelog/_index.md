@@ -19,6 +19,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **CLI commands now exit non-zero when the daemon rejects a request or is unreachable.** Previously most commands (`list`, `info`, `add`, `update`, batch start/stop/restart/remove/signal, `apply`, `export`, `reload`, `logs`, `events`, `token`, `shutdown`) printed `Error: …` but still exited 0, so scripts, cron jobs, and CI gates could not detect failures — `super list || alert` never fired. These commands now print the daemon's error message (the JSON `message` field when present) and exit 1. A declined batch-confirmation prompt ("Aborted.") still exits 0, and usage errors keep clap's exit code 2. See the [CLI reference — exit codes](/docs/06-internals/cli-reference/#exit-codes).
 - **Dashboard internals move to Tailwind CSS v4 and reka-ui primitives** for `UiDialog`/`UiSwitch` (the shadcn-style component layer). Visual design is unchanged; dialogs gain focus trapping, initial focus, and full ARIA wiring, and switches gain keyboard toggling (Space). Shadow scale renames (`shadow-sm` → `shadow-xs`, bare `shadow` → `shadow-sm`) were applied across templates — rendering is unchanged. `tailwindcss-animate` is replaced by `tw-animate-css`.
 
 ## [1.8.1] - 2026-11-02

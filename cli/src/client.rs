@@ -335,7 +335,7 @@ pub async fn resolve_target_details(
 
     if resp.status() == reqwest::StatusCode::UNAUTHORIZED {
         return Err(anyhow::anyhow!(
-            "Error: Unauthorized. Run `super login`, or pass --token / set SUPER_TOKEN."
+            "Unauthorized. Run `super login`, or pass --token / set SUPER_TOKEN."
         ));
     }
     let programs: Vec<ProgramSummary> = resp.json().await?;
@@ -354,8 +354,7 @@ pub async fn resolve_target_details(
             .collect();
         if matched.is_empty() {
             return Err(anyhow::anyhow!(
-                "Error: No programs found in group '@{}'",
-                group_name
+                "No programs found in group '@{group_name}'"
             ));
         }
         return Ok(matched);
@@ -367,17 +366,15 @@ pub async fn resolve_target_details(
         .collect();
 
     match matches.len() {
-        0 => Err(anyhow::anyhow!("Error: Program not found: '{}'", target)),
+        0 => Err(anyhow::anyhow!("Program not found: '{target}'")),
         1 => Ok(matches),
         _ => {
-            eprintln!(
-                "Error: Ambiguous target '{}'. Found multiple matches:",
-                target
-            );
+            let mut msg = format!("Ambiguous target '{target}'. Found multiple matches:");
             for p in &matches {
-                eprintln!("   {} ({})", p.id, p.name);
+                msg.push_str(&format!("\n   {} ({})", p.id, p.name));
             }
-            Err(anyhow::anyhow!("Please be more specific."))
+            msg.push_str("\nPlease be more specific.");
+            Err(anyhow::anyhow!("{msg}"))
         }
     }
 }

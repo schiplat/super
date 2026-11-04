@@ -30,6 +30,16 @@ The `super` binary is the primary way to interact with the daemon. Commands are 
 
 When the daemon listens on both TCP and a Unix socket, an unconfigured CLI therefore prefers the Unix socket automatically. To force TCP, pass `--server http://host:port` or run `super login <secret> http://host:port` to persist it. Auto-discovery only recognizes the conventional `run/superd.sock` path — a custom socket path or a non-default TCP port still needs an explicit `--server` (or a persisted login).
 
+**Exit codes** (what scripts and CI gates can rely on):
+
+| Code | Meaning |
+| :--- | :--- |
+| `0` | Command succeeded. A declined batch-confirmation prompt ("Aborted.") and a completed `--dry-run` also exit 0 — nothing was executed, but nothing failed |
+| `1` | Operation failed: the daemon returned an HTTP error (401/403/404/5xx — the daemon's error message is printed on stderr), the daemon was unreachable, or a `super reload --wait` readiness timeout was hit |
+| `2` | Usage error: unknown flag or missing argument (clap) |
+
+Historical note: before 1.9.0 most commands printed `Error: …` on an HTTP failure but still exited 0, so shell `||` fallbacks and CI gates never fired. Since 1.9.0 a non-zero exit reliably means the requested operation did not happen.
+
 ## Starting `superd` (daemon binary)
 
 `superd` is separate from the `super` CLI. It reads `$SUPER_ROOT/conf/super.toml` and listens for API/CLI traffic.

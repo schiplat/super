@@ -24,7 +24,11 @@ pub(crate) fn api_error_from_body(status: reqwest::StatusCode, body: &str) -> an
     {
         return anyhow::anyhow!("{msg}");
     }
-    anyhow::anyhow!("request failed (HTTP {}): {}", status.as_u16(), body)
+    let trimmed = body.trim();
+    if trimmed.is_empty() {
+        return anyhow::anyhow!("request failed (HTTP {status})");
+    }
+    anyhow::anyhow!("request failed (HTTP {status}): {trimmed}")
 }
 
 fn parse_autorestart(s: &str) -> anyhow::Result<AutorestartPolicy> {
@@ -91,25 +95,26 @@ pub async fn check_resp(resp: ApiResponse) -> anyhow::Result<()> {
     let status = resp.status();
     if status.is_success() {
         println!("Success");
-    } else {
-        let text = resp.text().await.unwrap_or_default();
-        if text.trim().is_empty() {
-            match status {
-                reqwest::StatusCode::FORBIDDEN => eprintln!("Error: Action Forbidden (403)."),
-                reqwest::StatusCode::NOT_FOUND => eprintln!("Error: Resource Not Found (404)."),
-                _ => eprintln!("Error: Failed with status: {}", status),
+        return Ok(());
+    }
+    let text = resp.text().await.unwrap_or_default();
+    if let Ok(err_json) = serde_json::from_str::<serde_json::Value>(&text)
+        && let Some(msg) = err_json.get("message").and_then(|m| m.as_str())
+    {
+        return Err(anyhow::anyhow!("{msg}"));
+    }
+    if text.trim().is_empty() {
+        match status {
+            reqwest::StatusCode::FORBIDDEN => {
+                return Err(anyhow::anyhow!("Action Forbidden (403)."));
             }
-        } else {
-            if let Ok(err_json) = serde_json::from_str::<serde_json::Value>(&text)
-                && let Some(msg) = err_json.get("message").and_then(|m| m.as_str())
-            {
-                eprintln!("Error: {}", msg);
-                return Ok(());
+            reqwest::StatusCode::NOT_FOUND => {
+                return Err(anyhow::anyhow!("Resource Not Found (404)."));
             }
-            eprintln!("Error: {}", text);
+            _ => return Err(anyhow::anyhow!("Failed with status: {status}")),
         }
     }
-    Ok(())
+    Err(anyhow::anyhow!("{text}"))
 }
 
 /// Extra safety knobs shared by every batch command.
@@ -234,9 +239,10 @@ pub async fn handle_batch_action(
     let url = format!("{}/api/v1/programs/batch", ctx.base_url);
     let resp = ctx.client.post(&url).json(&req).send().await?;
 
-    if !resp.status().is_success() {
-        eprintln!("Error: {}", resp.text().await?);
-        return Ok(());
+    let status = resp.status();
+    if !status.is_success() {
+        let body = resp.text().await?;
+        return Err(api_error_from_body(status, &body));
     }
 
     // 4. Handle response
@@ -320,32 +326,37 @@ pub async fn handle_list(ctx: &Context) -> anyhow::Result<()> {
     let url = format!("{}/api/v1/programs", ctx.base_url);
     let resp = ctx.client.get(&url).send().await?;
 
-    if resp.status().is_success() {
+    let status = resp.status();
+    if status.is_success() {
         let programs: Vec<ProgramSummary> = resp.json().await?;
         display::print_list_table(programs);
+        Ok(())
     } else {
-        eprintln!("Error: Failed to fetch list: {}", resp.status());
+        let body = resp.text().await?;
+        Err(api_error_from_body(status, &body))
     }
-    Ok(())
 }
 
 pub async fn handle_info(ctx: &Context, target: &str) -> anyhow::Result<()> {
     let ids = client::resolve_targets(&ctx.client, &ctx.base_url, target).await?;
     if ids.len() != 1 {
-        eprintln!("Error: Info command only supports a single target.");
-        return Ok(());
+        return Err(anyhow::anyhow!(
+            "Info command only supports a single target."
+        ));
     }
 
     let url = format!("{}/api/v1/programs/{}", ctx.base_url, ids[0]);
     let resp = ctx.client.get(&url).send().await?;
 
-    if resp.status().is_success() {
+    let status = resp.status();
+    if status.is_success() {
         let info: ProgramInfo = resp.json().await?;
         display::print_info(info);
+        Ok(())
     } else {
-        eprintln!("Error: Failed to fetch info: {}", resp.status());
+        let body = resp.text().await?;
+        Err(api_error_from_body(status, &body))
     }
-    Ok(())
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -362,21 +373,23 @@ pub async fn handle_events(
 ) -> anyhow::Result<()> {
     let ids = client::resolve_targets(&ctx.client, &ctx.base_url, target).await?;
     if ids.len() != 1 {
-        eprintln!("Error: Events command only supports a single target.");
-        return Ok(());
+        return Err(anyhow::anyhow!(
+            "Events command only supports a single target."
+        ));
     }
     let pid = ids[0];
 
     if stats {
         let url = format!("{}/api/v1/events/stats?program_id={}", ctx.base_url, pid);
         let resp = ctx.client.get(&url).send().await?;
-        if resp.status().is_success() {
+        let status = resp.status();
+        if status.is_success() {
             let stats: common::EventStats = resp.json().await?;
             display::print_event_stats(&stats);
-        } else {
-            eprintln!("Error: Failed to fetch event stats: {}", resp.status());
+            return Ok(());
         }
-        return Ok(());
+        let body = resp.text().await?;
+        return Err(api_error_from_body(status, &body));
     }
 
     let mut url = format!("{}/api/v1/programs/{}/events", ctx.base_url, pid);
@@ -396,13 +409,15 @@ pub async fn handle_events(
 
     let resp = ctx.client.get(&url).send().await?;
 
-    if resp.status().is_success() {
+    let status = resp.status();
+    if status.is_success() {
         let events: Vec<common::ProgramEventRecord> = resp.json().await?;
         display::print_events(&events, limit);
+        Ok(())
     } else {
-        eprintln!("Error: Failed to fetch events: {}", resp.status());
+        let body = resp.text().await?;
+        Err(api_error_from_body(status, &body))
     }
-    Ok(())
 }
 
 pub async fn handle_logs(
@@ -414,8 +429,9 @@ pub async fn handle_logs(
 ) -> anyhow::Result<()> {
     let ids = client::resolve_targets(&ctx.client, &ctx.base_url, target).await?;
     if ids.len() != 1 {
-        eprintln!("Error: Logs command only supports a single target.");
-        return Ok(());
+        return Err(anyhow::anyhow!(
+            "Logs command only supports a single target."
+        ));
     }
     let id = ids[0];
 
@@ -425,7 +441,8 @@ pub async fn handle_logs(
             url.push_str(&format!("&source={}", s));
         }
         let resp = ctx.client.get(&url).send().await?;
-        if resp.status().is_success() {
+        let status = resp.status();
+        if status.is_success() {
             let body: ProgramLogsResponse = resp.json().await?;
             for file in &body.logs {
                 if body.logs.len() > 1 {
@@ -440,8 +457,8 @@ pub async fn handle_logs(
                 println!("(no log files yet)");
             }
         } else {
-            eprintln!("Error: {}", resp.text().await?);
-            return Ok(());
+            let body = resp.text().await?;
+            return Err(api_error_from_body(status, &body));
         }
         if !follow {
             return Ok(());
@@ -827,7 +844,8 @@ pub async fn handle_update(ctx: &Context, cmd: &args::Commands) -> anyhow::Resul
 
         let url = format!("{}/api/v1/programs/{}", ctx.base_url, id);
         let resp = ctx.client.put(&url).json(&payload).send().await?;
-        if resp.status().is_success() {
+        let status = resp.status();
+        if status.is_success() {
             if ota_triggered {
                 println!("OTA update triggered for '{}'.", target);
             } else if is_live_resource_limits_update(&payload, ota_triggered) {
@@ -839,7 +857,8 @@ pub async fn handle_update(ctx: &Context, cmd: &args::Commands) -> anyhow::Resul
                 println!("Configuration updated for '{}'. Restart required.", target);
             }
         } else {
-            eprintln!("Error: {}", resp.text().await?);
+            let body = resp.text().await?;
+            return Err(api_error_from_body(status, &body));
         }
     }
     Ok(())
@@ -854,10 +873,12 @@ pub async fn handle_token(ctx: &Context, action: &TokenCommands) -> anyhow::Resu
                 .get(format!("{base_url}/api/v1/auth/tokens"))
                 .send()
                 .await?;
-            if resp.status().is_success() {
+            let status = resp.status();
+            if status.is_success() {
                 display::print_token_table(resp.json().await?);
             } else {
-                eprintln!("Error: Failed with status {}", resp.status());
+                let body = resp.text().await?;
+                return Err(api_error_from_body(status, &body));
             }
         }
         TokenCommands::Create { name, role } => {
@@ -877,13 +898,15 @@ pub async fn handle_token(ctx: &Context, action: &TokenCommands) -> anyhow::Resu
                 .send()
                 .await?;
 
-            if resp.status().is_success() {
+            let status = resp.status();
+            if status.is_success() {
                 let res: CreateTokenResponse = resp.json().await?;
                 println!("Token Created: {} ({:?})", res.record.name, res.record.role);
                 println!("Token: {}", res.token);
                 println!("Save it now! It will not be shown again.");
             } else {
-                eprintln!("Error: {}", resp.text().await?);
+                let body = resp.text().await?;
+                return Err(api_error_from_body(status, &body));
             }
         }
         TokenCommands::Revoke { id } => {
@@ -903,12 +926,14 @@ pub async fn handle_shutdown(ctx: &Context) -> anyhow::Result<()> {
     let url = format!("{}/api/v1/system/shutdown", ctx.base_url);
     let resp = ctx.client.post(&url).send().await?;
 
-    if resp.status().is_success() {
+    let status = resp.status();
+    if status.is_success() {
         println!("System is shutting down.");
+        Ok(())
     } else {
-        eprintln!("Error: Failed with status {}", resp.status());
+        let body = resp.text().await?;
+        Err(api_error_from_body(status, &body))
     }
-    Ok(())
 }
 
 pub async fn handle_reload(
@@ -943,8 +968,7 @@ pub async fn handle_reload(
     let status = resp.status();
     if !status.is_success() {
         let body = resp.text().await.unwrap_or_default();
-        eprintln!("Error: {}", body);
-        return Ok(());
+        return Err(api_error_from_body(status, &body));
     }
 
     let body: common::ReloadResponse = resp.json().await?;
@@ -1105,7 +1129,8 @@ pub async fn handle_export(ctx: &Context, format: args::ExportFormat) -> anyhow:
     let url = format!("{}/api/v1/stack", ctx.base_url);
     let resp = ctx.client.get(&url).send().await?;
 
-    if resp.status().is_success() {
+    let status = resp.status();
+    if status.is_success() {
         let json: serde_json::Value = resp.json().await?;
         match format {
             args::ExportFormat::Json => {
@@ -1116,8 +1141,13 @@ pub async fn handle_export(ctx: &Context, format: args::ExportFormat) -> anyhow:
                 println!("{}", toml::to_string_pretty(&stack)?);
             }
         }
+        Ok(())
     } else {
-        eprintln!("Error: Failed to export stack: {}", resp.status());
+        let body = resp.text().await?;
+        Err(api_error_from_body(status, &body))
     }
-    Ok(())
 }
+
+#[cfg(test)]
+#[path = "tests/handlers_tests.rs"]
+mod tests;
