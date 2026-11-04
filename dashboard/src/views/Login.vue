@@ -56,7 +56,7 @@ async function handleLogin() {
             <label class="text-xs font-semibold uppercase tracking-wider text-muted-foreground/60 pl-1">Bearer credential</label>
             <input
               v-model="token" type="password" placeholder="auth_secret or sk-…"
-              class="w-full px-4 py-3 rounded-xl bg-muted border border-border text-foreground font-mono text-sm focus:outline-hidden focus:ring-2 focus:ring-ring/30 focus:border-foreground/35 transition-all placeholder:text-muted-foreground/50"
+              class="w-full px-4 py-3 rounded-[11px] bg-muted border border-border text-foreground font-mono text-sm focus:outline-hidden focus:ring-2 focus:ring-ring/30 focus:border-foreground/35 transition-all placeholder:text-muted-foreground/50"
               :class="{ 'bg-destructive/5 border-destructive focus:border-destructive focus:ring-destructive/20': error }"
               @keyup.enter="handleLogin" autofocus
             />

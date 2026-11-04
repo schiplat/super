@@ -764,7 +764,7 @@ async function handleSubmit() {
               <div class="form-control">
                 <label class="label pt-0 pb-1.5"><span class="label-text text-xs font-medium text-foreground/75">Restart Policy</span></label>
                 <div class="relative">
-                  <select v-model="form.artifact_restart_policy" class="appearance-none bg-muted/60 hover:bg-border/60 focus:bg-border/60 focus:outline-hidden cursor-pointer text-sm font-medium h-9 min-h-0 w-full pl-3 pr-8 rounded-md border border-transparent">
+                  <select v-model="form.artifact_restart_policy" class="appearance-none bg-muted/60 hover:bg-border/60 focus:bg-border/60 focus:outline-hidden cursor-pointer text-sm font-medium h-9 min-h-0 w-full pl-3 pr-8 rounded-[9px] border border-transparent">
                     <option value="immediate">immediate — restart process (SIGTERM), then verify</option>
                     <option value="manual">manual — commit swap only (no restart / no verify)</option>
                     <option value="signal:hup">signal:hup — in-place reload (requires health check)</option>
@@ -870,7 +870,7 @@ async function handleSubmit() {
             <div class="form-control">
               <label class="label pt-0 pb-1.5"><span class="label-text text-xs font-medium text-foreground/75">Autorestart Policy</span></label>
               <div class="relative">
-                <select v-model="form.autorestart" class="appearance-none bg-muted/60 hover:bg-border/60 focus:bg-border/60 focus:outline-hidden cursor-pointer text-sm font-medium h-9 min-h-0 w-full pl-3 pr-8 rounded-md border border-transparent">
+                <select v-model="form.autorestart" class="appearance-none bg-muted/60 hover:bg-border/60 focus:bg-border/60 focus:outline-hidden cursor-pointer text-sm font-medium h-9 min-h-0 w-full pl-3 pr-8 rounded-[9px] border border-transparent">
                   <option value="unexpected">unexpected — only on non-zero / unknown exits</option>
                   <option value="true">true — always restart</option>
                   <option value="false">false — never restart</option>
@@ -944,7 +944,7 @@ async function handleSubmit() {
               <div class="form-control">
                 <label class="label pt-0 pb-1.5"><span class="label-text text-xs font-medium text-foreground/75">On Overlap</span></label>
                 <div class="relative">
-                  <select v-model="form.on_overlap" class="appearance-none bg-muted/60 hover:bg-border/60 focus:bg-border/60 focus:outline-hidden cursor-pointer text-sm font-medium h-9 min-h-0 w-full pl-3 pr-8 rounded-md border border-transparent">
+                  <select v-model="form.on_overlap" class="appearance-none bg-muted/60 hover:bg-border/60 focus:bg-border/60 focus:outline-hidden cursor-pointer text-sm font-medium h-9 min-h-0 w-full pl-3 pr-8 rounded-[9px] border border-transparent">
                     <option value="skip">skip — drop tick</option>
                     <option value="queue">queue — run after exit</option>
                     <option value="kill">kill — terminate running</option>
@@ -957,7 +957,7 @@ async function handleSubmit() {
               <div class="form-control">
                 <label class="label pt-0 pb-1.5"><span class="label-text text-xs font-medium text-foreground/75">Catchup</span></label>
                 <div class="relative">
-                  <select v-model="form.catchup" class="appearance-none bg-muted/60 hover:bg-border/60 focus:bg-border/60 focus:outline-hidden cursor-pointer text-sm font-medium h-9 min-h-0 w-full pl-3 pr-8 rounded-md border border-transparent">
+                  <select v-model="form.catchup" class="appearance-none bg-muted/60 hover:bg-border/60 focus:bg-border/60 focus:outline-hidden cursor-pointer text-sm font-medium h-9 min-h-0 w-full pl-3 pr-8 rounded-[9px] border border-transparent">
                     <option value="skip">skip — no backfill</option>
                     <option value="latest">latest — last missed</option>
                     <option value="all">all — every missed slot</option>

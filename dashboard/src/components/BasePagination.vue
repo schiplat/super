@@ -81,7 +81,7 @@ function changePage(newPage: number) {
           :value="pageSize"
           @change="e => { emit('update:pageSize', Number((e.target as HTMLSelectElement).value)); emit('update:page', 1); }"
           :disabled="disabled"
-          class="field-control !h-8 !w-16 !text-xs !px-2"
+          class="field-control !h-8 !w-16 !text-xs !px-2 !rounded-[8px]"
         >
           <option v-for="opt in displayOptions" :key="opt" :value="opt">{{ opt }}</option>
         </select>

@@ -691,7 +691,7 @@ function goToEdit() { if (props.processId) router.push(`/programs/${props.proces
             <div class="flex flex-col gap-2 lg:flex-row lg:items-center lg:flex-wrap">
               <select
                 v-model="eventsFilterType"
-                class="h-8 rounded-lg border border-border bg-background px-2.5 text-xs text-foreground"
+                class="h-8 rounded-[8px] border border-border bg-background px-2.5 text-xs text-foreground"
                 @change="applyEventFilters"
               >
                 <option value="">All types</option>
@@ -722,7 +722,7 @@ function goToEdit() { if (props.processId) router.push(`/programs/${props.proces
                 <span class="hidden sm:inline">Rows</span>
                 <select
                   :value="eventsPageSize"
-                  class="h-7 rounded-md border border-border bg-background px-1.5 text-xs"
+                  class="h-7 rounded-[7px] border border-border bg-background px-1.5 text-xs"
                   @change="changeEventsPageSize(Number(($event.target as HTMLSelectElement).value))"
                 >
                   <option v-for="n in eventsPageSizeOptions" :key="n" :value="n">{{ n }}</option>

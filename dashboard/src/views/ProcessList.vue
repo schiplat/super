@@ -208,14 +208,14 @@ const hasActiveFilters = computed(() => activeFilter.value !== 'ALL' || !!select
           </router-link>
 
           <div class="relative w-full sm:w-48">
-            <select v-model="selectedGroup" class="field-control !h-8 !text-xs !rounded-lg">
+            <select v-model="selectedGroup" class="field-control !h-8 !text-xs !rounded-[8px]">
               <option value="">All Groups</option>
               <option v-for="group in uniqueGroups" :key="group" :value="group">{{ group }}</option>
             </select>
           </div>
           <div class="relative w-full sm:w-64">
             <Search class="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground/40" />
-            <input v-model="searchQuery" type="text" placeholder="Search..." class="field-control !h-8 !pl-9 !text-xs !rounded-lg" />
+            <input v-model="searchQuery" type="text" placeholder="Search..." class="field-control !h-8 !pl-9 !text-xs !rounded-[8px]" />
           </div>
           <UiButton variant="outline" size="sm" @click="store.fetchPrograms()" :disabled="store.isLoading">
             <RefreshCw class="w-3.5 h-3.5" :class="{ 'animate-spin': store.isLoading }" />
