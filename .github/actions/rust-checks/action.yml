@@ -1,0 +1,59 @@
+name: 'Rust + dashboard checks'
+description: >-
+  Checkout, toolchain, dashboard contract tests + build, then fmt/clippy/test.
+  Composite action shared by the ubuntu and macOS CI legs so the two runners
+  cannot drift apart.
+
+inputs:
+  os:
+    description: 'Runner OS label; shards the cargo cache per platform'
+    required: true
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Checkout
+      uses: actions/checkout@v7
+
+    - name: Install Rust toolchain
+      uses: dtolnay/rust-toolchain@stable
+      with:
+        components: clippy, rustfmt
+
+    - name: Cache cargo
+      uses: swatinem/rust-cache@v2
+      with:
+        key: ${{ inputs.os }}
+
+    - name: Setup Node
+      uses: actions/setup-node@v7
+      with:
+        node-version: '22'
+        cache: npm
+        cache-dependency-path: dashboard/package-lock.json
+
+    - name: Dashboard slot contract tests
+      working-directory: dashboard
+      shell: bash
+      run: |
+        npm ci
+        npm test
+
+    - name: Build dashboard (embedded in superd)
+      working-directory: dashboard
+      shell: bash
+      run: |
+        npm run build
+        test -f dist/index.html
+
+    - name: Format check
+      shell: bash
+      run: cargo fmt --all -- --check
+
+    - name: Clippy
+      shell: bash
+      run: cargo clippy --workspace --all-targets -- -D warnings
+
+    - name: Test
+      shell: bash
+      run: cargo test --workspace

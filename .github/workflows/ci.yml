@@ -9,6 +9,11 @@ on:
       - '.github/workflows/deploy-docs.yml'
   pull_request:
     branches: [master, main]
+  # Nightly full matrix (ubuntu + macOS): catches platform drift between
+  # releases even when nothing landed that day.
+  schedule:
+    - cron: '30 2 * * *'
+  workflow_dispatch:
 
 env:
   HUGO_VERSION: '0.163.3'
@@ -40,6 +45,7 @@ jobs:
               - 'rustfmt.toml'
               - 'clippy.toml'
               - '.github/workflows/ci.yml'
+              - '.github/actions/**'
             benchmark:
               - 'tools/benchmark/**'
               - '.github/workflows/ci.yml'
@@ -59,53 +65,34 @@ jobs:
 
   rust:
     needs: changes
-    if: needs.changes.outputs.rust == 'true'
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ubuntu-latest, macos-latest]
-    runs-on: ${{ matrix.os }}
+    # Nightly/manual runs re-check the full workspace even without fresh changes.
+    if: >-
+      needs.changes.outputs.rust == 'true' ||
+      github.event_name == 'schedule' ||
+      github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
     steps:
-      - name: Checkout
-        uses: actions/checkout@v7
-
-      - name: Install Rust toolchain
-        uses: dtolnay/rust-toolchain@stable
+      - uses: ./.github/actions/rust-checks
         with:
-          components: clippy, rustfmt
+          os: ubuntu-latest
 
-      - name: Cache cargo
-        uses: swatinem/rust-cache@v2
+  # macOS arm64 hosted runners are capacity-constrained: a starved leg waits
+  # ~15 minutes and dies with "The job was not acquired by Runner of type
+  # hosted" — wasted wall-clock on every push. Pushes therefore get the fast
+  # ubuntu signal only; macOS runs on PRs, the nightly schedule, and on demand
+  # (workflow_dispatch).
+  rust-macos:
+    needs: changes
+    if: >-
+      (needs.changes.outputs.rust == 'true' ||
+       github.event_name == 'schedule' ||
+       github.event_name == 'workflow_dispatch') &&
+      github.event_name != 'push'
+    runs-on: macos-latest
+    steps:
+      - uses: ./.github/actions/rust-checks
         with:
-          key: ${{ matrix.os }}
-
-      - name: Setup Node
-        uses: actions/setup-node@v7
-        with:
-          node-version: '22'
-          cache: npm
-          cache-dependency-path: dashboard/package-lock.json
-
-      - name: Dashboard slot contract tests
-        working-directory: dashboard
-        run: |
-          npm ci
-          npm test
-
-      - name: Build dashboard (embedded in superd)
-        working-directory: dashboard
-        run: |
-          npm run build
-          test -f dist/index.html
-
-      - name: Format check
-        run: cargo fmt --all -- --check
-
-      - name: Clippy
-        run: cargo clippy --workspace --all-targets -- -D warnings
-
-      - name: Test
-        run: cargo test --workspace
+          os: macos-latest
 
   benchmark:
     needs: changes
