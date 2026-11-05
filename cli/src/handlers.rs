@@ -259,17 +259,29 @@ pub async fn handle_batch_action(
         result.failed.len()
     );
 
-    // 5. Wait for status change
+    // 5. Wait for status change. The caller asked `--wait`/`--wait-healthy`
+    //    for confirmation that the target state was reached, so a program that
+    //    never gets there (timeout, crash, backoff, lost daemon) fails the
+    //    command instead of printing a warning and exiting 0 — the scripted
+    //    path must not proceed on an unconfirmed state (mirror of
+    //    `super reload --wait`'s readiness timeout).
     if wait && !result.affected.is_empty() {
-        // Remove does not need wait
+        // Remove does not need wait; no wait target means nothing to verify.
+        let Some(target_state) = wait_target else {
+            return Ok(());
+        };
         if matches!(req.action, BatchAction::Remove) {
             return Ok(());
         }
 
+        let affected_count = result.affected.len();
         println!(
             "Waiting for {} programs to reach target state...",
-            result.affected.len()
+            affected_count
         );
+
+        let mut verified = 0usize;
+        let mut failures: Vec<String> = Vec::new();
 
         for id in result.affected {
             // Require PID change first on restart, then optionally Healthy, so a
@@ -285,7 +297,7 @@ pub async fn handle_batch_action(
                 )
                 .await
                 {
-                    eprintln!("   Verification warning for {}: {}", id, e);
+                    failures.push(format!("{id}: {e}"));
                     continue;
                 }
                 if matches!(wait_target, Some(WaitTarget::Healthy))
@@ -298,24 +310,36 @@ pub async fn handle_batch_action(
                     )
                     .await
                 {
-                    eprintln!("   Verification warning for {}: {}", id, e);
+                    failures.push(format!("{id}: {e}"));
+                    continue;
                 }
+                verified += 1;
                 continue;
             }
 
-            let specific_wait_target = wait_target;
-            if let Some(target_state) = specific_wait_target
-                && let Err(e) = client::wait_for_status(
-                    &ctx.client,
-                    &ctx.base_url,
-                    id,
-                    target_state,
-                    timeout_sec,
-                )
+            match client::wait_for_status(&ctx.client, &ctx.base_url, id, target_state, timeout_sec)
                 .await
             {
-                eprintln!("   Verification warning for {}: {}", id, e);
+                Ok(()) => verified += 1,
+                Err(e) => failures.push(format!("{id}: {e}")),
             }
+        }
+
+        if failures.is_empty() {
+            println!(
+                "Verified: {} program(s) reached the target state.",
+                verified
+            );
+        } else {
+            for f in &failures {
+                eprintln!("   Verification failed: {f}");
+            }
+            return Err(anyhow::anyhow!(
+                "{} of {} program(s) did not reach the target state within {}s.",
+                failures.len(),
+                affected_count,
+                timeout_sec
+            ));
         }
     }
 
