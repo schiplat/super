@@ -9,6 +9,7 @@ use super_core::extension::NoOpExtension;
 use super_core::manager::{Command, Manager};
 use tempfile::TempDir;
 use tokio::sync::{broadcast, mpsc};
+use uuid::Uuid;
 use wiremock::matchers::{method, path};
 use wiremock::{Mock, MockServer, ResponseTemplate};
 
@@ -23,6 +24,22 @@ fn calculate_hash(content: &str) -> String {
     hex::encode(hasher.finalize())
 }
 
+/// Wire the Manager's tracing into the test output (visible with --nocapture).
+/// RUST_LOG wins when set; default info so OTA/signal/restart sequences can be
+/// followed when a test fails.
+fn init_tracing() {
+    static ONCE: std::sync::Once = std::sync::Once::new();
+    ONCE.call_once(|| {
+        let _ = tracing_subscriber::fmt()
+            .with_env_filter(
+                tracing_subscriber::EnvFilter::try_from_default_env()
+                    .unwrap_or_else(|_| tracing_subscriber::EnvFilter::new("info")),
+            )
+            .with_test_writer()
+            .try_init();
+    });
+}
+
 async fn setup_system() -> (ManagerHandle, TempDir, PathBuf, PathBuf) {
     let (handle, tmp, target_bin, data_file, _tx) = setup_system_full().await;
     (handle, tmp, target_bin, data_file)
@@ -35,6 +52,7 @@ async fn setup_system_full() -> (
     PathBuf,
     mpsc::Sender<Command>,
 ) {
+    init_tracing();
     let temp_dir = TempDir::new().unwrap();
     let root = temp_dir.path();
 
@@ -514,9 +532,16 @@ async fn test_ota_restart_policy_signal_hup() {
 
     let marker = tmp.path().join("hup.marker");
     let script = tmp.path().join("hup-app.sh");
+    // The ready marker is touched as the script's FIRST action after `trap` —
+    // the test must not HUP before it exists: under full-suite parallel load
+    // the forked shell can take seconds to reach the trap line (fork→exec→dyld
+    // starvation), and a HUP delivered before that kills it with the default
+    // action (observed: sig=1 within uptime<startsecs, OTA rolls back).
+    let ready = tmp.path().join("hup.ready");
     let script_body = format!(
-        "#!/bin/sh\nMARKER='{}'\ntrap 'touch \"$MARKER\"' HUP\nwhile true; do sleep 1; done\n",
-        marker.display()
+        "#!/bin/sh\nMARKER='{}'\nREADY='{}'\ntrap 'touch \"$MARKER\"' HUP\ntouch \"$READY\"\nwhile true; do sleep 1; done\n",
+        marker.display(),
+        ready.display()
     );
     std::fs::write(&script, &script_body).unwrap();
     #[cfg(unix)]
@@ -529,8 +554,9 @@ async fn test_ota_restart_policy_signal_hup() {
 
     // Destination content for OTA swap (distinct bytes; process keeps old inode until exec).
     let v2 = format!(
-        "#!/bin/sh\nMARKER='{}'\ntrap 'touch \"$MARKER\"' HUP\necho V2\nwhile true; do sleep 1; done\n",
-        marker.display()
+        "#!/bin/sh\nMARKER='{}'\nREADY='{}'\ntrap 'touch \"$MARKER\"' HUP\necho V2\ntouch \"$READY\"\nwhile true; do sleep 1; done\n",
+        marker.display(),
+        ready.display()
     );
     let v2_hash = calculate_hash(&v2);
     Mock::given(method("GET"))
@@ -545,6 +571,9 @@ async fn test_ota_restart_policy_signal_hup() {
         args: vec![],
         autostart: true,
         startsecs: 2,
+        // Explicit: the audit trail noted `Default::default()` yields the type
+        // zero value (retry_limit = 0), not the documented default of 3.
+        retry_limit: 3,
         health_check: Some(common::HealthCheck::Exec {
             command: "true".to_string(),
             interval_secs: 1,
@@ -555,8 +584,24 @@ async fn test_ota_restart_policy_signal_hup() {
         ..Default::default()
     };
     let id = handle.create_program(req).await.unwrap()[0];
-    tokio::time::sleep(Duration::from_millis(600)).await;
-    let pid_before = handle.get_program(id).await.unwrap().pid.expect("pid");
+    // Wait until the shell has installed its trap (ready marker) AND the
+    // process is up before capturing the PID and triggering the OTA — a fixed
+    // sleep races the spawn under full-suite parallel load, and signal:hup
+    // requires the OLD pid to stay alive.
+    let mut pid_before = None;
+    for _ in 0..150 {
+        tokio::time::sleep(Duration::from_millis(200)).await;
+        if !ready.exists() {
+            continue;
+        }
+        if let Ok(info) = handle.get_program(id).await
+            && (info.state == ProcessStatus::Running || info.state == ProcessStatus::Healthy)
+        {
+            pid_before = info.pid;
+            break;
+        }
+    }
+    let pid_before = pid_before.expect("program should be running before OTA");
 
     handle
         .update_program(
@@ -568,6 +613,10 @@ async fn test_ota_restart_policy_signal_hup() {
                     extract: false,
                     destination: script.to_string_lossy().to_string(),
                     restart_policy: "signal:hup".to_string(),
+                    // Default 60s force-rolls-back an upgrade whose commit is
+                    // merely slow under heavy parallel test load; give the
+                    // signal → probe → commit chain room instead.
+                    verify_timeout: 120,
                     ..Default::default()
                 }),
                 ..Default::default()
@@ -577,24 +626,61 @@ async fn test_ota_restart_policy_signal_hup() {
         .unwrap();
 
     let mut ok = false;
+    let mut last_diag = String::new();
     for _ in 0..200 {
         tokio::time::sleep(Duration::from_millis(200)).await;
         let info = handle.get_program(id).await.unwrap();
+        let file_is_v2 = std::fs::read_to_string(&script)
+            .unwrap_or_default()
+            .contains("V2");
         if marker.exists()
             && info.pid == Some(pid_before)
             && info.config.restore_path.is_none()
-            && std::fs::read_to_string(&script)
-                .unwrap_or_default()
-                .contains("V2")
+            && file_is_v2
         {
             ok = true;
             break;
         }
+        last_diag = format!(
+            "marker={} pid={:?} (expected {pid_before}) restore_path={:?} file_is_v2={file_is_v2}",
+            marker.exists(),
+            info.pid,
+            info.config.restore_path,
+        );
     }
     assert!(
         ok,
-        "signal:hup should notify without PID change, swap file, and commit WAL"
+        "signal:hup should notify without PID change, swap file, and commit WAL \
+         — last poll: {last_diag}{}",
+        dump_recent_events(&tmp, id).await
     );
+}
+
+/// On failure, surface the daemon's own event trail (exit code, terminating
+/// signal, backoff, health restarts) so a poll timeout shows WHY the expected
+/// state never materialized instead of failing blind.
+async fn dump_recent_events(tmp: &TempDir, id: Uuid) -> String {
+    let Ok(db) = super_core::event_db::EventDb::open(&tmp.path().join("data/events.db")).await
+    else {
+        return String::new();
+    };
+    let events = db
+        .query(&super_core::event_db::EventQuery {
+            program_id: Some(id),
+            limit: Some(15),
+            sort_desc: true,
+            ..Default::default()
+        })
+        .await
+        .unwrap_or_default();
+    let mut out = String::from(" | recent events (newest first):");
+    for e in events {
+        out.push_str(&format!(
+            " [{} code={:?} sig={:?} retry={:?} \"{}\"]",
+            e.event, e.exit_code, e.signal, e.retry_count, e.msg
+        ));
+    }
+    out
 }
 
 #[tokio::test]
@@ -614,7 +700,13 @@ async fn test_ota_no_health_check_instant_crash_rolls_back() {
         std::fs::set_permissions(&app, perms).unwrap();
     }
 
-    let v2 = "#!/bin/sh\necho VERSION_2_CRASH\nexit 1\n";
+    // The bad binary must crash INSIDE the startsecs verification window for
+    // the rollback assertion to be deterministic, so it does nothing but exit
+    // 1 — no `echo` first (under full-suite parallel load the fork→exec→dyld
+    // delay can push the echo past startsecs, letting the window commit a
+    // delayed crash). The V2 bytes are asserted from the FILE content, not
+    // from this script's output.
+    let v2 = "#!/bin/sh\nexit 1\n";
     let v2_hash = calculate_hash(v2);
     Mock::given(method("GET"))
         .and(path("/download/v2"))
@@ -632,7 +724,19 @@ async fn test_ota_no_health_check_instant_crash_rolls_back() {
         ..Default::default()
     };
     let id = handle.create_program(req).await.unwrap()[0];
-    tokio::time::sleep(Duration::from_millis(500)).await;
+    // Wait for the process to be up before triggering the OTA — a fixed sleep
+    // races the spawn under full-suite parallel load.
+    let mut up = false;
+    for _ in 0..150 {
+        tokio::time::sleep(Duration::from_millis(200)).await;
+        if let Ok(info) = handle.get_program(id).await
+            && (info.state == ProcessStatus::Running || info.state == ProcessStatus::Healthy)
+        {
+            up = true;
+            break;
+        }
+    }
+    assert!(up, "program should be running before OTA");
 
     handle
         .update_program(
@@ -653,6 +757,7 @@ async fn test_ota_no_health_check_instant_crash_rolls_back() {
         .unwrap();
 
     let mut ok = false;
+    let mut last_diag = String::new();
     for _ in 0..120 {
         tokio::time::sleep(Duration::from_millis(200)).await;
         let content = std::fs::read_to_string(&app).unwrap_or_default();
@@ -664,18 +769,26 @@ async fn test_ota_no_health_check_instant_crash_rolls_back() {
             .get(&id)
             .map(|c| c.restore_path.is_none())
             .unwrap_or(false);
+        let bak_exists = app.with_extension("bak").exists();
         if content.contains("VERSION_1")
             && !content.contains("VERSION_2")
             && wal_clear
-            && !app.with_extension("bak").exists()
+            && !bak_exists
         {
             ok = true;
             break;
         }
+        last_diag = format!(
+            "version_1={} version_2={} wal_clear={wal_clear} bak_exists={bak_exists}",
+            content.contains("VERSION_1"),
+            content.contains("VERSION_2"),
+        );
     }
     assert!(
         ok,
-        "no-health-check instant crash must roll back before startsecs commit"
+        "no-health-check instant crash must roll back before startsecs commit \
+         — last poll: {last_diag}{}",
+        dump_recent_events(&tmp, id).await
     );
 }
 
