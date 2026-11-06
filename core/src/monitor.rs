@@ -59,7 +59,6 @@ impl ResourceMonitor {
     fn collect_disks(disks: &mut Disks) -> Vec<DiskPartitionStats> {
         disks.refresh(true);
         let mut out: Vec<DiskPartitionStats> = disks
-            .list()
             .iter()
             .filter_map(|d| {
                 let total = d.total_space();
@@ -111,13 +110,32 @@ impl ResourceMonitor {
         system_stats: Arc<RwLock<SystemStats>>,
         tx: mpsc::Sender<Command>,
     ) {
-        let mut sys = System::new_with_specifics(
-            RefreshKind::nothing()
-                .with_cpu(CpuRefreshKind::everything())
-                .with_memory(MemoryRefreshKind::everything())
-                .with_processes(ProcessRefreshKind::nothing().with_cpu().with_memory()),
-        );
-        let mut disks = Disks::new();
+        // sysinfo 0.40 made the constructors fallible; a monitor that cannot
+        // init is retried on the same 3s cadence as the collection loop
+        // rather than silently killing the thread.
+        let mut sys = loop {
+            match System::new_with_specifics(
+                RefreshKind::nothing()
+                    .with_cpu(CpuRefreshKind::everything())
+                    .with_memory(MemoryRefreshKind::everything())
+                    .with_processes(ProcessRefreshKind::nothing().with_cpu().with_memory()),
+            ) {
+                Ok(sys) => break sys,
+                Err(e) => {
+                    tracing::error!("super-monitor: system init failed: {e}; retrying in 3s");
+                    thread::sleep(Duration::from_secs(3));
+                }
+            }
+        };
+        let mut disks = loop {
+            match Disks::new() {
+                Ok(disks) => break disks,
+                Err(e) => {
+                    tracing::error!("super-monitor: disks init failed: {e}; retrying in 3s");
+                    thread::sleep(Duration::from_secs(3));
+                }
+            }
+        };
 
         loop {
             thread::sleep(Duration::from_secs(3));
