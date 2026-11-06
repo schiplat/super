@@ -18,7 +18,7 @@ use std::fs::OpenOptions;
 use std::io::Write;
 use std::path::{Path, PathBuf};
 
-use rand::RngCore;
+use rand::TryRngCore;
 
 /// Prefix shared by every shipped placeholder secret (`CHANGE-ME-…`).
 const PLACEHOLDER_PREFIX: &str = "change-me";
@@ -67,7 +67,9 @@ pub fn ephemeral_auth_secret_path(super_root: &Path) -> PathBuf {
 
 fn generate_secret() -> String {
     let mut bytes = [0u8; 24];
-    rand::rngs::OsRng.fill_bytes(&mut bytes);
+    rand::rngs::OsRng
+        .try_fill_bytes(&mut bytes)
+        .expect("OS RNG is unavailable");
     bytes.iter().map(|b| format!("{b:02x}")).collect()
 }
 
