@@ -210,7 +210,11 @@ impl EventDb {
             sql.push_str(" OFFSET ?");
         }
 
-        let mut qb = sqlx::query(&sql);
+        // Audited for SQL injection (sqlx 0.9 SqlSafeStr): the statement is
+        // assembled only from constant fragments, the whitelisted
+        // `EventSortBy::sql_expr()` column and a DESC/ASC constant; every
+        // user-controlled value is bound via `?` below.
+        let mut qb = sqlx::query(sqlx::AssertSqlSafe(sql.as_str()));
         if let Some(pid) = q.program_id {
             qb = qb.bind(pid.to_string());
         }
