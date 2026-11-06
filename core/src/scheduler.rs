@@ -38,7 +38,7 @@ fn jitter_offset(jitter_sec: u64) -> ChronoDuration {
     if jitter_sec == 0 {
         return ChronoDuration::zero();
     }
-    let j = rand::thread_rng().gen_range(0..=jitter_sec);
+    let j = rand::rng().random_range(0..=jitter_sec);
     ChronoDuration::seconds(j as i64)
 }
 

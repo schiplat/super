@@ -3,9 +3,11 @@ use crate::license::claims::LicenseClaims;
 use ed25519_dalek::{Signer, SigningKey};
 
 fn random_signing_key() -> SigningKey {
-    use rand::RngCore;
+    use rand::TryRngCore;
     let mut seed = [0u8; 32];
-    rand::rngs::OsRng.fill_bytes(&mut seed);
+    rand::rngs::OsRng
+        .try_fill_bytes(&mut seed)
+        .expect("OS RNG is unavailable");
     SigningKey::from_bytes(&seed)
 }
 

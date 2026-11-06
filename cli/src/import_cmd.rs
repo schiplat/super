@@ -340,10 +340,10 @@ fn pick_renamed(base: &str, taken: &[String], suffix: Option<&str>) -> String {
         // Fixed suffix taken: fall through to random to stay collision-free.
     }
     use rand::Rng as _;
-    let mut rng = rand::thread_rng();
+    let mut rng = rand::rng();
     loop {
         let hex: String = (0..6)
-            .map(|_| format!("{:x}", rng.gen_range(0..16)))
+            .map(|_| format!("{:x}", rng.random_range(0..16)))
             .collect();
         let candidate = format!("{base}-{hex}");
         if !taken.iter().any(|t| t == &candidate) {
