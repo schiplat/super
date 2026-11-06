@@ -40,4 +40,4 @@ dotenvy = "0.15"
 ratatui = "0.30"
 crossterm = "0.29"
 # Random rename suffix for `super import --on-collision rename`
-rand = "0.8"
+rand = "0.9"
