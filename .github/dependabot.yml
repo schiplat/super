@@ -32,6 +32,15 @@ updates:
       - dependency-name: typescript
         update-types:
           - version-update:semver-major
+      # vue-tsc 3.3.14 has a volar regression: in build mode (`vue-tsc -b`)
+      # template expressions are misdetected as refs needing `.value`,
+      # producing bogus TS2339s that single-project mode does not report.
+      # Re-enable once upstream fixes it.
+      - dependency-name: vue-tsc
+        update-types:
+          - version-update:semver-major
+          - version-update:semver-minor
+          - version-update:semver-patch
       # Tailwind 4 is a migration (new config model, PostCSS plugin split),
       # not a bump — schedule it deliberately.
       - dependency-name: tailwindcss
