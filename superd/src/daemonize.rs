@@ -1,10 +1,9 @@
 //! Unix self-daemonize (double-fork + setsid). Call before starting Tokio.
 
 use std::fs::OpenOptions;
-use std::os::unix::io::AsRawFd;
 use std::path::Path;
 
-use nix::unistd::{ForkResult, dup2, fork, setsid};
+use nix::unistd::{ForkResult, dup2_stderr, dup2_stdin, dup2_stdout, fork, setsid};
 
 /// Detach from the controlling terminal. Parent processes exit 0.
 ///
@@ -36,10 +35,9 @@ fn redirect_stdio_to_devnull() -> anyhow::Result<()> {
         .read(true)
         .write(true)
         .open("/dev/null")?;
-    let fd = devnull.as_raw_fd();
-    dup2(fd, 0)?;
-    dup2(fd, 1)?;
-    dup2(fd, 2)?;
+    dup2_stdin(&devnull)?;
+    dup2_stdout(&devnull)?;
+    dup2_stderr(&devnull)?;
     Ok(())
 }
 

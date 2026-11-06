@@ -54,7 +54,7 @@ rust-embed = "8.11"
 subtle = "2.6"
 
 # Signal handling (Unix only)
-nix = { version = "0.27", features = ["signal", "process", "user", "fs"] }
+nix = { version = "0.31", features = ["signal", "process", "user", "fs"] }
 
 
 [profile.release]
