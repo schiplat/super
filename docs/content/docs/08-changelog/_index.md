@@ -17,12 +17,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.9.0] - 2026-11-07
+
 ### Changed
 
 - **CLI commands now exit non-zero when the daemon rejects a request or is unreachable.** Previously most commands (`list`, `info`, `add`, `update`, batch start/stop/restart/remove/signal, `apply`, `export`, `reload`, `logs`, `events`, `token`, `shutdown`) printed `Error: …` but still exited 0, so scripts, cron jobs, and CI gates could not detect failures — `super list || alert` never fired. These commands now print the daemon's error message (the JSON `message` field when present) and exit 1. A declined batch-confirmation prompt ("Aborted.") still exits 0, and usage errors keep clap's exit code 2. See the [CLI reference — exit codes](/docs/06-internals/cli-reference/#exit-codes).
 - **Batch commands with `--wait`/`--wait-healthy` now exit non-zero when verification fails.** `start`/`stop`/`restart` poll every affected program after the daemon accepts the action; a program that never reached the target state (timeout, crash, backoff) previously printed a "Verification warning" but the command still exited 0, so deploy scripts proceeded on an unconfirmed state. They now mirror `super reload --wait`: per-program failures print to stderr and the command exits 1.
 - **Test reliability: the OTA integration tests no longer race process spawn under full-suite parallel load.** `test_ota_restart_policy_signal_hup` triggered `restart_policy = signal:hup` 0.6 s after creating the program — under load the forked shell had not yet installed its HUP trap, so the signal hit the default action and killed it (`sig=1`), the OTA rolled back, and the test timed out (~1 run in 2). It now waits for the script's ready marker before triggering, and polls for the running state instead of sleeping. `test_ota_no_health_check_instant_crash_rolls_back` raced the `startsecs` verification window the same way (failures were 3/3 under load): its bad binary now exits immediately, so the crash lands inside the window deterministically. Both tests additionally report a state snapshot plus the daemon's recent events (exit code, signal, retry count) on failure. Full `super-core` suite green in 8/8 consecutive runs.
+- **Test reliability: two remaining timing flakes deflaked.** `start_period_absorbs_early_failures` asserted "no restart" up to the exact 5 s start_period boundary, but that clock starts on the manager side while the assertion anchors to the test's PID detection — any spawn-detection lag shifted the two windows apart and tripped the assert on loaded runners. The assertion now covers the first 4 s (a broken grace would still fire at ~t+2 s and be caught), and `test_ota_restart_policy_signal_hup`'s spawn-readiness budget doubled to 60 s.
 - **Dashboard internals move to Tailwind CSS v4 and reka-ui primitives** for `UiDialog`/`UiSwitch` (the shadcn-style component layer). Visual design is unchanged; dialogs gain focus trapping, initial focus, and full ARIA wiring, and switches gain keyboard toggling (Space). Shadow scale renames (`shadow-sm` → `shadow-xs`, bare `shadow` → `shadow-sm`) were applied across templates — rendering is unchanged. `tailwindcss-animate` is replaced by `tw-animate-css`.
+
+### Dependencies
+
+- **Dependency refresh across the board** (all breaking 0.x-line upgrades migrated in-repo, no public API or behavior change): `rand` 0.8 → 0.9 (`OsRng` moved to `TryRngCore`, `thread_rng`/`gen_range` → `rng`/`random_range`), `sysinfo` 0.39 → 0.40 (fallible constructors — the resource monitor retries init instead of dying silently), `nix` 0.27 → 0.31 (daemonize uses the new `dup2_stdin/stdout/stderr` helpers), `libloading` 0.8 → 0.9, `cron` 0.15 → 0.17, `sqlx` 0.8 → 0.9 (dynamic event-filter SQL audited and asserted via `SqlSafeStr`), `zip` 9.3.
 
 ## [1.8.1] - 2026-11-02
 
