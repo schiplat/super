@@ -154,8 +154,8 @@ Add repository secrets (**Settings → Secrets → Actions**):
 Release example (Docker publish follows Release automatically):
 
 ```bash
-git tag v1.8.2
-git push origin v1.8.2
+git tag v1.8.3
+git push origin v1.8.3
 ```
 
 ### Manual push (from-source, slow)
@@ -164,6 +164,6 @@ git push origin v1.8.2
 docker buildx build --platform linux/amd64,linux/arm64 \
   -f packaging/docker/Dockerfile \
   -t schiplat/super:latest \
-  -t schiplat/super:1.8.2 \
+  -t schiplat/super:1.8.3 \
   --push .
 ```

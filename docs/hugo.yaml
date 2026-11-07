@@ -81,9 +81,9 @@ params:
   # localStorage; message supports Markdown links. Bump key on each release
   # so the banner shows again for returning visitors.
   banner:
-    key: "super-release-banner-v1-8-2"
+    key: "super-release-banner-v1-8-3"
     message: |
-      **Super 1.8.2 is here** — the dashboard moves to Tailwind CSS v4 with reka-ui-backed dialogs and switches (focus trapping, keyboard toggling, ARIA) — visually unchanged, everything works as before… [See what's new →](/docs/08-changelog/)
+      **Super 1.8.3 is here** — `super` commands now exit non-zero when the daemon rejects a request, so scripts and CI gates can finally trust exit codes — plus a full internal dependency refresh (rand 0.9, sqlx 0.9, nix 0.31 and more), behavior otherwise unchanged… [See what's new →](/docs/08-changelog/)
   contact:
     api_url: "https://open.schiplat.com/api/v1/demands"
   externalLinkDecoration: true

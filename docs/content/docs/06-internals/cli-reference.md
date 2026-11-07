@@ -38,7 +38,7 @@ When the daemon listens on both TCP and a Unix socket, an unconfigured CLI there
 | `1` | Operation failed: the daemon returned an HTTP error (401/403/404/5xx — the daemon's error message is printed on stderr), the daemon was unreachable, or a `--wait`/`--wait-healthy` verification timed out (batch start/stop/restart, `super reload --wait`) |
 | `2` | Usage error: unknown flag or missing argument (clap) |
 
-Historical note: before 1.9.0 most commands printed `Error: …` on an HTTP failure but still exited 0, so shell `||` fallbacks and CI gates never fired. Since 1.9.0 a non-zero exit reliably means the requested operation did not happen.
+Historical note: before 1.8.3 most commands printed `Error: …` on an HTTP failure but still exited 0, so shell `||` fallbacks and CI gates never fired. Since 1.8.3 a non-zero exit reliably means the requested operation did not happen.
 
 ## Starting `superd` (daemon binary)
 
