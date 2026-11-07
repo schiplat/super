@@ -587,9 +587,11 @@ async fn test_ota_restart_policy_signal_hup() {
     // Wait until the shell has installed its trap (ready marker) AND the
     // process is up before capturing the PID and triggering the OTA — a fixed
     // sleep races the spawn under full-suite parallel load, and signal:hup
-    // requires the OLD pid to stay alive.
+    // requires the OLD pid to stay alive. 60s budget: the suite runs many
+    // manager instances in parallel and spawn+startsecs can stall on a
+    // loaded CI runner (seen flaking at 30s).
     let mut pid_before = None;
-    for _ in 0..150 {
+    for _ in 0..300 {
         tokio::time::sleep(Duration::from_millis(200)).await;
         if !ready.exists() {
             continue;

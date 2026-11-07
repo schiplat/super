@@ -355,9 +355,12 @@ async fn start_period_absorbs_early_failures() {
     let id = spawn_with_health(&handle, "graceful-failer", "exit 1".to_string(), 1, 5, 2, 3).await;
     wait_for_pid(&handle, id, |p| p.is_some(), Duration::from_secs(10)).await;
 
-    // Grace is 5s and each failure takes ~1s (probe interval + timeout): the
-    // first two failures land inside the window and must NOT restart.
-    let deadline = tokio::time::Instant::now() + Duration::from_secs(5);
+    // The 5s no-restart assertion is anchored to the test's clock while the
+    // manager's start_period grace starts at its own spawn instant — any
+    // spawn-detection lag shifts the two clocks apart, so leave 1s of margin
+    // instead of asserting up to the exact grace boundary. A broken grace
+    // (restart on the first two failures at ~t+2s) is still caught inside 4s.
+    let deadline = tokio::time::Instant::now() + Duration::from_secs(4);
     while tokio::time::Instant::now() < deadline {
         assert!(
             handle
