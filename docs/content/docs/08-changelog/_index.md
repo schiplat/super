@@ -17,7 +17,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Changed
+## [1.9.0] - 2026-11-13
+
+### ⚠ Breaking & behavior changes — read before upgrading
 
 - **Licensing now uses a root-key certificate chain.** Every license carries its signing-key certificate; `superd` verifies it against the root public key embedded at compile time. Rotating a signing key no longer requires a new `superd` release, and the previous embedded-keyring / Manager keyring fetch path was removed. Licenses issued in the previous keyring format must be re-issued.
 

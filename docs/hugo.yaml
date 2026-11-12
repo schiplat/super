@@ -81,9 +81,9 @@ params:
   # localStorage; message supports Markdown links. Bump key on each release
   # so the banner shows again for returning visitors.
   banner:
-    key: "super-release-banner-v1-8-3"
+    key: "super-release-banner-v1-9-0"
     message: |
-      **Super 1.8.3 is here** — `super` commands now exit non-zero when the daemon rejects a request, so scripts and CI gates can finally trust exit codes — plus a full internal dependency refresh (rand 0.9, sqlx 0.9, nix 0.31 and more), behavior otherwise unchanged… [See what's new →](/docs/08-changelog/)
+      **Super 1.9.0 is here** — licensing now uses a root-key certificate chain: every license carries its signing-key certificate, so rotating a signing key no longer requires a new OSS release; licenses issued in the previous format must be re-issued… [See what's new →](/docs/08-changelog/)
   contact:
     api_url: "https://open.schiplat.com/api/v1/demands"
   externalLinkDecoration: true
