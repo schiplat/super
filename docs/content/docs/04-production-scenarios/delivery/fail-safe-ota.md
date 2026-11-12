@@ -47,6 +47,8 @@ The `restart_policy` field controls *when* the new binary becomes active after a
 
 Startup and `super check` warn on legacy `signal*` configs that lack an enabled probe (create/update already reject them). An `exec` probe of `true` / `:` / `/bin/true` / `/usr/bin/true` is accepted but ineffective for verifying hot-reload — use a real TCP/HTTP/exec check.
 
+Signals are delivered to the program's process group. If `superd` was started with SIGHUP ignored (for example under `nohup`), children inherit that disposition and POSIX shells will not install a `trap` for it — `signal:hup` then does nothing for shell-based programs. Run `superd` under systemd for hot-reload policies.
+
 ### Archives (`extract: true`)
 
 Set `extract: true` when `source` points at a `.tar.gz` / `.tgz` / `.tar` / `.zip`. Super verifies the SHA256 of the **archive**, unpacks it safely (no `..` / absolute paths / symlinks; size and file-count caps), then stages a single payload file to `destination` (prefer a member whose basename matches `destination`, otherwise the only regular file in the archive).

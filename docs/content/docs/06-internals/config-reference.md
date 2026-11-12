@@ -298,7 +298,7 @@ Schema fields are always accepted and stored. **Enforcement** (Linux cgroups v2 
 | Key | Type | Default | Description |
 | :--- | :--- | :--- | :--- |
 | `cpu_quota` 💎 | float | — | CPU quota in **cores** (`1.0` = one core, `0.5` = half a core). |
-| `memory_limit` 💎 | int | — | Hard memory limit in **MB** (`1 MB = 1024² bytes`); kernel OOM-kills when exceeded. |
+| `memory_limit` 💎 | int | — | Hard memory limit in **MB** (`1 MB = 1024² bytes`); kernel OOM-kills when exceeded. Caps RAM (`memory.max`), not swap — see [Resource Isolation](/docs/05-advanced-management/resource-isolation). |
 | `memory_warn_percent` 💎 | int | `80` | Pre-kill warning threshold as % of `memory_limit` (Tier 1). `0` disables. |
 | `memory_warn_headroom` 💎 | int | `0` | Also warn when live memory is within this many MB of the limit. `0` disables. |
 | `memory_high` 💎 | int | `0` | Kernel soft limit in MB (cgroup `memory.high`, Tier 2, opt-in). `0` disables. |

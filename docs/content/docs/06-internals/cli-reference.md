@@ -204,6 +204,7 @@ super add <COMMAND> [ARGS...] [FLAGS]
 | :--- | :--- | :--- | :--- |
 | `--name <NAME>` / `-n` | string | binary name | Custom program name |
 | `--autostart` | bool | `true` | Start the program when the daemon starts |
+| `--no-autostart` | bool | `false` | Disable auto-start. Use this instead of `--autostart false` — `--autostart` is a flag and does not take a value, so the literal `false` would be parsed as the command |
 | `--cwd <DIR>` | string | daemon cwd | Working directory |
 | `--env <KEY=VAL>` / `-e` | string[] | — | Set environment variables (repeatable) |
 | `--env-file <PATH>` | path | — | Load environment variables from a file at spawn time |

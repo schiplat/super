@@ -33,7 +33,7 @@ Resource limits are defined per program — via stack files (TOML/JSON), the API
 }
 ```
 
-*   `memory_limit` — hard memory limit in **MB** (binary, `1 MB = 1024² bytes`). If the process (and its children) exceed this, the OOM Killer terminates it.
+*   `memory_limit` — hard memory limit in **MB** (binary, `1 MB = 1024² bytes`). Caps **RAM** only (cgroup `memory.max`); if the process (and its children) exceed it they are OOM-killed. It does **not** cap swap — see the note below.
 *   `memory_warn_percent` — optional; warn (emit a `memory_pressure` event) when live memory reaches this % of `memory_limit`. Default `80`; `0` disables pre-kill warning (see [Warning & visibility](#warning--visibility-three-tier)).
 *   `memory_warn_headroom` — optional; also warn when live memory comes within this many MB of `memory_limit` (absolute headroom; whichever threshold triggers first). `0` (default) disables.
 *   `memory_high` — optional; kernel **soft limit** in MB. When exceeded the kernel throttles the cgroup instead of killing it (see [Tier 2 — `memory.high` (opt-in)](#tier-2--memoryhigh-opt-in)). `0` (default) disables.
@@ -42,13 +42,16 @@ Resource limits are defined per program — via stack files (TOML/JSON), the API
 > [!WARNING]
 > `memory_limit` is a **hard cap** enforced by the kernel — exceeding it kills the process (OOM). It is not a soft "restart when memory exceeds N" policy like PM2's `--max-memory-restart`. Super adds **warning + OOM confirmation** events around the hard cap, but never soft-restarts (see below). For graceful threshold-based restarts, poll `mem_usage` via the API and restart yourself — see [Programmable Ops](/docs/04-production-scenarios/observability/programmatic-control).
 
+> [!NOTE]
+> **Swap is not capped by `memory_limit`.** The limit maps to cgroup v2 `memory.max`, which caps RAM (anonymous + file pages), not swap. On a host with swap enabled a process can keep running by swapping pages out and sit at the limit without being OOM-killed; Super does not write `memory.swap.max`. If you need a hard cap on total footprint, disable swap for the host/container or set `memory.swap.max` on the program's cgroup yourself.
+
 ## Warning & visibility (three-tier)
 
 Super combines **pre-kill warning**, an **opt-in kernel throttle**, and **post-kill OOM confirmation** around the hard cap. All three surface as `SystemEvent`s — recorded in the [event history](/docs/03-orchestration/events/history) (`super events <name>`), forwarded by OSS [event hooks](/docs/03-orchestration/events/hooks), and alerted by licensed [event notifications](/docs/05-advanced-management/event-notifications).
 
 ### Tier 1 — pre-kill warning (default on)
 
-A background watcher polls each limited cgroup's **anonymous memory** (`memory.stat` → `anon`, page cache is excluded because the kernel can reclaim it and it never causes OOM) every **10 s**.
+A background watcher polls each limited cgroup's **anonymous memory** (`memory.stat` → `anon`, page cache is excluded because the kernel can reclaim it and it never causes OOM) every **5 s**.
 
 * When `anon` ≥ threshold (`memory_warn_percent`% of the limit, or within `memory_warn_headroom` of it), Super emits `memory_pressure` **once per 5-minute cooldown** per program. The process keeps running.
 * A program only re-arms the warning after it drops back below threshold − **5 pp** (hysteresis), preventing flapping at the boundary.
@@ -65,7 +68,7 @@ Setting `memory_high` writes the cgroup v2 **soft limit** (`memory.high`). When 
 
 ### Tier 3 — OOM confirmation (always on)
 
-Super watches each limited cgroup's `memory.events` → `oom_kill` counter. When it increments, Super emits **`memory_oom_kill`** with a usage snapshot (`memory.current`, `memory.max`, `anon`). This makes an OOM kill **distinguishable** from a manual `kill -9`: instead of a generic `signal 9` exit, you get an explicit "memory cap exceeded" event with the exact usage at kill time.
+Super watches each limited cgroup's `memory.events` → `oom_kill` counter. When it increments, Super emits **`memory_oom_kill`** with the killed process's `pid` and a usage snapshot. Because the process is already gone when the confirmation is sent, `usage_bytes` comes from the cgroup's **peak** counter (`memory.peak`, cgroup v2 ≥ 5.19) or the last sample the watcher took, not from a post-exit `memory.current` read (which has already dropped to near zero); `anon_bytes` is the last observed anonymous-memory value, and is `0` when the OOM happened before the first 5 s poll. This makes an OOM kill **distinguishable** from a manual `kill -9`: instead of a generic `signal 9` exit, you get an explicit "memory cap exceeded" event with the peak usage at kill time.
 
 ### Recommended setup
 
@@ -141,6 +144,9 @@ curl -X PUT http://127.0.0.1:9002/api/v1/programs/<id> \
 
 Re-check `cpu.max` / `memory.max` under `/sys/fs/cgroup/super/<id>/` and watch process CPU with `top -p <pid>`.
 
+> [!NOTE]
+> Hot-update only works for a program whose cgroup already exists — one that was **started with** `resource_limits`. Adding limits to a program created without them is rejected (`plugin 'isolation' on_update failed`) because there is no cgroup to update: stop the program, set the limits, and start it again (or recreate it with limits). Cgroup write failures are returned to the caller as an error (non-2xx); a successful update response means the limits were actually applied, not merely accepted.
+
 ### Troubleshooting
 
 | Symptom | Likely cause |
@@ -148,6 +154,7 @@ Re-check `cpu.max` / `memory.max` under `/sys/fs/cgroup/super/<id>/` and watch p
 | No `/sys/fs/cgroup/super/<id>/` | Non-Linux build, limits not set, or cgroup create failed (check superd logs) |
 | Limits ignored in Docker | Read-only cgroup mount — use a writable cgroup or run with appropriate privileges |
 | Process killed under cap | Expected OOM behaviour when exceeding `memory_limit`; confirm via the `memory_oom_kill` event |
+| Process sits at the cap and keeps swapping instead of being killed | Swap is enabled; `memory_limit` caps RAM only. Disable swap or set `memory.swap.max` yourself (see the Swap note above) |
 | `memory_pressure` never fires | Program's live memory stays below `memory_warn_percent`/headroom, or warnings disabled (`0`) |
 | Throttled process despite `memory_high = 0` | CPU quota throttling, not memory; `memory.high` is only written when `memory_high` is set |
 | `super_cgroup_enforced_total` is 0 | No programs currently have active cgroup enforcement |

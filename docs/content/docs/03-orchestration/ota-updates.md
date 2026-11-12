@@ -151,6 +151,7 @@ super restart my-app    # required to run the new command
 * `restart_policy=manual` skips verification by design — only use it when you accept swapping the on-disk binary without proving the new process can run.
 * `restart_policy=signal*` **requires** an enabled `health_check`. Hot-reload does not exec a new process; without a probe, “still alive” is not proof the reload succeeded. Legacy configs that still have `signal*` without a probe are rejected on the next create/update; **startup** and **`super check`** also warn (or report an error for the snapshot) until you add a probe or change the policy.
 * An `exec` health command of `true` / `:` / `/bin/true` / `/usr/bin/true` is accepted structurally but **does not verify** a hot-reload — prefer a real TCP/HTTP/exec probe that exercises the new binary.
+* `restart_policy=signal*` delivers the signal to the program's **process group**. The program must be able to receive it: if `superd` itself was started with SIGHUP ignored (for example under `nohup`), children inherit `SIG_IGN`, and POSIX shells refuse to `trap` a signal that was ignored at startup — `signal:hup` then silently does nothing for shell-based programs. Run `superd` under systemd (or another supervisor that leaves signal dispositions at their defaults) when using hot-reload policies.
 * An exit code `0` during the verify window commits the upgrade (one-shot / batch jobs). Non-zero exits and unexpected signals roll back.
 
 ## Why this matters

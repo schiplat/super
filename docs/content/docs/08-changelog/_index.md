@@ -17,6 +17,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **`super add --no-autostart`.** `--autostart` is a flag and does not take a value, so `super add --autostart false -- cmd` silently created a program whose command was the literal `false`. The new flag disables auto-start explicitly. See the [CLI reference — `add`](/docs/06-internals/cli-reference/#add).
+
+### Fixed
+
+- **Hot-update failures for `resource_limits` are no longer silent.** The licensed `isolation` plugin used to ignore every cgroup write error during a live update, so `super update --cpu/--memory` could return success while `cpu.max`/`memory.max` were unchanged. Write failures (and a missing controller) now fail the update with a non-2xx response. Adding limits to a program that was started without them is therefore reported as an error instead of a no-op — restart it with limits. See [Resource Isolation — Hot-update limits](/docs/05-advanced-management/resource-isolation/#hot-update-limits-no-restart-for-cpu-quota).
+- **`memory_oom_kill` events carry the killed pid and real usage.** The confirmation is emitted after the process exits, when `memory.current`/`memory.stat` have already collapsed, so alerts used to report `pid: null` and ~0 MiB. It now reports the pid plus peak usage (`memory.peak` when available, otherwise the last live sample); `anon_bytes` is the last observed value (`0` if the kill happened before the first poll). See [Events — types](/docs/03-orchestration/events/types).
+
+### Documentation
+
+- Documented that `restart_policy=signal*` cannot work for shell-based programs when `superd` itself was started with SIGHUP ignored (for example under `nohup`): children inherit `SIG_IGN` and POSIX shells refuse to trap it. Run `superd` under systemd for hot-reload policies. See [OTA updates — Verification tips](/docs/03-orchestration/ota-updates/#verification-tips).
+
 ## [1.8.3] - 2026-11-07
 
 ### Changed
