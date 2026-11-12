@@ -44,8 +44,9 @@ pub use license::{
     embedded_verifying_key_ids, embedded_verifying_keys, format_keyring_summary,
     kid_for_public_bytes, license_degradation_refusal_message, license_expiry_status,
     license_help_footer, licensed_deployment_intent, parse_signed_key_cert_unverified,
-    resolve_license_strict, scan_plugin_stems, should_refuse_license_degradation, verify_license,
-    verify_license_for_superd, verify_license_with_root, verify_signed_key_cert,
+    resolve_license_strict, scan_plugin_stems, should_refuse_license_degradation,
+    validate_key_cert_time, verify_license, verify_license_for_superd, verify_license_with_root,
+    verify_signed_key_cert,
 };
 pub use plugin_abi::{PLUGIN_API_VERSION, PLUGIN_SYMBOL, SuperPluginV1, read_plugin_version};
 pub use plugin_error::{set_last_plugin_error, take_last_plugin_error};

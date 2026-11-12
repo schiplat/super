@@ -337,6 +337,17 @@ fn validate_key_cert(cert: &KeyCert, root_kid: &str) -> anyhow::Result<Verifying
         anyhow::bail!("{}", unknown_root_message(&cert.root_kid));
     }
 
+    validate_key_cert_time(cert)?;
+
+    Ok(signing_key)
+}
+
+/// Validate the certificate's validity window against the local clock.
+///
+/// Runtime verification and issuance both call this: a certificate that is
+/// expired (or not yet valid) must never sign a new license, and an already
+/// issued license must not fail merely because its certificate aged out.
+pub fn validate_key_cert_time(cert: &KeyCert) -> anyhow::Result<()> {
     let now = current_unix_secs()?;
     if cert.not_before != 0 && now.saturating_add(CERT_CLOCK_SKEW_SECS) < cert.not_before {
         anyhow::bail!(
@@ -351,8 +362,7 @@ fn validate_key_cert(cert: &KeyCert, root_kid: &str) -> anyhow::Result<Verifying
             cert.not_after
         );
     }
-
-    Ok(signing_key)
+    Ok(())
 }
 
 fn verify_detached(

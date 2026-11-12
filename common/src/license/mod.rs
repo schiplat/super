@@ -25,6 +25,6 @@ pub use verify::{
     embedded_verifying_keys, format_keyring_summary, kid_for_public_bytes, license_expiry_status,
     license_help_footer, license_issued_for_version, license_max_superd_version,
     licensed_max_super_minor, licensed_minor_line, licensed_version_scope, parse_major_version,
-    parse_semver, parse_signed_key_cert_unverified, superd_within_license, verify_license,
-    verify_license_for_superd, verify_license_with_root, verify_signed_key_cert,
+    parse_semver, parse_signed_key_cert_unverified, superd_within_license, validate_key_cert_time,
+    verify_license, verify_license_for_superd, verify_license_with_root, verify_signed_key_cert,
 };
