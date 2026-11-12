@@ -1,4 +1,4 @@
-//! `super keyring` — list license verifying key ids embedded in this binary.
+//! `super keyring` — list license root key ids embedded in this binary.
 
 use colored::Colorize;
 use common::embedded_verifying_keys;
