@@ -1,4 +1,4 @@
-//! `super keyring` — list license verifying key ids embedded in this binary.
+//! `super keyring` — list license root key ids embedded in this binary.
 
 use colored::Colorize;
 use common::embedded_verifying_keys;
@@ -31,27 +31,25 @@ pub fn run(json: bool) -> anyhow::Result<()> {
 
     let count = keys.len();
     let title = match count {
-        0 => "License verifying keyring (empty)".to_string(),
-        1 => "License verifying keyring (1 key)".to_string(),
-        n => format!("License verifying keyring ({n} keys)"),
+        0 => "License root keyring (empty)".to_string(),
+        1 => "License root keyring (1 key)".to_string(),
+        n => format!("License root keyring ({n} keys)"),
     };
     println!("{}", title.bold());
     println!("   Binary version:  {}", env!("CARGO_PKG_VERSION"));
     if keys.is_empty() {
-        println!(
-            "   {}",
-            "No verifying keys embedded in this build.".yellow()
-        );
+        println!("   {}", "No root keys embedded in this build.".yellow());
     } else {
-        println!("   Keys:");
+        println!("   Root keys:");
         for key in &keys {
             println!("     {}", key.kid.cyan());
         }
     }
     println!();
     println!(
-        "Ed25519 public keys embedded at compile time; a license must verify against one of these ids."
+        "Root Ed25519 public keys embedded at compile time; every license must carry a \
+         signing-key certificate signed by one of them."
     );
-    println!("Release packages may include more keys than a local `cargo build` from git alone.");
+    println!("Signing-key rotation does not require a new build; root rotation does.");
     Ok(())
 }

@@ -24,7 +24,6 @@ help:
 	@echo "Targets:"
 	@echo "  frontend    Build Vue dashboard → dashboard/dist (required by superd)"
 	@echo "  build       Build OSS binaries (superd + super CLI; runs frontend if needed)"
-	@echo "  fetch-keys  Local/debug: fetch Manager keyring into common/keys/ (do not commit by default)"
 	@echo "  clean       Clean up build artifacts (target/, dashboard/dist)"
 	@echo "  check       Run cargo check"
 	@echo "  set-version Sync VERSION into this repo + ../super-pro (delegates)"
@@ -32,18 +31,13 @@ help:
 	@echo "  docker      Build schiplat/super image (native arch, local load)"
 	@echo "  docker-multi  Build and push linux/amd64 image"
 	@echo ""
-	@echo "Daily: make build uses hand-curated common/keys/*.public.key (no Manager)."
-	@echo "Release CI fetches Manager keyring before packaging (build tree only)."
+	@echo "Daily and release builds embed common/keys/root.public.key (no Manager)."
+	@echo "Signing-key rotation uses certificates carried in each license."
 	@echo ""
 
 # ==========================================
 # Core Build Tasks
 # ==========================================
-
-.PHONY: fetch-keys
-fetch-keys:
-	@echo "$(BLUE)🔑 Fetching verifying keyring from Manager...$(NC)"
-	@REQUIRE_MANAGER_KEYRING=1 bash .github/scripts/fetch-verifying-keys.sh
 
 .PHONY: frontend
 frontend:

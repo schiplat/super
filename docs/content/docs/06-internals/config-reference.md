@@ -104,7 +104,7 @@ The `SUPER_LICENSE` and `SUPER_LICENSE_STRICT` overrides are documented in [Envi
 
 | Key | Type | Default | Description |
 | :--- | :--- | :--- | :--- |
-| `key` 💎 | string | — | Base64-encoded signed subscription key. Obtain from your subscription vendor. Override: `SUPER_LICENSE` env (same format). Every valid license includes a signing key id (`kid`, e.g. `k_<8hex>`) that must match a verifying key embedded in your `superd` build — see [Troubleshooting license verification](/docs/02-essentials/authentication#troubleshooting-license-verification). |
+| `key` 💎 | string | — | Base64-encoded signed subscription key. Obtain from your subscription vendor. Override: `SUPER_LICENSE` env (same format). The key carries its claims and a signing-key certificate; `superd` verifies that chain against the root key embedded in the build. See [Troubleshooting license verification](/docs/02-essentials/authentication#troubleshooting-license-verification). |
 | `strict` 💎 | bool | `false` | When `true`, invalid or incompatible keys refuse startup instead of degrading to OSS. Recommended for production licensed deployments. Override: `SUPER_LICENSE_STRICT=1`. |
 
 ```toml

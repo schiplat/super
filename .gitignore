@@ -34,9 +34,8 @@ data.json
 !.env.example
 *.key
 *.pem
-# Ed25519 verifying public keys only (safe to commit; required for offline OSS builds).
+# Ed25519 root public key only (safe to commit; required for offline OSS builds).
 !common/keys/*.public.key
-!common/keys/.gitkeep
 
 docs/public/
 docs/resources/

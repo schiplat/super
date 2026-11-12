@@ -1,6 +1,5 @@
-# Builds release archives. Fetches Manager verifying keyring before compile.
-# Variables: SUPER_MANAGER_BASE, SUPER_MANAGER_PATH_PREFIX, SUPER_PRODUCT_ID.
-# Secret: SUPER_MANAGER_TOKEN. Daily make build / CI use committed common/keys/*.public.key only.
+# Builds release archives. The root public key is committed in the source tree;
+# signing-key rotation does not require a release.
 name: Release
 
 on:
@@ -68,15 +67,6 @@ jobs:
           cache: npm
           cache-dependency-path: dashboard/package-lock.json
 
-      - name: Fetch verifying keys from Manager
-        env:
-          SUPER_MANAGER_BASE: ${{ vars.SUPER_MANAGER_BASE }}
-          SUPER_MANAGER_PATH_PREFIX: ${{ vars.SUPER_MANAGER_PATH_PREFIX }}
-          SUPER_MANAGER_TOKEN: ${{ secrets.SUPER_MANAGER_TOKEN }}
-          SUPER_PRODUCT_ID: ${{ vars.SUPER_PRODUCT_ID }}
-          REQUIRE_MANAGER_KEYRING: '1'
-        run: bash .github/scripts/fetch-verifying-keys.sh
-
       - name: Build and package
         run: bash .github/scripts/package-release-unix.sh "${{ steps.ver.outputs.version }}" "${{ matrix.name }}" "${{ matrix.target }}"
 
@@ -101,15 +91,6 @@ jobs:
           else
             echo "version=$(grep '^version' Cargo.toml | head -1 | sed 's/.*"\(.*\)".*/\1/')" >> "$GITHUB_OUTPUT"
           fi
-
-      - name: Fetch verifying keys from Manager
-        env:
-          SUPER_MANAGER_BASE: ${{ vars.SUPER_MANAGER_BASE }}
-          SUPER_MANAGER_PATH_PREFIX: ${{ vars.SUPER_MANAGER_PATH_PREFIX }}
-          SUPER_MANAGER_TOKEN: ${{ secrets.SUPER_MANAGER_TOKEN }}
-          SUPER_PRODUCT_ID: ${{ vars.SUPER_PRODUCT_ID }}
-          REQUIRE_MANAGER_KEYRING: '1'
-        run: bash .github/scripts/fetch-verifying-keys.sh
 
       - name: Build on FreeBSD
         uses: vmactions/freebsd-vm@v1

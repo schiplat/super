@@ -91,7 +91,6 @@ CLI overrides: `--daemon` / `--foreground` / `--pidfile <PATH>`. See [Config ref
 | :--- | :--- | :--- |
 | [`super shutdown`](#shutdown) | — | Gracefully shut down the daemon and all children |
 | [`super doctor`](#doctor) | — | One-shot diagnostics (config, daemon, license) |
-| [`super keyring [--json]`](#keyring) | — | List embedded license verifying keys |
 | [`super completions <shell>`](#completions-alias-completion) | `completion` | Print a shell completion script (`bash`, `zsh`, `fish`, `elvish`, `powershell`) |
 
 ### Authentication
@@ -427,7 +426,7 @@ super export [--format toml|json]
 | `--format` | `toml` \| `json` | `toml` | Output format. `toml` produces the default stack format (inline/nested tables); `json` keeps the legacy shape for tooling that expects it. |
 
 ### `check`
-Validate `super.toml` **without a running daemon**: TOML syntax, bind/port, log/data paths, licensed-mode requirements, `[include]` stacks (TOML default, JSON compatible — same program-body checks as create), and rejected leftovers (`[webhook]`, `[[program]]` tables that Super does not load). Include errors name the file and location: `path:line:col:` for TOML/JSON syntax, `path: services[i] (name=…): field:` for invalid services. Non-zero exit if any error is found. Use with [`super keyring`](#keyring) when diagnosing license verification failures.
+Validate `super.toml` **without a running daemon**: TOML syntax, bind/port, log/data paths, licensed-mode requirements, `[include]` stacks (TOML default, JSON compatible — same program-body checks as create), and rejected leftovers (`[webhook]`, `[[program]]` tables that Super does not load). Include errors name the file and location: `path:line:col:` for TOML/JSON syntax, `path: services[i] (name=…): field:` for invalid services. Non-zero exit if any error is found. Use with `super doctor` when diagnosing license verification failures.
 
 ```bash
 super check
@@ -447,26 +446,12 @@ super shutdown
 ```
 
 ### `doctor`
-One-shot diagnostics: config check (`super check` output), daemon health, license status, a **Verifying keys** summary line (same ids as [`super keyring`](#keyring)), and local `[server].daemon` / pidfile hints (systemd conflict, stale pidfile). See [Troubleshooting license verification](/docs/02-essentials/authentication#troubleshooting-license-verification).
+One-shot diagnostics: config check (`super check` output), daemon health, license status, the embedded **root key** id, and local `[server].daemon` / pidfile hints (systemd conflict, stale pidfile). See [Troubleshooting license verification](/docs/02-essentials/authentication#troubleshooting-license-verification).
 
 ```bash
 super doctor
 ```
 
-### `keyring`
-List Ed25519 verifying key ids (`kid`) compiled into this `super` binary — one row per key, so multiple rotation keys are all visible. Each `kid` uses the `k_<8hex>` convention (first four bytes of the public key as hex). Suggested when a license fails with an unknown signing key or to compare a local build with an official release. See [Troubleshooting license verification](/docs/02-essentials/authentication#troubleshooting-license-verification).
-
-> [!NOTE]
-> This command exists to help diagnose **license verification for licensed deployments**. Pure OSS builds have no license, so the keyring output is irrelevant unless you run a licensed instance.
-
-```bash
-super keyring
-super keyring --json
-```
-
-| Flag | Type | Default | Description |
-| :--- | :--- | :--- | :--- |
-| `--json` | bool | `false` | Output JSON (for scripts / monitoring) |
 
 ### `completions` (alias `completion`)
 Print a shell completion script for `super` to stdout. The script is generated from the same argument definition as `super --help`, so subcommands, aliases (`ls`, `rs`, `rm`, `log`), and flags stay in sync with the installed binary. No daemon or credentials are needed.

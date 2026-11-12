@@ -363,8 +363,9 @@ API / stack / CLI / dashboard. Schema: [Config reference — artifact](https://s
      See `super doctor` / `super keyring` for verify issues.
 
 3. **License verification fails**
-   - `super doctor` prints the verifying-key summary; `super keyring` lists
-     `kid`s compiled into the binary. The license's `kid` must match.
+   - `super doctor` prints the embedded root-key summary; `super keyring` lists
+     root `kid`s compiled into the binary. The certificate's `root_kid` must match
+     one of them, and the certificate's `kid` must match its signing public key.
    - Containers: inject via `SUPER_LICENSE` instead of `[license].key`.
    - Set `SUPER_LICENSE_STRICT=1` to make invalid keys fail loudly instead of
      silently degrading to OSS.
