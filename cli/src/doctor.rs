@@ -16,7 +16,7 @@ use common::{
 pub async fn run(base_url: &str, token: Option<&String>) -> anyhow::Result<()> {
     println!("{}", "Super Doctor".bold());
     println!("   CLI version:     {}", env!("CARGO_PKG_VERSION"));
-    println!("   Verifying keys:  {}", embedded_keyring_summary().cyan());
+    println!("   Root key:        {}", embedded_keyring_summary().cyan());
     let mut diagnostics_ok = true;
 
     // 1. Config file validation (reuse `super check`; it prints its own report).
