@@ -61,6 +61,11 @@ pub enum Commands {
         #[arg(long, default_value = "true")]
         autostart: bool,
 
+        /// Disable auto-start. `--autostart` is a flag and cannot take a value,
+        /// so `--autostart false` would be parsed as the command; use this instead.
+        #[arg(long)]
+        no_autostart: bool,
+
         /// Working directory
         #[arg(long)]
         cwd: Option<String>,

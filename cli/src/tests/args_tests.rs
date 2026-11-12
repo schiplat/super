@@ -144,3 +144,24 @@ fn completions_rejects_unknown_shell() {
         "the shell argument is required"
     );
 }
+
+#[test]
+fn add_no_autostart_flag_keeps_command_intact() {
+    let cli = Cli::try_parse_from(["super", "add", "--no-autostart", "echo", "hi"])
+        .expect("add must parse");
+    match cli.command {
+        Commands::Add {
+            autostart,
+            no_autostart,
+            command,
+            args,
+            ..
+        } => {
+            assert!(autostart, "--autostart still defaults to true");
+            assert!(no_autostart);
+            assert_eq!(command, "echo");
+            assert_eq!(args, vec!["hi".to_string()]);
+        }
+        _ => panic!("expected add command"),
+    }
+}
