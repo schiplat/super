@@ -20,11 +20,11 @@ const LICENSE_PRODUCT_ID: &str = "super-pro";
 const ROOT_PUBLIC_KEY_BYTES: &[u8; 32] = include_bytes!("../../root.public.key");
 
 /// Domain separation for the two Ed25519 signatures carried by a license.
-const LICENSE_SIGNING_DOMAIN: &[u8] = b"super-license-v1\n";
-const KEY_CERT_SIGNING_DOMAIN: &[u8] = b"super-keycert-v1\n";
+pub const LICENSE_SIGNING_DOMAIN: &[u8] = b"super-license-v1\n";
+pub const KEY_CERT_SIGNING_DOMAIN: &[u8] = b"super-keycert-v1\n";
 
 /// Key-certificate format version.
-const KEY_CERT_VERSION: u8 = 1;
+pub const KEY_CERT_VERSION: u8 = 1;
 
 /// Tolerated clock skew when checking certificate validity.
 const CERT_CLOCK_SKEW_SECS: u64 = 300;
@@ -54,6 +54,16 @@ pub struct KeyCert {
     pub not_after: u64,
     /// Id of the root key that signed this certificate.
     pub root_kid: String,
+}
+
+/// A signing-key certificate signed by the root key, stored by Manager next to
+/// the signing key and copied into every license.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct SignedKeyCert {
+    /// Base64 of the `KeyCert` JSON bytes (exactly what the root signed).
+    pub cert: String,
+    /// Base64 of the root Ed25519 signature over the certificate bytes.
+    pub cert_signature: String,
 }
 
 /// Derive stable signing key id from an Ed25519 public key (Manager + OSS convention).
@@ -357,18 +367,12 @@ fn verify_detached(
     public_key.verify(&signed, signature).is_ok()
 }
 
-fn verify_signature_with_root(
-    license_str: &str,
+fn verify_signed_key_cert_with_root(
+    signed: &SignedKeyCert,
     root: &VerifyingKey,
-) -> anyhow::Result<LicenseClaims> {
-    let container = decode_license_container(license_str)?;
-
-    let cert_bytes = decode_field(
-        &container.key_cert,
-        "key certificate",
-        MAX_KEY_CERT_JSON_LEN,
-    )?;
-    let cert_signature = decode_signature(&container.cert_signature, "key certificate signature")?;
+) -> anyhow::Result<(KeyCert, VerifyingKey)> {
+    let cert_bytes = decode_field(&signed.cert, "key certificate", MAX_KEY_CERT_JSON_LEN)?;
+    let cert_signature = decode_signature(&signed.cert_signature, "key certificate signature")?;
     let cert: KeyCert =
         serde_json::from_slice(&cert_bytes).context("Invalid signing-key certificate structure")?;
 
@@ -384,6 +388,35 @@ fn verify_signature_with_root(
     }
 
     let signing_key = validate_key_cert(&cert, &root_kid)?;
+    Ok((cert, signing_key))
+}
+
+/// Decode a stored certificate without checking its root signature.
+///
+/// Signing-side tools use this to validate structure/kid binding; anything that
+/// persists or issues a certificate must use [`verify_signed_key_cert`].
+pub fn parse_signed_key_cert_unverified(signed: &SignedKeyCert) -> anyhow::Result<KeyCert> {
+    let cert_bytes = decode_field(&signed.cert, "key certificate", MAX_KEY_CERT_JSON_LEN)?;
+    serde_json::from_slice(&cert_bytes).context("Invalid signing-key certificate structure")
+}
+
+/// Verify a stored signing-key certificate against the embedded root key.
+/// Manager calls this before storing/using a certificate.
+pub fn verify_signed_key_cert(signed: &SignedKeyCert) -> anyhow::Result<KeyCert> {
+    let root = root_verifying_key()?;
+    verify_signed_key_cert_with_root(signed, &root).map(|(cert, _)| cert)
+}
+
+fn verify_signature_with_root(
+    license_str: &str,
+    root: &VerifyingKey,
+) -> anyhow::Result<LicenseClaims> {
+    let container = decode_license_container(license_str)?;
+    let signed_cert = SignedKeyCert {
+        cert: container.key_cert.clone(),
+        cert_signature: container.cert_signature.clone(),
+    };
+    let (cert, signing_key) = verify_signed_key_cert_with_root(&signed_cert, root)?;
 
     let claims_bytes = decode_field(&container.claims, "claims", MAX_CLAIMS_JSON_LEN)?;
     let signature = decode_signature(&container.signature, "license signature")?;

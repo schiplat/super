@@ -38,10 +38,7 @@ pub fn run(json: bool) -> anyhow::Result<()> {
     println!("{}", title.bold());
     println!("   Binary version:  {}", env!("CARGO_PKG_VERSION"));
     if keys.is_empty() {
-        println!(
-            "   {}",
-            "No root keys embedded in this build.".yellow()
-        );
+        println!("   {}", "No root keys embedded in this build.".yellow());
     } else {
         println!("   Root keys:");
         for key in &keys {

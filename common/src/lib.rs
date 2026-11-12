@@ -38,13 +38,14 @@ pub use auth::{
     UserContext, UserRole,
 };
 pub use license::{
-    EmbeddedVerifyingKeyInfo, KeyCert, LICENSE_TRIAL_URL, LICENSE_UPGRADE_URL, LicenseClaims,
-    LicenseExpiryStatus, LicenseInfo, embedded_keyring_summary, embedded_verifying_key_ids,
-    embedded_verifying_keys, format_keyring_summary, kid_for_public_bytes,
-    license_degradation_refusal_message, license_expiry_status, license_help_footer,
-    licensed_deployment_intent, resolve_license_strict, scan_plugin_stems,
-    should_refuse_license_degradation, verify_license, verify_license_for_superd,
-    verify_license_with_root,
+    EmbeddedVerifyingKeyInfo, KEY_CERT_SIGNING_DOMAIN, KEY_CERT_VERSION, KeyCert,
+    LICENSE_SIGNING_DOMAIN, LICENSE_TRIAL_URL, LICENSE_UPGRADE_URL, LicenseClaims,
+    LicenseExpiryStatus, LicenseInfo, SignedKeyCert, embedded_keyring_summary,
+    embedded_verifying_key_ids, embedded_verifying_keys, format_keyring_summary,
+    kid_for_public_bytes, license_degradation_refusal_message, license_expiry_status,
+    license_help_footer, licensed_deployment_intent, parse_signed_key_cert_unverified,
+    resolve_license_strict, scan_plugin_stems, should_refuse_license_degradation, verify_license,
+    verify_license_for_superd, verify_license_with_root, verify_signed_key_cert,
 };
 pub use plugin_abi::{PLUGIN_API_VERSION, PLUGIN_SYMBOL, SuperPluginV1, read_plugin_version};
 pub use plugin_error::{set_last_plugin_error, take_last_plugin_error};

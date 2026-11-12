@@ -153,22 +153,20 @@ Production subscription templates ship with `strict = true`. Fix the key, renew,
 
 #### Troubleshooting license verification
 
-When startup, `super check`, or `super doctor` reports a bad or incompatible license, try these steps locally (no daemon required for `check` / `keyring`):
+When startup, `super check`, or `super doctor` reports a bad or incompatible license, try these steps locally (no daemon required for `check`):
 
 1. **`super check`** — re-validates `conf/super.toml`, including the license string and licensed-mode requirements.
-2. **`super doctor`** — runs the same config check, then probes a running daemon; prints a **Verifying keys** line (embedded signing key ids in this CLI binary).
-3. **`super keyring`** — lists every verifying key id (`kid`) compiled into this build; use `--json` for scripts.
+2. **`super doctor`** — runs the same config check, then probes a running daemon; prints the **root key** id this build trusts.
 
 Typical messages and what to do:
 
 | Symptom | Likely cause | What to try |
 | :--- | :--- | :--- |
-| Missing signing key id (`kid`) | License predates the current format | Ask your vendor to **re-issue** the license |
-| Unknown / unrecognized `kid` | License signed with a key this `superd` build does not embed yet (common after key rotation) | Run `super keyring` on the **same** `super` / `superd` version you deploy; upgrade to an official release that includes that `kid`, or keep your previous license file until you upgrade |
-| Signature mismatch for a listed `kid` | Wrong, truncated, or tampered key string | Restore the exact key from your vendor portal; avoid editing `[license].key` |
+| Missing signing-key certificate | License was truncated or predates the current format | Ask your vendor to **re-issue** the license |
+| Certificate not valid for this product | License belongs to a different product | Use the license issued for Super Pro |
+| Signing-key certificate expired | The vendor's signing key passed its validity window | Ask your vendor to **re-issue** the license |
+| Signature mismatch | Wrong, truncated, or tampered key string | Restore the exact key from your vendor portal; avoid editing `[license].key` |
 | Expired or version out of range | Policy or Super version span | Renew or upgrade per your subscription terms — see [Get Super Pro](/go/pro/) |
-
-Official release binaries may embed **more** verifying keys than a local `cargo build` from git alone. Compare against the release you actually run in production, not only a dev build.
 
 ## Enabling Authentication (Subscription)
 
