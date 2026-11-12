@@ -35,7 +35,7 @@ data.json
 *.key
 *.pem
 # Ed25519 root public key only (safe to commit; required for offline OSS builds).
-!common/root.public.key
+!common/keys/*.public.key
 
 docs/public/
 docs/resources/

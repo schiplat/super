@@ -4,7 +4,7 @@
 //! embedded in the binary. Rotating a signing key therefore does not require a
 //! new `superd` build; only root rotation does.
 //!
-//! Root public keys are committed under `common/root.public.key` (public
+//! Root public keys are committed under `common/keys/root.public.key` (public
 //! material). Signing private keys stay in Manager; this repository only
 //! verifies.
 

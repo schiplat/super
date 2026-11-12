@@ -17,7 +17,7 @@ const LICENSE_PRODUCT_ID: &str = "super-pro";
 /// The committed file is public material. Production root keys are generated
 /// and kept offline (see the private release runbook); replace this file with
 /// the production root public key before shipping a release.
-const ROOT_PUBLIC_KEY_BYTES: &[u8; 32] = include_bytes!("../../root.public.key");
+const ROOT_PUBLIC_KEY_BYTES: &[u8; 32] = include_bytes!("../../keys/root.public.key");
 
 /// Domain separation for the two Ed25519 signatures carried by a license.
 pub const LICENSE_SIGNING_DOMAIN: &[u8] = b"super-license-v1\n";

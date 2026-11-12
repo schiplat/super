@@ -31,7 +31,7 @@ help:
 	@echo "  docker      Build schiplat/super image (native arch, local load)"
 	@echo "  docker-multi  Build and push linux/amd64 image"
 	@echo ""
-	@echo "Daily and release builds embed common/root.public.key (no Manager)."
+	@echo "Daily and release builds embed common/keys/root.public.key (no Manager)."
 	@echo "Signing-key rotation uses certificates carried in each license."
 	@echo ""
 

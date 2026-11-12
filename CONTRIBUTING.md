@@ -60,7 +60,7 @@ Before opening a PR that touches docs or license-related code, confirm the chang
 
 ## License trust anchor (OSS-friendly)
 
-`common/root.public.key` is the **root Ed25519 public key** embedded at compile time. Every license carries a signing-key certificate signed by that root, so rotating a signing key does **not** require an OSS rebuild. The root key is public material; the corresponding private key is held offline by the maintainers and never enters this repository.
+`common/keys/root.public.key` is the **root Ed25519 public key** embedded at compile time. Every license carries a signing-key certificate signed by that root, so rotating a signing key does **not** require an OSS rebuild. The root key is public material; the corresponding private key is held offline by the maintainers and never enters this repository.
 
 - Ordinary `make build` / PR CI work offline with the committed root key.
 - Release builds need no Manager credentials.
