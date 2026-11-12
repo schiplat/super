@@ -63,3 +63,10 @@ lto = true
 codegen-units = 1
 strip = true
 #panic = "abort"
+
+# sqlx-sqlite 0.9.0 caps libsqlite3-sys at <0.38, which bundles SQLite versions
+# affected by CVE-2026-119375 (RUSTSEC-2026-0459). The vendored copy only widens
+# that bound so the resolver can pick libsqlite3-sys 0.39 (SQLite 3.54+).
+# Remove once upstream sqlx allows >=0.39.
+[patch.crates-io]
+sqlx-sqlite = { path = "vendor/sqlx-sqlite" }
