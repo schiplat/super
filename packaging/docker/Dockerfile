@@ -34,6 +34,9 @@ COPY common/ common/
 COPY core/ core/
 COPY cli/ cli/
 COPY superd/ superd/
+# [patch.crates-io] in Cargo.toml points sqlx-sqlite at this path; without it the
+# local from-source build fails with "patch location does not contain packages".
+COPY vendor/ vendor/
 COPY --from=dashboard /build/dashboard/dist dashboard/dist/
 RUN cargo build --release -p superd -p super-cli
 

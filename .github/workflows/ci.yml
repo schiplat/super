@@ -182,6 +182,9 @@ jobs:
           grep -q 'COPY packaging/docker/conf/' packaging/docker/Dockerfile
           grep -q 'COPY packaging/docker/conf/' packaging/docker/Dockerfile.pack
           grep -q 'COPY bin/superd' packaging/docker/Dockerfile.pack
+          # Cargo.toml patches sqlx-sqlite to vendor/; the from-source image
+          # context must copy it or the build fails with a patch-location error.
+          grep -q 'COPY vendor/ vendor/' packaging/docker/Dockerfile
           stale=0
           for f in Makefile .github/workflows/docker-publish.yml packaging/docker/Dockerfile packaging/docker/Dockerfile.pack; do
             if grep -n 'dockerbuild/' "$f"; then
