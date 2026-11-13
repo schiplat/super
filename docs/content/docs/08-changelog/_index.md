@@ -17,6 +17,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.9.1] - 2026-11-13
+
+### Fixed
+
+- **From-source Docker builds work again.** `packaging/docker/Dockerfile` now copies `vendor/` into the build context. The workspace patches `sqlx-sqlite` to that path, so `make docker` failed on 1.9.0 with `patch location ... does not contain packages matching sqlx-sqlite`. Published images were unaffected (they are assembled from prebuilt release binaries), and the `superd`/CLI release binaries themselves were already built against the patched SQLite.
+
+### Notes
+
+- Commercial plugin bundles are rebuilt in lockstep with this release; see their release notes for details.
+
 ## [1.9.0] - 2026-11-13
 
 ### ⚠ Breaking & behavior changes — read before upgrading

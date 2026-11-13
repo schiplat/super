@@ -81,9 +81,9 @@ params:
   # localStorage; message supports Markdown links. Bump key on each release
   # so the banner shows again for returning visitors.
   banner:
-    key: "super-release-banner-v1-9-0"
+    key: "super-release-banner-v1-9-1"
     message: |
-      **Super 1.9.0 is here** — licensing now uses a root-key certificate chain: every license carries its signing-key certificate, so rotating a signing key no longer requires a new OSS release; licenses issued in the previous format must be re-issued… [See what's new →](/docs/08-changelog/)
+      **Super 1.9.1 is here** — a maintenance release: from-source Docker builds are fixed, and the commercial plugin bundles are rebuilt in lockstep… [See what's new →](/docs/08-changelog/)
   contact:
     api_url: "https://open.schiplat.com/api/v1/demands"
   externalLinkDecoration: true
