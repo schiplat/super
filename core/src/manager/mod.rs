@@ -2491,6 +2491,25 @@ impl Manager {
         let mut touched_programs = HashSet::new();
         let mut affected_ids = Vec::new();
 
+        // Reject an oversized `numprocs` before any name/graph validation runs:
+        // both expand their services, and expansion happens inline in the actor
+        // loop — a huge value would stall the daemon on a single request.
+        // (`validate_create_program_request` re-checks below for the create path.)
+        for (i, service_req) in req.services.iter().enumerate() {
+            if service_req.numprocs > common::MAX_NUMPROCS_CAP {
+                let e = anyhow::anyhow!(
+                    "numprocs: must be ≤ {} (got {})",
+                    common::MAX_NUMPROCS_CAP,
+                    service_req.numprocs
+                );
+                return Err(with_program_location(
+                    e,
+                    service_req.name.as_deref(),
+                    Some(i),
+                ));
+            }
+        }
+
         self.validate_stack_service_names(&req.services)?;
 
         // Stack-level depends_on resolution: references may target services

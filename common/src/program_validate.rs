@@ -78,6 +78,13 @@ pub fn validate_create_program_request(
     log_dir: &Path,
 ) -> anyhow::Result<()> {
     validate_source_label(req.source.as_deref())?;
+    if req.numprocs > crate::MAX_NUMPROCS_CAP {
+        bail!(
+            "numprocs: must be ≤ {} (got {})",
+            crate::MAX_NUMPROCS_CAP,
+            req.numprocs
+        );
+    }
     if req.command.trim().is_empty() {
         bail!("command: must not be empty");
     }
