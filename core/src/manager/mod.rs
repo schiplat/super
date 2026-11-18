@@ -2744,8 +2744,21 @@ impl Manager {
         let total = order.len();
         tracing::info!("Shutdown plan computed for {} services.", total);
 
+        // `stop_program` carries operator-stop side effects (`autostart = false`
+        // + `stopped_by_user`); they exist for `super stop`. A daemon shutdown
+        // must not change what starts at the next boot, so the pre-shutdown
+        // flags are snapshotted here and restored after the stop loop.
+        let mut pre_shutdown_state: HashMap<Uuid, (bool, bool)> = HashMap::new();
+
         for (i, id) in order.iter().enumerate() {
             if self.registry.is_running(id) {
+                let autostart = self
+                    .registry
+                    .get_config(id)
+                    .map(|c| c.autostart)
+                    .unwrap_or(false);
+                let held = self.registry.stopped_by_user.contains(id);
+                pre_shutdown_state.insert(*id, (autostart, held));
                 if let Some(conf) = self.registry.get_config(id) {
                     tracing::info!("[{}/{}] Stopping {}...", i + 1, total, conf.name);
                 }
@@ -2807,6 +2820,29 @@ impl Manager {
                 }
             }
         }
+
+        // Restore the pre-shutdown autostart / hold-stop flags: the daemon
+        // stopping is not an operator stop, and the next daemon start must
+        // bring autostart services back.
+        for (id, (autostart, held)) in pre_shutdown_state {
+            if let Some(cfg) = self.registry.get_config_mut(&id) {
+                cfg.autostart = autostart;
+            }
+            if held {
+                self.registry.stopped_by_user.insert(id);
+            } else {
+                self.registry.stopped_by_user.remove(&id);
+            }
+        }
+        // Persist deterministically. Without this flush the restored state
+        // only reached disk if a PersistTick happened to race the process
+        // exit — the snapshot could randomly carry the operator-stop side
+        // effects of the shutdown itself.
+        self.registry.mark_dirty();
+        if let Err(e) = self.flush_to_disk().await {
+            tracing::error!("Failed to persist post-shutdown state: {}", e);
+        }
+
         self.record_system_event("system_shutdown", "Daemon stopped".to_string());
         tracing::info!("Bye!");
     }
