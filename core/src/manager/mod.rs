@@ -2486,9 +2486,11 @@ impl Manager {
                 s.restart_requested = true;
             }
         }
+        // Negative PID targets the process group (children share the PGID);
+        // matching the stop paths, which already signal the group.
         for state_pid in &pids {
             let _ = nix::sys::signal::kill(
-                nix::unistd::Pid::from_raw(*state_pid as i32),
+                nix::unistd::Pid::from_raw(-(*state_pid as i32)),
                 Signal::SIGTERM,
             );
         }
@@ -2792,8 +2794,10 @@ impl Manager {
                 );
                 for (_id, state_pid) in running {
                     tracing::warn!("Force killing PID {}", state_pid);
+                    // Negative PID targets the process group so descendants
+                    // die with their leader (same as the stop paths).
                     let _ = nix::sys::signal::kill(
-                        nix::unistd::Pid::from_raw(state_pid as i32),
+                        nix::unistd::Pid::from_raw(-(state_pid as i32)),
                         Signal::SIGKILL,
                     );
                 }
@@ -3335,9 +3339,11 @@ impl Manager {
                     state.restart_requested = true;
                 }
             }
+            // Negative PID targets the process group (children share the
+            // PGID); matching the stop paths, which already signal the group.
             for state_pid in &pids {
                 let _ = nix::sys::signal::kill(
-                    nix::unistd::Pid::from_raw(*state_pid as i32),
+                    nix::unistd::Pid::from_raw(-(*state_pid as i32)),
                     Signal::SIGTERM,
                 );
             }
