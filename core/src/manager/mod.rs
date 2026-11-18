@@ -1683,8 +1683,10 @@ impl Manager {
         let state = match self.registry.remove_running_by_pid(&id, pid) {
             Some(s) => s,
             None => {
-                // A newer instance replaced this one before the exit event
-                // arrived (rare race); treat as already handled.
+                // Duplicate exit event for a pid that was already removed, or a
+                // newer instance replaced this one before the exit event
+                // arrived (rare race); treat as already handled. Never remove
+                // a different, still-running instance here.
                 tracing::warn!(
                     "Program {} (PID {}) exited but no matching running state; ignoring.",
                     id,
