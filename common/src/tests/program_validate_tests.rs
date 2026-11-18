@@ -367,6 +367,34 @@ fn create_rejects_numprocs_over_cap() {
 }
 
 #[test]
+fn create_rejects_masked_export_env() {
+    let dir = tmp_logs();
+    // A secret-named key carrying the display mask looks like export output
+    // taken without admin rights; applying it would destroy the real secret.
+    let mut req = minimal_create("/bin/true");
+    req.env.insert("DB_PASSWORD".into(), "********".into());
+    let err = validate_create_program_request(&req, dir.path()).unwrap_err();
+    assert!(err.to_string().contains("DB_PASSWORD"), "{err}");
+
+    // Update path: same guard.
+    let req = UpdateProgramRequest {
+        env: Some(HashMap::from([(
+            "API_TOKEN".to_string(),
+            "********".to_string(),
+        )])),
+        ..Default::default()
+    };
+    let err = validate_update_program_request(&req, dir.path()).unwrap_err();
+    assert!(err.to_string().contains("API_TOKEN"), "{err}");
+
+    // Non-secret keys may legitimately hold ********; real values pass.
+    let mut req = minimal_create("/bin/true");
+    req.env.insert("PATTERN".into(), "********".into());
+    req.env.insert("DB_PASSWORD".into(), "hunter2".into());
+    validate_create_program_request(&req, dir.path()).unwrap();
+}
+
+#[test]
 fn create_accepts_zero_and_defaults() {
     let dir = tmp_logs();
     let mut req = minimal_create("/bin/true");

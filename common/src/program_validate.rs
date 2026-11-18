@@ -10,7 +10,29 @@ use crate::{
     UpdateProgramRequest,
 };
 use anyhow::{Context, bail};
+use std::collections::HashMap;
 use std::path::Path;
+
+/// Display mask emitted by `security::mask_env_map` (API/CLI/export output).
+const ENV_MASK_SENTINEL: &str = "********";
+
+/// Reject env values that look like masked export output. Re-applying an
+/// export taken without admin rights would otherwise silently replace real
+/// secrets with the literal mask string. Non-secret keys may legitimately
+/// hold `********` and are not rejected.
+fn validate_env_values(env: &HashMap<String, String>) -> anyhow::Result<()> {
+    for (k, v) in env {
+        if v == ENV_MASK_SENTINEL && crate::security::mask_secret_value(k, "x") == ENV_MASK_SENTINEL
+        {
+            bail!(
+                "env: '{k}' carries the masked placeholder '{ENV_MASK_SENTINEL}' — this looks \
+                 like export output taken without admin rights; supply the real value instead \
+                 of re-applying masked output"
+            );
+        }
+    }
+    Ok(())
+}
 
 /// Prefix a field-level error with `services[i] (name=…)` or `program '…'`.
 pub fn with_program_location(
@@ -85,6 +107,7 @@ pub fn validate_create_program_request(
             req.numprocs
         );
     }
+    validate_env_values(&req.env)?;
     if req.command.trim().is_empty() {
         bail!("command: must not be empty");
     }
@@ -116,6 +139,9 @@ pub fn validate_update_program_request(
     log_dir: &Path,
 ) -> anyhow::Result<()> {
     validate_source_label(req.source.as_deref())?;
+    if let Some(env) = &req.env {
+        validate_env_values(env)?;
+    }
     if let Some(command) = &req.command
         && command.trim().is_empty()
     {
