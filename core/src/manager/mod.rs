@@ -1409,6 +1409,14 @@ impl Manager {
             id
         );
 
+        // Capture the hold-stop flag before the registry is borrowed mutably.
+        // An operator hold-stop (`super stop`) must survive the OTA: deliver
+        // the artifact, but do not re-enable autostart or spawn behind the
+        // operator's back — otherwise the next daemon restart boots a
+        // held-stopped program. The pending WAL commits whenever the program
+        // next reports Healthy (see handle_health_update).
+        let held_stopped = self.registry.stopped_by_user.contains(&id);
+
         let config = match self.registry.get_config_mut(&id) {
             Some(c) => c,
             None => return,
@@ -1453,7 +1461,9 @@ impl Manager {
         // 2. Persist state (WAL)
         // Record backup path so crash recovery can roll back.
         config.restore_path = Some(backup_path.to_string_lossy().to_string());
-        config.autostart = true;
+        if !held_stopped {
+            config.autostart = true;
+        }
         config.updated_at = chrono::Utc::now().timestamp() as u64;
 
         self.registry.mark_dirty();
@@ -1502,6 +1512,11 @@ impl Manager {
                     let _ = nix::sys::signal::kill(
                         nix::unistd::Pid::from_raw(state.pid as i32),
                         Signal::SIGTERM,
+                    );
+                } else if held_stopped {
+                    tracing::info!(
+                        "OTA immediate for {}: program is held-stopped; new binary activates on the next explicit start",
+                        id
                     );
                 } else {
                     let _ = self
@@ -1580,6 +1595,11 @@ impl Manager {
                     } else {
                         self.schedule_ota_verify_timeout(id);
                     }
+                } else if held_stopped {
+                    tracing::info!(
+                        "OTA restart_policy=signal for {}: program is held-stopped; new binary activates on the next explicit start",
+                        id
+                    );
                 } else {
                     tracing::info!(
                         "OTA restart_policy=signal for {}: process not running, spawning",
