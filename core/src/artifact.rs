@@ -48,7 +48,11 @@ pub async fn download_to_staging(
     // `timeout_secs == 0` → no overall transfer deadline (matches config docs).
     // Connect still fails closed after 10s so a black-holed peer cannot hang forever
     // before the first byte.
-    let mut builder = reqwest::Client::builder().connect_timeout(Duration::from_secs(10));
+    let mut builder = reqwest::Client::builder()
+        .connect_timeout(Duration::from_secs(10))
+        // Re-validate every redirect hop against the OTA policy: a public CDN
+        // 302 must not pull the artifact from a private/metadata address.
+        .redirect(crate::outbound_redirect_policy(FetchUrlPolicy::OtaArtifact));
     if timeout_secs > 0 {
         builder = builder.timeout(Duration::from_secs(timeout_secs));
     }

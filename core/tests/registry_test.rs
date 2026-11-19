@@ -140,25 +140,28 @@ fn test_registry_concurrent_instances() {
 }
 
 #[test]
-fn remove_running_by_pid_unknown_pid_falls_back_to_primary() {
-    // Documented fallback: when the reported pid no longer matches any instance
-    // (a race with a restart), the primary instance is removed instead.
+fn remove_running_by_pid_unknown_pid_is_noop() {
+    // Duplicate exit events (manual ESRCH cleanup + the real reap) report a pid
+    // that no longer matches any instance. Removing must be a no-op then — the
+    // old "fall back to the primary" behaviour dropped a still-running sibling
+    // or freshly restarted instance instead.
     let mut registry = ProcessRegistry::new(HashMap::new(), HashSet::new());
     let id = Uuid::new_v4();
     for pid in [2001u32, 2002, 2003] {
         registry.insert_running(id, running_state(pid));
     }
 
-    let removed = registry.remove_running_by_pid(&id, 9999).unwrap();
-    assert_eq!(
-        removed.pid, 2001,
-        "unknown pid must fall back to the primary"
+    assert!(
+        registry.remove_running_by_pid(&id, 9999).is_none(),
+        "unknown pid must not remove any instance"
     );
-    assert_eq!(registry.running_count(&id), 2);
-    assert_eq!(registry.get_running(&id).unwrap().pid, 2002);
+    assert_eq!(registry.running_count(&id), 3, "siblings stay untouched");
+    assert_eq!(registry.get_running(&id).unwrap().pid, 2001);
 
-    // Removing the remaining instances drops the program's key.
+    // Matching pids still remove normally.
     registry.remove_running_by_pid(&id, 2002).unwrap();
+    assert_eq!(registry.running_count(&id), 2);
+    registry.remove_running_by_pid(&id, 2001).unwrap();
     registry.remove_running_by_pid(&id, 2003).unwrap();
     assert!(!registry.is_running(&id));
     assert!(registry.running_empty());
