@@ -42,6 +42,11 @@ A correctness-and-hardening release from a full security audit: 4 crash/correctn
 - **Pidfile claims are atomic** (`O_CREAT|O_EXCL` plus an exclusive `flock` held for the process lifetime). Two concurrent starts could both pass the old check-then-create window and silently double-start; a stale pidfile is still reclaimed, a live holder still refuses the start.
 - **The failed-auth throttle aggregates IPv6 peers per /64.** Keyed on the exact address, a client rotating addresses inside one subnet reset the failure counter on every hop and could brute-force indefinitely; distinct subnets still throttle independently.
 
+### Dependencies
+
+- **Rust:** `rand` 0.9.5 → 0.10.3 (major — code migrated: the OS generator is now `SysRng`, still the getrandom-backed OS CSPRNG; `TryRngCore` → `TryRng`; `random_range` lives on the `RngExt` trait), `colored` 2.2.0 → 3.1.1 (major — MSRV 1.80), `hostname` 0.3.1 → 0.4.2 (major), plus the minor/patch group `uuid` 1.29.2, `toml`, `flate2`, `zip`. Transitive copies of `rand` 0.8/0.9 remain only behind build-time (`phf`/`cron`) and WebSocket client (`tungstenite`) paths — not in any key/license code path.
+- **Dashboard (npm):** `axios` 1.21.1 (pulls the `follow-redirects` CVE fix), `cronstrue` 3.39, `tom-select` 2.7, `vue` 3.5.45, `tailwindcss`/`@tailwindcss/vite` 4.3.5, `vite` 8.3.7, and dev-only `jsdom` 30 → 31.
+
 ### Documentation
 
 - `SECURITY.md` now states plainly that `install.sh` checksums guard transport integrity only (the `SHA256SUMS` ships from the same release channel) and that a `--token` flag is visible in the local process list while the command runs; the [authentication guide](/docs/02-essentials/authentication/) links the `super login` / `SUPER_TOKEN` alternatives.
