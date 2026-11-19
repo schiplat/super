@@ -795,11 +795,16 @@ async fn test_ota_no_health_check_instant_crash_rolls_back() {
     }
 
     // The bad binary must crash INSIDE the startsecs verification window for
-    // the rollback assertion to be deterministic, so it does nothing but exit
-    // 1 — no `echo` first (under full-suite parallel load the fork→exec→dyld
-    // delay can push the echo past startsecs, letting the window commit a
-    // delayed crash). The V2 bytes are asserted from the FILE content, not
-    // from this script's output.
+    // the rollback assertion to hold, so it does nothing but exit 1 — no
+    // `echo` first. The window must dominate worst-case spawn latency, not
+    // merely typical latency: under full-suite parallel load a bare
+    // `#!/bin/sh` can take multiple seconds to fork→exec→exit (observed:
+    // 3.85s spawn-to-exit on a loaded runner), which raced a startsecs=3
+    // window and committed the OTA before the crash was observed. startsecs
+    // = 10 leaves ~2.5× headroom over that worst case while keeping the
+    // runtime bounded — the commit timer only elapses in the failure mode,
+    // since a timely crash short-circuits it via rollback. The V2 bytes are
+    // asserted from the FILE content, not from this script's output.
     let v2 = "#!/bin/sh\nexit 1\n";
     let v2_hash = calculate_hash(v2);
     Mock::given(method("GET"))
@@ -813,7 +818,7 @@ async fn test_ota_no_health_check_instant_crash_rolls_back() {
         command: app.to_string_lossy().to_string(),
         args: vec![],
         autostart: true,
-        startsecs: 3,
+        startsecs: 10,
         // intentionally no health_check
         ..Default::default()
     };

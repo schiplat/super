@@ -17,6 +17,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Test reliability
+
+- **`test_ota_no_health_check_instant_crash_rolls_back` no longer races spawn latency.** Its no-probe OTA commit dwell was `startsecs = 3` — the same order of magnitude as fork→exec latency under full-suite parallel load (observed: a bare `#!/bin/sh` exiting 1 took 3.85 s to spawn-and-exit on a loaded runner), so the crash could land after the commit and skip the rollback the test asserts. The window is now `startsecs = 10`, ~2.5× the observed worst case. Test-only; no product change.
+
 ## [1.9.2] - 2026-11-19
 
 A correctness-and-hardening release from a full security audit: 4 crash/correctness fixes and 12 security/robustness fixes, each covered by regression tests.
