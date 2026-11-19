@@ -112,9 +112,17 @@ async fn ui_fallback_handler(
     let spa_fallback_allowed = !path.starts_with("/assets/") && !last_segment.contains('.');
     let file_path = normalize_ui_path(path);
 
-    // Prefer licensed ui plugin assets when loaded (optional override / hot path).
-    if let Some(ui) = ui.as_ref() {
-        if let Some(resp) = serve_ui_asset(
+    let inject = |raw: &[u8], auth: bool, lic: bool| {
+        inject_ui_config_with_plugins(raw, auth, lic, &ui_plugin_ids)
+    };
+
+    // Licensed ui plugin assets take precedence (optional override / hot
+    // path), but a plugin MISS falls through to the OSS embedded dashboard
+    // instead of 404ing: the plugin bundles its own dist snapshot, and a
+    // plugin built against an older/newer shell dist must not break assets
+    // (e.g. self-hosted monaco under /monaco/…) the OSS binary provides.
+    if let Some(ui) = ui.as_ref()
+        && let Some(resp) = serve_ui_asset(
             ui,
             &file_path,
             auth_required,
@@ -123,23 +131,24 @@ async fn ui_fallback_handler(
             &ui_plugin_ids,
         )
         .await
-        {
-            return resp;
-        }
-        if spa_fallback_allowed {
-            return spa_fallback(ui, auth_required, is_licensed, &ui_plugin_ids).await;
-        }
-        return StatusCode::NOT_FOUND.into_response();
+    {
+        return resp;
     }
 
-    // OSS default: Dashboard embedded in this binary.
-    let inject = |raw: &[u8], auth: bool, lic: bool| {
-        inject_ui_config_with_plugins(raw, auth, lic, &ui_plugin_ids)
-    };
+    // OSS base: Dashboard embedded in this binary.
     if let Some(resp) = embedded_ui::response(&file_path, auth_required, is_licensed, inject) {
         return resp;
     }
+
+    // SPA fallback (document-style paths only): prefer the plugin's
+    // index.html when a plugin is loaded, else the OSS embed's.
     if spa_fallback_allowed {
+        if let Some(ui) = ui.as_ref() {
+            let resp = spa_fallback(ui, auth_required, is_licensed, &ui_plugin_ids).await;
+            if resp.status() != StatusCode::NOT_FOUND {
+                return resp;
+            }
+        }
         return embedded_ui::spa_index(auth_required, is_licensed, inject);
     }
     StatusCode::NOT_FOUND.into_response()

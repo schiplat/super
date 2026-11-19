@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, onMounted, watch, computed } from 'vue';
-import { VueMonacoEditor } from '@guolao/vue-monaco-editor';
+import { VueMonacoEditor, loader } from '@guolao/vue-monaco-editor';
 import { FONT_MONO } from '@/constants/fonts';
 import { useDark } from '@vueuse/core';
 import {
@@ -15,6 +15,12 @@ import { API_PATHS } from '@/api/paths';
 import { useAuthStore } from '@/stores/auth';
 import { alertDialog, confirmDialog } from '@/lib/app-dialog';
 import { cn } from '@/lib/utils';
+
+// Load monaco same-origin from public/monaco/vs (copied at build time, see
+// scripts/copy-monaco.mjs). The loader's default is a runtime CDN fetch,
+// which superd's CSP (script-src 'self') blocks — the editor must work
+// offline and behind the strict security headers.
+loader.config({ paths: { vs: '/monaco/vs' } });
 
 /** Must match CLI `PRUNE_CONFIRM_TOKEN` — soft yes/confirm is not enough. */
 const PRUNE_CONFIRM_TOKEN = 'confirmed';

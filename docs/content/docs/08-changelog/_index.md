@@ -17,6 +17,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **Stack Editor loads its editor again (second 1.9.2 CSP casualty).** Monaco was fetched at runtime from a public CDN, which `script-src 'self'` blocks — the page showed "load failed" and never mounted an editor. Monaco is now self-hosted: the dashboard build copies `monaco-editor/min/vs` into the bundle and the editor loads it same-origin (also makes the dashboard work offline / air-gapped).
+- **ui-plugin assets no longer shadow the OSS embedded dashboard.** With a `ui` plugin loaded, an asset the plugin did not embed (for example the self-hosted `/monaco/…` tree) returned 404 because the plugin branch never fell through. Plugin assets keep precedence; a miss now serves the OSS embedded dashboard's asset, and only document-style SPA fallbacks prefer the plugin's index.html.
+
 ## [1.9.3] - 2026-11-19
 
 Hotfix release: **upgrading from 1.9.2 is strongly recommended** — the security headers shipped in 1.9.2 broke the web dashboard for every install.
