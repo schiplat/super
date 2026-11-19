@@ -292,8 +292,7 @@ fn shutdown_signal(
 /// Inject baseline security headers on every response. API/WS responses pass
 /// through untouched (JSON + token auth need no HTML hardening); UI assets
 /// get the standard browser hardening set. The dashboard is same-origin only
-/// (it talks to `/api/v1` from the same host), so a strict CSP with no
-/// `unsafe-*` beyond what the Vue bundle needs is safe; connect-src/self and
+/// (it talks to `/api/v1` from the same host); connect-src/self and
 /// style-src/inline cover Vite's runtime-injected styles.
 ///
 /// Applied as middleware rather than inside each asset responder so plugin
@@ -314,7 +313,15 @@ async fn ui_security_headers_middleware(req: axum::extract::Request, next: Next)
         ("Referrer-Policy", "no-referrer"),
         (
             "Content-Security-Policy",
-            "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; \
+            // `unsafe-inline` for scripts is required by the shell contract:
+            // superd injects `window.__SUPER_CONFIG__` / `__SUPER_PLUGINS__`
+            // as an inline <script> into index.html (see
+            // inject_ui_config_with_plugins), and a static CSP cannot pin a
+            // per-response hash because the injected values vary. Same-origin
+            // `self` still governs every external script; the high-value
+            // vectors stay closed (object-src 'none', base-uri 'none',
+            // frame-ancestors 'none').
+            "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; \
              img-src 'self' data:; font-src 'self'; connect-src 'self' ws: wss:; \
              object-src 'none'; base-uri 'none'; frame-ancestors 'none'",
         ),

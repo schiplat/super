@@ -17,6 +17,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **Dashboard loads again under the security headers (regression in 1.9.2).** The CSP added in 1.9.2 used `script-src 'self'`, which browsers enforce against *inline* scripts — including the configuration block superd injects into index.html (`window.__SUPER_CONFIG__` / `__SUPER_PLUGINS__`). The shell therefore booted without its edition/auth flags, and Licensed instances lost their Pro pages (Tokens, Notifications, Hot Reload). `script-src` now also allows `unsafe-inline` for that injected block (a static CSP cannot pin a per-response hash of the injected values); external scripts remain same-origin and `object-src 'none'`, `base-uri 'none'`, `frame-ancestors 'none'` keep the high-value vectors closed.
+
 ### Test reliability
 
 - **`test_ota_no_health_check_instant_crash_rolls_back` no longer races spawn latency.** Its no-probe OTA commit dwell was `startsecs = 3` — the same order of magnitude as fork→exec latency under full-suite parallel load (observed: a bare `#!/bin/sh` exiting 1 took 3.85 s to spawn-and-exit on a loaded runner), so the crash could land after the commit and skip the rollback the test asserts. The window is now `startsecs = 10`, ~2.5× the observed worst case. Test-only; no product change.
