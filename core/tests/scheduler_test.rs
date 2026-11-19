@@ -165,3 +165,23 @@ fn dt(y: i32, mo: u32, d: u32, h: u32, mi: u32, s: u32) -> chrono::DateTime<Utc>
         .single()
         .expect("valid instant")
 }
+
+/// The missed-slot count must be bounded: a long outage with a per-second
+/// schedule previously made the tick loop iterate once per missed slot inside
+/// the manager actor (millions of iterations after a month offline). Consumers
+/// cap catchup at 10 runs, so counting beyond a small bound is pure waste.
+#[test]
+fn missed_slot_count_is_capped() {
+    let mut scheduler = CronScheduler::new();
+    let id = Uuid::new_v4();
+    // Anchor 1000 slots in the past on a per-second schedule.
+    let anchor = Utc::now() - chrono::Duration::seconds(1000);
+    scheduler.upsert(id, "0/1 * * * * * *", 0, Some(anchor));
+
+    let triggered = scheduler.tick();
+    assert_eq!(triggered.len(), 1);
+    assert_eq!(
+        triggered[0].missed_slots, 12,
+        "count must stop at the cap, not iterate 1000 slots"
+    );
+}

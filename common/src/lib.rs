@@ -155,6 +155,10 @@ pub const DEFAULT_MAX_QUEUED: u32 = 100;
 pub const MAX_CONCURRENT_CAP: u32 = 64;
 /// Hard upper bound for `max_queued`.
 pub const MAX_QUEUED_CAP: u32 = 10000;
+/// Hard upper bound for `numprocs` (one program definition → N OS processes).
+/// Expansion happens in the manager actor, so an unbounded value would stall
+/// the whole daemon on a single create/stack-apply request.
+pub const MAX_NUMPROCS_CAP: u32 = 256;
 
 /// Auto-restart policy (Supervisor-compatible semantics)
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, ToSchema, Default)]

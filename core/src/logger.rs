@@ -372,6 +372,13 @@ pub async fn emit_superd_line(
 }
 
 /// Read last N lines from a log file (historical log API).
+///
+/// Scans backwards in 64 KiB chunks instead of slurping the whole file:
+/// default rotation caps files at a few MB, but a custom
+/// `[child_logging] max_size_mb` can reach gigabytes and this runs on the
+/// request path. The backwards scan is bounded (`MAX_TAIL_SCAN_BYTES`) — if
+/// the requested lines do not exist within that budget, the last lines of the
+/// budgeted tail are returned.
 pub async fn read_log_lines(
     log_dir: &Path,
     id: Uuid,
@@ -385,14 +392,45 @@ pub async fn read_log_lines(
         return None;
     }
 
-    let content = tokio::fs::read_to_string(&path).await.ok()?;
-    if content.is_empty() {
+    const CHUNK: u64 = 64 * 1024;
+    const MAX_TAIL_SCAN_BYTES: u64 = 8 * 1024 * 1024;
+
+    let mut file = tokio::fs::File::open(&path).await.ok()?;
+    let len = file.metadata().await.ok()?.len();
+    if len == 0 {
         return None;
     }
 
-    let lines: Vec<&str> = content.lines().collect();
-    let n = max_lines as usize;
-    let start = lines.len().saturating_sub(n);
+    // Scan backwards until the region holds more than `max_lines` newlines,
+    // the start of the file is reached, or the scan budget is exhausted.
+    let mut chunks: Vec<Vec<u8>> = Vec::new();
+    let mut pos = len;
+    let mut newlines = 0usize;
+    let mut scanned = 0u64;
+    while pos > 0 && newlines <= max_lines as usize && scanned < MAX_TAIL_SCAN_BYTES {
+        let take = CHUNK.min(pos) as usize;
+        pos -= take as u64;
+        file.seek(SeekFrom::Start(pos)).await.ok()?;
+        let mut buf = vec![0u8; take];
+        file.read_exact(&mut buf).await.ok()?;
+        newlines += buf.iter().filter(|&&b| b == b'\n').count();
+        scanned += take as u64;
+        chunks.insert(0, buf);
+    }
+
+    // Stopping early (pos > 0) means the first chunk may begin mid-line:
+    // drop the partial head line before selecting the tail.
+    let stopped_early = pos > 0;
+    let data: Vec<u8> = chunks.concat();
+    let text = String::from_utf8_lossy(&data);
+    let mut lines: Vec<&str> = text.lines().collect();
+    if stopped_early && !lines.is_empty() {
+        lines.remove(0);
+    }
+    if lines.is_empty() {
+        return None;
+    }
+    let start = lines.len().saturating_sub(max_lines as usize);
     Some(lines[start..].join("\n"))
 }
 

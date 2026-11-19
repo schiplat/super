@@ -102,13 +102,13 @@ impl HttpPluginHandle {
         path: &str,
         body: &str,
         ctx_json: &str,
-    ) -> Option<(u16, String)> {
+    ) -> Option<ApiCallOutcome> {
         let method_c = CString::new(method).unwrap_or_default();
         let path_c = CString::new(path).unwrap_or_default();
         let body_c = CString::new(body).unwrap_or_default();
         let ctx_c = CString::new(ctx_json).unwrap_or_default();
         let handle_api = self.handle_api;
-        let mut buf = vec![0u8; 65536];
+        let mut buf = vec![0u8; PLUGIN_API_BUF_LEN];
         // SAFETY: the four input pointers are valid NUL-terminated `CString`s
         // and `buf` is a valid writable buffer of `buf.len()` bytes, all
         // outliving the call; the ABI contract is that the plugin writes a
@@ -124,14 +124,39 @@ impl HttpPluginHandle {
                     buf.len(),
                 )
             };
-            let nul = buf.iter().position(|&b| b == 0).unwrap_or(buf.len());
-            (
-                status as u16,
-                String::from_utf8_lossy(&buf[..nul]).into_owned(),
-            )
+            match buf.iter().position(|&b| b == 0) {
+                Some(nul) => ApiCallOutcome::Answered {
+                    status: status as u16,
+                    body: String::from_utf8_lossy(&buf[..nul]).into_owned(),
+                },
+                // No NUL anywhere: the plugin filled the whole buffer, so the
+                // response did not fit (ABI writes NUL-terminated output).
+                // Surfaced instead of silently returning truncated JSON.
+                None => ApiCallOutcome::BufferExhausted,
+            }
         })
         .await
     }
+}
+
+/// Response buffer for plugin `handle_api` calls on the request hot path.
+/// Transient per in-flight plugin request; sized for typical JSON payloads
+/// (token lists, audit queries). Larger answers fail closed rather than
+/// truncating — a true streaming contract needs an ABI version bump.
+const PLUGIN_API_BUF_LEN: usize = 256 * 1024;
+
+/// Context buffer for plugin `authenticate` calls. Holds the user-context
+/// JSON (or the code-4 detail); oversized answers collapse to the fail-closed
+/// path instead of being trusted truncated.
+const PLUGIN_AUTH_BUF_LEN: usize = 8192;
+
+/// Outcome of one bounded plugin `handle_api` call.
+enum ApiCallOutcome {
+    /// Plugin answered within the buffer (NUL-terminated).
+    Answered { status: u16, body: String },
+    /// Response exceeded `PLUGIN_API_BUF_LEN` (no NUL terminator) — fail
+    /// closed instead of returning silently truncated JSON.
+    BufferExhausted,
 }
 
 /// Wall-clock budget for a plugin FFI call on the request hot path.
@@ -318,19 +343,33 @@ async fn plugin_api_handler(
         .unwrap_or_default();
     let body_str = String::from_utf8_lossy(&body);
     // `None` = plugin did not answer within PLUGIN_FFI_TIMEOUT: fail closed.
-    let Some((status, resp_body)) = handle.call_api(&method, &path, &body_str, &ctx_json).await
-    else {
-        warn!("Plugin API call timed out: {method} {path}");
-        return (
-            StatusCode::GATEWAY_TIMEOUT,
-            Json(serde_json::json!({
-                "status": "error",
-                "message": "plugin handler timed out",
-            })),
-        )
-            .into_response();
-    };
-    api_response(status, resp_body)
+    match handle.call_api(&method, &path, &body_str, &ctx_json).await {
+        Some(ApiCallOutcome::Answered { status, body }) => api_response(status, body),
+        Some(ApiCallOutcome::BufferExhausted) => {
+            warn!(
+                "Plugin API response exceeded the {PLUGIN_API_BUF_LEN}-byte buffer: {method} {path}"
+            );
+            (
+                StatusCode::BAD_GATEWAY,
+                Json(serde_json::json!({
+                    "status": "error",
+                    "message": "plugin response exceeded the host buffer",
+                })),
+            )
+                .into_response()
+        }
+        None => {
+            warn!("Plugin API call timed out: {method} {path}");
+            (
+                StatusCode::GATEWAY_TIMEOUT,
+                Json(serde_json::json!({
+                    "status": "error",
+                    "message": "plugin handler timed out",
+                })),
+            )
+                .into_response()
+        }
+    }
 }
 
 fn api_response(status: u16, body: String) -> Response {
@@ -385,7 +424,7 @@ async fn plugin_auth_middleware(
     };
     let auth_c = CString::new(auth).unwrap_or_default();
     let query_c = CString::new(query).unwrap_or_default();
-    let mut buf = vec![0u8; 2048];
+    let mut buf = vec![0u8; PLUGIN_AUTH_BUF_LEN];
 
     // `None` = plugin did not answer within PLUGIN_FFI_TIMEOUT: fail closed
     // (5xx), never fail open on a slow/hung authentication hook. The buffer is
@@ -402,14 +441,14 @@ async fn plugin_auth_middleware(
                 buf.as_mut_ptr().cast(),
                 buf.len(),
             );
-            let nul = buf.iter().position(|&b| b == 0).unwrap_or(buf.len());
-            // Strict UTF-8: lossy conversion would silently repair non-UTF-8
-            // garbage into U+FFFD and the 500 contract below would never fire.
-            // `None` = plugin wrote invalid UTF-8 (contract violation).
-            (
-                code,
-                std::str::from_utf8(&buf[..nul]).ok().map(str::to_string),
-            )
+            // A plugin that fills the whole buffer without a NUL violated the
+            // ABI (response did not fit): collapse to `None` so code 0 fails
+            // closed with 500 instead of trusting a truncated context.
+            let ctx = buf
+                .iter()
+                .position(|&b| b == 0)
+                .and_then(|nul| std::str::from_utf8(&buf[..nul]).ok().map(str::to_string));
+            (code, ctx)
         })
         .await
     else {

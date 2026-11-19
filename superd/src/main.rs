@@ -3,6 +3,7 @@ use axum::{
     Router,
     extract::Request,
     http::{HeaderValue, StatusCode, Uri, header},
+    middleware::Next,
     response::{IntoResponse, Response},
 };
 use clap::Parser;
@@ -288,6 +289,43 @@ fn shutdown_signal(
     })
 }
 
+/// Inject baseline security headers on every response. API/WS responses pass
+/// through untouched (JSON + token auth need no HTML hardening); UI assets
+/// get the standard browser hardening set. The dashboard is same-origin only
+/// (it talks to `/api/v1` from the same host), so a strict CSP with no
+/// `unsafe-*` beyond what the Vue bundle needs is safe; connect-src/self and
+/// style-src/inline cover Vite's runtime-injected styles.
+///
+/// Applied as middleware rather than inside each asset responder so plugin
+/// UI bundles and the OSS embed cannot drift apart.
+async fn ui_security_headers_middleware(req: axum::extract::Request, next: Next) -> Response {
+    let is_api = req.uri().path().starts_with("/api/")
+        || req.uri().path().starts_with("/health")
+        || req.uri().path().starts_with("/metrics")
+        || req.uri().path().starts_with("/ws");
+    let mut resp = next.run(req).await;
+    if is_api {
+        return resp;
+    }
+    let headers = resp.headers_mut();
+    for (name, value) in [
+        ("X-Content-Type-Options", "nosniff"),
+        ("X-Frame-Options", "DENY"),
+        ("Referrer-Policy", "no-referrer"),
+        (
+            "Content-Security-Policy",
+            "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; \
+             img-src 'self' data:; font-src 'self'; connect-src 'self' ws: wss:; \
+             object-src 'none'; base-uri 'none'; frame-ancestors 'none'",
+        ),
+    ] {
+        if let Ok(v) = value.parse::<HeaderValue>() {
+            headers.insert(name, v);
+        }
+    }
+    resp
+}
+
 fn main() -> anyhow::Result<()> {
     let cli = Cli::parse();
     let root = resolve_root();
@@ -490,7 +528,8 @@ async fn async_main() -> anyhow::Result<()> {
                 ui_fallback_handler(parts.uri, parts.method, ui, auth_flag, licensed_flag, ids)
                     .await
             }
-        });
+        })
+        .layer(axum::middleware::from_fn(ui_security_headers_middleware));
 
     let addr = format!("{}:{}", core.config.server.host, core.config.server.port);
     let server = &core.config.server;

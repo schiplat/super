@@ -370,6 +370,98 @@ async fn test_ota_ready_without_artifact_does_not_panic() {
     assert!(info.config.restore_path.is_none());
 }
 
+// Regression: an OTA on a held-stopped program (`super stop`) must respect the
+// operator's intent — the artifact is delivered (binary swapped) but the
+// program is not started and `autostart` is not re-enabled, so a daemon
+// restart cannot resurrect it behind the operator's back.
+#[tokio::test]
+async fn test_ota_on_held_stopped_program_stays_stopped() {
+    let (handle, _tmp, target_bin, data_file) = setup_system().await;
+    let mock_server = MockServer::start().await;
+
+    let v2_content = "VERSION_2_HELD_STOPPED";
+    let v2_hash = calculate_hash(v2_content);
+
+    Mock::given(method("GET"))
+        .and(path("/download/v2"))
+        .respond_with(ResponseTemplate::new(200).set_body_string(v2_content))
+        .mount(&mock_server)
+        .await;
+
+    // Start the program, then hold it stopped like `super stop` would.
+    let req = CreateProgramRequest {
+        name: Some("app-held-stopped".to_string()),
+        command: "sleep".to_string(),
+        args: vec!["100".to_string()],
+        autostart: true,
+        ..Default::default()
+    };
+    let id = handle.create_program(req).await.unwrap()[0];
+    tokio::time::sleep(Duration::from_millis(300)).await;
+    handle.stop_program(id, false).await.unwrap();
+    tokio::time::sleep(Duration::from_millis(300)).await;
+    assert_eq!(
+        handle.get_program(id).await.unwrap().state,
+        ProcessStatus::Stopped
+    );
+
+    // Trigger OTA (checksum change → download → InternalArtifactReady).
+    let update_req = UpdateProgramRequest {
+        artifact: Some(ArtifactConfig {
+            source: format!("{}/download/v2", mock_server.uri()),
+            checksum: v2_hash,
+            extract: false,
+            destination: target_bin.to_string_lossy().to_string(),
+            restart_policy: "immediate".to_string(),
+            ..Default::default()
+        }),
+        ..Default::default()
+    };
+    handle.update_program(id, update_req).await.unwrap();
+
+    // The swap still happens (delivery), then the program must stay down.
+    let mut swapped = false;
+    for _ in 0..50 {
+        tokio::time::sleep(Duration::from_millis(100)).await;
+        if std::fs::read_to_string(&target_bin)
+            .map(|c| c == v2_content)
+            .unwrap_or(false)
+        {
+            swapped = true;
+            break;
+        }
+    }
+    assert!(
+        swapped,
+        "artifact swap should still happen for a held-stopped program"
+    );
+
+    tokio::time::sleep(Duration::from_millis(500)).await;
+    let info = handle.get_program(id).await.unwrap();
+    assert_eq!(
+        info.state,
+        ProcessStatus::Stopped,
+        "OTA must not start a held-stopped program"
+    );
+    assert_eq!(info.pid, None);
+    assert!(
+        !info.config.autostart,
+        "OTA must not re-enable autostart behind the operator's back"
+    );
+    assert!(
+        info.config.restore_path.is_some(),
+        "WAL stays pending until the next explicit start"
+    );
+
+    // On-disk state agrees (a daemon restart would not resurrect it).
+    let saved = super_core::store::load_with_recovery(&data_file)
+        .await
+        .unwrap();
+    let cfg = saved.programs.get(&id).unwrap();
+    assert!(!cfg.autostart);
+    assert!(cfg.restore_path.is_some());
+}
+
 #[tokio::test]
 async fn test_ota_extract_tar_gz_commit() {
     let (handle, tmp, _target_bin, _data_file) = setup_system().await;

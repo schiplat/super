@@ -1409,6 +1409,14 @@ impl Manager {
             id
         );
 
+        // Capture the hold-stop flag before the registry is borrowed mutably.
+        // An operator hold-stop (`super stop`) must survive the OTA: deliver
+        // the artifact, but do not re-enable autostart or spawn behind the
+        // operator's back — otherwise the next daemon restart boots a
+        // held-stopped program. The pending WAL commits whenever the program
+        // next reports Healthy (see handle_health_update).
+        let held_stopped = self.registry.stopped_by_user.contains(&id);
+
         let config = match self.registry.get_config_mut(&id) {
             Some(c) => c,
             None => return,
@@ -1453,7 +1461,9 @@ impl Manager {
         // 2. Persist state (WAL)
         // Record backup path so crash recovery can roll back.
         config.restore_path = Some(backup_path.to_string_lossy().to_string());
-        config.autostart = true;
+        if !held_stopped {
+            config.autostart = true;
+        }
         config.updated_at = chrono::Utc::now().timestamp() as u64;
 
         self.registry.mark_dirty();
@@ -1502,6 +1512,11 @@ impl Manager {
                     let _ = nix::sys::signal::kill(
                         nix::unistd::Pid::from_raw(state.pid as i32),
                         Signal::SIGTERM,
+                    );
+                } else if held_stopped {
+                    tracing::info!(
+                        "OTA immediate for {}: program is held-stopped; new binary activates on the next explicit start",
+                        id
                     );
                 } else {
                     let _ = self
@@ -1580,6 +1595,11 @@ impl Manager {
                     } else {
                         self.schedule_ota_verify_timeout(id);
                     }
+                } else if held_stopped {
+                    tracing::info!(
+                        "OTA restart_policy=signal for {}: program is held-stopped; new binary activates on the next explicit start",
+                        id
+                    );
                 } else {
                     tracing::info!(
                         "OTA restart_policy=signal for {}: process not running, spawning",
@@ -1683,8 +1703,10 @@ impl Manager {
         let state = match self.registry.remove_running_by_pid(&id, pid) {
             Some(s) => s,
             None => {
-                // A newer instance replaced this one before the exit event
-                // arrived (rare race); treat as already handled.
+                // Duplicate exit event for a pid that was already removed, or a
+                // newer instance replaced this one before the exit event
+                // arrived (rare race); treat as already handled. Never remove
+                // a different, still-running instance here.
                 tracing::warn!(
                     "Program {} (PID {}) exited but no matching running state; ignoring.",
                     id,
@@ -2464,9 +2486,11 @@ impl Manager {
                 s.restart_requested = true;
             }
         }
+        // Negative PID targets the process group (children share the PGID);
+        // matching the stop paths, which already signal the group.
         for state_pid in &pids {
             let _ = nix::sys::signal::kill(
-                nix::unistd::Pid::from_raw(*state_pid as i32),
+                nix::unistd::Pid::from_raw(-(*state_pid as i32)),
                 Signal::SIGTERM,
             );
         }
@@ -2488,6 +2512,25 @@ impl Manager {
         let mut logs = Vec::new();
         let mut touched_programs = HashSet::new();
         let mut affected_ids = Vec::new();
+
+        // Reject an oversized `numprocs` before any name/graph validation runs:
+        // both expand their services, and expansion happens inline in the actor
+        // loop — a huge value would stall the daemon on a single request.
+        // (`validate_create_program_request` re-checks below for the create path.)
+        for (i, service_req) in req.services.iter().enumerate() {
+            if service_req.numprocs > common::MAX_NUMPROCS_CAP {
+                let e = anyhow::anyhow!(
+                    "numprocs: must be ≤ {} (got {})",
+                    common::MAX_NUMPROCS_CAP,
+                    service_req.numprocs
+                );
+                return Err(with_program_location(
+                    e,
+                    service_req.name.as_deref(),
+                    Some(i),
+                ));
+            }
+        }
 
         self.validate_stack_service_names(&req.services)?;
 
@@ -2703,8 +2746,21 @@ impl Manager {
         let total = order.len();
         tracing::info!("Shutdown plan computed for {} services.", total);
 
+        // `stop_program` carries operator-stop side effects (`autostart = false`
+        // + `stopped_by_user`); they exist for `super stop`. A daemon shutdown
+        // must not change what starts at the next boot, so the pre-shutdown
+        // flags are snapshotted here and restored after the stop loop.
+        let mut pre_shutdown_state: HashMap<Uuid, (bool, bool)> = HashMap::new();
+
         for (i, id) in order.iter().enumerate() {
             if self.registry.is_running(id) {
+                let autostart = self
+                    .registry
+                    .get_config(id)
+                    .map(|c| c.autostart)
+                    .unwrap_or(false);
+                let held = self.registry.stopped_by_user.contains(id);
+                pre_shutdown_state.insert(*id, (autostart, held));
                 if let Some(conf) = self.registry.get_config(id) {
                     tracing::info!("[{}/{}] Stopping {}...", i + 1, total, conf.name);
                 }
@@ -2738,8 +2794,10 @@ impl Manager {
                 );
                 for (_id, state_pid) in running {
                     tracing::warn!("Force killing PID {}", state_pid);
+                    // Negative PID targets the process group so descendants
+                    // die with their leader (same as the stop paths).
                     let _ = nix::sys::signal::kill(
-                        nix::unistd::Pid::from_raw(state_pid as i32),
+                        nix::unistd::Pid::from_raw(-(state_pid as i32)),
                         Signal::SIGKILL,
                     );
                 }
@@ -2766,6 +2824,29 @@ impl Manager {
                 }
             }
         }
+
+        // Restore the pre-shutdown autostart / hold-stop flags: the daemon
+        // stopping is not an operator stop, and the next daemon start must
+        // bring autostart services back.
+        for (id, (autostart, held)) in pre_shutdown_state {
+            if let Some(cfg) = self.registry.get_config_mut(&id) {
+                cfg.autostart = autostart;
+            }
+            if held {
+                self.registry.stopped_by_user.insert(id);
+            } else {
+                self.registry.stopped_by_user.remove(&id);
+            }
+        }
+        // Persist deterministically. Without this flush the restored state
+        // only reached disk if a PersistTick happened to race the process
+        // exit — the snapshot could randomly carry the operator-stop side
+        // effects of the shutdown itself.
+        self.registry.mark_dirty();
+        if let Err(e) = self.flush_to_disk().await {
+            tracing::error!("Failed to persist post-shutdown state: {}", e);
+        }
+
         self.record_system_event("system_shutdown", "Daemon stopped".to_string());
         tracing::info!("Bye!");
     }
@@ -3258,9 +3339,11 @@ impl Manager {
                     state.restart_requested = true;
                 }
             }
+            // Negative PID targets the process group (children share the
+            // PGID); matching the stop paths, which already signal the group.
             for state_pid in &pids {
                 let _ = nix::sys::signal::kill(
-                    nix::unistd::Pid::from_raw(*state_pid as i32),
+                    nix::unistd::Pid::from_raw(-(*state_pid as i32)),
                     Signal::SIGTERM,
                 );
             }

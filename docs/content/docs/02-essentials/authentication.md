@@ -25,6 +25,8 @@ super --token 'your-auth-secret' list
 
 `--token` only means “send this string as Bearer”; it does **not** mint or imply an `sk-…` token.
 
+> **Tip:** a secret passed as a CLI flag is visible in the local process list (`ps`) while the command runs. For interactive shells prefer `super login <secret>` (saved to `~/.super/cli.json`, mode `0600`) or `export SUPER_TOKEN=…`; keep `--token` for scripts that source the value from a protected store.
+
 | Credential | OSS | Subscription (`security` plugin) |
 | :--- | :--- | :--- |
 | `auth_secret` (`[server]` in `conf/super.toml`) | ✅ single shared secret | ✅ bootstrap Admin Bearer |

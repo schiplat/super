@@ -75,6 +75,15 @@ async fn post_webhook(
     id: Option<&str>,
 ) {
     let label = id.unwrap_or(url);
+    // Outbound URL policy: cloud metadata / link-local targets are rejected so
+    // a tampered `[[event_hooks]]` entry cannot harvest instance credentials.
+    // Loopback stays allowed (first-party local receivers).
+    if let Err(e) =
+        common::security::validate_outbound_url(url, common::security::FetchUrlPolicy::EventHook)
+    {
+        tracing::warn!("Event webhook '{label}' rejected by outbound URL policy: {e}");
+        return;
+    }
     let Ok(client) = reqwest::Client::builder()
         .timeout(std::time::Duration::from_secs(timeout_secs))
         .build()
