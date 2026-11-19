@@ -1,6 +1,6 @@
 use chrono::{DateTime, Duration as ChronoDuration, Utc};
 use cron::Schedule;
-use rand::Rng;
+use rand::RngExt;
 use std::collections::HashMap;
 use std::str::FromStr;
 use uuid::Uuid;
