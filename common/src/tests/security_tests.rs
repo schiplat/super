@@ -119,6 +119,30 @@ fn health_allows_loopback() {
 }
 
 #[test]
+fn event_hook_blocks_metadata_allows_loopback_and_public() {
+    use FetchUrlPolicy::EventHook;
+    // Local receivers are first-party integrations for root-configured hooks.
+    assert!(validate_outbound_url("http://127.0.0.1:5000/hook", EventHook).is_ok());
+    assert!(validate_outbound_url("http://localhost:9090/alerts", EventHook).is_ok());
+    assert!(validate_outbound_url("http://[::1]:9090/alerts", EventHook).is_ok());
+    // Cloud metadata / ECS task credentials stay blocked.
+    assert!(validate_outbound_url("http://169.254.169.254/latest/meta-data", EventHook).is_err());
+    assert!(validate_outbound_url("http://169.254.170.2/v2/credentials", EventHook).is_err());
+    assert!(validate_outbound_url("http://100.100.100.200/latest/meta-data/", EventHook).is_err());
+    assert!(
+        validate_outbound_url(
+            "https://metadata.google.internal/computeMetadata/v1",
+            EventHook
+        )
+        .is_err()
+    );
+    assert!(validate_outbound_url("http://[fd00:ec2::254]/computeMetadata/v1", EventHook).is_err());
+    // Public and private-LAN receivers stay operator-configurable.
+    assert!(validate_outbound_url("https://hooks.example.com/services/x", EventHook).is_ok());
+    assert!(validate_outbound_url("http://gateway.lan.internal/hook", EventHook).is_ok());
+}
+
+#[test]
 fn ui_path_rejects_traversal() {
     assert!(sanitize_ui_asset_path("/../etc/passwd").is_none());
     assert_eq!(

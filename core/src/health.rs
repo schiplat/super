@@ -69,6 +69,8 @@ async fn check_http(url: &str, method: Option<&str>, timeout: Duration) -> Check
         .user_agent("Superd-HealthCheck/1.0")
         // Health checks hit localhost/LAN; disable proxy to skip extra hops
         .no_proxy()
+        // Re-validate every redirect hop against the outbound URL policy.
+        .redirect(crate::outbound_redirect_policy(FetchUrlPolicy::HealthCheck))
         .build()
     {
         Ok(client) => client,

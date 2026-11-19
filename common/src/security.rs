@@ -81,6 +81,12 @@ pub enum FetchUrlPolicy {
     /// credentials. Private LAN ranges stay operator-configured (self-hosted
     /// gateways legitimately live there).
     Webhook,
+    /// OSS `[[event_hooks]]` webhooks (root-configured in `conf/super.toml`).
+    /// Cloud-metadata and link-local targets are rejected so a tampered config
+    /// cannot harvest instance credentials; loopback receivers stay allowed —
+    /// a local alert pipeline on the same host is a first-party integration,
+    /// and whoever can write `super.toml` already holds full daemon trust.
+    EventHook,
 }
 
 /// Validate a URL before superd performs an outbound HTTP request.
@@ -111,6 +117,7 @@ pub fn validate_outbound_url(url: &str, policy: FetchUrlPolicy) -> anyhow::Resul
         (FetchUrlPolicy::OtaArtifact, "http", true) => {}
         (FetchUrlPolicy::HealthCheck, "http" | "https", _) => {}
         (FetchUrlPolicy::Webhook, "http" | "https", _) => {}
+        (FetchUrlPolicy::EventHook, "http" | "https", _) => {}
         _ => bail!("URL scheme is not allowed for this operation"),
     }
 
@@ -120,6 +127,10 @@ pub fn validate_outbound_url(url: &str, policy: FetchUrlPolicy) -> anyhow::Resul
 
     if policy == FetchUrlPolicy::Webhook && (loopback || webhook_targets_blocked_address(&host)) {
         bail!("webhook URL must not target loopback or cloud metadata addresses (got {host})");
+    }
+
+    if policy == FetchUrlPolicy::EventHook && event_hook_targets_blocked_address(&host) {
+        bail!("event hook URL must not target cloud metadata or link-local addresses (got {host})");
     }
 
     Ok(())
@@ -189,6 +200,35 @@ fn is_webhook_blocked_ip(ip: &IpAddr) -> bool {
                     v4.is_loopback() || v4.is_link_local() || v4.is_unspecified()
                 })
         }
+    }
+}
+
+/// [`FetchUrlPolicy::EventHook`] counterpart of [`is_webhook_blocked_ip`]:
+/// metadata + link-local are blocked, loopback stays allowed (local
+/// receivers are first-party integrations for root-configured hooks).
+fn is_event_hook_blocked_ip(ip: &IpAddr) -> bool {
+    match ip {
+        IpAddr::V4(v4) => *v4 == ALIBABA_METADATA_V4 || v4.is_link_local(),
+        IpAddr::V6(v6) => {
+            (v6.segments()[0] & 0xffc0) == 0xfe80 // link-local
+                || *v6 == GCP_METADATA_V6
+                || v6.to_ipv4_mapped().is_some_and(|v4| v4.is_link_local())
+        }
+    }
+}
+
+/// Best-effort resolution counterpart of [`webhook_targets_blocked_address`]
+/// for [`FetchUrlPolicy::EventHook`].
+fn event_hook_targets_blocked_address(host: &url::Host<&str>) -> bool {
+    match host {
+        url::Host::Ipv4(v4) => is_event_hook_blocked_ip(&IpAddr::V4(*v4)),
+        url::Host::Ipv6(v6) => is_event_hook_blocked_ip(&IpAddr::V6(*v6)),
+        url::Host::Domain(d) => match (*d, 0).to_socket_addrs() {
+            Ok(addrs) => addrs
+                .map(|a| a.ip())
+                .any(|ip| is_event_hook_blocked_ip(&ip)),
+            Err(_) => false,
+        },
     }
 }
 

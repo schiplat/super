@@ -1185,48 +1185,63 @@ async fn export_stack(
         .map_err(|e| AppError(StatusCode::INTERNAL_SERVER_ERROR, e))?;
     let services: Vec<CreateProgramRequest> = configs
         .into_iter()
-        .map(|c| {
-            #[allow(unused_mut, clippy::needless_update)]
-            let mut req = CreateProgramRequest {
-                name: Some(c.name),
-                command: c.command,
-                args: c.args,
-                env: if reveal_secrets {
-                    c.env
-                } else {
-                    mask_env_map(&c.env)
-                },
-                env_file: c.env_file,
-                cwd: c.cwd,
-                user: c.user,
-                group: c.group,
-                autostart: c.autostart,
-                retry_limit: c.retry_limit,
-                autorestart: c.autorestart,
-                exitcodes: c.exitcodes,
-                startsecs: c.startsecs,
-                stopsecs: c.stopsecs,
-                priority: c.priority,
-                stdout_logfile: c.stdout_logfile.clone(),
-                stderr_logfile: c.stderr_logfile.clone(),
-                depends_on: c.depends_on,
-                health_check: c.health_check,
-                hooks: c.hooks,
-                artifact: c.artifact,
-                cron: c.cron,
-                numprocs: 1,
-                process_name: None,
-                ..Default::default()
-            };
-            req.resource_limits = c.resource_limits;
-            req
-        })
+        .map(|c| program_config_to_create_request(c, reveal_secrets))
         .collect();
 
     Ok(Json(StackApplyRequest {
         prune: false,
         services,
     }))
+}
+
+/// Map one persisted `ProgramConfig` onto an exportable
+/// `CreateProgramRequest`. Every scheduling knob is carried over so an
+/// export → apply round-trip preserves behavior; multi-instance programs
+/// (`numprocs > 1`) export as one service per instance under their final
+/// names, which re-applies in place. Internal bookkeeping (`cron_last_run`,
+/// `restore_path`) is intentionally not exported.
+fn program_config_to_create_request(
+    c: ProgramConfig,
+    reveal_secrets: bool,
+) -> CreateProgramRequest {
+    CreateProgramRequest {
+        name: Some(c.name),
+        command: c.command,
+        args: c.args,
+        env: if reveal_secrets {
+            c.env
+        } else {
+            mask_env_map(&c.env)
+        },
+        env_file: c.env_file,
+        cwd: c.cwd,
+        user: c.user,
+        group: c.group,
+        autostart: c.autostart,
+        retry_limit: c.retry_limit,
+        autorestart: c.autorestart,
+        exitcodes: c.exitcodes,
+        startsecs: c.startsecs,
+        stopsecs: c.stopsecs,
+        priority: c.priority,
+        stdout_logfile: c.stdout_logfile,
+        stderr_logfile: c.stderr_logfile,
+        depends_on: c.depends_on,
+        health_check: c.health_check,
+        hooks: c.hooks,
+        artifact: c.artifact,
+        cron: c.cron,
+        on_overlap: c.on_overlap,
+        catchup: c.catchup,
+        jitter_sec: c.jitter_sec,
+        max_concurrent: c.max_concurrent,
+        max_queued: c.max_queued,
+        kill_after_secs: c.kill_after_secs,
+        numprocs: 1,
+        process_name: None,
+        resource_limits: c.resource_limits,
+        source: c.source,
+    }
 }
 
 /// Send signal to program

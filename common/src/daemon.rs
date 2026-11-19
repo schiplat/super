@@ -81,21 +81,81 @@ pub fn inspect_pidfile(path: &Path) -> PidfileStatus {
 }
 
 /// Write `pid` to `path`, creating parent directories. Fails if another live process owns the file.
+///
+/// The claim is atomic: the pidfile is opened with `O_CREAT|O_EXCL` and held
+/// with an exclusive `flock` for the process lifetime. Two concurrent starts
+/// can no longer both pass the old check-then-create window; a stale pidfile
+/// is unlinked and recreated under the lock.
 pub fn claim_pidfile(path: &Path, pid: i32) -> anyhow::Result<()> {
     if let Some(parent) = path.parent() {
         fs::create_dir_all(parent)?;
     }
-    match inspect_pidfile(path) {
-        PidfileStatus::Alive { pid: other } => {
+
+    // O_EXCL fails if another starter created the file in the check-then-create
+    // race window; a leftover from an older (crashed) process is unlinked first.
+    for attempt in 0..2 {
+        let file = fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(path);
+        match file {
+            Ok(file) => return write_pidfile_locked(file, path, pid),
+            Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists && attempt == 0 => {
+                // File exists: only unlink a stale/invalid one. A live holder
+                // keeps its lock (flock survives unlink-by-another-process
+                // only until the fd closes, so verify liveness first).
+                match inspect_pidfile(path) {
+                    PidfileStatus::Alive { pid: other } => anyhow::bail!(
+                        "pidfile {} is held by running process {other}; refuse to start",
+                        path.display()
+                    ),
+                    PidfileStatus::Stale { .. } | PidfileStatus::Invalid => {
+                        let _ = fs::remove_file(path);
+                        continue;
+                    }
+                    PidfileStatus::Missing => {
+                        // Vanished between the O_EXCL error and the inspect;
+                        // retry the exclusive create once.
+                        continue;
+                    }
+                }
+            }
+            Err(e) => return Err(e.into()),
+        }
+    }
+    // Second O_EXCL also hit an existing file: another starter won the race.
+    anyhow::bail!(
+        "pidfile {} was claimed concurrently by another process; refuse to start",
+        path.display()
+    );
+}
+
+/// Write the pid and keep an exclusive advisory lock on the pidfile fd for
+/// the process lifetime. The lock (not the file contents) is the real claim:
+/// a concurrent starter's O_EXCL fails, and legacy readers that only inspect
+/// the pid still see a live process through [`inspect_pidfile`].
+fn write_pidfile_locked(file: fs::File, path: &Path, pid: i32) -> anyhow::Result<()> {
+    #[cfg(unix)]
+    {
+        use std::os::unix::io::AsRawFd;
+        let rc = unsafe { libc::flock(file.as_raw_fd(), libc::LOCK_EX | libc::LOCK_NB) };
+        if rc != 0 {
+            let e = std::io::Error::last_os_error();
             anyhow::bail!(
-                "pidfile {} is held by running process {other}; refuse to start",
+                "pidfile {} is locked by another process ({e}); refuse to start",
                 path.display()
             );
         }
-        PidfileStatus::Stale { .. } | PidfileStatus::Invalid | PidfileStatus::Missing => {}
     }
-    let mut f = fs::File::create(path)?;
-    writeln!(f, "{pid}")?;
+    let mut file = file;
+    file.set_len(0)?;
+    writeln!(file, "{pid}")?;
+    file.sync_all()?;
+    // Deliberately leak the File: the open fd keeps the flock held until the
+    // process exits (or crashes), which is exactly the claim lifetime. The OS
+    // closes leaked fds and releases the lock on exit.
+    std::mem::forget(file);
+    let _ = path;
     Ok(())
 }
 

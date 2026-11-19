@@ -106,3 +106,38 @@ fn extract_multi_file_without_basename_errors() {
     let err = extract_archive_to_staging(&archive, &staging, "app").unwrap_err();
     assert!(err.to_string().contains("none named"), "{err}");
 }
+
+/// A public artifact URL that 302-redirects to a private address must fail:
+/// `validate_outbound_url` only sees the first hop, so the client attaches a
+/// redirect policy that re-validates every hop against the OTA policy.
+#[tokio::test]
+async fn download_rejects_redirect_to_private_target() {
+    use wiremock::matchers::{method, path};
+    use wiremock::{Mock, MockServer, ResponseTemplate};
+
+    let server = MockServer::start().await;
+    Mock::given(method("GET"))
+        .and(path("/start"))
+        .respond_with(
+            ResponseTemplate::new(302).insert_header("Location", "http://10.1.2.3/secret-payload"),
+        )
+        .mount(&server)
+        .await;
+
+    let dir = tempfile::tempdir().unwrap();
+    let dest = dir.path().join("app.bin");
+    let config = common::ArtifactConfig {
+        source: format!("{}/start", server.uri()),
+        checksum: "0".repeat(64),
+        extract: false,
+        destination: dest.to_string_lossy().to_string(),
+        ..Default::default()
+    };
+    let err = download_to_staging(&config, 10).await.unwrap_err();
+    let msg = err.to_string();
+    assert!(
+        msg.contains("redirect") || msg.contains("private") || msg.contains("rejected"),
+        "{msg}"
+    );
+    assert!(!dest.exists(), "nothing must land at the destination");
+}

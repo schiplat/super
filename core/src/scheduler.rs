@@ -24,6 +24,13 @@ struct CronTask {
     jitter_sec: u64,
 }
 
+/// Upper bound for the missed-slot count computed per trigger. Consumers cap
+/// their use of the count anyway (catchup `All` runs at most
+/// `CRON_CATCHUP_CAP = 10`), so counting beyond a small bound — for a
+/// per-second schedule after a month-long outage — would spin the tick loop
+/// for millions of iterations inside the manager actor for nothing.
+const MISSED_SLOT_COUNT_CAP: u32 = 12;
+
 pub struct CronScheduler {
     tasks: HashMap<Uuid, CronTask>,
 }
@@ -132,9 +139,10 @@ impl CronScheduler {
                         None => break, // schedule exhausted
                     }
                 }
-                // Count slots that expired after the trigger deadline.
+                // Count slots that expired after the trigger deadline, capped:
+                // the exact number beyond the cap is never consumed.
                 let mut probe = cursor;
-                while probe <= now {
+                while probe <= now && missed < MISSED_SLOT_COUNT_CAP {
                     missed += 1;
                     match schedule.after(&probe).next() {
                         Some(n) if n <= now => probe = n,

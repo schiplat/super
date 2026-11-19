@@ -54,6 +54,11 @@ Managed processes receive `env` / `env_file` values through `execve` environment
 
 **Status: evaluated, not implementing now.** A privileged-channel injection (memfd / fd or a credentials directory, opt-in per program) would require child cooperation and is logged as a future hardening direction rather than a GA blocker. Tracked in the changelog.
 
+## Known limitations: installer and client-side secrets
+
+- **Installer checksums verify transport, not the release channel.** `install.sh` verifies the downloaded archive against the release's `SHA256SUMS`, which is fetched from the same GitHub Releases channel as the archive. That guards against corrupted or truncated downloads, not against a compromised release channel. If your threat model includes that channel, build from source at a reviewed tag instead.
+- **`--token` is visible in the local process list.** A secret passed as a CLI flag (`super --token …`) appears in `ps` output for any same-UID process while the command runs. Prefer `super login` (stores the secret in `~/.super/cli.json`, mode `0600`) or the `SUPER_TOKEN` environment variable.
+
 ## Security self-audit
 
 We hold the codebase to the following public standards, checked on every release branch:

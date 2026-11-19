@@ -310,3 +310,22 @@ async fn warn_if_config_world_readable(path: &std::path::Path) {
         let _ = path;
     }
 }
+
+/// reqwest redirect policy that re-validates every hop against the outbound
+/// URL policy. `validate_outbound_url` only sees the first hop, so without
+/// this a public URL that 302-redirects to loopback or cloud metadata would
+/// bypass the check while the HTTP client still connects. The hop cap
+/// matches reqwest's default `limited(10)`.
+pub fn outbound_redirect_policy(
+    policy: common::security::FetchUrlPolicy,
+) -> reqwest::redirect::Policy {
+    reqwest::redirect::Policy::custom(move |attempt| {
+        if attempt.previous().len() > 10 {
+            return attempt.error("too many redirects");
+        }
+        match common::security::validate_outbound_url(attempt.url().as_str(), policy) {
+            Ok(()) => attempt.follow(),
+            Err(e) => attempt.error(anyhow::anyhow!("redirect target rejected: {e}")),
+        }
+    })
+}

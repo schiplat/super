@@ -61,3 +61,38 @@ fn failures_outside_window_do_not_accumulate() {
     t.record_failure(ip(5));
     assert!(t.allowed(ip(5)));
 }
+
+/// IPv6 addresses within one /64 share a throttle entry: an attacker rotating
+/// addresses inside their subnet must not reset the failure counter per hop.
+/// Addresses from a different /64 throttle independently.
+#[test]
+fn ipv6_addresses_aggregate_per_subnet() {
+    use std::net::Ipv6Addr;
+    let t = AuthThrottle::new(3, Duration::from_secs(60));
+
+    let base = Ipv6Addr::new(0x2001, 0xdb8, 0x1, 0x2, 0, 0, 0, 0);
+    let mates = [
+        base,
+        Ipv6Addr::new(0x2001, 0xdb8, 0x1, 0x2, 0xaabb, 0xccdd, 0xeeff, 0x1),
+        Ipv6Addr::new(0x2001, 0xdb8, 0x1, 0x2, 0xdead, 0xbeef, 0, 0xffff),
+    ];
+    // Three failures spread across three addresses in the same /64.
+    for mate in mates {
+        t.record_failure(IpAddr::V6(mate));
+    }
+    // The /64 as a whole is locked out: a fourth address from it is denied.
+    assert!(
+        !t.allowed(IpAddr::V6(Ipv6Addr::new(
+            0x2001, 0xdb8, 0x1, 0x2, 0x1111, 0x2222, 0x3333, 0x4444
+        ))),
+        "rotation within one /64 must not evade the lockout"
+    );
+    // A different /64 is unaffected.
+    assert!(t.allowed(IpAddr::V6(Ipv6Addr::new(
+        0x2001, 0xdb8, 0x99, 0x99, 0, 0, 0, 1
+    ))));
+
+    // A successful auth from the locked /64 clears the shared counter.
+    t.record_success(IpAddr::V6(mates[1]));
+    assert!(t.allowed(IpAddr::V6(base)));
+}

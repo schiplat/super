@@ -1,5 +1,6 @@
 use super::*;
 use axum::body::Body;
+use std::collections::HashMap;
 
 fn req_with(content_type: &str, body: &str) -> Request {
     Request::builder()
@@ -116,4 +117,52 @@ async fn request_timeout_zero_disables_limit() {
 fn config_default_request_timeout_is_30s() {
     let cfg = common::config::ServerSection::default();
     assert_eq!(cfg.request_timeout_secs, 30);
+}
+
+// ---- export mapping (GET /api/v1/stack) ----
+
+#[test]
+fn export_mapping_preserves_scheduling_fields() {
+    let config = ProgramConfig {
+        name: "nightly".to_string(),
+        command: "/bin/backup".to_string(),
+        cron: Some("0 3 * * * *".to_string()),
+        on_overlap: Some(common::CronOverlap::Queue),
+        catchup: Some(common::CronCatchup::Latest),
+        jitter_sec: Some(30),
+        max_concurrent: Some(2),
+        max_queued: Some(50),
+        kill_after_secs: Some(1800),
+        resource_limits: Some(common::ResourceLimits {
+            cpu_quota: Some(0.5),
+            memory_limit: Some(256),
+            ..Default::default()
+        }),
+        source: Some("stack:prod.toml".to_string()),
+        env: HashMap::from([("DB_PASSWORD".to_string(), "hunter2".to_string())]),
+        ..Default::default()
+    };
+
+    // Non-admin export masks secret env values.
+    let req = program_config_to_create_request(config.clone(), false);
+    assert_eq!(
+        req.env.get("DB_PASSWORD").map(String::as_str),
+        Some("********")
+    );
+    assert_eq!(req.cron.as_deref(), Some("0 3 * * * *"));
+    assert_eq!(req.on_overlap, Some(common::CronOverlap::Queue));
+    assert_eq!(req.catchup, Some(common::CronCatchup::Latest));
+    assert_eq!(req.jitter_sec, Some(30));
+    assert_eq!(req.max_concurrent, Some(2));
+    assert_eq!(req.max_queued, Some(50));
+    assert_eq!(req.kill_after_secs, Some(1800));
+    assert_eq!(req.numprocs, 1);
+    assert!(req.resource_limits.is_some());
+
+    // Admin export reveals the real values.
+    let req = program_config_to_create_request(config, true);
+    assert_eq!(
+        req.env.get("DB_PASSWORD").map(String::as_str),
+        Some("hunter2")
+    );
 }

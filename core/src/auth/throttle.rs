@@ -26,6 +26,22 @@ struct Entry {
     locked_until: Option<Instant>,
 }
 
+/// Throttle key for a peer address. IPv6 hosts are aggregated to the /64
+/// subnet: an attacker rotating individual addresses within one /64 can no
+/// longer outpace the failure counter, while distinct LAN /64s still throttle
+/// independently (the accepted trade-off stays documented on the module).
+fn throttle_key(ip: IpAddr) -> IpAddr {
+    match ip {
+        IpAddr::V6(v6) => {
+            let segments = v6.segments();
+            let mut agg = [0u16; 8];
+            agg[..4].copy_from_slice(&segments[..4]);
+            IpAddr::V6(std::net::Ipv6Addr::from(agg))
+        }
+        v4 => v4,
+    }
+}
+
 /// Shared failure window/lockout state. Cheap to hold in a `OnceLock`.
 pub struct AuthThrottle {
     max_failures: AtomicU32,
@@ -88,7 +104,7 @@ impl AuthThrottle {
         }
         let mut entries = self.entries.lock().unwrap_or_else(|e| e.into_inner());
         prune(&mut entries, self.window());
-        match entries.get(&ip) {
+        match entries.get(&throttle_key(ip)) {
             Some(Entry {
                 locked_until: Some(until),
                 ..
@@ -105,7 +121,7 @@ impl AuthThrottle {
         let mut entries = self.entries.lock().unwrap_or_else(|e| e.into_inner());
         prune(&mut entries, window);
         let now = Instant::now();
-        let entry = entries.entry(ip).or_insert(Entry {
+        let entry = entries.entry(throttle_key(ip)).or_insert(Entry {
             failures: 0,
             window_started: now,
             locked_until: None,
@@ -136,7 +152,7 @@ impl AuthThrottle {
         self.entries
             .lock()
             .unwrap_or_else(|e| e.into_inner())
-            .remove(&ip);
+            .remove(&throttle_key(ip));
     }
 }
 
