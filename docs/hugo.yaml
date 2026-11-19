@@ -81,9 +81,9 @@ params:
   # localStorage; message supports Markdown links. Bump key on each release
   # so the banner shows again for returning visitors.
   banner:
-    key: "super-release-banner-v1-9-3"
+    key: "super-release-banner-v1-9-4"
     message: |
-      **Super 1.9.3 is here** — fixes a 1.9.2 regression that broke the web dashboard (security-header CSP blocked the shell's config script). All 1.9.2 fixes included; upgrade recommended… [See what's new →](/docs/08-changelog/)
+      **Super 1.9.4 is here** — the Stack Editor loads again (Monaco now bundled same-origin instead of a CSP-blocked CDN) and ui-plugin assets no longer shadow the built-in dashboard… [See what's new →](/docs/08-changelog/)
   contact:
     api_url: "https://open.schiplat.com/api/v1/demands"
   externalLinkDecoration: true

@@ -17,6 +17,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.9.4] - 2026-11-19
+
+Hotfix on top of 1.9.3: **upgrading from 1.9.2–1.9.3 is recommended** — 1.9.2 shipped a broken web dashboard (security-header CSP regression) and 1.9.3 still carried a broken Stack Editor page.
+
 ### Fixed
 
 - **Stack Editor loads its editor again (second 1.9.2 CSP casualty).** Monaco was fetched at runtime from a public CDN, which `script-src 'self'` blocks — the page showed "load failed" and never mounted an editor. Monaco is now self-hosted: the dashboard build copies `monaco-editor/min/vs` into the bundle and the editor loads it same-origin (also makes the dashboard work offline / air-gapped).
