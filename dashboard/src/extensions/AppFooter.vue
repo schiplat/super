@@ -14,7 +14,7 @@ const isLicensed = computed(() => {
 
 <template>
   <footer class="mt-10 pt-6 pb-2 border-t border-border/70 flex flex-wrap justify-center items-center gap-x-3 gap-y-2 text-xs text-muted-foreground/60">
-    <span class="cursor-default font-medium">&copy; 2026 g1/DDL</span>
+    <span class="cursor-default font-medium">&copy; 2026 power by schiplat/super</span>
     <span class="w-1 h-1 rounded-full bg-border"></span>
     <div
       v-if="isLicensed"
