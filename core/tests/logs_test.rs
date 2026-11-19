@@ -64,3 +64,34 @@ async fn test_read_log_lines_rejects_path_outside_log_dir() {
     assert!(tail.is_none());
     let _ = tokio::fs::remove_file(outside).await;
 }
+
+/// The backwards tail scan must match a full-file read even when the file
+/// spans multiple 64 KiB chunks, and must not touch lines it does not need.
+/// (The old implementation slurped the whole file into memory per request.)
+#[tokio::test]
+async fn test_read_log_lines_multi_chunk_file() {
+    let dir = tempfile::tempdir().unwrap();
+    let id = Uuid::new_v4();
+    let path = dir.path().join(format!("{}.out", id));
+
+    // 30000 short lines (~200 KB) spans several 64 KiB chunks.
+    let total = 30000usize;
+    let mut body = String::with_capacity(total * 8);
+    for i in 0..total {
+        body.push_str(&format!("line-{i}\n"));
+    }
+    tokio::fs::write(&path, &body).await.unwrap();
+
+    let tail = logger::read_log_lines(dir.path(), id, LogSource::Stdout, 10, None, None)
+        .await
+        .unwrap();
+    let expected: Vec<String> = ((total - 10)..total).map(|i| format!("line-{i}")).collect();
+    assert_eq!(tail, expected.join("\n"));
+
+    // Whole-file request still returns everything.
+    let all = logger::read_log_lines(dir.path(), id, LogSource::Stdout, 50000, None, None)
+        .await
+        .unwrap();
+    assert_eq!(all.lines().count(), total);
+    assert!(all.starts_with("line-0"));
+}

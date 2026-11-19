@@ -79,6 +79,11 @@ impl EventSortBy {
     }
 }
 
+/// Hard cap for one query's `LIMIT`. An explicit `limit=u32::MAX` used to
+/// select the whole retained table in one response; rows are retention-pruned
+/// anyway, so 5000 is a generous page.
+const MAX_EVENT_QUERY_LIMIT: u32 = 5000;
+
 impl EventDb {
     /// Open (or create) the SQLite store at `path`, applying migrations.
     pub async fn open(path: &Path) -> anyhow::Result<Self> {
@@ -234,7 +239,7 @@ impl EventDb {
             qb = qb.bind(format!("%{}%", text));
         }
         if let Some(lim) = q.limit {
-            qb = qb.bind(lim as i64);
+            qb = qb.bind(lim.min(MAX_EVENT_QUERY_LIMIT) as i64);
         }
         if let Some(off) = q.offset {
             qb = qb.bind(off as i64);

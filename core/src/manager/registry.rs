@@ -145,11 +145,13 @@ impl ProcessRegistry {
         self.running.entry(id).or_default().push(state);
     }
 
-    /// Remove the instance with the given pid. If no entry matches (e.g. a race
-    /// with a restart), falls back to removing the primary instance.
+    /// Remove the instance with the given pid. Returns `None` when no instance
+    /// matches (duplicate exit event, or a race where the pid was already
+    /// replaced) — callers treat that as "already handled" and must never
+    /// remove a different, still-running instance instead.
     pub fn remove_running_by_pid(&mut self, id: &Uuid, pid: u32) -> Option<RuntimeState> {
         let states = self.running.get_mut(id)?;
-        let pos = states.iter().position(|s| s.pid == pid).unwrap_or(0);
+        let pos = states.iter().position(|s| s.pid == pid)?;
         let removed = states.remove(pos);
         if states.is_empty() {
             self.running.remove(id);
