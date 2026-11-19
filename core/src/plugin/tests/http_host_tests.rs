@@ -326,3 +326,60 @@ async fn api_timeout_maps_to_504() {
         "hung handle_api must surface as None (timeout)"
     );
 }
+
+/// A `handle_api` that fills the whole buffer without a NUL violated the ABI
+/// (the response did not fit): the host must surface it as `BufferExhausted`
+/// instead of silently returning a truncated response body.
+#[tokio::test]
+async fn api_response_without_nul_surfaces_buffer_exhausted() {
+    unsafe extern "C" fn fake_handle_api_fills_buffer(
+        _method: *const std::ffi::c_char,
+        _path: *const std::ffi::c_char,
+        _body: *const std::ffi::c_char,
+        _ctx_json: *const std::ffi::c_char,
+        out: *mut std::ffi::c_char,
+        out_len: usize,
+    ) -> u32 {
+        // SAFETY: the host always passes a valid writable buffer of out_len bytes.
+        unsafe {
+            std::ptr::write_bytes(out.cast::<u8>(), b'x', out_len);
+        }
+        200
+    }
+    let handle = Arc::new(HttpPluginHandle {
+        init: None,
+        authenticate: None,
+        authorize: None,
+        audit_request: None,
+        handle_api: fake_handle_api_fills_buffer,
+    });
+    match handle.call_api("GET", "/probe", "", "").await {
+        Some(ApiCallOutcome::BufferExhausted) => {}
+        other => panic!("expected BufferExhausted, got {:?}", other.is_some()),
+    }
+}
+
+/// Same contract for the authenticate hook: a context written without a NUL
+/// terminator must fail closed (500 on code 0), never pass a truncated
+/// context downstream.
+#[tokio::test]
+async fn auth_context_without_nul_fails_closed() {
+    unsafe extern "C" fn fake_auth_fills_buffer(
+        _path: *const std::ffi::c_char,
+        _authorization: *const std::ffi::c_char,
+        _query: *const std::ffi::c_char,
+        out_ctx_json: *mut std::ffi::c_char,
+        out_len: usize,
+    ) -> i32 {
+        // SAFETY: the host always passes a valid writable buffer of out_len bytes.
+        unsafe {
+            std::ptr::write_bytes(out_ctx_json.cast::<u8>(), b'x', out_len);
+        }
+        0
+    }
+    let seen = StdArc::new(AtomicU8::new(NOT_SEEN));
+    let router = probe_router(ok_handle(fake_auth_fills_buffer), seen.clone());
+    let resp = probe_request(router).await.unwrap();
+    assert_eq!(resp.status(), StatusCode::INTERNAL_SERVER_ERROR);
+    assert_eq!(seen.load(Ordering::SeqCst), NOT_SEEN);
+}

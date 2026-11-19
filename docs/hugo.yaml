@@ -81,9 +81,9 @@ params:
   # localStorage; message supports Markdown links. Bump key on each release
   # so the banner shows again for returning visitors.
   banner:
-    key: "super-release-banner-v1-9-1"
+    key: "super-release-banner-v1-9-2"
     message: |
-      **Super 1.9.1 is here** — a maintenance release: from-source Docker builds are fixed, and the commercial plugin bundles are rebuilt in lockstep… [See what's new →](/docs/08-changelog/)
+      **Super 1.9.2 is here** — shutdown and OTA now respect operator intent, event-hook and redirect targets are validated against SSRF, and a dozen crash-and-correctness fixes from a full audit… [See what's new →](/docs/08-changelog/)
   contact:
     api_url: "https://open.schiplat.com/api/v1/demands"
   externalLinkDecoration: true
