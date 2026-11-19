@@ -17,6 +17,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.9.2] - 2026-11-19
+
+A correctness-and-hardening release from a full security audit: 4 crash/correctness fixes and 12 security/robustness fixes, each covered by regression tests.
+
+### ⚠ Breaking & behavior changes — read before upgrading
+
+- **Graceful shutdown preserves autostart.** `super shutdown` (and SIGTERM) used to reuse the manual-stop path, so every running program came back with `autostart = false` plus an operator hold-stop: after a daemon restart, autostart services stayed down, and whether the flipped flags even reached disk depended on a background save racing process exit. Shutdown now stops children without touching their start-at-boot flags and persists the snapshot deterministically. Explicit `super stop` semantics are unchanged.
+- **OTA upgrades respect operator hold-stops.** An OTA on a program stopped with `super stop` no longer starts it and no longer re-enables autostart — the artifact is still delivered and swapped, and the pending verification commits whenever the program is next started. Previously the upgrade silently started the program and booted it on every future daemon restart. `restart_policy=immediate` still starts programs that are merely not running; only an explicit operator stop is honored.
+- **Masked environment values are rejected on write.** Stack exports taken without admin rights carry `********` placeholders for secret-looking env keys; re-applying such output used to overwrite the real secrets with the literal mask. Create, update, and stack apply now reject env entries that carry the mask on secret-named keys (non-secret keys may legitimately hold `********`).
+- **Event-hook webhooks enforce the outbound URL policy.** `[[event_hooks]]` entries with a `url` can no longer target cloud-metadata (`169.254.169.254`, `metadata.google.internal`, Alibaba's `100.100.100.200`) or link-local addresses — previously an attacker who could write `super.toml` could harvest instance credentials. Loopback and private-LAN receivers stay allowed (local alert pipelines are first-party integrations). Separately, OTA downloads and HTTP health checks now re-validate **every redirect hop**, so a public URL that 302-redirects to a private or metadata address is refused instead of fetched.
+- **Plugin HTTP responses fail closed instead of truncating.** A plugin response larger than the host buffer (now 256 KiB, up from 64 KiB) answers 502 with the standard error envelope; the authenticate context buffer (8 KiB) likewise refuses oversized answers with 500 instead of trusting a truncated user context. Honest large-payload streaming needs a future HTTP plugin ABI bump.
+- **Dashboard responses carry baseline security headers** — `Content-Security-Policy` (same-origin, `style-src 'unsafe-inline'` for the Vite runtime), `X-Frame-Options: DENY`, `X-Content-Type-Options: nosniff`, and `Referrer-Policy: no-referrer`. API, `/health`, `/metrics`, and `/ws` responses are untouched.
+
+### Fixed
+
+- **Duplicate process-exit events no longer drop live instances.** A manual force-stop and the real process reap can both report the same exit; the manager used to fall back to removing the *primary* runtime entry when the reported pid matched nothing, orphaning a still-running sibling (with `max_concurrent > 1`) or a freshly restarted instance — status showed Stopped while the process ran, and its exit was never handled. Unmatched exit events are now ignored.
+- **`numprocs` is capped at 256.** Expansion happens inline in the manager loop, so one request with `numprocs = 4294967295` stalled the whole daemon. Create, stack apply, and include files now reject values over the cap before any expansion.
+- **Stack export round-trips scheduling fields.** `GET /api/v1/stack` dropped `on_overlap`, `catchup`, `jitter_sec`, `max_concurrent`, `max_queued`, and `kill_after_secs`, so an export → apply cycle silently reset every cron policy to defaults despite the documented round-trip guarantee. Multi-instance programs export as one service per final name (`worker-0` …), which re-applies in place.
+- **Restart, health-restart, and the shutdown-deadline SIGKILL signal the process group**, matching the stop paths. A leader that spawned its own children never received the leader-only SIGTERM, then the stopsecs watchdog SIGKILLed the whole group — services with descendants now restart cleanly.
+- **Cron catch-up counting is bounded** (12 slots per trigger). A per-second schedule after a long outage used to make the scheduler iterate millions of missed slots inside the manager loop in a single tick; consumers never use an exact count beyond the catch-up cap (10).
+- **`GET /api/v1/programs/{id}/logs` scans backwards** in bounded chunks instead of loading the entire log file into memory per request (8 MiB scan budget; past it, the last lines of the budgeted tail are returned).
+- **Event queries clamp `limit` to 5000 rows** — `limit` at `u32::MAX` used to select the whole retained table in one serialized response; pagination still reaches the rest.
+- **Pidfile claims are atomic** (`O_CREAT|O_EXCL` plus an exclusive `flock` held for the process lifetime). Two concurrent starts could both pass the old check-then-create window and silently double-start; a stale pidfile is still reclaimed, a live holder still refuses the start.
+- **The failed-auth throttle aggregates IPv6 peers per /64.** Keyed on the exact address, a client rotating addresses inside one subnet reset the failure counter on every hop and could brute-force indefinitely; distinct subnets still throttle independently.
+
+### Documentation
+
+- `SECURITY.md` now states plainly that `install.sh` checksums guard transport integrity only (the `SHA256SUMS` ships from the same release channel) and that a `--token` flag is visible in the local process list while the command runs; the [authentication guide](/docs/02-essentials/authentication/) links the `super login` / `SUPER_TOKEN` alternatives.
+
 ## [1.9.1] - 2026-11-13
 
 ### Fixed
