@@ -17,6 +17,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.9.3] - 2026-11-19
+
+Hotfix release: **upgrading from 1.9.2 is strongly recommended** — the security headers shipped in 1.9.2 broke the web dashboard for every install.
+
 ### Fixed
 
 - **Dashboard loads again under the security headers (regression in 1.9.2).** The CSP added in 1.9.2 used `script-src 'self'`, which browsers enforce against *inline* scripts — including the configuration block superd injects into index.html (`window.__SUPER_CONFIG__` / `__SUPER_PLUGINS__`). The shell therefore booted without its edition/auth flags, and Licensed instances lost their Pro pages (Tokens, Notifications, Hot Reload). `script-src` now also allows `unsafe-inline` for that injected block (a static CSP cannot pin a per-response hash of the injected values); external scripts remain same-origin and `object-src 'none'`, `base-uri 'none'`, `frame-ancestors 'none'` keep the high-value vectors closed.

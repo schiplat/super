@@ -81,9 +81,9 @@ params:
   # localStorage; message supports Markdown links. Bump key on each release
   # so the banner shows again for returning visitors.
   banner:
-    key: "super-release-banner-v1-9-2"
+    key: "super-release-banner-v1-9-3"
     message: |
-      **Super 1.9.2 is here** — shutdown and OTA now respect operator intent, event-hook and redirect targets are validated against SSRF, and a dozen crash-and-correctness fixes from a full audit… [See what's new →](/docs/08-changelog/)
+      **Super 1.9.3 is here** — fixes a 1.9.2 regression that broke the web dashboard (security-header CSP blocked the shell's config script). All 1.9.2 fixes included; upgrade recommended… [See what's new →](/docs/08-changelog/)
   contact:
     api_url: "https://open.schiplat.com/api/v1/demands"
   externalLinkDecoration: true
