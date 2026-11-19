@@ -339,7 +339,7 @@ fn pick_renamed(base: &str, taken: &[String], suffix: Option<&str>) -> String {
         }
         // Fixed suffix taken: fall through to random to stay collision-free.
     }
-    use rand::Rng as _;
+    use rand::RngExt as _;
     let mut rng = rand::rng();
     loop {
         let hex: String = (0..6)
