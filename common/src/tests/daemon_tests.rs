@@ -110,3 +110,29 @@ fn claim_refuses_when_pidfile_held_by_live_process() {
     ));
     release_pidfile(&path, holder);
 }
+
+/// The old check-then-create claim had a race window where two concurrent
+/// starts could both pass `inspect_pidfile` and both write. The O_EXCL +
+/// flock claim must let exactly one starter win.
+#[test]
+fn concurrent_pidfile_claims_are_mutually_exclusive() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("superd.pid");
+
+    // Starter A claims normally.
+    let a_pid = std::process::id() as i32;
+    claim_pidfile(&path, a_pid).unwrap();
+
+    // Starter B's claim must fail while A holds the file. (Use the current
+    // pid: inspect_pidfile reports a non-running pid as Stale, not Alive.)
+    let b_attempt = claim_pidfile(&path, a_pid);
+    assert!(b_attempt.is_err(), "second concurrent claim must lose");
+
+    // After A releases, B can claim.
+    release_pidfile(&path, a_pid);
+    claim_pidfile(&path, a_pid).unwrap();
+    assert!(matches!(
+        inspect_pidfile(&path),
+        PidfileStatus::Alive { pid } if pid == a_pid
+    ));
+}
