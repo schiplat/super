@@ -29,7 +29,7 @@ anyhow = "1.0"
 base64 = "0.23"
 url = "2.5"
 ed25519-dalek = "3.0"
-rand = "0.9"
+rand = "0.10"
 # CLI parsing
 clap = { version = "4.4", features = ["derive", "env"] }
 # Shell completion scripts (`super completions <shell>`)
