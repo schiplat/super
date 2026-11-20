@@ -7,6 +7,7 @@
 
 mod middleware;
 mod routes;
+pub mod store;
 pub mod throttle;
 
 #[cfg(test)]
@@ -14,6 +15,7 @@ pub mod throttle;
 mod policy_tests;
 
 pub use middleware::{AuthState, attach_core_auth, is_auth_exempt};
+pub use store::AuthStore;
 pub use throttle::AuthThrottle;
 
 use axum::Router;

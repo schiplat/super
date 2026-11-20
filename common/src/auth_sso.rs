@@ -66,6 +66,23 @@ pub enum TokenAuthMethod {
     ClientSecretPost,
 }
 
+impl TokenAuthMethod {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::ClientSecretBasic => "client_secret_basic",
+            Self::ClientSecretPost => "client_secret_post",
+        }
+    }
+
+    pub fn parse(raw: &str) -> Option<Self> {
+        match raw {
+            "client_secret_basic" => Some(Self::ClientSecretBasic),
+            "client_secret_post" => Some(Self::ClientSecretPost),
+            _ => None,
+        }
+    }
+}
+
 /// One entry of the ordered role mapping.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
 pub struct RoleRule {
