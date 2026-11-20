@@ -118,6 +118,17 @@ impl EventDb {
             .await
             .context("run events database migrations")?;
 
+        // SQLite creates -wal/-shm with umask-derived modes, so a 0600
+        // database can leave 0644 sidecars holding the same rows. Migrations
+        // have run by now, which is what materializes the sidecars.
+        for (failed, error) in common::sensitive_file::ensure_sqlite_owner_only(path) {
+            tracing::warn!(
+                path = %failed.display(),
+                error = %error,
+                "could not restrict SQLite file mode to 0600"
+            );
+        }
+
         Ok(Self { pool })
     }
 

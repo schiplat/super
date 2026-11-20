@@ -108,6 +108,74 @@ pub fn inspect(_path: &Path, _kind: PathKind) -> std::io::Result<Option<Permissi
     Ok(None)
 }
 
+/// Force a data file to owner-only mode. Missing files are not an error.
+///
+/// SQLite derives the mode of `-wal`/`-shm` sidecars from the umask, so a
+/// 0600 database can end up with 0644 sidecars holding the same rows. Stores
+/// call this after opening (and after migrations, which is when the sidecars
+/// first appear) instead of trusting the default.
+#[cfg(unix)]
+pub fn ensure_owner_only(path: &Path) -> std::io::Result<()> {
+    use std::os::unix::fs::PermissionsExt;
+    match std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o600)) {
+        Ok(()) => Ok(()),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(()),
+        Err(e) => Err(e),
+    }
+}
+
+#[cfg(not(unix))]
+pub fn ensure_owner_only(_path: &Path) -> std::io::Result<()> {
+    Ok(())
+}
+
+/// Tighten a SQLite database plus its `-wal`/`-shm` sidecars.
+///
+/// Returns the paths whose chmod failed; callers log and keep going (an
+/// unopenable store would be worse than a wide mode that the next
+/// `super doctor` run reports).
+pub fn ensure_sqlite_owner_only(db_path: &Path) -> Vec<(PathBuf, std::io::Error)> {
+    let mut failures = Vec::new();
+    for suffix in ["", "-wal", "-shm"] {
+        let mut name = db_path.as_os_str().to_owned();
+        name.push(suffix);
+        let path = PathBuf::from(name);
+        if let Err(e) = ensure_owner_only(&path) {
+            failures.push((path, e));
+        }
+    }
+    failures
+}
+
+/// Write `bytes` to `path`, owner-only from the moment the file exists.
+///
+/// `File::create` + `chmod` leaves a window where a umask-derived 0644 file
+/// already contains the secret. This creates with mode 0600, re-tightens an
+/// existing file before writing, and fsyncs. Not atomic (no temp+rename):
+/// callers that need atomic replacement keep their own tmp-file dance.
+#[cfg(unix)]
+pub fn write_owner_only(path: &Path, bytes: &[u8]) -> std::io::Result<()> {
+    use std::io::Write;
+    use std::os::unix::fs::{OpenOptionsExt, PermissionsExt};
+
+    let mut file = std::fs::OpenOptions::new()
+        .write(true)
+        .create(true)
+        .truncate(true)
+        .mode(0o600)
+        .open(path)?;
+    // `truncate(true)` keeps the mode of an existing file; tighten it before
+    // any new bytes land in it.
+    file.set_permissions(std::fs::Permissions::from_mode(0o600))?;
+    file.write_all(bytes)?;
+    file.sync_all()
+}
+
+#[cfg(not(unix))]
+pub fn write_owner_only(path: &Path, bytes: &[u8]) -> std::io::Result<()> {
+    std::fs::write(path, bytes)
+}
+
 #[cfg(unix)]
 fn describe(mode: u32, kind: PathKind) -> Option<(String, PermissionSeverity)> {
     let mut labels: Vec<&str> = Vec::new();

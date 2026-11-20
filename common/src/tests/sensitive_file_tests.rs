@@ -179,3 +179,44 @@ fn config_file_is_skipped_without_a_live_auth_secret() {
         audit.findings
     );
 }
+
+#[test]
+fn write_owner_only_creates_and_retightens() {
+    let tmp = tempfile::tempdir().unwrap();
+    let path = tmp.path().join("sso_client.secret");
+
+    write_owner_only(&path, b"first").unwrap();
+    assert_eq!(
+        fs::metadata(&path).unwrap().permissions().mode() & 0o777,
+        0o600
+    );
+
+    // A file that was loosened by hand must be tightened before the next
+    // write lands, not after.
+    fs::set_permissions(&path, fs::Permissions::from_mode(0o644)).unwrap();
+    write_owner_only(&path, b"second").unwrap();
+    assert_eq!(fs::read_to_string(&path).unwrap(), "second");
+    assert_eq!(
+        fs::metadata(&path).unwrap().permissions().mode() & 0o777,
+        0o600
+    );
+}
+
+#[test]
+fn ensure_sqlite_owner_only_covers_sidecars_and_ignores_missing() {
+    let tmp = tempfile::tempdir().unwrap();
+    let db = write_mode(tmp.path(), "events.db", 0o644);
+    let wal = write_mode(tmp.path(), "events.db-wal", 0o644);
+    // events.db-shm does not exist yet.
+
+    let failures = ensure_sqlite_owner_only(&db);
+    assert!(failures.is_empty(), "{failures:?}");
+    for path in [&db, &wal] {
+        assert_eq!(
+            fs::metadata(path).unwrap().permissions().mode() & 0o777,
+            0o600,
+            "{}",
+            path.display()
+        );
+    }
+}

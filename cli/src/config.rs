@@ -49,22 +49,14 @@ impl CliConfig {
         Self::path().exists()
     }
 
-    /// Save config to disk (atomic write + permission control)
+    /// Save config to disk (owner-only from creation, not after the write).
     pub fn save(&self) -> anyhow::Result<()> {
         let path = Self::path();
         if let Some(parent) = path.parent() {
             fs::create_dir_all(parent)?;
         }
         let content = serde_json::to_string_pretty(self)?;
-        fs::write(&path, content)?;
-
-        #[cfg(unix)]
-        {
-            use std::os::unix::fs::PermissionsExt;
-            let mut perms = fs::metadata(&path)?.permissions();
-            perms.set_mode(0o600);
-            fs::set_permissions(&path, perms)?;
-        }
+        common::sensitive_file::write_owner_only(&path, content.as_bytes())?;
         Ok(())
     }
 }

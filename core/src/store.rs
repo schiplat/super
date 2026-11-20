@@ -31,11 +31,19 @@ pub async fn save(path: &Path, data: &Snapshot) -> anyhow::Result<()> {
     let content = serde_json::to_string_pretty(data)?;
 
     // 3. Write temp file
+    //
+    // Create it owner-only. `File::create` takes a umask-derived mode, so the
+    // snapshot (program env values included) would be group/world-readable for
+    // the whole duration of the write. Re-tighten first in case a stale temp
+    // file from an older version is still around.
     let tmp_path = path.with_extension("tmp");
-    let mut file = tokio::fs::File::create(&tmp_path).await?;
-    file.write_all(content.as_bytes()).await?;
-
-    // Hardening: mode 600 so other users cannot read sensitive snapshot data
+    let mut options = tokio::fs::OpenOptions::new();
+    options.write(true).create(true).truncate(true);
+    #[cfg(unix)]
+    {
+        options.mode(0o600);
+    }
+    let mut file = options.open(&tmp_path).await?;
     #[cfg(unix)]
     {
         use std::os::unix::fs::PermissionsExt;
@@ -43,7 +51,7 @@ pub async fn save(path: &Path, data: &Snapshot) -> anyhow::Result<()> {
         perms.set_mode(0o600);
         file.set_permissions(perms).await?;
     }
-
+    file.write_all(content.as_bytes()).await?;
     file.flush().await?;
     // fsync the temp file before rename: without it a power loss right after
     // rename can leave the main path empty or partially written on some

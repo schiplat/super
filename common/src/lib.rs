@@ -35,7 +35,8 @@ pub use security::{
 };
 pub use sensitive_file::{
     AUTH_DB_FILE_NAME, AUTH_STATE_FILE_NAME, PathKind, PermissionAudit, PermissionFinding,
-    PermissionSeverity, SSO_SECRET_FILE_NAME, audit_instance,
+    PermissionSeverity, SSO_SECRET_FILE_NAME, audit_instance, ensure_owner_only,
+    ensure_sqlite_owner_only, write_owner_only,
 };
 
 pub use auth::{
