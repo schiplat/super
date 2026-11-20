@@ -16,6 +16,8 @@ pub enum Bucket {
     Login,
     Callback,
     Exchange,
+    CliStart,
+    CliPoll,
 }
 
 impl Bucket {
@@ -24,6 +26,8 @@ impl Bucket {
             Self::Login => 0,
             Self::Callback => 1,
             Self::Exchange => 2,
+            Self::CliStart => 3,
+            Self::CliPoll => 4,
         }
     }
 
@@ -35,6 +39,10 @@ impl Bucket {
             // Multiple tabs and retries after an IdP hiccup.
             Self::Callback => 60,
             Self::Exchange => 20,
+            // A CLI starts one request per login attempt.
+            Self::CliStart => 10,
+            // Polling every few seconds for up to ten minutes.
+            Self::CliPoll => 120,
         }
     }
 }

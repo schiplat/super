@@ -1,4 +1,5 @@
 mod args;
+mod auth_cmd;
 mod check;
 mod client;
 mod completions;
@@ -53,7 +54,13 @@ async fn main() -> anyhow::Result<()> {
     }
 
     match &args.command {
-        Commands::Login { secret, url } => {
+        Commands::Login { secret, sso, url } => {
+            if *sso {
+                return session::login_sso(&mut config, url.as_deref()).await;
+            }
+            let Some(secret) = secret.as_deref() else {
+                anyhow::bail!("provide a credential, or use `super login --sso`");
+            };
             return session::login(&mut config, secret, url.as_deref()).await;
         }
         Commands::Logout => {
@@ -87,6 +94,9 @@ async fn main() -> anyhow::Result<()> {
     };
 
     match &args.command {
+        Commands::Auth { action } => {
+            auth_cmd::run(&ctx, action).await?;
+        }
         Commands::List => handlers::handle_list(&ctx).await?,
         Commands::Add { .. } => handlers::handle_add(&ctx, &args.command).await?,
         Commands::Update { .. } => handlers::handle_update(&ctx, &args.command).await?,

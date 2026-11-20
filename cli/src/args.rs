@@ -29,14 +29,24 @@ pub struct Cli {
 pub enum Commands {
     /// Log in and save credentials to ~/.super/cli.json
     Login {
-        /// Authentication secret or access token
-        secret: String,
+        /// Authentication secret or access token (omit with --sso)
+        #[arg(required_unless_present = "sso")]
+        secret: Option<String>,
+        /// Sign in through SSO with a browser device-code approval
+        #[arg(long)]
+        sso: bool,
         /// Server URL (optional, defaults to configured server)
         #[arg(long)]
         url: Option<String>,
     },
     /// Clear saved credentials from ~/.super/cli.json
     Logout,
+
+    /// Configure SSO (OIDC) authentication
+    Auth {
+        #[command(subcommand)]
+        action: AuthCommands,
+    },
 
     /// Manage API access tokens (requires security plugin)
     Token {
@@ -549,6 +559,51 @@ pub enum TokenCommands {
     /// Revoke (delete) a token by ID
     #[command(alias = "rm")]
     Revoke { id: String },
+}
+
+#[derive(Subcommand)]
+pub enum AuthCommands {
+    /// SSO (OpenID Connect) settings
+    Sso {
+        #[command(subcommand)]
+        action: SsoCommands,
+    },
+}
+
+#[derive(Subcommand)]
+pub enum SsoCommands {
+    /// Show the active gate and the stored SSO configuration
+    Status,
+    /// Configure SSO; with --secret-stdin and role rules this enables it
+    Enable {
+        /// Issuer URL (https, or loopback http with --allow-insecure)
+        #[arg(long)]
+        issuer: Option<String>,
+        /// OIDC client id
+        #[arg(long = "client-id")]
+        client_id: Option<String>,
+        /// Externally reachable origin used to build the redirect URI
+        #[arg(long = "base-url")]
+        base_url: Option<String>,
+        /// Read the OIDC client secret from stdin and store it before enabling
+        #[arg(long = "secret-stdin")]
+        secret_stdin: bool,
+        /// Allow a plain-http issuer (loopback development only)
+        #[arg(long = "allow-insecure")]
+        allow_insecure: bool,
+        /// Save the configuration but leave SSO disabled
+        #[arg(long)]
+        disabled: bool,
+        /// Role rule, repeatable: sub=<sub>:<role> | email=<addr>:<role> | groups=<a,b>:<role>
+        #[arg(long = "role-rule")]
+        role_rules: Vec<String>,
+    },
+    /// Store or rotate the OIDC client secret (reads stdin)
+    Secret,
+    /// Run an OIDC discovery check against the stored configuration
+    Test,
+    /// Disable SSO and revoke every SSO session
+    Disable,
 }
 
 #[cfg(test)]

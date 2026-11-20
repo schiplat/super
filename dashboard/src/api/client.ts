@@ -43,7 +43,10 @@ apiClient.interceptors.response.use(
         localStorage.removeItem('super_token');
         // Only bounce to login when the security plugin is active.
         if (authRequired() && window.location.pathname !== '/login') {
-          router.push('/login');
+          // Keep where the user was — an expired session (or a CLI approval
+          // link opened without one) must survive the login round trip.
+          const current = window.location.pathname + window.location.search;
+          router.push({ path: '/login', query: { redirect: current } });
         }
       } else if (status === 403) {
         if (!isOnErrorPage()) router.replace('/error/403');

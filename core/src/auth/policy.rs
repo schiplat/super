@@ -28,6 +28,11 @@ pub fn required_role(method: &Method, path: &str) -> UserRole {
     if path == "/api/v1/auth/logout" {
         return UserRole::Viewer;
     }
+    // Approving a CLI sign-in issues a session for the approver's own role, so
+    // every authenticated role may do it (the CLI is then bound to that role).
+    if path == "/api/v1/auth/sso/cli/approve" {
+        return UserRole::Viewer;
+    }
     if path.starts_with("/api/v1/auth/sso/")
         || path == "/api/v1/system/shutdown"
         || path == "/api/v1/system/reload"

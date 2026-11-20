@@ -23,6 +23,8 @@ use sqlx::sqlite::{SqliteConnectOptions, SqliteJournalMode, SqlitePoolOptions, S
 pub const MAX_SESSIONS: i64 = 1000;
 /// Upper bound on in-flight login attempts (10-minute TTL each).
 pub const MAX_PENDING: i64 = 256;
+/// Upper bound on in-flight CLI device codes.
+pub const MAX_CLI_PENDING: i64 = 128;
 /// How long the previous client secret stays usable after rotation.
 pub const SECRET_GRACE_SECS: u64 = 15 * 60;
 /// Audit retention.
@@ -132,6 +134,22 @@ pub struct PendingAuth {
     pub expires_at: u64,
 }
 
+/// Device-code CLI sign-in request. `approved_at` plus the identity columns
+/// are filled when a signed-in browser confirms the user code; the CLI's
+/// session is only created when it polls, so no token is ever stored here.
+#[derive(Debug, Clone)]
+pub struct CliPending {
+    pub user_code: String,
+    pub created_at: u64,
+    pub expires_at: u64,
+    pub approved_at: Option<u64>,
+    pub sub: Option<String>,
+    pub email: Option<String>,
+    pub name: Option<String>,
+    pub groups_json: Option<String>,
+    pub email_verified: Option<bool>,
+}
+
 /// One audit row to write.
 #[derive(Debug, Clone, Copy, Default)]
 pub struct AuditEvent<'a> {
@@ -163,6 +181,45 @@ fn now_secs() -> u64 {
 
 fn truncate_chars(value: &str, max: usize) -> String {
     value.chars().take(max).collect()
+}
+
+fn session_from_row(row: &sqlx::sqlite::SqliteRow) -> anyhow::Result<SessionRow> {
+    Ok(SessionRow {
+        id: row.try_get("id")?,
+        sub: row.try_get("sub")?,
+        email: row.try_get("email")?,
+        name: row.try_get("name")?,
+        groups_json: row.try_get("groups_json")?,
+        email_verified: row.try_get("email_verified")?,
+        return_to: row.try_get("return_to")?,
+        created_at: row.try_get::<i64, _>("created_at")? as u64,
+        expires_at: row.try_get::<i64, _>("expires_at")? as u64,
+        last_seen_at: row.try_get::<i64, _>("last_seen_at")? as u64,
+        revoked_at: row
+            .try_get::<Option<i64>, _>("revoked_at")?
+            .map(|v| v as u64),
+        exchange_used_at: row
+            .try_get::<Option<i64>, _>("exchange_used_at")?
+            .map(|v| v as u64),
+        ip: row.try_get("ip")?,
+        user_agent: row.try_get("user_agent")?,
+    })
+}
+
+fn cli_pending_from_row(row: &sqlx::sqlite::SqliteRow) -> anyhow::Result<CliPending> {
+    Ok(CliPending {
+        user_code: row.try_get("user_code")?,
+        created_at: row.try_get::<i64, _>("created_at")? as u64,
+        expires_at: row.try_get::<i64, _>("expires_at")? as u64,
+        approved_at: row
+            .try_get::<Option<i64>, _>("approved_at")?
+            .map(|v| v as u64),
+        sub: row.try_get("sub")?,
+        email: row.try_get("email")?,
+        name: row.try_get("name")?,
+        groups_json: row.try_get("groups_json")?,
+        email_verified: row.try_get::<Option<bool>, _>("email_verified")?,
+    })
 }
 
 impl AuthStore {
@@ -487,27 +544,21 @@ impl AuthStore {
         .fetch_optional(&self.pool)
         .await
         .context("lookup session")?;
-        let Some(row) = row else { return Ok(None) };
-        Ok(Some(SessionRow {
-            id: row.try_get("id")?,
-            sub: row.try_get("sub")?,
-            email: row.try_get("email")?,
-            name: row.try_get("name")?,
-            groups_json: row.try_get("groups_json")?,
-            email_verified: row.try_get("email_verified")?,
-            return_to: row.try_get("return_to")?,
-            created_at: row.try_get::<i64, _>("created_at")? as u64,
-            expires_at: row.try_get::<i64, _>("expires_at")? as u64,
-            last_seen_at: row.try_get::<i64, _>("last_seen_at")? as u64,
-            revoked_at: row
-                .try_get::<Option<i64>, _>("revoked_at")?
-                .map(|v| v as u64),
-            exchange_used_at: row
-                .try_get::<Option<i64>, _>("exchange_used_at")?
-                .map(|v| v as u64),
-            ip: row.try_get("ip")?,
-            user_agent: row.try_get("user_agent")?,
-        }))
+        row.as_ref().map(session_from_row).transpose()
+    }
+
+    /// Session by its opaque id (the middleware puts it in `token_id`).
+    pub async fn find_session_by_id(&self, id: &str) -> anyhow::Result<Option<SessionRow>> {
+        let row = sqlx::query(
+            "SELECT id, sub, email, name, groups_json, email_verified, return_to, \
+             created_at, expires_at, last_seen_at, revoked_at, exchange_used_at, ip, user_agent \
+             FROM sessions WHERE id = ?",
+        )
+        .bind(id)
+        .fetch_optional(&self.pool)
+        .await
+        .context("lookup session by id")?;
+        row.as_ref().map(session_from_row).transpose()
     }
 
     pub async fn touch_session(&self, id: &str, now: u64) -> anyhow::Result<()> {
@@ -546,30 +597,7 @@ impl AuthStore {
         .fetch_all(&self.pool)
         .await
         .context("list sessions")?;
-        rows.into_iter()
-            .map(|row| {
-                Ok(SessionRow {
-                    id: row.try_get("id")?,
-                    sub: row.try_get("sub")?,
-                    email: row.try_get("email")?,
-                    name: row.try_get("name")?,
-                    groups_json: row.try_get("groups_json")?,
-                    email_verified: row.try_get("email_verified")?,
-                    return_to: row.try_get("return_to")?,
-                    created_at: row.try_get::<i64, _>("created_at")? as u64,
-                    expires_at: row.try_get::<i64, _>("expires_at")? as u64,
-                    last_seen_at: row.try_get::<i64, _>("last_seen_at")? as u64,
-                    revoked_at: row
-                        .try_get::<Option<i64>, _>("revoked_at")?
-                        .map(|v| v as u64),
-                    exchange_used_at: row
-                        .try_get::<Option<i64>, _>("exchange_used_at")?
-                        .map(|v| v as u64),
-                    ip: row.try_get("ip")?,
-                    user_agent: row.try_get("user_agent")?,
-                })
-            })
-            .collect()
+        rows.iter().map(session_from_row).collect()
     }
 
     pub async fn revoke_session(&self, id: &str) -> anyhow::Result<bool> {
@@ -678,6 +706,107 @@ impl AuthStore {
         }))
     }
 
+    // ------------------------------------------------------- CLI device codes
+
+    /// Start a device-code CLI sign-in. Expired rows are pruned and the table
+    /// is capped so a flood cannot grow it without bound.
+    pub async fn insert_cli_pending(
+        &self,
+        device_sha256: &[u8],
+        user_code: &str,
+        now: u64,
+        expires_at: u64,
+    ) -> anyhow::Result<()> {
+        let mut tx = self.pool.begin().await?;
+        sqlx::query("DELETE FROM cli_pending WHERE expires_at < ?")
+            .bind(now as i64)
+            .execute(&mut *tx)
+            .await?;
+        let count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM cli_pending")
+            .fetch_one(&mut *tx)
+            .await?;
+        if count >= MAX_CLI_PENDING {
+            sqlx::query(
+                "DELETE FROM cli_pending WHERE device_sha256 IN \
+                 (SELECT device_sha256 FROM cli_pending ORDER BY created_at ASC LIMIT ?)",
+            )
+            .bind(count - MAX_CLI_PENDING + 1)
+            .execute(&mut *tx)
+            .await?;
+        }
+        sqlx::query(
+            "INSERT INTO cli_pending (device_sha256, user_code, created_at, expires_at) \
+             VALUES (?, ?, ?, ?)",
+        )
+        .bind(device_sha256)
+        .bind(user_code)
+        .bind(now as i64)
+        .bind(expires_at as i64)
+        .execute(&mut *tx)
+        .await
+        .context("insert CLI sign-in request")?;
+        tx.commit().await?;
+        Ok(())
+    }
+
+    pub async fn find_cli_pending(
+        &self,
+        device_sha256: &[u8],
+    ) -> anyhow::Result<Option<CliPending>> {
+        let row = sqlx::query(
+            "SELECT user_code, created_at, expires_at, approved_at, sub, email, name, \
+             groups_json, email_verified FROM cli_pending WHERE device_sha256 = ?",
+        )
+        .bind(device_sha256)
+        .fetch_optional(&self.pool)
+        .await
+        .context("lookup CLI sign-in request")?;
+        row.as_ref().map(cli_pending_from_row).transpose()
+    }
+
+    /// Confirm a user code with the approving session's identity claims.
+    pub async fn approve_cli(
+        &self,
+        user_code: &str,
+        session: &SessionRow,
+        now: u64,
+    ) -> anyhow::Result<bool> {
+        let result = sqlx::query(
+            "UPDATE cli_pending SET approved_at = ?, sub = ?, email = ?, name = ?, \
+             groups_json = ?, email_verified = ? \
+             WHERE user_code = ? AND approved_at IS NULL AND expires_at > ?",
+        )
+        .bind(now as i64)
+        .bind(&session.sub)
+        .bind(&session.email)
+        .bind(&session.name)
+        .bind(&session.groups_json)
+        .bind(session.email_verified)
+        .bind(user_code)
+        .bind(now as i64)
+        .execute(&self.pool)
+        .await
+        .context("approve CLI sign-in request")?;
+        Ok(result.rows_affected() == 1)
+    }
+
+    /// Single-use claim of an approved request (the poll's last step).
+    pub async fn take_cli_pending(
+        &self,
+        device_sha256: &[u8],
+    ) -> anyhow::Result<Option<CliPending>> {
+        let row = sqlx::query(
+            "DELETE FROM cli_pending WHERE device_sha256 = ? \
+             RETURNING user_code, created_at, expires_at, approved_at, sub, email, name, \
+             groups_json, email_verified",
+        )
+        .bind(device_sha256)
+        .fetch_optional(&self.pool)
+        .await
+        .context("consume CLI sign-in request")?;
+        row.as_ref().map(cli_pending_from_row).transpose()
+    }
+
     // ----------------------------------------------------------------- audit
 
     pub async fn audit(&self, event: AuditEvent<'_>) -> anyhow::Result<()> {
@@ -756,6 +885,11 @@ impl AuthStore {
             .execute(&self.pool)
             .await
             .context("prune pending authorizations")?;
+        sqlx::query("DELETE FROM cli_pending WHERE expires_at < ?")
+            .bind(now as i64)
+            .execute(&self.pool)
+            .await
+            .context("prune CLI sign-in requests")?;
         self.prune_audit(now).await?;
         Ok(())
     }

@@ -39,6 +39,9 @@ pub fn sso_routes() -> Router<AuthState> {
         .route("/api/v1/auth/sso/login", get(login))
         .route("/api/v1/auth/sso/callback", get(callback))
         .route("/api/v1/auth/sso/exchange", post(exchange))
+        .route("/api/v1/auth/sso/cli/start", post(cli_start))
+        .route("/api/v1/auth/sso/cli/poll", post(cli_poll))
+        .route("/api/v1/auth/sso/cli/approve", post(cli_approve))
         .route("/api/v1/auth/sso/config", get(get_config).put(put_config))
         .route("/api/v1/auth/sso/secret", post(put_secret))
         .route("/api/v1/auth/sso/test", post(test))
@@ -349,6 +352,292 @@ async fn exchange(State(state): State<AuthState>, headers: HeaderMap, peer: Peer
         response.headers_mut().insert(header::SET_COOKIE, value);
     }
     response
+}
+
+// -------------------------------------------------------------- CLI sign-in
+
+/// User codes are read aloud and typed by hand: 32 symbols, no I/O/0/1, one
+/// dash for readability. 32^8 combinations with a 10-minute TTL and a capped
+/// table.
+fn cli_user_code() -> String {
+    const ALPHABET: &[u8] = b"ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+    let bytes = super::pkce::random_bytes(8);
+    let code: String = bytes
+        .iter()
+        .map(|byte| ALPHABET[*byte as usize % ALPHABET.len()] as char)
+        .collect();
+    format!("{}-{}", &code[..4], &code[4..])
+}
+
+fn normalize_user_code(raw: &str) -> String {
+    let cleaned: String = raw
+        .chars()
+        .filter(char::is_ascii_alphanumeric)
+        .collect::<String>()
+        .to_ascii_uppercase();
+    if cleaned.len() == 8 {
+        format!("{}-{}", &cleaned[..4], &cleaned[4..])
+    } else {
+        cleaned
+    }
+}
+
+async fn cli_start(State(state): State<AuthState>, peer: Peer) -> Response {
+    if state.gate() != AuthGate::Sso {
+        return not_found();
+    }
+    let Some(sso) = state.sso() else {
+        return not_found();
+    };
+    let Some(config) = sso.config().filter(|config| config.enabled) else {
+        return not_found();
+    };
+    if let Some(ip) = peer_ip(&peer)
+        && !rate_limit::allow(ip, Bucket::CliStart)
+    {
+        return too_many_requests();
+    }
+
+    let device_code = super::pkce::random_token();
+    let user_code = cli_user_code();
+    let now = now_secs();
+    let expires_in = 10 * 60;
+    if let Err(e) = sso
+        .store()
+        .insert_cli_pending(
+            &super::pkce::token_hash(&device_code),
+            &user_code,
+            now,
+            now + expires_in,
+        )
+        .await
+    {
+        tracing::error!(error = %e, "cannot start a CLI sign-in");
+        return server_error();
+    }
+
+    Json(json!({
+        "device_code": device_code,
+        "user_code": user_code,
+        "verification_url": format!(
+            "{}/auth/cli?code={user_code}",
+            config.public_base_url.trim_end_matches('/')
+        ),
+        "expires_in": expires_in,
+        "interval": 3,
+    }))
+    .into_response()
+}
+
+#[derive(Debug, Deserialize)]
+struct CliPollBody {
+    device_code: String,
+}
+
+async fn cli_poll(
+    State(state): State<AuthState>,
+    peer: Peer,
+    Json(body): Json<CliPollBody>,
+) -> Response {
+    if state.gate() != AuthGate::Sso {
+        return not_found();
+    }
+    let Some(sso) = state.sso() else {
+        return not_found();
+    };
+    let Some(config) = sso.config().filter(|config| config.enabled) else {
+        return not_found();
+    };
+    if let Some(ip) = peer_ip(&peer)
+        && !rate_limit::allow(ip, Bucket::CliPoll)
+    {
+        return too_many_requests();
+    }
+
+    let device_hash = super::pkce::token_hash(&body.device_code);
+    let now = now_secs();
+    let row = match sso.store().find_cli_pending(&device_hash).await {
+        Ok(Some(row)) => row,
+        Ok(None) => {
+            return (StatusCode::NOT_FOUND, Json(json!({ "status": "unknown" }))).into_response();
+        }
+        Err(e) => {
+            tracing::error!(error = %e, "cannot read a CLI sign-in request");
+            return server_error();
+        }
+    };
+    if row.expires_at <= now {
+        let _ = sso.store().take_cli_pending(&device_hash).await;
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(json!({ "status": "expired" })),
+        )
+            .into_response();
+    }
+    if row.approved_at.is_none() {
+        return Json(json!({ "status": "pending" })).into_response();
+    }
+
+    // Single-use: the row disappears even if a second poll races this one.
+    let row = match sso.store().take_cli_pending(&device_hash).await {
+        Ok(Some(row)) => row,
+        Ok(None) => {
+            return (StatusCode::CONFLICT, Json(json!({ "status": "consumed" }))).into_response();
+        }
+        Err(e) => {
+            tracing::error!(error = %e, "cannot consume a CLI sign-in request");
+            return server_error();
+        }
+    };
+    let Some(sub) = row.sub else {
+        return bad_request("the request was approved without an identity");
+    };
+    let groups: Vec<String> =
+        serde_json::from_str(row.groups_json.as_deref().unwrap_or("[]")).unwrap_or_default();
+    let claims = IdentityClaims {
+        sub: &sub,
+        email: row.email.as_deref(),
+        email_verified: row.email_verified.unwrap_or(false),
+        groups: &groups,
+    };
+    let Some((_, role)) = resolve_role(&config.role_rules, &claims) else {
+        return forbidden("no role is assigned to this account");
+    };
+
+    let session_token = format!("su_{}", super::pkce::random_token());
+    let now = now_secs();
+    let expires_at = now + config.session_ttl_secs;
+    let user_agent = Some("super-cli".to_string());
+    let ip = peer_ip(&peer).map(|ip| ip.to_string());
+    if let Err(e) = sso
+        .store()
+        .insert_session(&NewSession {
+            id: uuid::Uuid::new_v4().simple().to_string(),
+            token_sha256: super::pkce::token_hash(&session_token).to_vec(),
+            sub: sub.clone(),
+            email: row.email.clone(),
+            name: row.name.clone(),
+            groups_json: row.groups_json.clone().unwrap_or_else(|| "[]".into()),
+            email_verified: row.email_verified.unwrap_or(false),
+            return_to: "/".into(),
+            created_at: now,
+            expires_at,
+            ip: ip.clone(),
+            user_agent: user_agent.clone(),
+        })
+        .await
+    {
+        tracing::error!(error = %e, "cannot create a CLI session");
+        return server_error();
+    }
+
+    let _ = sso
+        .store()
+        .audit(AuditEvent {
+            kind: "login_success",
+            sub: Some(&sub),
+            email: row.email.as_deref(),
+            ip: ip.as_deref(),
+            ua: user_agent.as_deref(),
+            detail: Some("cli device code"),
+        })
+        .await;
+
+    Json(json!({
+        "status": "ok",
+        "token": session_token,
+        "expires_at": expires_at,
+        "user": {
+            "name": row.name,
+            "email": row.email,
+            "role": role,
+        },
+    }))
+    .into_response()
+}
+
+#[derive(Debug, Deserialize)]
+struct CliApproveBody {
+    user_code: String,
+}
+
+async fn cli_approve(
+    State(state): State<AuthState>,
+    Extension(user): Extension<UserContext>,
+    Json(body): Json<CliApproveBody>,
+) -> Response {
+    if state.gate() != AuthGate::Sso {
+        return not_found();
+    }
+    let Some(sso) = state.sso() else {
+        return not_found();
+    };
+    let Some(config) = sso.config().filter(|config| config.enabled) else {
+        return not_found();
+    };
+
+    // Only an SSO session can approve: the CLI inherits its identity claims.
+    let session = match sso.store().find_session_by_id(&user.token_id).await {
+        Ok(Some(session)) => session,
+        Ok(None) => {
+            return bad_request("approve the CLI sign-in from an SSO browser session");
+        }
+        Err(e) => {
+            tracing::error!(error = %e, "cannot read the approving session");
+            return server_error();
+        }
+    };
+    let now = now_secs();
+    if session.revoked_at.is_some()
+        || session.expires_at <= now
+        || session
+            .last_seen_at
+            .saturating_add(config.idle_timeout_secs)
+            <= now
+    {
+        return unauthorized();
+    }
+
+    let groups: Vec<String> = serde_json::from_str(&session.groups_json).unwrap_or_default();
+    let claims = IdentityClaims {
+        sub: &session.sub,
+        email: session.email.as_deref(),
+        email_verified: session.email_verified,
+        groups: &groups,
+    };
+    if resolve_role(&config.role_rules, &claims).is_none() {
+        return forbidden("no role is assigned to this account");
+    }
+
+    let user_code = normalize_user_code(&body.user_code);
+    match sso.store().approve_cli(&user_code, &session, now).await {
+        Ok(true) => {
+            let _ = sso
+                .store()
+                .audit(AuditEvent {
+                    kind: "cli_approved",
+                    sub: Some(&session.sub),
+                    email: session.email.as_deref(),
+                    ip: session.ip.as_deref(),
+                    ua: session.user_agent.as_deref(),
+                    detail: Some(&format!("{user_code} approved by {}", user.name)),
+                })
+                .await;
+            Json(json!({ "ok": true, "user_code": user_code })).into_response()
+        }
+        Ok(false) => (
+            StatusCode::NOT_FOUND,
+            Json(json!({
+                "status": "error",
+                "message": "unknown, expired, or already approved code",
+            })),
+        )
+            .into_response(),
+        Err(e) => {
+            tracing::error!(error = %e, "cannot approve the CLI sign-in");
+            server_error()
+        }
+    }
 }
 
 // -------------------------------------------------------------------- admin

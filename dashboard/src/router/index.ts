@@ -22,6 +22,14 @@ const router = createRouter({
       meta: { requiresAuth: true },
     },
     {
+      // Terminal-initiated SSO sign-in: any signed-in role can approve, and
+      // the CLI session inherits that role.
+      path: '/auth/cli',
+      name: 'CliApprove',
+      component: () => import('@/views/CliApprove.vue'),
+      meta: { requiresAuth: true },
+    },
+    {
       path: '/error/:code',
       name: 'Error',
       component: ErrorPage,

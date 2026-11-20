@@ -8,14 +8,19 @@ use base64::engine::general_purpose::URL_SAFE_NO_PAD;
 use rand::TryRng;
 use sha2::{Digest, Sha256};
 
-/// Random 32-byte value as base64url (43 chars). Used for `state`, `nonce`,
-/// PKCE verifiers, session ids, and `su_` tokens.
-pub fn random_token() -> String {
-    let mut bytes = [0u8; 32];
+/// Raw OS randomness for values that need a custom encoding (e.g. user codes).
+pub fn random_bytes(len: usize) -> Vec<u8> {
+    let mut bytes = vec![0u8; len];
     rand::rngs::SysRng
         .try_fill_bytes(&mut bytes)
         .expect("OS RNG is unavailable");
-    URL_SAFE_NO_PAD.encode(bytes)
+    bytes
+}
+
+/// Random 32-byte value as base64url (43 chars). Used for `state`, `nonce`,
+/// PKCE verifiers, session ids, and `su_` tokens.
+pub fn random_token() -> String {
+    URL_SAFE_NO_PAD.encode(random_bytes(32))
 }
 
 pub fn sha256(bytes: &[u8]) -> [u8; 32] {

@@ -144,6 +144,32 @@ fn auth_request(method: &str, uri: &str, token: &str) -> Request<Body> {
         .unwrap()
 }
 
+fn json_request(method: &str, uri: &str, token: Option<&str>, body: Value) -> Request<Body> {
+    let mut builder = Request::builder()
+        .method(method)
+        .uri(uri)
+        .header(header::CONTENT_TYPE, "application/json");
+    if let Some(token) = token {
+        builder = builder.header(header::AUTHORIZATION, format!("Bearer {token}"));
+    }
+    builder.body(Body::from(body.to_string())).unwrap()
+}
+
+async fn cli_poll(app: &Router, device_code: &str) -> (StatusCode, Value) {
+    let response = app
+        .clone()
+        .oneshot(json_request(
+            "POST",
+            "/api/v1/auth/sso/cli/poll",
+            None,
+            json!({ "device_code": device_code }),
+        ))
+        .await
+        .unwrap();
+    let status = response.status();
+    (status, json_body(response).await)
+}
+
 fn header_string(response: &axum::response::Response, name: header::HeaderName) -> String {
     response
         .headers()
@@ -378,6 +404,61 @@ async fn oidc_login_exchange_rbac_and_logout() {
         .unwrap();
     assert_eq!(response.status(), StatusCode::OK);
     assert_eq!(json_body(response).await["role"], "viewer");
+
+    // CLI device-code sign-in: start -> pending -> approve -> poll -> session.
+    let response = app
+        .clone()
+        .oneshot(json_request(
+            "POST",
+            "/api/v1/auth/sso/cli/start",
+            None,
+            json!({}),
+        ))
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    let start = json_body(response).await;
+    let device_code = start["device_code"].as_str().unwrap().to_string();
+    let user_code = start["user_code"].as_str().unwrap().to_string();
+    assert!(
+        start["verification_url"]
+            .as_str()
+            .unwrap()
+            .ends_with(&format!("/auth/cli?code={user_code}")),
+        "{start}"
+    );
+
+    let (status, body) = cli_poll(&app, &device_code).await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(body["status"], "pending");
+
+    let response = app
+        .clone()
+        .oneshot(json_request(
+            "POST",
+            "/api/v1/auth/sso/cli/approve",
+            Some(&admin_token),
+            json!({ "user_code": user_code }),
+        ))
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+
+    let (status, body) = cli_poll(&app, &device_code).await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(body["status"], "ok");
+    assert_eq!(body["user"]["role"], "admin");
+    let cli_token = body["token"].as_str().unwrap().to_string();
+    let response = app
+        .clone()
+        .oneshot(auth_request("GET", "/api/v1/programs", &cli_token))
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+
+    // The device code is single-use.
+    let (status, _) = cli_poll(&app, &device_code).await;
+    assert_eq!(status, StatusCode::NOT_FOUND);
 
     // Logout revokes immediately.
     let response = app
