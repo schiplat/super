@@ -1017,7 +1017,9 @@ onUnmounted(() => {
       </div>
 
       <!-- Sticky action bar: summary + preview + create -->
-      <div class="sticky bottom-0 -mx-4 border-t border-border/40 bg-background/95 px-4 py-3 backdrop-blur-sm sm:-mx-6 sm:px-6">
+      <!-- z-10: tom-select's own CSS gives its control `z-index: 1`, which
+           would otherwise paint above this bar. -->
+      <div class="sticky bottom-0 z-10 -mx-4 border-t border-border/40 bg-background/95 px-4 py-3 backdrop-blur-sm sm:-mx-6 sm:px-6">
         <UiNotice v-if="submitError" tone="danger" class="mb-3">{{ submitError }}</UiNotice>
         <div class="flex flex-wrap items-center justify-between gap-3">
           <div class="min-w-0 text-xs text-muted-foreground">
