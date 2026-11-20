@@ -13,15 +13,15 @@ const enabled = defineModel<boolean>({ required: true });
 </script>
 
 <template>
-  <div class="surface-card border border-border shadow-xs">
+  <div class="surface-card ring-1 ring-border/60 shadow-[0_1px_2px_hsl(220_20%_20%/0.04),0_2px_8px_hsl(220_20%_20%/0.03)]">
     <!-- Collapsed height is identical across optional sections -->
-    <div class="flex items-center justify-between gap-3 px-5 min-h-[3.25rem]">
+    <div class="flex items-center justify-between gap-3 px-6 py-4">
       <div class="flex items-center gap-2 min-w-0">
         <span class="text-muted-foreground shrink-0 [&_svg]:w-3.5 [&_svg]:h-3.5">
           <slot name="icon" />
         </span>
         <div class="min-w-0">
-          <h3 class="text-xs font-semibold uppercase tracking-[0.08em] text-muted-foreground flex items-center gap-2">
+          <h3 class="type-eyebrow text-muted-foreground flex items-center gap-2">
             {{ title }}
             <a
               v-if="docHref"
@@ -37,7 +37,7 @@ const enabled = defineModel<boolean>({ required: true });
       </div>
       <UiSwitch v-model="enabled" />
     </div>
-    <div v-if="enabled" class="px-5 pb-5 border-t border-border/60 pt-4 space-y-4">
+    <div v-if="enabled" class="space-y-4 border-t border-border/40 px-6 pb-6 pt-4">
       <slot />
     </div>
   </div>

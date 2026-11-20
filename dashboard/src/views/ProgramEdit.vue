@@ -474,7 +474,7 @@ async function handleSubmit() {
 </script>
 
 <template>
-  <div class="max-w-5xl mx-auto py-6 space-y-6 pb-20">
+  <div class="mx-auto max-w-5xl space-y-6">
 
     <!-- Loading State -->
     <div v-if="loading" class="flex flex-col items-center justify-center py-20 gap-4">
@@ -486,7 +486,7 @@ async function handleSubmit() {
       <!-- Header -->
       <div class="flex items-center justify-between mb-6">
         <div class="flex items-center gap-4">
-          <button class="inline-flex h-9 w-9 items-center justify-center rounded-[9px] text-muted-foreground hover:text-foreground hover:bg-muted transition-colors" @click="router.push({ path: '/', query: { detail: programId } })">
+          <button class="inline-flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted/40 hover:text-foreground" @click="router.push(`/programs/${programId}`)">
             <ArrowLeft class="w-5 h-5" />
           </button>
           <div>
@@ -496,7 +496,7 @@ async function handleSubmit() {
             <p class="text-sm text-foreground/60 font-mono">{{ programId }}</p>
           </div>
         </div>
-        <button class="h-9 gap-2 shadow-xs shadow-foreground/20 whitespace-nowrap inline-flex items-center justify-center rounded-[9px] font-medium px-3.5 text-sm bg-primary text-primary-foreground hover:bg-primary/90 transition-colors disabled:opacity-50" :disabled="submitting" @click="handleSubmit">
+        <button class="inline-flex h-9 items-center justify-center gap-2 whitespace-nowrap rounded-xl bg-primary px-4 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-50" :disabled="submitting" @click="handleSubmit">
           <span v-if="submitting" class="inline-block w-3 h-3 border-2 border-foreground/20 border-t-foreground/50 rounded-full animate-spin"></span>
           <Save v-else class="w-4 h-4" />
           Update Configuration
@@ -513,26 +513,26 @@ async function handleSubmit() {
         <div class="lg:col-span-8 space-y-6">
 
           <!-- 1. Basic Info -->
-          <div class="surface-card border border-border shadow-xs overflow-visible">
+          <div class="surface-card ring-1 ring-border/60 shadow-[0_1px_2px_hsl(220_20%_20%/0.04),0_2px_8px_hsl(220_20%_20%/0.03)] overflow-visible">
             <div class="p-6">
-              <h3 class="text-xs font-semibold uppercase tracking-[0.08em] text-muted-foreground mb-4 flex items-center gap-2">
+              <h3 class="type-eyebrow text-muted-foreground mb-4 flex items-center gap-2">
                 <Box class="w-4 h-4" /> Essentials
               <a :href="docRef('identity--execution')" target="_blank" class="inline-flex ml-1.5 text-foreground/25 hover:text-primary transition-colors" title="Docs: Identity & execution"><ExternalLink class="w-3 h-3" /></a>
               </h3>
 
-              <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
                 <div class="form-control">
-                  <label class="label pt-0 pb-1.5"><span class="label-text text-xs font-medium text-foreground/75">Program Name<a :href="docRef('identity--execution')" target="_blank" class="inline-flex ml-1 text-foreground/25 hover:text-primary align-text-bottom" title="Docs"><ExternalLink class="w-3 h-3" /></a></span></label>
+                  <label class="label pt-0 pb-2"><span class="label-text text-xs font-medium text-foreground/75">Program Name<a :href="docRef('identity--execution')" target="_blank" class="inline-flex ml-1 text-foreground/25 hover:text-primary align-text-bottom" title="Docs"><ExternalLink class="w-3 h-3" /></a></span></label>
                   <input v-model="form.name" type="text" class="field-control" />
                 </div>
                 <div class="form-control">
-                  <label class="label pt-0 pb-1.5"><span class="label-text text-xs font-medium text-foreground/75">Group<a :href="docRef('identity--execution')" target="_blank" class="inline-flex ml-1 text-foreground/25 hover:text-primary align-text-bottom" title="Docs"><ExternalLink class="w-3 h-3" /></a></span></label>
+                  <label class="label pt-0 pb-2"><span class="label-text text-xs font-medium text-foreground/75">Group<a :href="docRef('identity--execution')" target="_blank" class="inline-flex ml-1 text-foreground/25 hover:text-primary align-text-bottom" title="Docs"><ExternalLink class="w-3 h-3" /></a></span></label>
                   <input v-model="form.group" type="text" class="field-control" />
                 </div>
               </div>
 
               <div class="form-control mt-4">
-                <label class="label pt-0 pb-1.5 justify-start gap-2">
+                <label class="label pt-0 pb-2 justify-start gap-2">
                   <span class="label-text text-xs font-medium text-foreground/75">Command<a :href="docRef('identity--execution')" target="_blank" class="inline-flex ml-1 text-foreground/25 hover:text-primary align-text-bottom" title="Docs"><ExternalLink class="w-3 h-3" /></a></span>
                   <span class="text-destructive text-xs">*</span>
                 </label>
@@ -582,13 +582,13 @@ async function handleSubmit() {
                 <code class="block mt-1 text-xs font-mono text-foreground/80 break-all">{{ fullCommandLine || '(empty)' }}</code>
               </div>
 
-              <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+              <div class="grid grid-cols-1 md:grid-cols-2 gap-3 mt-4">
                 <div class="form-control">
-                  <label class="label pt-0 pb-1.5"><span class="label-text text-xs font-medium text-foreground/75">Working Directory<a :href="docRef('identity--execution')" target="_blank" class="inline-flex ml-1 text-foreground/25 hover:text-primary align-text-bottom" title="Docs"><ExternalLink class="w-3 h-3" /></a></span></label>
+                  <label class="label pt-0 pb-2"><span class="label-text text-xs font-medium text-foreground/75">Working Directory<a :href="docRef('identity--execution')" target="_blank" class="inline-flex ml-1 text-foreground/25 hover:text-primary align-text-bottom" title="Docs"><ExternalLink class="w-3 h-3" /></a></span></label>
                   <input v-model="form.cwd" type="text" class="field-control font-mono text-sm" />
                 </div>
                 <div class="form-control">
-                  <label class="label pt-0 pb-1.5"><span class="label-text text-xs font-medium text-foreground/75">Run As User<a :href="docRef('identity--execution')" target="_blank" class="inline-flex ml-1 text-foreground/25 hover:text-primary align-text-bottom" title="Docs"><ExternalLink class="w-3 h-3" /></a></span></label>
+                  <label class="label pt-0 pb-2"><span class="label-text text-xs font-medium text-foreground/75">Run As User<a :href="docRef('identity--execution')" target="_blank" class="inline-flex ml-1 text-foreground/25 hover:text-primary align-text-bottom" title="Docs"><ExternalLink class="w-3 h-3" /></a></span></label>
                   <input v-model="form.user" type="text" class="field-control font-mono text-sm" />
                 </div>
               </div>
@@ -596,9 +596,9 @@ async function handleSubmit() {
           </div>
 
           <!-- 2. Environment Variables -->
-          <div class="surface-card border border-border shadow-xs overflow-visible">
+          <div class="surface-card ring-1 ring-border/60 shadow-[0_1px_2px_hsl(220_20%_20%/0.04),0_2px_8px_hsl(220_20%_20%/0.03)] overflow-visible">
             <div class="p-6">
-              <h3 class="text-xs font-semibold uppercase tracking-[0.08em] text-muted-foreground mb-4 flex items-center gap-2">
+              <h3 class="type-eyebrow text-muted-foreground mb-4 flex items-center gap-2">
                 <Layers class="w-4 h-4" /> Environment Variables
                 <a :href="docRef('identity--execution')" target="_blank" class="inline-flex ml-1.5 text-foreground/25 hover:text-primary transition-colors" title="Docs: Identity & execution"><ExternalLink class="w-3 h-3" /></a>
               </h3>
@@ -677,30 +677,30 @@ async function handleSubmit() {
                 <div class="min-h-[6.5rem]">
                   <div v-show="form.healthCheckType === 'tcp'" class="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div class="form-control">
-                      <label class="label pt-0 pb-1.5"><span class="label-text text-xs font-medium text-foreground/75">Host</span></label>
+                      <label class="label pt-0 pb-2"><span class="label-text text-xs font-medium text-foreground/75">Host</span></label>
                       <input v-model="form.hc_host" class="field-control font-mono text-sm" />
                     </div>
                     <div class="form-control">
-                      <label class="label pt-0 pb-1.5"><span class="label-text text-xs font-medium text-foreground/75">Port</span></label>
+                      <label class="label pt-0 pb-2"><span class="label-text text-xs font-medium text-foreground/75">Port</span></label>
                       <input v-model="form.hc_port" type="number" class="field-control font-mono text-sm" />
                     </div>
                   </div>
 
                   <div v-show="form.healthCheckType === 'http'" class="grid grid-cols-1 md:grid-cols-12 gap-4">
                     <div class="form-control md:col-span-3">
-                      <label class="label pt-0 pb-1.5"><span class="label-text text-xs font-medium text-foreground/75">Method</span></label>
+                      <label class="label pt-0 pb-2"><span class="label-text text-xs font-medium text-foreground/75">Method</span></label>
                       <select v-model="form.hc_method" class="field-control font-mono text-sm">
                         <option>GET</option><option>POST</option><option>HEAD</option>
                       </select>
                     </div>
                     <div class="form-control md:col-span-9">
-                      <label class="label pt-0 pb-1.5"><span class="label-text text-xs font-medium text-foreground/75">URL</span></label>
+                      <label class="label pt-0 pb-2"><span class="label-text text-xs font-medium text-foreground/75">URL</span></label>
                       <input v-model="form.hc_url" class="field-control font-mono text-sm" />
                     </div>
                   </div>
 
                   <div v-show="form.healthCheckType === 'exec'" class="form-control">
-                    <label class="label pt-0 pb-1.5"><span class="label-text text-xs font-medium text-foreground/75">Command</span></label>
+                    <label class="label pt-0 pb-2"><span class="label-text text-xs font-medium text-foreground/75">Command</span></label>
                     <div class="relative">
                       <span class="absolute left-3 top-2.5 font-mono text-sm text-foreground/40">$</span>
                       <input v-model="form.hc_command" class="field-control pl-7 font-mono text-sm" />
@@ -712,19 +712,19 @@ async function handleSubmit() {
 
                 <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
                   <div class="form-control">
-                    <label class="label pt-0 pb-1.5"><span class="label-text text-xs font-medium text-foreground/75">Probe Interval (s)</span></label>
+                    <label class="label pt-0 pb-2"><span class="label-text text-xs font-medium text-foreground/75">Probe Interval (s)</span></label>
                     <input v-model="form.hc_interval" type="number" min="0" class="field-control" placeholder="10 (default)" />
                   </div>
                   <div class="form-control">
-                    <label class="label pt-0 pb-1.5"><span class="label-text text-xs font-medium text-foreground/75">Probe Timeout (s)</span></label>
+                    <label class="label pt-0 pb-2"><span class="label-text text-xs font-medium text-foreground/75">Probe Timeout (s)</span></label>
                     <input v-model="form.hc_timeout" type="number" min="0" class="field-control" placeholder="0 (default)" />
                   </div>
                   <div class="form-control">
-                    <label class="label pt-0 pb-1.5"><span class="label-text text-xs font-medium text-foreground/75">Start Period (s)</span></label>
+                    <label class="label pt-0 pb-2"><span class="label-text text-xs font-medium text-foreground/75">Start Period (s)</span></label>
                     <input v-model="form.hc_start_period" type="number" min="0" class="field-control" placeholder="0" />
                   </div>
                   <div class="form-control">
-                    <label class="label pt-0 pb-1.5"><span class="label-text text-xs font-medium text-foreground/75">Max Failures</span></label>
+                    <label class="label pt-0 pb-2"><span class="label-text text-xs font-medium text-foreground/75">Max Failures</span></label>
                     <input v-model="form.hc_max_failures" type="number" min="0" class="field-control" placeholder="3 (default)" />
                   </div>
                 </div>
@@ -743,26 +743,26 @@ async function handleSubmit() {
             <template #icon><Zap /></template>
             <p class="text-xs text-muted-foreground">Define an artifact to download and replace the binary before the next restart.</p>
             <div class="form-control">
-              <label class="label pt-0 pb-1.5"><span class="label-text text-xs font-medium text-foreground/75">Source URL</span></label>
+              <label class="label pt-0 pb-2"><span class="label-text text-xs font-medium text-foreground/75">Source URL</span></label>
               <input v-model="form.artifact_source" type="url" placeholder="https://artifacts.example.com/releases/my-app.tar.gz" class="field-control font-mono" />
             </div>
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
               <div class="form-control">
-                <label class="label pt-0 pb-1.5"><span class="label-text text-xs font-medium text-foreground/75">Checksum</span></label>
+                <label class="label pt-0 pb-2"><span class="label-text text-xs font-medium text-foreground/75">Checksum</span></label>
                 <input v-model="form.artifact_checksum" type="text" placeholder="sha256:abc123..." class="field-control font-mono" />
               </div>
               <div class="form-control">
-                <label class="label pt-0 pb-1.5"><span class="label-text text-xs font-medium text-foreground/75">Destination Path</span></label>
+                <label class="label pt-0 pb-2"><span class="label-text text-xs font-medium text-foreground/75">Destination Path</span></label>
                 <input v-model="form.artifact_destination" type="text" placeholder="/opt/my-app" class="field-control font-mono" />
               </div>
             </div>
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
               <label class="flex items-center justify-between cursor-pointer group">
                 <span class="font-medium text-sm group-hover:text-primary transition-colors">Extract archive</span>
                 <UiSwitch v-model="form.artifact_extract" />
               </label>
               <div class="form-control">
-                <label class="label pt-0 pb-1.5"><span class="label-text text-xs font-medium text-foreground/75">Restart Policy</span></label>
+                <label class="label pt-0 pb-2"><span class="label-text text-xs font-medium text-foreground/75">Restart Policy</span></label>
                 <div class="relative">
                   <select v-model="form.artifact_restart_policy" class="appearance-none bg-muted/60 hover:bg-border/60 focus:bg-border/60 focus:outline-hidden cursor-pointer text-sm font-medium h-9 min-h-0 w-full pl-3 pr-8 rounded-[9px] border border-transparent">
                     <option value="immediate">immediate — restart process (SIGTERM), then verify</option>
@@ -783,14 +783,14 @@ async function handleSubmit() {
                 </p>
               </div>
             </div>
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
               <div class="form-control">
-                <label class="label pt-0 pb-1.5"><span class="label-text text-xs font-medium text-foreground/75">Download timeout (s)</span></label>
+                <label class="label pt-0 pb-2"><span class="label-text text-xs font-medium text-foreground/75">Download timeout (s)</span></label>
                 <input v-model.number="form.artifact_download_timeout" type="number" min="0" placeholder="60" class="field-control font-mono" />
                 <p class="text-xs text-muted-foreground mt-1">HTTP download deadline. <code class="text-[10px]">0</code> disables overall transfer timeout.</p>
               </div>
               <div class="form-control">
-                <label class="label pt-0 pb-1.5"><span class="label-text text-xs font-medium text-foreground/75">Verify timeout (s)</span></label>
+                <label class="label pt-0 pb-2"><span class="label-text text-xs font-medium text-foreground/75">Verify timeout (s)</span></label>
                 <input v-model.number="form.artifact_verify_timeout" type="number" min="0" placeholder="60" class="field-control font-mono" />
                 <p class="text-xs text-muted-foreground mt-1">Post-swap health window before auto-rollback. <code class="text-[10px]">0</code> disables.</p>
               </div>
@@ -808,19 +808,19 @@ async function handleSubmit() {
             <template #icon><Activity /></template>
             <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div class="form-control">
-                <label class="label pt-0 pb-1.5"><span class="label-text text-xs font-medium text-foreground/75">Pre-Start</span></label>
+                <label class="label pt-0 pb-2"><span class="label-text text-xs font-medium text-foreground/75">Pre-Start</span></label>
                 <textarea v-model="form.hooks.pre_start" class="field-control font-mono h-24 py-2 leading-relaxed resize-y"></textarea>
               </div>
               <div class="form-control">
-                <label class="label pt-0 pb-1.5"><span class="label-text text-xs font-medium text-foreground/75">Post-Start</span></label>
+                <label class="label pt-0 pb-2"><span class="label-text text-xs font-medium text-foreground/75">Post-Start</span></label>
                 <textarea v-model="form.hooks.post_start" class="field-control font-mono h-24 py-2 leading-relaxed resize-y"></textarea>
               </div>
               <div class="form-control">
-                <label class="label pt-0 pb-1.5"><span class="label-text text-xs font-medium text-foreground/75">Pre-Stop</span></label>
+                <label class="label pt-0 pb-2"><span class="label-text text-xs font-medium text-foreground/75">Pre-Stop</span></label>
                 <textarea v-model="form.hooks.pre_stop" class="field-control font-mono h-24 py-2 leading-relaxed resize-y"></textarea>
               </div>
               <div class="form-control">
-                <label class="label pt-0 pb-1.5"><span class="label-text text-xs font-medium text-foreground/75">Post-Stop</span></label>
+                <label class="label pt-0 pb-2"><span class="label-text text-xs font-medium text-foreground/75">Post-Stop</span></label>
                 <textarea v-model="form.hooks.post_stop" class="field-control font-mono h-24 py-2 leading-relaxed resize-y"></textarea>
               </div>
             </div>
@@ -835,13 +835,13 @@ async function handleSubmit() {
             doc-title="Docs: Logging"
           >
             <template #icon><Box /></template>
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
               <div class="form-control">
-                <label class="label pt-0 pb-1.5"><span class="label-text text-xs font-medium text-foreground/75">Stdout Log File</span></label>
+                <label class="label pt-0 pb-2"><span class="label-text text-xs font-medium text-foreground/75">Stdout Log File</span></label>
                 <input v-model="form.stdout_logfile" type="text" placeholder="auto (managed in log dir)" class="field-control font-mono" />
               </div>
               <div class="form-control">
-                <label class="label pt-0 pb-1.5"><span class="label-text text-xs font-medium text-foreground/75">Stderr Log File</span></label>
+                <label class="label pt-0 pb-2"><span class="label-text text-xs font-medium text-foreground/75">Stderr Log File</span></label>
                 <input v-model="form.stderr_logfile" type="text" placeholder="auto (managed in log dir)" class="field-control font-mono" />
               </div>
             </div>
@@ -853,8 +853,8 @@ async function handleSubmit() {
         <div class="lg:col-span-4 space-y-6">
 
           <!-- Control + Lifecycle (merged) -->
-          <div class="surface-card border border-border shadow-xs p-5 space-y-5">
-            <h3 class="text-xs font-semibold uppercase tracking-[0.08em] text-muted-foreground flex items-center gap-2">
+          <div class="surface-card ring-1 ring-border/60 shadow-[0_1px_2px_hsl(220_20%_20%/0.04),0_2px_8px_hsl(220_20%_20%/0.03)] p-5 space-y-5">
+            <h3 class="type-eyebrow text-muted-foreground flex items-center gap-2">
               Control & Lifecycle
               <a :href="docRef('restart--stop-behaviour')" target="_blank" class="inline-flex text-foreground/25 hover:text-primary transition-colors" title="Docs"><ExternalLink class="w-3 h-3" /></a>
             </h3>
@@ -863,12 +863,12 @@ async function handleSubmit() {
               <UiSwitch v-model="form.autostart" />
             </label>
             <div class="form-control">
-              <label class="label pt-0 pb-1.5"><span class="label-text text-xs font-medium text-foreground/75">Retry Limit</span></label>
+              <label class="label pt-0 pb-2"><span class="label-text text-xs font-medium text-foreground/75">Retry Limit</span></label>
               <input v-model="form.retry_limit" type="number" min="0" class="field-control" />
             </div>
             <div class="h-px bg-border"></div>
             <div class="form-control">
-              <label class="label pt-0 pb-1.5"><span class="label-text text-xs font-medium text-foreground/75">Autorestart Policy</span></label>
+              <label class="label pt-0 pb-2"><span class="label-text text-xs font-medium text-foreground/75">Autorestart Policy</span></label>
               <div class="relative">
                 <select v-model="form.autorestart" class="appearance-none bg-muted/60 hover:bg-border/60 focus:bg-border/60 focus:outline-hidden cursor-pointer text-sm font-medium h-9 min-h-0 w-full pl-3 pr-8 rounded-[9px] border border-transparent">
                   <option value="unexpected">unexpected — only on non-zero / unknown exits</option>
@@ -882,23 +882,23 @@ async function handleSubmit() {
             </div>
             <div class="grid grid-cols-2 gap-3">
               <div class="form-control">
-                <label class="label pt-0 pb-1.5"><span class="label-text text-xs font-medium text-foreground/75">Startsecs</span></label>
+                <label class="label pt-0 pb-2"><span class="label-text text-xs font-medium text-foreground/75">Startsecs</span></label>
                 <input v-model="form.startsecs" type="number" min="0" class="field-control" placeholder="10" />
                 <span class="text-xs text-muted-foreground mt-0.5">Sec to mark stable</span>
               </div>
               <div class="form-control">
-                <label class="label pt-0 pb-1.5"><span class="label-text text-xs font-medium text-foreground/75">Stopsecs</span></label>
+                <label class="label pt-0 pb-2"><span class="label-text text-xs font-medium text-foreground/75">Stopsecs</span></label>
                 <input v-model.number="form.stopsecs" type="number" min="0" class="field-control" placeholder="global timeout" />
                 <span class="text-xs text-muted-foreground mt-0.5">SIGTERM → SIGKILL wait</span>
               </div>
             </div>
             <div class="form-control">
-              <label class="label pt-0 pb-1.5"><span class="label-text text-xs font-medium text-foreground/75">Priority</span></label>
+              <label class="label pt-0 pb-2"><span class="label-text text-xs font-medium text-foreground/75">Priority</span></label>
               <input v-model="form.priority" type="number" class="field-control" placeholder="999" />
               <span class="text-xs text-muted-foreground mt-0.5">Lower = earlier startup order</span>
             </div>
             <div class="form-control">
-              <label class="label pt-0 pb-1.5"><span class="label-text text-xs font-medium text-foreground/75">Exit Codes</span></label>
+              <label class="label pt-0 pb-2"><span class="label-text text-xs font-medium text-foreground/75">Exit Codes</span></label>
               <p class="text-xs text-muted-foreground mb-2">Expected success codes. Defaults to <code class="bg-muted px-1 rounded">[0]</code>.</p>
               <div class="space-y-2">
                 <div v-for="(ec, idx) in form.exitcodes" :key="idx" class="flex gap-2">
@@ -920,29 +920,29 @@ async function handleSubmit() {
           >
             <template #icon><Clock /></template>
             <div class="form-control">
-              <label class="label pt-0 pb-1.5"><span class="label-text text-xs font-medium text-foreground/75">Expression</span></label>
+              <label class="label pt-0 pb-2"><span class="label-text text-xs font-medium text-foreground/75">Expression</span></label>
               <input v-model="form.cron" type="text" placeholder="0 * * * * *" class="field-control font-mono" />
             </div>
             <div class="grid grid-cols-2 gap-3">
               <div class="form-control">
-                <label class="label pt-0 pb-1.5"><span class="label-text text-xs font-medium text-foreground/75">Max Concurrent</span></label>
+                <label class="label pt-0 pb-2"><span class="label-text text-xs font-medium text-foreground/75">Max Concurrent</span></label>
                 <input v-model="form.max_concurrent" type="number" min="0" max="64" placeholder="1 (default)" class="field-control" />
                 <span class="text-xs text-muted-foreground mt-0.5">Overlapping runs allowed</span>
               </div>
               <div class="form-control">
-                <label class="label pt-0 pb-1.5"><span class="label-text text-xs font-medium text-foreground/75">Max Queued</span></label>
+                <label class="label pt-0 pb-2"><span class="label-text text-xs font-medium text-foreground/75">Max Queued</span></label>
                 <input v-model="form.max_queued" type="number" min="0" max="10000" placeholder="100 (default)" class="field-control" />
                 <span class="text-xs text-muted-foreground mt-0.5">Cap queued firings</span>
               </div>
             </div>
             <div class="form-control">
-              <label class="label pt-0 pb-1.5"><span class="label-text text-xs font-medium text-foreground/75">Kill After (secs)</span></label>
+              <label class="label pt-0 pb-2"><span class="label-text text-xs font-medium text-foreground/75">Kill After (secs)</span></label>
               <input v-model="form.kill_after_secs" type="number" min="0" placeholder="Disabled" class="field-control" />
               <span class="text-xs text-muted-foreground mt-0.5">Terminate a run exceeding this wall-clock time (SIGTERM, then SIGKILL after stopsecs)</span>
             </div>
             <div class="grid grid-cols-2 gap-3">
               <div class="form-control">
-                <label class="label pt-0 pb-1.5"><span class="label-text text-xs font-medium text-foreground/75">On Overlap</span></label>
+                <label class="label pt-0 pb-2"><span class="label-text text-xs font-medium text-foreground/75">On Overlap</span></label>
                 <div class="relative">
                   <select v-model="form.on_overlap" class="appearance-none bg-muted/60 hover:bg-border/60 focus:bg-border/60 focus:outline-hidden cursor-pointer text-sm font-medium h-9 min-h-0 w-full pl-3 pr-8 rounded-[9px] border border-transparent">
                     <option value="skip">skip — drop tick</option>
@@ -955,7 +955,7 @@ async function handleSubmit() {
                 </div>
               </div>
               <div class="form-control">
-                <label class="label pt-0 pb-1.5"><span class="label-text text-xs font-medium text-foreground/75">Catchup</span></label>
+                <label class="label pt-0 pb-2"><span class="label-text text-xs font-medium text-foreground/75">Catchup</span></label>
                 <div class="relative">
                   <select v-model="form.catchup" class="appearance-none bg-muted/60 hover:bg-border/60 focus:bg-border/60 focus:outline-hidden cursor-pointer text-sm font-medium h-9 min-h-0 w-full pl-3 pr-8 rounded-[9px] border border-transparent">
                     <option value="skip">skip — no backfill</option>
@@ -969,7 +969,7 @@ async function handleSubmit() {
               </div>
             </div>
             <div class="form-control">
-              <label class="label pt-0 pb-1.5"><span class="label-text text-xs font-medium text-foreground/75">Jitter (s)</span></label>
+              <label class="label pt-0 pb-2"><span class="label-text text-xs font-medium text-foreground/75">Jitter (s)</span></label>
               <input v-model="form.jitter_sec" type="number" min="0" placeholder="0" class="field-control" />
               <span class="text-xs text-muted-foreground mt-0.5">Random delay before each trigger</span>
             </div>
@@ -987,23 +987,23 @@ async function handleSubmit() {
             <template #icon><Cpu /></template>
             <div class="grid grid-cols-2 gap-3">
               <div class="form-control">
-                <label class="label pt-0 pb-1.5"><span class="label-text text-xs font-medium text-foreground/75 flex items-center gap-1"><Cpu class="w-3 h-3" /> CPU (cores)</span></label>
+                <label class="label pt-0 pb-2"><span class="label-text text-xs font-medium text-foreground/75 flex items-center gap-1"><Cpu class="w-3 h-3" /> CPU (cores)</span></label>
                 <input v-model="form.cpu_quota" type="number" step="0.1" placeholder="1.0" class="field-control" />
               </div>
               <div class="form-control">
-                <label class="label pt-0 pb-1.5"><span class="label-text text-xs font-medium text-foreground/75 flex items-center gap-1"><Box class="w-3 h-3" /> Mem (MB)</span></label>
+                <label class="label pt-0 pb-2"><span class="label-text text-xs font-medium text-foreground/75 flex items-center gap-1"><Box class="w-3 h-3" /> Mem (MB)</span></label>
                 <input v-model="form.memory_mb" type="number" placeholder="512" class="field-control" />
               </div>
               <div class="form-control">
-                <label class="label pt-0 pb-1.5"><span class="label-text text-xs font-medium text-foreground/75">Warn %</span></label>
+                <label class="label pt-0 pb-2"><span class="label-text text-xs font-medium text-foreground/75">Warn %</span></label>
                 <input v-model="form.memory_warn_percent" type="number" min="0" max="100" placeholder="80" class="field-control" />
               </div>
               <div class="form-control">
-                <label class="label pt-0 pb-1.5"><span class="label-text text-xs font-medium text-foreground/75">Warn Headroom (MB)</span></label>
+                <label class="label pt-0 pb-2"><span class="label-text text-xs font-medium text-foreground/75">Warn Headroom (MB)</span></label>
                 <input v-model="form.memory_warn_headroom" type="number" placeholder="0" class="field-control" />
               </div>
               <div class="form-control col-span-2">
-                <label class="label pt-0 pb-1.5"><span class="label-text text-xs font-medium text-foreground/75">Mem High (MB, soft)</span></label>
+                <label class="label pt-0 pb-2"><span class="label-text text-xs font-medium text-foreground/75">Mem High (MB, soft)</span></label>
                 <input v-model="form.memory_high" type="number" placeholder="0" class="field-control" />
               </div>
             </div>

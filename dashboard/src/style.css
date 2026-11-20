@@ -237,6 +237,11 @@
     @apply cursor-pointer hover:bg-muted/40;
   }
 
+  /* Inline form error (used by the program forms). */
+  .alert-error {
+    @apply rounded-xl bg-destructive/10 px-3 py-2 text-sm text-destructive;
+  }
+
   .field-error {
     @apply rounded-xl bg-destructive/10 px-3 py-2 text-sm text-destructive;
   }
