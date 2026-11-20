@@ -6,6 +6,7 @@ use utoipa::ToSchema;
 
 pub mod auth;
 pub mod auth_secret;
+pub mod auth_sso;
 pub mod config;
 pub mod daemon;
 pub mod import;
@@ -44,6 +45,10 @@ pub use sensitive_file::{
 pub use auth::{
     AuthRecord, AuthStatusResponse, AuthTokenInfo, CreateTokenRequest, CreateTokenResponse,
     UserContext, UserRole,
+};
+pub use auth_sso::{
+    AuthMode, IdentityClaims, RoleRule, RuleMatch, SSO_CALLBACK_PATH, SSO_LOGIN_PATH, SsoConfig,
+    SsoStatus, TokenAuthMethod, is_loopback_url, resolve_role,
 };
 pub use license::{
     EmbeddedVerifyingKeyInfo, KEY_CERT_SIGNING_DOMAIN, KEY_CERT_VERSION, KeyCert,
