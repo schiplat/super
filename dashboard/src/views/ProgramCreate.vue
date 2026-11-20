@@ -458,30 +458,44 @@ onUnmounted(() => {
 
 <template>
   <div class="lg:grid lg:grid-cols-[13rem_1fr] lg:gap-6">
-    <!-- Anchor rail: section spine + completion state -->
+    <!-- Anchor rail: page header + section spine + completion state -->
     <nav class="hidden lg:block" aria-label="Form sections">
-      <div class="sticky top-6 space-y-1 py-1">
-        <button
-          v-for="section in sections"
-          :key="section.key"
-          type="button"
-          class="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-left text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/30"
-          :class="activeSection === section.key
-            ? 'bg-muted text-foreground'
-            : 'text-muted-foreground hover:bg-muted/40 hover:text-foreground'"
-          @click="scrollToSection(section.key)"
-        >
-          <span
-            class="h-1.5 w-1.5 shrink-0 rounded-full"
-            :class="sectionDone(section.key)
-              ? 'bg-success'
-              : section.required
-                ? 'bg-destructive'
-                : 'bg-muted-foreground/30'"
-            aria-hidden="true"
-          />
-          <span class="truncate">{{ section.label }}</span>
-        </button>
+      <div class="sticky top-6 py-1">
+        <div class="mb-4">
+          <div class="flex items-center gap-2">
+            <button class="inline-flex h-7 w-7 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted/40 hover:text-foreground" title="Back" @click="router.back()">
+              <ArrowLeft class="h-3.5 w-3.5" />
+            </button>
+            <h1 class="text-sm font-semibold tracking-tight">New Program</h1>
+          </div>
+          <p class="mt-2 text-xs leading-snug text-muted-foreground">
+            Only <span class="font-medium text-foreground">Run</span> is required — everything
+            else has safe defaults.
+          </p>
+        </div>
+        <div class="space-y-1">
+          <button
+            v-for="section in sections"
+            :key="section.key"
+            type="button"
+            class="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-left text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/30"
+            :class="activeSection === section.key
+              ? 'bg-muted text-foreground'
+              : 'text-muted-foreground hover:bg-muted/40 hover:text-foreground'"
+            @click="scrollToSection(section.key)"
+          >
+            <span
+              class="h-1.5 w-1.5 shrink-0 rounded-full"
+              :class="sectionDone(section.key)
+                ? 'bg-success'
+                : section.required
+                  ? 'bg-destructive'
+                  : 'bg-muted-foreground/30'"
+              aria-hidden="true"
+            />
+            <span class="truncate">{{ section.label }}</span>
+          </button>
+        </div>
         <p class="mt-3 px-2.5 text-[11px] leading-snug text-muted-foreground">
           <span class="inline-block h-1.5 w-1.5 rounded-full bg-success align-middle" />
           configured ·
@@ -493,21 +507,15 @@ onUnmounted(() => {
 
     <!-- Main column -->
     <div class="min-w-0">
-      <!-- Header -->
-      <div class="mb-6 flex items-start justify-between gap-4">
-        <div class="flex items-center gap-3">
-          <button class="inline-flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted/40 hover:text-foreground" @click="router.back()">
-            <ArrowLeft class="w-4 h-4" />
-          </button>
-          <div>
-            <h1 class="text-lg font-semibold tracking-tight">New Program</h1>
-            <p class="text-sm text-muted-foreground">Only Run is required — everything else has safe defaults.</p>
-          </div>
+      <!-- Compact header for narrow screens, where the rail is hidden -->
+      <div class="mb-6 flex items-center gap-3 lg:hidden">
+        <button class="inline-flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted/40 hover:text-foreground" @click="router.back()">
+          <ArrowLeft class="w-4 h-4" />
+        </button>
+        <div>
+          <h1 class="text-base font-semibold tracking-tight">New Program</h1>
+          <p class="text-xs text-muted-foreground">Only Run is required — everything else has safe defaults.</p>
         </div>
-        <UiButton variant="secondary" size="sm" @click="previewOpen = true">
-          <Eye class="h-4 w-4" />
-          Preview JSON
-        </UiButton>
       </div>
 
       <UiNotice v-if="submitError" tone="danger" class="mb-6">{{ submitError }}</UiNotice>
