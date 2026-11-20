@@ -71,7 +71,8 @@ const router = createRouter({
           component: () => import('@/views/AuthSettings.vue'),
         },
         {
-          path: 'stack',
+          path: 'stacks',
+          alias: '/stack',
           name: 'StackEditor',
           component: StackEditor
         },

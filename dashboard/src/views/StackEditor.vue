@@ -7,7 +7,8 @@ import {
   Save, Download, Layers, AlertTriangle, Trash2, Plus, RefreshCw,
 } from 'lucide-vue-next';
 import UiButton from '@/components/ui/UiButton.vue';
-import UiDialog from '@/components/ui/UiDialog.vue';
+import UiDialog from '@/components/ui/UiDialog.vue'
+import UiNotice from '@/components/ui/UiNotice.vue';
 import UiInput from '@/components/ui/UiInput.vue';
 import UiBadge from '@/components/ui/UiBadge.vue';
 import apiClient from '@/api/client';
@@ -212,62 +213,52 @@ async function confirmPruneApply() {
 </script>
 
 <template>
-  <div class="max-w-5xl mx-auto py-6 pb-20">
-  <div class="h-[calc(100vh-8rem)] flex flex-col bg-card border border-border rounded-xl shadow-xs overflow-hidden">
+  <div class="flex h-[calc(100vh-6.5rem)] flex-col overflow-hidden rounded-2xl bg-card ring-1 ring-border/60 shadow-[0_1px_2px_hsl(220_20%_20%/0.04),0_2px_8px_hsl(220_20%_20%/0.03)]">
 
     <!-- Toolbar Area -->
-    <div class="border-b border-border bg-muted/30">
+    <div class="border-b border-border/40">
 
       <!-- Top Row: Title & Actions -->
-      <div class="px-6 pt-5 pb-3 flex flex-col md:flex-row md:items-center justify-between gap-4">
+      <div class="flex flex-col justify-between gap-4 px-6 py-4 md:flex-row md:items-center">
 
-        <!-- Left: Title -->
-        <div class="flex gap-4">
-          <div class="p-3 bg-primary/10 text-primary rounded-xl h-fit shrink-0">
-            <Layers class="w-6 h-6" />
-          </div>
-          <div>
-            <h2 class="text-xl font-bold text-foreground tracking-tight">Stack Editor</h2>
-            <p class="text-sm text-foreground/50 font-medium">Declarative configuration via JSON.</p>
-          </div>
+        <div class="min-w-0">
+          <h2 class="text-sm font-semibold tracking-tight">Stack definition</h2>
+          <p class="mt-1 text-sm text-muted-foreground">
+            Apply a JSON inventory of programs. Changes are diffed before anything is stopped.
+          </p>
         </div>
 
         <!-- Right: Action Buttons -->
         <div class="flex items-center gap-3">
-          <button class="inline-flex items-center gap-2 px-3 py-1.5 rounded-[7px] text-sm font-medium text-muted-foreground hover:text-foreground hover:bg-muted transition-colors" @click="loadCurrentStack" :disabled="loading">
-            <Download class="w-4 h-4" />
-            Load Current
+          <button class="inline-flex h-9 items-center gap-2 rounded-xl px-3 text-sm font-medium text-muted-foreground transition-colors hover:bg-muted/40 hover:text-foreground disabled:opacity-50" @click="loadCurrentStack" :disabled="loading">
+            <Download class="h-4 w-4" />
+            Load current
           </button>
 
           <button
             v-if="canApply"
-            class="inline-flex items-center justify-center gap-2 rounded-[9px] font-medium px-3.5 text-sm h-9 bg-primary text-primary-foreground hover:bg-primary/90 transition-colors disabled:opacity-50"
+            class="inline-flex h-9 items-center justify-center gap-2 rounded-xl bg-primary px-4 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-50"
             :disabled="applying"
             @click="applyStack"
           >
             <span v-if="applying" class="inline-block w-3 h-3 border-2 border-foreground/20 border-t-foreground/50 rounded-full animate-spin"></span>
             <Save v-else class="w-4 h-4" />
-            Apply Stack
+            Apply stack
           </button>
-          <span v-else class="text-xs text-foreground/50 px-2">View only — Admin required to apply</span>
+          <span v-else class="px-2 text-xs text-muted-foreground">View only — Admin required to apply</span>
         </div>
       </div>
 
       <!-- Bottom Row: Warning (100% Width) -->
-      <div class="px-6 pb-5 w-full">
-        <div class="flex items-start sm:items-center gap-3 px-4 py-3 rounded-r-lg border border-l-4 border-border border-l-warning bg-card shadow-xs w-full">
-          <AlertTriangle class="w-5 h-5 shrink-0 text-warning mt-0.5 sm:mt-0" />
-          <span class="text-sm leading-relaxed font-medium text-foreground/80">
-            <span class="font-bold text-foreground">Caution:</span>
-            Setting
-            <code class="font-mono font-bold mx-1 px-1.5 py-0.5 rounded bg-muted text-foreground text-xs">"prune": true</code>
-            will
-            <span class="font-bold text-destructive">PERMANENTLY DESTROY</span>
-            any running services not defined in this JSON. Apply shows a diff and requires typing
-            <code class="font-mono font-bold mx-1 px-1.5 py-0.5 rounded bg-muted text-foreground text-xs">{{ PRUNE_CONFIRM_TOKEN }}</code>
-            before removals run.
-          </span>
-        </div>
+      <div class="w-full px-6 pb-4">
+        <UiNotice tone="warning" title="Prune is irreversible">
+          Setting
+          <code class="mx-1 rounded-md bg-muted/40 px-1.5 py-0.5 font-mono text-xs">"prune": true</code>
+          stops and unregisters any program missing from this JSON. Apply shows the diff and
+          requires typing
+          <code class="mx-1 rounded-md bg-muted/40 px-1.5 py-0.5 font-mono text-xs">{{ PRUNE_CONFIRM_TOKEN }}</code>
+          before removals run.
+        </UiNotice>
       </div>
 
     </div>
@@ -425,7 +416,5 @@ async function confirmPruneApply() {
         <UiButton @click="showResultModal = false">Close</UiButton>
       </div>
     </UiDialog>
-
-  </div>
   </div>
 </template>

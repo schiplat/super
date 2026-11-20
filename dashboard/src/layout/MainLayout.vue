@@ -77,7 +77,7 @@ function toggleCollapsed() {
 const mainNav = [
   { to: '/', label: 'Overview', icon: LayoutDashboard },
   { to: '/programs', label: 'Programs', icon: Boxes },
-  { to: '/stack', label: 'Stacks', icon: Layers },
+  { to: '/stacks', label: 'Stacks', icon: Layers },
   { to: '/events', label: 'Events', icon: History },
 ];
 
@@ -98,8 +98,9 @@ const settingsNav = computed(() => {
 const TITLES: Record<string, string> = {
   '/': 'Overview',
   '/programs': 'Programs',
-  '/events': 'Events',
+  '/stacks': 'Stacks',
   '/stack': 'Stacks',
+  '/events': 'Events',
   '/license': 'License',
   '/settings/authentication': 'Authentication',
   '/programs/new': 'New Program',
