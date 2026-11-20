@@ -7,6 +7,7 @@
 
 mod middleware;
 mod routes;
+pub mod sso;
 pub mod store;
 pub mod throttle;
 

@@ -87,6 +87,12 @@ pub enum FetchUrlPolicy {
     /// a local alert pipeline on the same host is a first-party integration,
     /// and whoever can write `super.toml` already holds full daemon trust.
     EventHook,
+    /// OIDC discovery / token / JWKS endpoints. HTTPS for remote hosts; HTTP
+    /// only for loopback (a local development IdP). Metadata and link-local
+    /// addresses are rejected. Private LAN IdPs stay allowed: the URL is
+    /// admin-configured, so the threat is a hijacked config, not an
+    /// attacker-chosen URL, and self-hosted IdPs legitimately live on 10/8.
+    OidcEndpoint,
 }
 
 /// Validate a URL before superd performs an outbound HTTP request.
@@ -118,6 +124,8 @@ pub fn validate_outbound_url(url: &str, policy: FetchUrlPolicy) -> anyhow::Resul
         (FetchUrlPolicy::HealthCheck, "http" | "https", _) => {}
         (FetchUrlPolicy::Webhook, "http" | "https", _) => {}
         (FetchUrlPolicy::EventHook, "http" | "https", _) => {}
+        (FetchUrlPolicy::OidcEndpoint, "https", _) => {}
+        (FetchUrlPolicy::OidcEndpoint, "http", true) => {}
         _ => bail!("URL scheme is not allowed for this operation"),
     }
 
@@ -131,6 +139,10 @@ pub fn validate_outbound_url(url: &str, policy: FetchUrlPolicy) -> anyhow::Resul
 
     if policy == FetchUrlPolicy::EventHook && event_hook_targets_blocked_address(&host) {
         bail!("event hook URL must not target cloud metadata or link-local addresses (got {host})");
+    }
+
+    if policy == FetchUrlPolicy::OidcEndpoint && event_hook_targets_blocked_address(&host) {
+        bail!("OIDC endpoint must not target cloud metadata or link-local addresses (got {host})");
     }
 
     Ok(())

@@ -143,6 +143,30 @@ fn event_hook_blocks_metadata_allows_loopback_and_public() {
 }
 
 #[test]
+fn oidc_endpoints_require_https_except_loopback_and_block_metadata() {
+    use FetchUrlPolicy::OidcEndpoint;
+    // A local development IdP may speak plain http on loopback.
+    assert!(validate_outbound_url("http://127.0.0.1:8080/token", OidcEndpoint).is_ok());
+    assert!(validate_outbound_url("http://localhost:8080/jwks", OidcEndpoint).is_ok());
+    // Remote endpoints must be https.
+    assert!(validate_outbound_url("http://idp.example.com/token", OidcEndpoint).is_err());
+    assert!(validate_outbound_url("https://idp.example.com/token", OidcEndpoint).is_ok());
+    // A hijacked config must not turn the daemon into a metadata client.
+    assert!(
+        validate_outbound_url("http://169.254.169.254/latest/meta-data", OidcEndpoint).is_err()
+    );
+    assert!(
+        validate_outbound_url(
+            "https://metadata.google.internal/computeMetadata/v1",
+            OidcEndpoint
+        )
+        .is_err()
+    );
+    // Self-hosted IdPs on a private LAN stay allowed (admin-configured URL).
+    assert!(validate_outbound_url("https://10.0.0.5/realms/super", OidcEndpoint).is_ok());
+}
+
+#[test]
 fn ui_path_rejects_traversal() {
     assert!(sanitize_ui_asset_path("/../etc/passwd").is_none());
     assert_eq!(

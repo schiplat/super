@@ -38,6 +38,8 @@ clap_complete = "4.5"
 tracing = "0.1"
 tracing-appender = "0.2"
 tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt"] }
+# JWT verification (OIDC ID tokens)
+jsonwebtoken = "9"
 # Web & HTTP
 axum = { version = "0.8.1", features = ["ws", "macros"] }
 tower-http = { version = "0.7.1", features = ["cors", "fs", "trace"] }
