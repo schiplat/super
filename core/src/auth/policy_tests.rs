@@ -1,53 +1,116 @@
-//! Core auth gate selection: exactly one gate, with a deliberate precedence.
+//! Core RBAC: read-only for any session, mutations for Operator, admin
+//! endpoints for Admin.
 
-use super::AuthGate;
+use super::{is_allowed, required_role};
+use axum::http::Method;
+use common::UserRole;
 
-#[test]
-fn plugin_always_wins() {
-    assert_eq!(
-        AuthGate::resolve(Some("secret"), true, true),
-        AuthGate::Plugin
-    );
-    assert_eq!(AuthGate::resolve(None, true, false), AuthGate::Plugin);
+fn method(name: &str) -> Method {
+    Method::from_bytes(name.as_bytes()).unwrap()
 }
 
 #[test]
-fn signet_beats_the_static_secret() {
-    // Enabling SSO is what switches the long-lived shared secret off; leaving
-    // it dormant in conf/super.toml is the break-glass fallback, not a second
-    // simultaneous gate.
-    assert_eq!(
-        AuthGate::resolve(Some("secret"), false, true),
-        AuthGate::Sso
-    );
-    assert_eq!(AuthGate::resolve(None, false, true), AuthGate::Sso);
+fn viewers_can_read_but_not_mutate() {
+    assert!(is_allowed(
+        &UserRole::Viewer,
+        &method("GET"),
+        "/api/v1/programs"
+    ));
+    assert!(is_allowed(
+        &UserRole::Viewer,
+        &method("GET"),
+        "/api/v1/programs/x/logs"
+    ));
+    assert!(!is_allowed(
+        &UserRole::Viewer,
+        &method("POST"),
+        "/api/v1/programs/x/start"
+    ));
+    assert!(!is_allowed(
+        &UserRole::Viewer,
+        &method("PUT"),
+        "/api/v1/stack"
+    ));
 }
 
 #[test]
-fn no_secret_means_open() {
-    assert_eq!(AuthGate::resolve(None, false, false), AuthGate::None);
-    assert_eq!(AuthGate::resolve(Some(""), false, false), AuthGate::None);
-    assert_eq!(AuthGate::resolve(Some("   "), false, false), AuthGate::None);
-    assert!(!AuthGate::None.requires_auth());
+fn operators_can_mutate_but_not_administer() {
+    assert!(is_allowed(
+        &UserRole::Operator,
+        &method("POST"),
+        "/api/v1/programs/x/restart"
+    ));
+    assert!(is_allowed(
+        &UserRole::Operator,
+        &method("POST"),
+        "/api/v1/stack"
+    ));
+    assert!(!is_allowed(
+        &UserRole::Operator,
+        &method("POST"),
+        "/api/v1/system/reload"
+    ));
+    assert!(!is_allowed(
+        &UserRole::Operator,
+        &method("PUT"),
+        "/api/v1/auth/sso/config"
+    ));
 }
 
 #[test]
-fn non_empty_secret_activates() {
-    assert_eq!(
-        AuthGate::resolve(Some("my-secret"), false, false),
-        AuthGate::CoreSecret
-    );
-    assert_eq!(
-        AuthGate::resolve(Some("  padded  "), false, false),
-        AuthGate::CoreSecret
-    );
-    assert!(AuthGate::CoreSecret.requires_auth());
+fn admins_can_do_everything() {
+    for (m, path) in [
+        ("GET", "/api/v1/programs"),
+        ("POST", "/api/v1/programs"),
+        ("POST", "/api/v1/system/shutdown"),
+        ("PUT", "/api/v1/auth/sso/config"),
+    ] {
+        assert!(is_allowed(&UserRole::Admin, &method(m), path), "{m} {path}");
+    }
 }
 
 #[test]
-fn every_gate_but_none_requires_auth() {
-    assert!(AuthGate::Plugin.requires_auth());
-    assert!(AuthGate::Sso.requires_auth());
-    assert!(AuthGate::CoreSecret.requires_auth());
-    assert!(!AuthGate::None.requires_auth());
+fn admin_endpoints_require_admin_even_for_reads() {
+    assert_eq!(
+        required_role(&method("GET"), "/api/v1/auth/sso/sessions"),
+        UserRole::Admin
+    );
+    assert_eq!(
+        required_role(&method("GET"), "/api/v1/auth/sso/config"),
+        UserRole::Admin
+    );
+    assert!(!is_allowed(
+        &UserRole::Operator,
+        &method("GET"),
+        "/api/v1/auth/sso/sessions"
+    ));
+}
+
+#[test]
+fn logout_is_available_to_any_session() {
+    assert_eq!(
+        required_role(&method("POST"), "/api/v1/auth/logout"),
+        UserRole::Viewer
+    );
+    assert!(is_allowed(
+        &UserRole::Viewer,
+        &method("POST"),
+        "/api/v1/auth/logout"
+    ));
+}
+
+#[test]
+fn metrics_and_websocket_are_read_only() {
+    assert!(is_allowed(&UserRole::Viewer, &method("GET"), "/metrics"));
+    assert!(is_allowed(&UserRole::Viewer, &method("GET"), "/ws"));
+    assert!(!is_allowed(&UserRole::Viewer, &method("POST"), "/metrics"));
+}
+
+#[test]
+fn plugin_ui_assets_stay_readable() {
+    assert!(is_allowed(
+        &UserRole::Viewer,
+        &method("GET"),
+        "/api/v1/plugins/ui/ui.js"
+    ));
 }

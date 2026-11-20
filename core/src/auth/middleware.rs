@@ -1,4 +1,6 @@
-//! Axum middleware: require `Authorization: Bearer <secret>` (or `?token=`).
+//! Axum middleware: require the active gate's credential and enforce RBAC.
+
+use std::sync::{Arc, RwLock};
 
 use axum::{
     Json,
@@ -7,26 +9,87 @@ use axum::{
     middleware::Next,
     response::{IntoResponse, Response},
 };
-use common::{AuthStatusResponse, UserContext, UserRole};
-use std::sync::Arc;
+use common::{AuthStatusResponse, IdentityClaims, SsoStatus, UserContext, UserRole, resolve_role};
 
-/// Shared state for the OSS auth middleware and `/auth/*` handlers.
+use super::policy;
+use super::sso::{SsoRuntime, pkce};
+
+/// Shared state for the OSS auth middleware, `/auth/*` handlers, and the SSO
+/// routes. The gate is swappable so enabling/disabling SSO in the Web UI (or
+/// an external `super auth sso disable --offline`) needs no restart.
 #[derive(Clone)]
 pub struct AuthState {
-    gate: super::AuthGate,
-    secret: Arc<str>,
+    inner: Arc<AuthInner>,
+}
+
+struct AuthInner {
+    gate: RwLock<super::AuthGate>,
+    /// Static secret from `conf/super.toml`; `None` when none is configured.
+    /// Kept dormant while the SSO gate is active — it is the break-glass.
+    secret: Option<Arc<str>>,
+    /// SSO store + configuration. Present in OSS mode even before SSO is
+    /// enabled, so the UI can turn it on without a restart.
+    sso: Option<Arc<SsoRuntime>>,
+    /// True on a non-loopback bind: a gate change must never resolve to
+    /// `None`, or a reload would expose the API.
+    require_auth: bool,
+}
+
+/// Result of evaluating one credential against the active gate.
+enum GateOutcome {
+    Authenticated(UserContext),
+    /// The credential is missing, unknown, expired, or revoked.
+    Unauthorized,
+    /// The credential is valid but the account has no usable role.
+    Forbidden(&'static str),
+    /// SSO is configured but cannot currently authenticate anyone.
+    Unavailable(String),
 }
 
 impl AuthState {
+    /// Secret-only state (tests, and callers that do not own a store).
     pub fn new(secret: impl Into<String>) -> Self {
+        let secret: String = secret.into();
         Self {
-            gate: super::AuthGate::CoreSecret,
-            secret: Arc::from(secret.into()),
+            inner: Arc::new(AuthInner {
+                gate: RwLock::new(super::AuthGate::CoreSecret),
+                secret: Some(Arc::from(secret.as_str())),
+                sso: None,
+                require_auth: false,
+            }),
+        }
+    }
+
+    pub fn with_sso(
+        secret: Option<String>,
+        sso: Option<Arc<SsoRuntime>>,
+        gate: super::AuthGate,
+        require_auth: bool,
+    ) -> Self {
+        Self {
+            inner: Arc::new(AuthInner {
+                gate: RwLock::new(gate),
+                secret: secret.map(|s| Arc::from(s.as_str())),
+                sso,
+                require_auth,
+            }),
         }
     }
 
     pub fn gate(&self) -> super::AuthGate {
-        self.gate
+        *self.inner.gate.read().unwrap_or_else(|p| p.into_inner())
+    }
+
+    pub fn require_auth(&self) -> bool {
+        self.inner.require_auth
+    }
+
+    pub fn secret_configured(&self) -> bool {
+        self.inner.secret.is_some()
+    }
+
+    pub fn sso(&self) -> Option<&SsoRuntime> {
+        self.inner.sso.as_deref()
     }
 
     pub fn root_context() -> UserContext {
@@ -37,22 +100,150 @@ impl AuthState {
         }
     }
 
-    /// `/api/v1/auth/status` payload. Built from the active gate instead of a
-    /// constant so a future SSO gate reports itself honestly: with SSO on, the
-    /// static secret is not an accepted login.
+    /// `/api/v1/auth/status` payload, built from the live gate so the login
+    /// page knows whether the static secret still works and whether SSO is on.
     pub fn status_response(&self) -> AuthStatusResponse {
+        let gate = self.gate();
         AuthStatusResponse {
             auth_secret_disabled: false,
             has_admin_token: false,
             can_disable_auth_secret: false,
-            auth_secret_login_allowed: self.gate == super::AuthGate::CoreSecret,
+            auth_secret_login_allowed: gate == super::AuthGate::CoreSecret,
             token_management: false,
+            mode: gate.mode(),
+            sso: self.inner.sso.as_ref().map(|sso| SsoStatus {
+                enabled: sso.enabled(),
+                available: true,
+                login_path: common::SSO_LOGIN_PATH.to_string(),
+            }),
         }
     }
 
     pub fn secret_matches(&self, token: &str) -> bool {
-        common::secrets_equal(token, self.secret.as_ref())
+        self.inner
+            .secret
+            .as_deref()
+            .is_some_and(|secret| common::secrets_equal(token, secret))
     }
+
+    /// Recompute the gate from the live configuration. Refuses to leave a
+    /// non-loopback instance unauthenticated, and refuses an SSO gate without
+    /// a store.
+    pub fn refresh_gate(&self) -> anyhow::Result<super::AuthGate> {
+        let sso_enabled = self.inner.sso.as_ref().is_some_and(|sso| sso.enabled());
+        let gate = super::AuthGate::resolve(self.inner.secret.as_deref(), false, sso_enabled);
+        self.set_gate(gate)?;
+        Ok(gate)
+    }
+
+    pub fn set_gate(&self, gate: super::AuthGate) -> anyhow::Result<()> {
+        if gate == super::AuthGate::None && self.inner.require_auth {
+            anyhow::bail!("refusing to disable authentication on a non-loopback bind");
+        }
+        if gate == super::AuthGate::Sso && self.inner.sso.is_none() {
+            anyhow::bail!("SSO gate requested without an auth store");
+        }
+        *self.inner.gate.write().unwrap_or_else(|p| p.into_inner()) = gate;
+        Ok(())
+    }
+
+    /// Revoke the session behind a `su_` token (logout). No-op for non-SSO
+    /// gates.
+    pub async fn revoke_token(&self, token: &str) -> anyhow::Result<bool> {
+        let Some(sso) = self.inner.sso.as_ref() else {
+            return Ok(false);
+        };
+        let hash = pkce::token_hash(token);
+        let Some(row) = sso.store().find_session_by_token_hash(&hash).await? else {
+            return Ok(false);
+        };
+        let revoked = sso.store().revoke_session(&row.id).await?;
+        if revoked {
+            let _ = sso
+                .store()
+                .audit(super::store::AuditEvent {
+                    kind: "session_revoked",
+                    sub: Some(&row.sub),
+                    email: row.email.as_deref(),
+                    ip: row.ip.as_deref(),
+                    ua: row.user_agent.as_deref(),
+                    detail: Some("logout"),
+                })
+                .await;
+        }
+        Ok(revoked)
+    }
+
+    async fn sso_authenticate(&self, token: &str) -> GateOutcome {
+        let Some(sso) = self.inner.sso.as_ref() else {
+            return GateOutcome::Unavailable("SSO is not initialized".into());
+        };
+        let Some(config) = sso.config() else {
+            return GateOutcome::Unavailable("SSO configuration is missing".into());
+        };
+
+        let hash = pkce::token_hash(token);
+        let row = match sso.store().find_session_by_token_hash(&hash).await {
+            Ok(row) => row,
+            Err(e) => return GateOutcome::Unavailable(format!("auth store: {e}")),
+        };
+        let Some(row) = row else {
+            return GateOutcome::Unauthorized;
+        };
+
+        let now = now_secs();
+        if row.revoked_at.is_some()
+            || row.expires_at <= now
+            || row.last_seen_at.saturating_add(config.idle_timeout_secs) <= now
+        {
+            return GateOutcome::Unauthorized;
+        }
+
+        // Role is recomputed per request from the current rules, so a demotion
+        // takes effect immediately instead of at the next login.
+        let groups: Vec<String> = serde_json::from_str(&row.groups_json).unwrap_or_default();
+        let claims = IdentityClaims {
+            sub: &row.sub,
+            email: row.email.as_deref(),
+            email_verified: row.email_verified,
+            groups: &groups,
+        };
+        let Some((rule_index, role)) = resolve_role(&config.role_rules, &claims) else {
+            tracing::warn!(
+                session = %row.id,
+                sub = %row.sub,
+                "SSO session matches no role rule; denying"
+            );
+            return GateOutcome::Forbidden("no role is assigned to this account");
+        };
+
+        if now.saturating_sub(row.last_seen_at) >= 60
+            && let Err(e) = sso.store().touch_session(&row.id, now).await
+        {
+            tracing::debug!(error = %e, "could not update session last_seen");
+        }
+
+        tracing::debug!(
+            session = %row.id,
+            sub = %row.sub,
+            rule_index,
+            role = ?role,
+            "SSO session authenticated"
+        );
+        GateOutcome::Authenticated(UserContext {
+            token_id: row.id.clone(),
+            name: row
+                .name
+                .clone()
+                .or_else(|| row.email.clone())
+                .unwrap_or_else(|| row.sub.clone()),
+            role,
+        })
+    }
+}
+
+fn now_secs() -> u64 {
+    chrono::Utc::now().timestamp().max(0) as u64
 }
 
 /// Paths that skip the Bearer check (UI discovery + liveness).
@@ -66,6 +257,20 @@ pub fn is_auth_exempt(path: &str) -> bool {
         "/" | "/health" | "/api/v1/openapi.json" | "/api/v1/auth/status"
     ) || path.starts_with("/api/docs")
         || path.starts_with("/assets")
+}
+
+/// SSO endpoints a browser must reach without a session. Only exempt while
+/// the SSO gate is active: in secret mode these paths require the secret like
+/// everything else.
+pub fn is_sso_public(path: &str) -> bool {
+    matches!(
+        path,
+        "/api/v1/auth/sso/login"
+            | "/api/v1/auth/sso/callback"
+            | "/api/v1/auth/sso/exchange"
+            | "/api/v1/auth/sso/cli/start"
+            | "/api/v1/auth/sso/cli/poll"
+    )
 }
 
 /// Extract Bearer token from `Authorization`, or — WebSocket only — from the
@@ -120,37 +325,67 @@ pub async fn core_auth_middleware(
     next: Next,
 ) -> Response {
     let path = req.uri().path().to_string();
-    if is_auth_exempt(&path) {
+    let gate = state.gate();
+
+    // No gate means loopback development; superd refuses that on a public bind.
+    if gate == super::AuthGate::None || is_auth_exempt(&path) {
+        return next.run(req).await;
+    }
+    if gate == super::AuthGate::Sso && is_sso_public(&path) {
         return next.run(req).await;
     }
 
-    // Peer IP is absent on Unix-socket connections, which need no throttling.
-    // A valid secret is checked BEFORE the lockout probe so a correct token
-    // still works (and clears the counter) while an IP is locked out; the
-    // throttle only gates requests that failed authentication.
     let peer_ip = peer.map(|ci| ci.0.ip());
     let throttle = super::throttle::AuthThrottle::shared();
-
     let query = req.uri().query().map(str::to_string);
-    // `?token=` is a WebSocket-only fallback; REST requests must use the
-    // Authorization header so secrets stay out of proxy/audit logs.
     let query_for_auth = if path == "/ws" {
         query.as_deref()
     } else {
         None
     };
-    if let Some(token) = extract_token(req.headers(), query_for_auth)
-        && state.secret_matches(&token)
-    {
-        if let Some(ip) = peer_ip {
-            throttle.record_success(ip);
+
+    if let Some(token) = extract_token(req.headers(), query_for_auth) {
+        let outcome = match gate {
+            super::AuthGate::CoreSecret => {
+                if state.secret_matches(&token) {
+                    GateOutcome::Authenticated(AuthState::root_context())
+                } else {
+                    GateOutcome::Unauthorized
+                }
+            }
+            super::AuthGate::Sso => state.sso_authenticate(&token).await,
+            super::AuthGate::Plugin | super::AuthGate::None => GateOutcome::Unauthorized,
+        };
+
+        match outcome {
+            GateOutcome::Authenticated(user) => {
+                if gate == super::AuthGate::CoreSecret
+                    && let Some(ip) = peer_ip
+                {
+                    throttle.record_success(ip);
+                }
+                if !policy::is_allowed(&user.role, req.method(), &path) {
+                    return forbidden("this account is not allowed to perform that action");
+                }
+                let mut req = req;
+                req.extensions_mut().insert(user);
+                return next.run(req).await;
+            }
+            GateOutcome::Forbidden(reason) => return forbidden(reason),
+            GateOutcome::Unavailable(reason) => {
+                tracing::error!(reason = %reason, path = %path, "SSO authentication is unavailable");
+                return service_unavailable(&reason);
+            }
+            GateOutcome::Unauthorized => {}
         }
-        let mut req = req;
-        req.extensions_mut().insert(AuthState::root_context());
-        return next.run(req).await;
     }
 
-    if let Some(ip) = peer_ip {
+    // Failed-auth lockout applies to the static secret only. Expired SSO
+    // sessions are normal traffic, and counting them would lock out everyone
+    // behind one NAT address.
+    if gate == super::AuthGate::CoreSecret
+        && let Some(ip) = peer_ip
+    {
         if !throttle.allowed(ip) {
             return (
                 StatusCode::TOO_MANY_REQUESTS,
@@ -163,6 +398,7 @@ pub async fn core_auth_middleware(
         }
         throttle.record_failure(ip);
     }
+
     // REST requests that still carry `?token=` (accepted only on /ws since
     // 1.8.0) get an actionable hint instead of a bare 401, plus a server-side
     // trace so the upgrade regression shows up in logs instead of only in a
@@ -204,8 +440,29 @@ fn unauthorized() -> Response {
         .into_response()
 }
 
-/// Layer core auth middleware onto an API router. Caller must only invoke this
-/// when [`super::AuthGate::resolve`] selected [`super::AuthGate::CoreSecret`].
+fn forbidden(reason: &str) -> Response {
+    (
+        StatusCode::FORBIDDEN,
+        Json(serde_json::json!({
+            "status": "error",
+            "message": format!("forbidden: {reason}"),
+        })),
+    )
+        .into_response()
+}
+
+fn service_unavailable(reason: &str) -> Response {
+    (
+        StatusCode::SERVICE_UNAVAILABLE,
+        Json(serde_json::json!({
+            "status": "error",
+            "message": format!("authentication is temporarily unavailable: {reason}"),
+        })),
+    )
+        .into_response()
+}
+
+/// Layer core auth middleware onto an API router.
 pub fn attach_core_auth(router: axum::Router, state: AuthState) -> axum::Router {
     router.layer(axum::middleware::from_fn_with_state(
         state,

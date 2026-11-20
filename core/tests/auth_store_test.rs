@@ -155,6 +155,8 @@ fn session(id: &str, hash: u8, created_at: u64) -> NewSession {
         email: Some("ops@example.com".into()),
         name: Some("Ops".into()),
         groups_json: r#"["admins"]"#.into(),
+        email_verified: true,
+        return_to: "/programs".into(),
         created_at,
         expires_at: created_at + 3600,
         ip: Some("127.0.0.1".into()),
@@ -184,6 +186,8 @@ async fn session_lifecycle() {
     assert_eq!(found.id, "s1");
     assert_eq!(found.sub, "u1");
     assert_eq!(found.groups_json, r#"["admins"]"#);
+    assert!(found.email_verified);
+    assert_eq!(found.return_to, "/programs");
 
     // Exchange tickets are single-use.
     assert!(store.mark_exchange_used(&[1u8; 32], created).await.unwrap());

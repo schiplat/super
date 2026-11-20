@@ -6,16 +6,17 @@
 //! API is open, which is why superd refuses non-loopback binds in that state.
 
 mod middleware;
+pub mod policy;
 mod routes;
 pub mod sso;
 pub mod store;
 pub mod throttle;
 
 #[cfg(test)]
-#[path = "policy_tests.rs"]
-mod policy_tests;
+#[path = "gate_tests.rs"]
+mod gate_tests;
 
-pub use middleware::{AuthState, attach_core_auth, is_auth_exempt};
+pub use middleware::{AuthState, attach_core_auth, is_auth_exempt, is_sso_public};
 pub use store::AuthStore;
 pub use throttle::AuthThrottle;
 
@@ -54,11 +55,11 @@ impl AuthGate {
     pub fn resolve(
         config_secret: Option<&str>,
         plugin_auth_active: bool,
-        signet_enabled: bool,
+        sso_enabled: bool,
     ) -> Self {
         if plugin_auth_active {
             Self::Plugin
-        } else if signet_enabled {
+        } else if sso_enabled {
             Self::Sso
         } else if non_empty_auth_secret(config_secret).is_some() {
             Self::CoreSecret
@@ -69,6 +70,16 @@ impl AuthGate {
 
     pub fn requires_auth(self) -> bool {
         !matches!(self, Self::None)
+    }
+
+    /// Wire representation for `GET /api/v1/auth/status`.
+    pub fn mode(self) -> common::AuthMode {
+        match self {
+            Self::None => common::AuthMode::None,
+            Self::CoreSecret => common::AuthMode::Secret,
+            Self::Plugin => common::AuthMode::Plugin,
+            Self::Sso => common::AuthMode::Sso,
+        }
     }
 }
 

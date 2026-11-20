@@ -3,6 +3,8 @@
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
+use crate::auth_sso::{AuthMode, SsoStatus};
+
 /// Auth role
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, ToSchema)]
 #[serde(rename_all = "lowercase")]
@@ -85,4 +87,11 @@ pub struct AuthStatusResponse {
     /// OSS core auth sets this to `false`; the security plugin sets `true`.
     #[serde(default)]
     pub token_management: bool,
+    /// The gate that actually guards the API right now.
+    #[serde(default)]
+    pub mode: AuthMode,
+    /// SSO facts for the login page and the settings entry; `None` when the
+    /// security plugin owns auth.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub sso: Option<SsoStatus>,
 }

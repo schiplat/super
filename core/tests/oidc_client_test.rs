@@ -17,35 +17,10 @@ use super_core::auth::sso::client::{OidcClient, OidcError};
 use wiremock::matchers::{body_string_contains, header, method, path};
 use wiremock::{Mock, MockServer, Request, Respond, ResponseTemplate};
 
-const TEST_RSA_KEY: &str = "-----BEGIN RSA PRIVATE KEY-----
-MIIEowIBAAKCAQEAoELWq/pGTfILOjgAuu/Qw8X5rEjq6KFf6OvOFWpdps4aQt32
-qPGOdM0figjoLg2w6BcpBG7Npmq3+dZq/b7otvTqHdk3YDTMdjFOW3YkVBI1j62O
-FbXZRfqgQCeFkmYxA4KCF96KvIVLw44NKF0VsDDn5QeXA/x8Mc5sT8vB2JpyR9DQ
-ENRb0m0yp3mq2+L2n+McQROkMEobwqUwXnXNvif5kG2YVP+HPMofN9jErPs9GyjQ
-XJlKZfLgqyCL0X2b/1e5lttIzKWBC9ZhJR0l/1xyLkWtvRCEpv5yRw9byH75iA/M
-WVkeOAMjfZktnTXTFBFKrEFQRtwj6Qnk9J4tDQIDAQABAoIBACMcQZfP7xMokhkh
-J9fMrnoVp4t9NindIPwQnUfH09i1kr9PjbiZo1Inll9RcDyWt0lBubTE6b0p6ECO
-H0aUSru6kIgVjLJBHwJN7xLOoUrh6mYd6eELxBw2umETx4m5ZceVEhdUpCSFN4IS
-XwOW0SeWr1dYAFfZOwRWaxhYVZG0e8vX1RaIUeu98UEKEFZ+QwCzkQ9NF9aricIF
-xDZIJZK8DJ7nOEtmImeJB7UcBGZHMAxAoCL8RrAk4oblAzH6PpKbX/2UOIKrt7UF
-SPdw1q3V/bho5zmUXNJ/QN7P+B/oje2zcAks1d4pPSRcCdFUyOdcPrpCj3mdzBzc
-Qk0IVsECgYEAzrY5ac1ZvcoJZVLB8Bu0cD1tHpEKmvVuIQWcA3GPnrzAknXEj3ns
-f37waLXTSpxmO9qOQR4hmYa/ORedJYtWeBwc/vsnpjebvZ3G/an4fJTkQpraKpJg
-Guzyegm+ZtLJVCOrdwY6DS28D/iJTe+JI+Ya0m+knRzqgk5xXjvFVqUCgYEAxnk+
-F2DNO4EZk6bjtXaR2IbuNB/TRtqW71XPVNz9FGNCr1Vb2I/KEwQS/uTyKHhuGDEC
-LeZ88E2BIYANJpqj8FgodekvqE62olw/kJzzsvXsDTqCcq71MXDM+HPKAR80hpPm
-2hwniPILiYZA3egcHcHbsBIVO+Ej2EIeKFgFGEkCgYANl1OdDkBpRyBpBhD0TY4G
-lzNWgCjXWW29RBYm78+Gm1h6CL48xMJ0+46pA9N5o2DhbJRP2cBRzNdD1LajYk70
-JL0PUsoflqZpyDbuNL++yTdc3buccvVYr92dgoh/UDqmipXahJFKjog/8JJuimJU
-9usqjOag4ebVXHz9uiZWdQKBgFp/kDNivVIjpMDxuSTWItyDcfwsgs7s/yO0kexV
-M8TnGdIO7ulJb0/KbMrzJAQWHcVEG4VIcrGz9WyMEfMHUjdWS2SwZj2tXpOb0pQj
-LO/uOKszgaW/ZygbEis7yOFIFFBFAl9ztQc5rs8Pe2Zz3tYmvgCDzlDWcNy8ETo+
-IFyZAoGBAJY2Ga0wSqHq+gG+sVsdfRfKLAkjNihGar7UAmmSw47RvlzC+i1oIXH5
-wIKo6Wj+UHIw2RBvwGy7/qIzvzYwp2dwPwz+zU8omCncc49Wimfhr+EohjvC5/X9
-TGWzZKAeN5MbU7gn8ZZiWRiyyHsidLKzfgP9ZUbzCKNusOqtU8Qb
------END RSA PRIVATE KEY-----";
+#[path = "fixtures/test_key.rs"]
+mod test_key;
 
-const TEST_JWK_N: &str = "oELWq_pGTfILOjgAuu_Qw8X5rEjq6KFf6OvOFWpdps4aQt32qPGOdM0figjoLg2w6BcpBG7Npmq3-dZq_b7otvTqHdk3YDTMdjFOW3YkVBI1j62OFbXZRfqgQCeFkmYxA4KCF96KvIVLw44NKF0VsDDn5QeXA_x8Mc5sT8vB2JpyR9DQENRb0m0yp3mq2-L2n-McQROkMEobwqUwXnXNvif5kG2YVP-HPMofN9jErPs9GyjQXJlKZfLgqyCL0X2b_1e5lttIzKWBC9ZhJR0l_1xyLkWtvRCEpv5yRw9byH75iA_MWVkeOAMjfZktnTXTFBFKrEFQRtwj6Qnk9J4tDQ";
+use test_key::{TEST_JWK_N, TEST_RSA_KEY};
 
 fn now() -> i64 {
     chrono::Utc::now().timestamp()

@@ -93,6 +93,11 @@ pub struct NewSession {
     pub email: Option<String>,
     pub name: Option<String>,
     pub groups_json: String,
+    /// Whether the IdP asserted a verified email. Email-based role rules
+    /// depend on this, and the decision is made per request.
+    pub email_verified: bool,
+    /// Where to send the browser after the one-time exchange.
+    pub return_to: String,
     pub created_at: u64,
     pub expires_at: u64,
     pub ip: Option<String>,
@@ -106,6 +111,8 @@ pub struct SessionRow {
     pub email: Option<String>,
     pub name: Option<String>,
     pub groups_json: String,
+    pub email_verified: bool,
+    pub return_to: String,
     pub created_at: u64,
     pub expires_at: u64,
     pub last_seen_at: u64,
@@ -209,11 +216,6 @@ impl AuthStore {
 
     pub fn path(&self) -> &Path {
         &self.path
-    }
-
-    /// Drop a connection pool; used by tests and by `--offline` CLI paths.
-    pub async fn close(self) {
-        self.pool.close().await;
     }
 
     // ---------------------------------------------------------------- config
@@ -448,9 +450,9 @@ impl AuthStore {
         }
         sqlx::query(
             "INSERT INTO sessions \
-             (id, token_sha256, sub, email, name, groups_json, created_at, expires_at, \
-              last_seen_at, ip, user_agent) \
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+             (id, token_sha256, sub, email, name, groups_json, email_verified, return_to, \
+              created_at, expires_at, last_seen_at, ip, user_agent) \
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
         )
         .bind(&session.id)
         .bind(&session.token_sha256)
@@ -458,6 +460,8 @@ impl AuthStore {
         .bind(&session.email)
         .bind(&session.name)
         .bind(&session.groups_json)
+        .bind(session.email_verified)
+        .bind(&session.return_to)
         .bind(session.created_at as i64)
         .bind(session.expires_at as i64)
         .bind(session.created_at as i64)
@@ -475,8 +479,8 @@ impl AuthStore {
         token_sha256: &[u8],
     ) -> anyhow::Result<Option<SessionRow>> {
         let row = sqlx::query(
-            "SELECT id, sub, email, name, groups_json, created_at, expires_at, \
-             last_seen_at, revoked_at, exchange_used_at, ip, user_agent \
+            "SELECT id, sub, email, name, groups_json, email_verified, return_to, \
+             created_at, expires_at, last_seen_at, revoked_at, exchange_used_at, ip, user_agent \
              FROM sessions WHERE token_sha256 = ?",
         )
         .bind(token_sha256)
@@ -490,6 +494,8 @@ impl AuthStore {
             email: row.try_get("email")?,
             name: row.try_get("name")?,
             groups_json: row.try_get("groups_json")?,
+            email_verified: row.try_get("email_verified")?,
+            return_to: row.try_get("return_to")?,
             created_at: row.try_get::<i64, _>("created_at")? as u64,
             expires_at: row.try_get::<i64, _>("expires_at")? as u64,
             last_seen_at: row.try_get::<i64, _>("last_seen_at")? as u64,
@@ -531,8 +537,8 @@ impl AuthStore {
 
     pub async fn list_sessions(&self, now: u64) -> anyhow::Result<Vec<SessionRow>> {
         let rows = sqlx::query(
-            "SELECT id, sub, email, name, groups_json, created_at, expires_at, \
-             last_seen_at, revoked_at, exchange_used_at, ip, user_agent \
+            "SELECT id, sub, email, name, groups_json, email_verified, return_to, \
+             created_at, expires_at, last_seen_at, revoked_at, exchange_used_at, ip, user_agent \
              FROM sessions WHERE revoked_at IS NULL AND expires_at > ? \
              ORDER BY created_at DESC",
         )
@@ -548,6 +554,8 @@ impl AuthStore {
                     email: row.try_get("email")?,
                     name: row.try_get("name")?,
                     groups_json: row.try_get("groups_json")?,
+                    email_verified: row.try_get("email_verified")?,
+                    return_to: row.try_get("return_to")?,
                     created_at: row.try_get::<i64, _>("created_at")? as u64,
                     expires_at: row.try_get::<i64, _>("expires_at")? as u64,
                     last_seen_at: row.try_get::<i64, _>("last_seen_at")? as u64,
@@ -733,5 +741,22 @@ impl AuthStore {
         .context("trim auth audit events")?
         .rows_affected();
         Ok(removed)
+    }
+
+    /// Hourly housekeeping: drop expired/revoked sessions, expired pending
+    /// authorizations, and audit rows past their retention window.
+    pub async fn prune_ephemeral(&self, now: u64) -> anyhow::Result<()> {
+        sqlx::query("DELETE FROM sessions WHERE expires_at < ? OR revoked_at IS NOT NULL")
+            .bind(now as i64)
+            .execute(&self.pool)
+            .await
+            .context("prune sessions")?;
+        sqlx::query("DELETE FROM pending WHERE expires_at < ?")
+            .bind(now as i64)
+            .execute(&self.pool)
+            .await
+            .context("prune pending authorizations")?;
+        self.prune_audit(now).await?;
+        Ok(())
     }
 }

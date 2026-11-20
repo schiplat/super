@@ -494,45 +494,179 @@ async fn async_main() -> anyhow::Result<()> {
         license_info,
     );
 
-    let (mut api_router, mut auth_required) =
+    let (mut api_router, plugin_auth_active) =
         attach_http_plugins(base_router, &plugin_runtime, &core.paths)?;
 
-    // Exactly one gate: the security plugin when loaded, else SSO when
-    // configured, else the static secret. SSO is enabled by the auth store
-    // (data/auth.db), which lands with the SSO gate.
-    let gate = auth::AuthGate::resolve(
-        core.config.server.auth_secret.as_deref(),
-        auth_required,
-        false,
-    );
-    if plugin_host.mode == RunMode::Licensed && gate != auth::AuthGate::Plugin {
+    if plugin_host.mode == RunMode::Licensed && !plugin_auth_active {
         anyhow::bail!(
             "Licensed deployment requires the security plugin HTTP auth middleware, but it is not active. \
              Ensure security.so exports authenticate and re-check superd logs."
         );
     }
-    match gate {
-        auth::AuthGate::Plugin => tracing::info!("Plugin HTTP auth middleware active"),
-        auth::AuthGate::CoreSecret => {
-            let Some(secret) =
-                auth::non_empty_auth_secret(core.config.server.auth_secret.as_deref())
-            else {
-                anyhow::bail!(
-                    "[server].auth_secret activated core auth but the value is empty; \
-                     set a non-empty secret in conf/super.toml"
-                );
-            };
-            tracing::info!("API auth using [server].auth_secret from conf/super.toml");
-            let state = auth::AuthState::new(secret);
-            api_router = auth::install_core_auth(api_router, state);
-            auth_required = true;
-            tracing::info!("Core HTTP auth middleware active");
+
+    let mut auth_required = plugin_auth_active;
+
+    // OSS mode: exactly one gate — SSO when enabled, else the static secret,
+    // else none (loopback only). The SSO store is opened even when SSO is off
+    // so the Web UI can enable it without a restart.
+    if !plugin_auth_active {
+        let loopback = common::is_loopback_bind_host(&core.config.server.host);
+        let secret = auth::non_empty_auth_secret(core.config.server.auth_secret.as_deref());
+
+        let mut sso_runtime: Option<std::sync::Arc<auth::sso::SsoRuntime>> = None;
+        let mut sso_problem: Option<String> = None;
+        match auth::AuthStore::open(&core.paths.auth_db_file).await {
+            Ok(store) => {
+                let store = std::sync::Arc::new(store);
+                match auth::sso::SsoRuntime::load(store).await {
+                    Ok(runtime) => sso_runtime = Some(std::sync::Arc::new(runtime)),
+                    Err(e) => {
+                        sso_problem = Some(format!("SSO configuration is unreadable: {e}"));
+                    }
+                }
+            }
+            Err(e) => {
+                // A store that existed but cannot be opened may have held the
+                // only gate; treat it as a broken SSO configuration. A failed
+                // first-time creation just means no SSO this run.
+                if core.paths.auth_db_file.exists() {
+                    sso_problem = Some(format!("SSO store is unreadable: {e}"));
+                } else {
+                    tracing::warn!(
+                        path = %core.paths.auth_db_file.display(),
+                        error = %e,
+                        "SSO store unavailable; continuing without SSO"
+                    );
+                }
+            }
         }
-        auth::AuthGate::Sso => anyhow::bail!(
-            "SSO authentication is configured but this superd build has no SSO gate; \
-             remove the SSO configuration from data/auth.db or upgrade superd"
-        ),
-        auth::AuthGate::None => {}
+
+        if let Some(runtime) = &sso_runtime
+            && runtime.enabled()
+        {
+            match runtime.store().load_secret().await {
+                Ok(Some(_)) => {}
+                Ok(None) => {
+                    sso_problem =
+                        Some("SSO is enabled but the OIDC client secret is missing".into());
+                }
+                Err(e) => {
+                    sso_problem = Some(format!("SSO client secret is unreadable: {e}"));
+                }
+            }
+        }
+
+        // Break-glass: an unreadable SSO configuration falls back to the
+        // dormant static secret. Without one there is no way in, so refuse to
+        // start rather than serving an API nobody can authenticate to.
+        if let Some(problem) = &sso_problem {
+            tracing::error!(problem, "SSO is unusable at startup");
+            if secret.is_none() {
+                anyhow::bail!(
+                    "{problem}; set [server].auth_secret in conf/super.toml (break-glass) \
+                     or fix data/auth.db"
+                );
+            }
+            tracing::warn!(
+                "falling back to [server].auth_secret (break-glass); fix the SSO store and restart"
+            );
+        }
+
+        let sso_enabled = sso_problem.is_none()
+            && sso_runtime
+                .as_ref()
+                .is_some_and(|runtime| runtime.enabled());
+        let gate = auth::AuthGate::resolve(secret.as_deref(), false, sso_enabled);
+        if gate == auth::AuthGate::None && !loopback {
+            anyhow::bail!(
+                "Refusing to bind to {} without authentication. \
+                 Set [server].auth_secret in conf/super.toml, bind to 127.0.0.1, or configure SSO.",
+                core.config.server.host
+            );
+        }
+
+        let state = auth::AuthState::with_sso(secret, sso_runtime.clone(), gate, !loopback);
+        api_router = auth::install_core_auth(api_router, state.clone());
+        auth_required = gate.requires_auth();
+
+        match gate {
+            auth::AuthGate::CoreSecret => {
+                tracing::info!("API auth using [server].auth_secret from conf/super.toml")
+            }
+            auth::AuthGate::Sso => tracing::info!("API auth using SSO (OIDC) sessions"),
+            auth::AuthGate::None => tracing::warn!("API is unauthenticated (loopback bind)"),
+            auth::AuthGate::Plugin => {}
+        }
+        tracing::info!("Core HTTP auth middleware active");
+
+        if let Some(runtime) = sso_runtime {
+            // Out-of-process writers (CLI --offline, manual edits) bump the
+            // config revision; poll it instead of watching files, which do not
+            // move predictably in WAL mode.
+            let reload_state = state.clone();
+            let reload_runtime = runtime.clone();
+            tokio::spawn(async move {
+                let mut ticker = tokio::time::interval(std::time::Duration::from_secs(5));
+                ticker.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+                loop {
+                    ticker.tick().await;
+                    match reload_runtime.reload().await {
+                        Ok(true) => match reload_state.refresh_gate() {
+                            Ok(gate) => {
+                                tracing::info!(gate = ?gate, "SSO configuration reloaded")
+                            }
+                            Err(e) => tracing::error!(error = %e, "refusing SSO gate change"),
+                        },
+                        Ok(false) => {}
+                        Err(e) => tracing::warn!(error = %e, "could not reload SSO configuration"),
+                    }
+                }
+            });
+
+            #[cfg(unix)]
+            {
+                let hup_state = state.clone();
+                let hup_runtime = runtime.clone();
+                tokio::spawn(async move {
+                    let mut hup = match tokio::signal::unix::signal(
+                        tokio::signal::unix::SignalKind::hangup(),
+                    ) {
+                        Ok(signal) => signal,
+                        Err(e) => {
+                            tracing::warn!(error = %e, "could not install SIGHUP handler");
+                            return;
+                        }
+                    };
+                    while hup.recv().await.is_some() {
+                        match hup_runtime.reload_force().await {
+                            Ok(_) => match hup_state.refresh_gate() {
+                                Ok(gate) => tracing::info!(
+                                    gate = ?gate,
+                                    "SSO configuration reloaded (SIGHUP)"
+                                ),
+                                Err(e) => tracing::error!(error = %e, "refusing SSO gate change"),
+                            },
+                            Err(e) => tracing::warn!(error = %e, "SIGHUP reload failed"),
+                        }
+                    }
+                });
+            }
+
+            // Hourly housekeeping: expired sessions/pending, audit retention.
+            let prune_runtime = runtime.clone();
+            tokio::spawn(async move {
+                if let Err(e) = prune_runtime.prune().await {
+                    tracing::warn!(error = %e, "auth housekeeping failed");
+                }
+                let mut ticker = tokio::time::interval(std::time::Duration::from_secs(60 * 60));
+                loop {
+                    ticker.tick().await;
+                    if let Err(e) = prune_runtime.prune().await {
+                        tracing::warn!(error = %e, "auth housekeeping failed");
+                    }
+                }
+            });
+        }
     }
 
     let auth_flag = auth_required;

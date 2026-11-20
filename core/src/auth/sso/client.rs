@@ -106,17 +106,27 @@ impl<T> Cached<T> {
     }
 }
 
-/// One client per configuration snapshot. Rebuilt when the configuration
-/// changes, which also discards cached discovery/JWKS — correct, because an
-/// issuer change must not reuse the previous issuer's keys.
+/// Discovery + JWKS cache shared across the per-login clients.
+///
+/// One cache per runtime (not per client): otherwise every login would refetch
+/// discovery twice and JWKS once, and the "at most one forced refetch per
+/// minute" limit would reset on each request.
+#[derive(Default)]
+pub struct OidcCache {
+    discovery: Mutex<Option<Cached<Discovery>>>,
+    jwks: Mutex<Option<Cached<JwkSet>>>,
+    forced_jwks_at: Mutex<Option<Instant>>,
+}
+
+/// One client per login request, holding a snapshot of the configuration and
+/// the shared cache. An issuer change must discard the cache: the new issuer's
+/// keys are not the old issuer's keys.
 pub struct OidcClient {
     http: reqwest::Client,
     config: Arc<SsoConfig>,
     secret: Arc<str>,
     previous_secret: Option<Arc<str>>,
-    discovery: Mutex<Option<Cached<Discovery>>>,
-    jwks: Mutex<Option<Cached<JwkSet>>>,
-    forced_jwks_at: Mutex<Option<Instant>>,
+    cache: Arc<OidcCache>,
 }
 
 impl OidcClient {
@@ -124,6 +134,20 @@ impl OidcClient {
         config: Arc<SsoConfig>,
         secret: impl Into<String>,
         previous_secret: Option<String>,
+    ) -> Result<Self, OidcError> {
+        Self::with_cache(
+            config,
+            secret,
+            previous_secret,
+            Arc::new(OidcCache::default()),
+        )
+    }
+
+    pub fn with_cache(
+        config: Arc<SsoConfig>,
+        secret: impl Into<String>,
+        previous_secret: Option<String>,
+        cache: Arc<OidcCache>,
     ) -> Result<Self, OidcError> {
         let http = reqwest::Client::builder()
             .redirect(reqwest::redirect::Policy::none())
@@ -136,10 +160,14 @@ impl OidcClient {
             config,
             secret: Arc::from(secret.into()),
             previous_secret: previous_secret.map(Arc::from),
-            discovery: Mutex::new(None),
-            jwks: Mutex::new(None),
-            forced_jwks_at: Mutex::new(None),
+            cache,
         })
+    }
+
+    /// Discovery-only client for `POST /sso/test`: no secret is needed to
+    /// validate issuer reachability and endpoint shape.
+    pub fn for_probe(config: Arc<SsoConfig>) -> Result<Self, OidcError> {
+        Self::new(config, String::new(), None)
     }
 
     /// Cached discovery document.
@@ -153,7 +181,7 @@ impl OidcClient {
     }
 
     async fn discovery_with(&self, force: bool) -> Result<Discovery, OidcError> {
-        let mut cache = self.discovery.lock().await;
+        let mut cache = self.cache.discovery.lock().await;
         if !force
             && let Some(cached) = cache.as_ref()
             && cached.fresh(DISCOVERY_TTL)
@@ -313,17 +341,15 @@ impl OidcClient {
         redirect_uri: &str,
         secret: &str,
     ) -> Result<TokenResponse, OidcError> {
-        let mut form = url::form_urlencoded::Serializer::new(String::new());
-        form.append_pair("grant_type", "authorization_code")
-            .append_pair("code", code)
-            .append_pair("redirect_uri", redirect_uri)
-            .append_pair("code_verifier", verifier);
-
-        let mut request = self.http.post(endpoint).header(
-            reqwest::header::CONTENT_TYPE,
-            "application/x-www-form-urlencoded",
-        );
-        match self.config.token_auth_method {
+        // Build the body before any await: `form_urlencoded::Serializer` is
+        // not `Send`, and axum handlers are boxed into a `Send` future.
+        let mut pairs: Vec<(&str, String)> = vec![
+            ("grant_type", "authorization_code".into()),
+            ("code", code.into()),
+            ("redirect_uri", redirect_uri.into()),
+            ("code_verifier", verifier.into()),
+        ];
+        let authorization = match self.config.token_auth_method {
             TokenAuthMethod::ClientSecretBasic => {
                 // RFC 6749 §2.3.1: form-encode both parts before base64.
                 let credentials = format!(
@@ -331,19 +357,33 @@ impl OidcClient {
                     form_encode(&self.config.client_id),
                     form_encode(secret)
                 );
-                request = request.header(
-                    reqwest::header::AUTHORIZATION,
-                    format!("Basic {}", BASE64_STANDARD.encode(credentials)),
-                );
+                Some(format!("Basic {}", BASE64_STANDARD.encode(credentials)))
             }
             TokenAuthMethod::ClientSecretPost => {
-                form.append_pair("client_id", &self.config.client_id)
-                    .append_pair("client_secret", secret);
+                pairs.push(("client_id", self.config.client_id.clone()));
+                pairs.push(("client_secret", secret.to_string()));
+                None
             }
+        };
+
+        let body = {
+            let mut form = url::form_urlencoded::Serializer::new(String::new());
+            for (key, value) in &pairs {
+                form.append_pair(key, value);
+            }
+            form.finish()
+        };
+
+        let mut request = self.http.post(endpoint).header(
+            reqwest::header::CONTENT_TYPE,
+            "application/x-www-form-urlencoded",
+        );
+        if let Some(authorization) = authorization {
+            request = request.header(reqwest::header::AUTHORIZATION, authorization);
         }
 
         let response = request
-            .body(form.finish())
+            .body(body)
             .send()
             .await
             .map_err(|e| OidcError::Network(format!("token endpoint: {e}")))?;
@@ -396,7 +436,7 @@ impl OidcClient {
     }
 
     async fn jwks(&self, uri: &str, force: bool) -> Result<JwkSet, OidcError> {
-        let mut cache = self.jwks.lock().await;
+        let mut cache = self.cache.jwks.lock().await;
         if !force
             && let Some(cached) = cache.as_ref()
             && cached.fresh(JWKS_TTL)
@@ -405,7 +445,7 @@ impl OidcClient {
         }
 
         if force {
-            let mut last = self.forced_jwks_at.lock().await;
+            let mut last = self.cache.forced_jwks_at.lock().await;
             if let Some(at) = *last
                 && at.elapsed() < FORCED_JWKS_MIN_INTERVAL
             {
