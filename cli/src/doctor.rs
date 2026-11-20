@@ -7,6 +7,7 @@ use crate::check;
 use crate::client;
 use colored::Colorize;
 use common::config::{ServerConfig, resolve_license_key};
+use common::sensitive_file::{PathKind, PermissionFinding, PermissionSeverity, inspect};
 use common::{
     HealthResponse, LicenseInfo, PidfileStatus, embedded_keyring_summary, inspect_pidfile,
     pidfile_parent_unwritable, resolve_pidfile_path, resolve_super_root, under_systemd,
@@ -26,6 +27,14 @@ pub async fn run(base_url: &str, token: Option<&String>) -> anyhow::Result<()> {
         println!("   {}", format!("config check reported: {e}").yellow());
     }
     report_daemon_config();
+
+    // 1b. Sensitive-file permissions: credentials must not be readable by other
+    // users, and nothing that decides what the daemon executes may be writable
+    // by them.
+    println!("\n{}", "== Permissions ==".bold());
+    if !report_permissions() {
+        diagnostics_ok = false;
+    }
 
     // 2. Daemon connectivity + health.
     println!("\n{}", "== Daemon ==".bold());
@@ -243,6 +252,90 @@ fn report_daemon_config() {
             format!("ERROR: pidfile parent is not writable: {parent}").red()
         );
     }
+}
+
+/// Check the mode bits on everything that carries credentials or decides what
+/// the daemon executes. Returns `false` only for integrity problems
+/// (world-writable paths); confidentiality exposure is reported as a warning.
+fn report_permissions() -> bool {
+    let Some((root, cfg)) = load_server_config() else {
+        println!(
+            "   {}",
+            "conf/super.toml not readable — sensitive-path checks skipped".yellow()
+        );
+        return true;
+    };
+
+    let audit = common::sensitive_file::audit_instance(&root, &cfg);
+    let mut checked = audit.checked;
+    let mut findings = audit.findings;
+
+    // The CLI's own credential store (`auth_token`, often the admin secret)
+    // lives outside the instance root but on the same host.
+    if let Some(path) = crate::config::CliConfig::try_path() {
+        match inspect(&path, PathKind::Secret) {
+            Ok(Some(finding)) => {
+                checked += 1;
+                findings.push(finding);
+            }
+            Ok(None) => {}
+            Err(e) => println!(
+                "   {}",
+                format!("cannot inspect {}: {e}", path.display()).yellow()
+            ),
+        }
+    }
+
+    findings.sort_by(|a, b| {
+        b.severity
+            .cmp(&a.severity)
+            .then_with(|| a.path.as_os_str().cmp(b.path.as_os_str()))
+    });
+
+    println!("   Instance root:   {}", root.display());
+    if findings.is_empty() {
+        println!(
+            "   {}",
+            format!("{checked} sensitive paths checked — none group/world accessible").green()
+        );
+        return true;
+    }
+
+    for finding in &findings {
+        print_permission_finding(finding);
+    }
+
+    let errors = findings
+        .iter()
+        .filter(|f| f.severity == PermissionSeverity::Error)
+        .count();
+    let warnings = findings.len() - errors;
+    if errors > 0 {
+        println!(
+            "   {}",
+            format!("{errors} error(s), {warnings} warning(s) — apply the chmod hints above").red()
+        );
+    } else {
+        println!(
+            "   {}",
+            format!("{warnings} warning(s), no world-writable paths").yellow()
+        );
+    }
+    errors == 0
+}
+
+fn print_permission_finding(finding: &PermissionFinding) {
+    let tag = match finding.severity {
+        PermissionSeverity::Error => "ERROR".red(),
+        PermissionSeverity::Warning => "WARN ".yellow(),
+    };
+    println!(
+        "   {tag} {} 0{:03o} {} — {}",
+        finding.path.display(),
+        finding.mode,
+        finding.reason,
+        finding.hint
+    );
 }
 
 fn report_pidfile_status() {

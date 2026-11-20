@@ -280,34 +280,29 @@ pub async fn bootstrap(extension: Box<dyn Extension>) -> anyhow::Result<SystemCo
 
 /// When `[server].auth_secret` is set, conf/super.toml holds a live credential —
 /// warn if the file is group/world-readable (prefer `chmod 600`).
+///
+/// The bit tests live in `common::sensitive_file` so `super doctor` reports the
+/// same thing the daemon warns about.
 async fn warn_if_config_world_readable(path: &std::path::Path) {
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt;
-        match tokio::fs::metadata(path).await {
-            Ok(meta) => {
-                let mode = meta.permissions().mode() & 0o777;
-                if mode & 0o077 != 0 {
-                    tracing::warn!(
-                        config = %path.display(),
-                        mode = format!("0{:o}", mode),
-                        "[server].auth_secret is set but conf/super.toml is group/world-readable; \
-                         run `chmod 600` on the config file"
-                    );
-                }
-            }
-            Err(e) => {
-                tracing::debug!(
-                    config = %path.display(),
-                    error = %e,
-                    "could not stat config for auth_secret permission check"
-                );
-            }
+    match common::sensitive_file::inspect(path, common::sensitive_file::PathKind::Secret) {
+        Ok(Some(finding)) => {
+            tracing::warn!(
+                config = %finding.path.display(),
+                mode = format!("0{:03o}", finding.mode),
+                reason = %finding.reason,
+                "[server].auth_secret is set but conf/super.toml is {}; run `{}`",
+                finding.reason,
+                finding.hint
+            );
         }
-    }
-    #[cfg(not(unix))]
-    {
-        let _ = path;
+        Ok(None) => {}
+        Err(e) => {
+            tracing::debug!(
+                config = %path.display(),
+                error = %e,
+                "could not stat config for auth_secret permission check"
+            );
+        }
     }
 }
 

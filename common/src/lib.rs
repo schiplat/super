@@ -19,6 +19,7 @@ pub mod plugin_ui_abi;
 pub mod program_validate;
 pub mod resources;
 pub mod security;
+pub mod sensitive_file;
 
 pub use daemon::{
     DEFAULT_PIDFILE_REL, PidfileStatus, claim_pidfile, inspect_pidfile, pid_is_alive,
@@ -31,6 +32,10 @@ pub use security::{
     is_loopback_bind_host, mask_env_map, mask_secret_value, parse_socket_mode,
     resolve_confined_log_path, resolve_plugin_library, sanitize_ui_asset_path, secrets_equal,
     validate_license_grant_ids, validate_outbound_url,
+};
+pub use sensitive_file::{
+    AUTH_DB_FILE_NAME, AUTH_STATE_FILE_NAME, PathKind, PermissionAudit, PermissionFinding,
+    PermissionSeverity, SSO_SECRET_FILE_NAME, audit_instance,
 };
 
 pub use auth::{

@@ -19,10 +19,16 @@ impl Default for CliConfig {
 }
 
 impl CliConfig {
-    /// Config file path: ~/.super/cli.json
+    /// Config file path: ~/.super/cli.json (panics without a home directory;
+    /// `try_path` is the non-panicking form for diagnostics).
     fn path() -> PathBuf {
-        let home = dirs::home_dir().expect("Cannot find home directory");
-        home.join(".super").join("cli.json")
+        Self::try_path().expect("Cannot find home directory")
+    }
+
+    /// Non-panicking config path for tools that must not abort on a container
+    /// without `$HOME`.
+    pub fn try_path() -> Option<PathBuf> {
+        dirs::home_dir().map(|home| home.join(".super").join("cli.json"))
     }
 
     /// Load config; return defaults if missing
