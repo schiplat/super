@@ -327,8 +327,15 @@ pub async fn core_auth_middleware(
     let path = req.uri().path().to_string();
     let gate = state.gate();
 
+    if is_auth_exempt(&path) {
+        return next.run(req).await;
+    }
     // No gate means loopback development; superd refuses that on a public bind.
-    if gate == super::AuthGate::None || is_auth_exempt(&path) {
+    // Inject the local root identity so admin-only endpoints (SSO settings,
+    // reload/shutdown) work in that mode, where nobody can authenticate.
+    if gate == super::AuthGate::None {
+        let mut req = req;
+        req.extensions_mut().insert(AuthState::root_context());
         return next.run(req).await;
     }
     if gate == super::AuthGate::Sso && is_sso_public(&path) {

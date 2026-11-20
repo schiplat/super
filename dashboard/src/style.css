@@ -171,8 +171,7 @@
   }
 
   .field-control {
-    @apply flex h-10 w-full rounded-[10px] border border-border bg-card px-3 text-sm text-foreground;
-    @apply shadow-[inset_0_1px_1px_rgba(28,25,23,0.04)];
+    @apply flex h-10 w-full rounded-xl border border-border bg-card px-3 text-sm text-foreground;
     @apply placeholder:text-muted-foreground;
     @apply transition-[border-color,box-shadow,background-color];
     @apply focus-visible:outline-hidden focus-visible:border-foreground/35 focus-visible:ring-2 focus-visible:ring-ring/30;

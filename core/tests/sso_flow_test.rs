@@ -200,7 +200,7 @@ async fn complete_login(app: &Router, oauth_state: &str) -> (String, String) {
         .await
         .unwrap();
     assert!(response.status().is_redirection(), "callback must redirect");
-    assert_eq!(header_string(&response, header::LOCATION), "/?sso=ok");
+    assert_eq!(header_string(&response, header::LOCATION), "/login?sso=ok");
     let cookie = header_string(&response, header::SET_COOKIE);
     assert!(cookie.contains("HttpOnly"), "{cookie}");
     assert!(cookie.contains("SameSite=Lax"), "{cookie}");
@@ -304,6 +304,17 @@ async fn oidc_login_exchange_rbac_and_logout() {
     let (replay_status, _) = exchange(&app, &admin_cookie).await;
     assert_eq!(replay_status, StatusCode::UNAUTHORIZED);
 
+    // `/auth/me` is the gateway-agnostic profile endpoint the shell uses.
+    let response = app
+        .clone()
+        .oneshot(auth_request("GET", "/api/v1/auth/me", &admin_token))
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    let me = json_body(response).await;
+    assert_eq!(me["role"], "admin");
+    assert_eq!(me["name"], "u1");
+
     // Admin can read, mutate, and see the config view without the secret.
     for (method, uri) in [
         ("GET", "/api/v1/programs"),
@@ -359,6 +370,15 @@ async fn oidc_login_exchange_rbac_and_logout() {
         );
     }
 
+    // The profile endpoint reports the viewer role without admin access.
+    let response = app
+        .clone()
+        .oneshot(auth_request("GET", "/api/v1/auth/me", &viewer_token))
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    assert_eq!(json_body(response).await["role"], "viewer");
+
     // Logout revokes immediately.
     let response = app
         .clone()
@@ -382,6 +402,6 @@ async fn oidc_login_exchange_rbac_and_logout() {
     assert!(response.status().is_redirection(), "{}", response.status());
     assert_eq!(
         header_string(&response, header::LOCATION),
-        "/?auth_error=state"
+        "/login?auth_error=state"
     );
 }

@@ -2,12 +2,12 @@
 
 use axum::{
     Json, Router,
-    extract::State,
+    extract::{Extension, State},
     http::{HeaderMap, StatusCode},
     response::IntoResponse,
     routing::{get, post},
 };
-use common::AuthStatusResponse;
+use common::{AuthStatusResponse, UserContext};
 
 use super::AuthGate;
 use super::middleware::{AuthState, extract_token};
@@ -32,6 +32,13 @@ async fn status(State(auth): State<AuthState>) -> Json<AuthStatusResponse> {
     Json(auth.status_response())
 }
 
+/// The caller's own identity. Gateway-agnostic (`secret` → root, `sso` → the
+/// session's name/role), and readable by every role, so the shell does not
+/// have to infer the profile from an admin-only endpoint.
+async fn me(Extension(user): Extension<UserContext>) -> Json<UserContext> {
+    Json(user)
+}
+
 /// Routes nested under the API router. Status is auth-exempt; login is not.
 /// The SSO routes carry their own visibility rules (public flow vs admin).
 pub fn auth_routes(state: AuthState) -> Router {
@@ -39,6 +46,7 @@ pub fn auth_routes(state: AuthState) -> Router {
         .route("/api/v1/auth/login", post(login))
         .route("/api/v1/auth/logout", post(logout))
         .route("/api/v1/auth/status", get(status))
+        .route("/api/v1/auth/me", get(me))
         .merge(super::sso::routes::sso_routes())
         .with_state(state)
 }

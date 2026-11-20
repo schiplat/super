@@ -9,10 +9,12 @@ import {
   PanelLeftClose,
   PanelLeftOpen,
   RefreshCw,
+  ShieldCheck,
   Sun,
 } from 'lucide-vue-next';
 import { useProgramStore } from '@/stores/program';
 import { useAuthStore } from '@/stores/auth';
+import { useCapabilitiesStore } from '@/stores/capabilities';
 import { computed, onMounted, ref } from 'vue';
 import { useDark, useToggle, useWindowSize } from '@vueuse/core';
 import UiButton from '@/components/ui/UiButton.vue';
@@ -23,6 +25,7 @@ import { getSuperConfig } from '@/lib/superConfig';
 
 const store = useProgramStore();
 const authStore = useAuthStore();
+const caps = useCapabilitiesStore();
 const route = useRoute();
 const router = useRouter();
 
@@ -74,12 +77,25 @@ const mainNav = [
   { to: '/stack', label: 'Stacks', icon: Layers },
 ];
 
-const settingsNav = [{ to: '/license', label: 'License', icon: BadgeCheck }];
+const settingsNav = computed(() => {
+  const items = [{ to: '/license', label: 'License', icon: BadgeCheck }];
+  // SSO settings exist in OSS builds only (the security plugin owns auth in
+  // licensed mode) and are admin-only by API policy.
+  if (authStore.isAdmin && !caps.security) {
+    items.unshift({
+      to: '/settings/authentication',
+      label: 'Authentication',
+      icon: ShieldCheck,
+    });
+  }
+  return items;
+});
 
 const TITLES: Record<string, string> = {
   '/': 'Programs',
   '/stack': 'Stacks',
   '/license': 'License',
+  '/settings/authentication': 'Authentication',
   '/programs/new': 'New Program',
 };
 

@@ -43,6 +43,11 @@ const router = createRouter({
           component: License
         },
         {
+          path: 'settings/authentication',
+          name: 'AuthSettings',
+          component: () => import('@/views/AuthSettings.vue'),
+        },
+        {
           path: 'stack',
           name: 'StackEditor',
           component: StackEditor

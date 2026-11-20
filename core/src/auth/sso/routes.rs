@@ -273,7 +273,7 @@ async fn callback(
         .await;
 
     let secure = config.public_base_url.starts_with("https://");
-    let mut response = Redirect::to("/?sso=ok").into_response();
+    let mut response = Redirect::to("/login?sso=ok").into_response();
     if let Ok(value) = header::HeaderValue::from_str(&session_cookie(&session_token, secure)) {
         response.headers_mut().insert(header::SET_COOKIE, value);
     }
@@ -373,6 +373,7 @@ async fn get_config(State(state): State<AuthState>) -> Response {
         "updated_at": stored.as_ref().map(|s| s.updated_at),
         "updated_by": stored.as_ref().and_then(|s| s.updated_by.clone()),
         "gate": state.gate().mode(),
+        "break_glass": state.secret_configured(),
     }))
     .into_response()
 }
@@ -845,7 +846,7 @@ fn server_error() -> Response {
 }
 
 fn redirect_auth_error(code: &str) -> Response {
-    Redirect::to(&format!("/?auth_error={code}")).into_response()
+    Redirect::to(&format!("/login?auth_error={code}")).into_response()
 }
 
 #[cfg(test)]

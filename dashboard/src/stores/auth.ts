@@ -53,15 +53,21 @@ export const useAuthStore = defineStore('auth', () => {
       return;
     }
 
-    // Core auth only (no token CRUD): verify Bearer against the server first.
+    // Core auth only (no token CRUD): ask the server who this session is.
+    // `/auth/me` is gateway-agnostic (static secret → root/Admin, SSO → the
+    // session's name and role) and readable by every role, unlike the admin
+    // token list.
     if (!caps.security) {
       try {
-        await apiClient.post('/api/v1/auth/login', {});
+        const res = await apiClient.get<{ token_id: string; name: string; role: string }>(
+          '/api/v1/auth/me',
+        );
+        const role = res.data.role;
         user.value = {
-          id: 'root',
-          name: 'Administrator',
-          role: 'Admin',
-          avatar: 'A',
+          id: res.data.token_id,
+          name: res.data.name,
+          role: (role.charAt(0).toUpperCase() + role.slice(1)) as UserRole,
+          avatar: (res.data.name || 'U').charAt(0).toUpperCase(),
         };
       } catch {
         await logout();
