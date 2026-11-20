@@ -9,7 +9,6 @@ import StatusBadge from '@/components/StatusBadge.vue';
 import ActionButtons from '@/components/ActionButtons.vue';
 import Slot from '@/slots/Slot.vue';
 import BasePagination from '@/components/BasePagination.vue';
-import OverviewHeader from '@/components/OverviewHeader.vue';
 import TopologyGraph from '@/components/TopologyGraph.vue';
 import EmptyProgramsState from '@/components/EmptyProgramsState.vue';
 import UiButton from '@/components/ui/UiButton.vue';
@@ -93,6 +92,13 @@ const stats = computed(() => ({
     ['Fatal', 'Backoff'].includes(p.status) || isHealthFailing(p),
   ).length,
 }));
+
+const filterChips = [
+  { key: 'ALL', label: 'All', valueKey: 'total', dot: 'bg-info' },
+  { key: 'Running', label: 'Running', valueKey: 'running', dot: 'bg-success' },
+  { key: 'Stopped', label: 'Stopped', valueKey: 'stopped', dot: 'bg-muted-foreground/40' },
+  { key: 'Fatal', label: 'Issues', valueKey: 'problem', dot: 'bg-destructive' },
+] as const;
 
 const filteredPrograms = computed(() => {
   let result = store.programs;
@@ -191,16 +197,24 @@ const hasActiveFilters = computed(() => activeFilter.value !== 'ALL' || !!select
     />
 
     <template v-else>
-      <OverviewHeader :stats="stats" :active-filter="activeFilter" @filter="setFilter" />
-
       <section class="overflow-hidden rounded-2xl bg-card ring-1 ring-border/60 shadow-[0_1px_2px_hsl(220_20%_20%/0.04),0_2px_8px_hsl(220_20%_20%/0.03)]">
         <!-- Toolbar: one 20px gutter, 32px controls -->
         <div class="flex flex-wrap items-center justify-between gap-3 border-b border-border/40 px-5 py-3">
-          <div class="flex min-w-0 items-center gap-2">
-            <h2 class="whitespace-nowrap text-sm font-semibold">
-              {{ activeFilter === 'ALL' ? 'All programs' : `${activeFilter} programs` }}
-            </h2>
-            <span class="text-[11px] tabular-nums text-muted-foreground">{{ filteredPrograms.length }}</span>
+          <div class="flex min-w-0 flex-wrap items-center gap-1">
+            <button
+              v-for="item in filterChips"
+              :key="item.key"
+              type="button"
+              class="inline-flex h-8 items-center gap-1.5 rounded-lg px-2.5 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/30"
+              :class="activeFilter === item.key
+                ? 'bg-muted text-foreground'
+                : 'text-muted-foreground hover:bg-muted/40 hover:text-foreground'"
+              @click="setFilter(item.key)"
+            >
+              <span class="h-1.5 w-1.5 rounded-full" :class="item.dot" aria-hidden="true" />
+              <span>{{ item.label }}</span>
+              <span class="tabular-nums">{{ stats[item.valueKey] }}</span>
+            </button>
             <button
               v-if="selectedGroup"
               type="button"
