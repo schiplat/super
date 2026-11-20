@@ -1,33 +1,34 @@
 <script setup lang="ts">
 import { RouterView, RouterLink, useRoute, useRouter } from 'vue-router';
 import {
-  LayoutDashboard, Settings, RefreshCw, ChevronDown,
-  Menu, X, Sun, Moon, Layers
+  BadgeCheck,
+  Boxes,
+  Layers,
+  Menu,
+  Moon,
+  PanelLeftClose,
+  PanelLeftOpen,
+  RefreshCw,
+  Sun,
 } from 'lucide-vue-next';
 import { useProgramStore } from '@/stores/program';
 import { useAuthStore } from '@/stores/auth';
-import { computed, ref, onMounted } from 'vue';
-import { useDark, useToggle } from '@vueuse/core';
+import { computed, onMounted, ref } from 'vue';
+import { useDark, useToggle, useWindowSize } from '@vueuse/core';
 import UiButton from '@/components/ui/UiButton.vue';
 import UiDialog from '@/components/ui/UiDialog.vue';
 import NavbarRight from '@extensions/NavbarRight.vue';
-import AppFooter from '@extensions/AppFooter.vue';
 import Slot from '@/slots/Slot.vue';
+import { getSuperConfig } from '@/lib/superConfig';
 
 const store = useProgramStore();
 const authStore = useAuthStore();
 const route = useRoute();
 const router = useRouter();
 
-const mobileMenuOpen = ref(false);
-const manageDropdownOpen = ref(false);
-const showReloadModal = ref(false);
+const appVersion = getSuperConfig().version || 'dev';
 
-/** Routes under the Manage dropdown — keep the parent nav item active. */
-const manageRouteActive = computed(() => {
-  const path = route.path;
-  return path === '/stack' || path.startsWith('/settings/');
-});
+const showReloadModal = ref(false);
 
 const isDark = useDark({
   selector: 'html',
@@ -37,44 +38,67 @@ const isDark = useDark({
 });
 const toggleDark = useToggle(isDark);
 
-function toggleMobileMenu() {
-  mobileMenuOpen.value = !mobileMenuOpen.value;
+// ---------------------------------------------------------------- navigation
+
+/**
+ * Sidebar geometry: 248px expanded / 68px collapsed on desktop. Below 768px
+ * the sidebar becomes an off-canvas drawer so nav labels (including plugin
+ * items) stay readable on narrow screens.
+ */
+const COLLAPSE_KEY = 'super_sidebar_collapsed';
+const collapsed = ref(localStorage.getItem(COLLAPSE_KEY) === '1');
+const mobileOpen = ref(false);
+const { width } = useWindowSize();
+const isNarrow = computed(() => width.value < 768);
+const effectiveCollapsed = computed(() => collapsed.value && !isNarrow.value);
+
+const sidebarClass = computed(() =>
+  isNarrow.value
+    ? [
+        'fixed inset-y-0 left-0 z-50 w-[248px] transition-transform duration-150',
+        mobileOpen.value ? 'translate-x-0' : '-translate-x-full',
+      ]
+    : [
+        'shrink-0 transition-[width] duration-150',
+        effectiveCollapsed.value ? 'w-[68px]' : 'w-[248px]',
+      ],
+);
+
+function toggleCollapsed() {
+  collapsed.value = !collapsed.value;
+  localStorage.setItem(COLLAPSE_KEY, collapsed.value ? '1' : '0');
 }
 
-function toggleManageDropdown() {
-  manageDropdownOpen.value = !manageDropdownOpen.value;
-}
+const mainNav = [
+  { to: '/', label: 'Programs', icon: Boxes },
+  { to: '/stack', label: 'Stacks', icon: Layers },
+];
 
-function handleManageBlur() {
-  window.setTimeout(() => { manageDropdownOpen.value = false; }, 200);
-}
+const settingsNav = [{ to: '/license', label: 'License', icon: BadgeCheck }];
 
-/** Keep the Manage menu open while focus moves into the dropdown panel. */
-function onManageFocusOut(e: FocusEvent) {
-  const root = e.currentTarget as HTMLElement | null;
-  const next = e.relatedTarget as Node | null;
-  if (root && next && root.contains(next)) return;
-  handleManageBlur();
-}
+const TITLES: Record<string, string> = {
+  '/': 'Programs',
+  '/stack': 'Stacks',
+  '/license': 'License',
+  '/programs/new': 'New Program',
+};
+
+const pageTitle = computed(() => {
+  if (route.name === 'ProgramEdit') return 'Edit Program';
+  return TITLES[route.path] ?? (route.meta.title as string | undefined) ?? '';
+});
 
 function navigateTo(path: string) {
-  manageDropdownOpen.value = false;
-  mobileMenuOpen.value = false;
   void router.push(path);
 }
 
-function closeManageMenu() {
-  manageDropdownOpen.value = false;
-}
-
-function closeMobileMenu() {
-  mobileMenuOpen.value = false;
+/** Kept for the `nav.manage` / `nav.mobile` slot contract (plugins call it). */
+function closeNav() {
+  mobileOpen.value = false;
 }
 
 function requestReload() {
   showReloadModal.value = true;
-  manageDropdownOpen.value = false;
-  mobileMenuOpen.value = false;
 }
 
 function confirmReload() {
@@ -88,178 +112,222 @@ onMounted(() => {
 </script>
 
 <template>
-  <div class="h-screen w-full bg-background text-foreground font-sans flex flex-col overflow-hidden">
+  <div class="flex h-screen w-full overflow-hidden bg-background text-foreground font-sans">
+    <!-- Off-canvas backdrop (narrow screens only) -->
+    <div
+      v-if="isNarrow && mobileOpen"
+      class="fixed inset-0 z-40 bg-foreground/20"
+      @click="mobileOpen = false"
+    ></div>
 
-    <!-- Navbar -->
-    <nav class="relative h-16 shrink-0 z-50 bg-card border-b border-border flex items-center justify-between px-4 sm:px-6 lg:px-8">
-      <!-- Left: Logo & Mobile Toggle -->
-      <div class="flex items-center gap-3 z-10 w-[250px]">
-        <button class="md:hidden inline-flex h-8 w-8 items-center justify-center rounded-[8px] text-muted-foreground hover:bg-muted hover:text-foreground transition-colors" @click="toggleMobileMenu">
-          <Menu v-if="!mobileMenuOpen" class="w-5 h-5" />
-          <X v-else class="w-5 h-5" />
+    <!-- Sidebar: its own surface, no border/ring/shadow (separation comes from
+         the gutter and the background change). -->
+    <aside
+      class="flex h-full flex-col bg-sidebar text-sidebar-foreground"
+      :class="sidebarClass"
+    >
+      <!-- Brand row -->
+      <div
+        class="flex h-16 shrink-0 items-center px-3"
+        :class="effectiveCollapsed ? 'justify-center' : 'justify-between'"
+      >
+        <a
+          href="/"
+          class="flex items-center gap-3 rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/30"
+          @click.prevent="navigateTo('/'); closeNav()"
+        >
+          <img src="/super.png" alt="Super Process Manager" class="h-8 w-auto object-contain" />
+          <span v-if="!effectiveCollapsed" class="text-sm font-semibold tracking-tight">
+            Super
+          </span>
+        </a>
+        <button
+          v-if="!isNarrow"
+          type="button"
+          class="inline-flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-sidebar-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/30"
+          :title="collapsed ? 'Expand sidebar' : 'Collapse sidebar'"
+          @click="toggleCollapsed"
+        >
+          <component :is="collapsed ? PanelLeftOpen : PanelLeftClose" class="h-4 w-4" />
         </button>
-        <div class="flex items-center gap-3">
-          <img
-            src="/super.png"
-            alt="Super Process Manager"
-            class="h-10 w-auto object-contain cursor-pointer"
-            @click="$router.push('/')"
-          />
-        </div>
       </div>
 
-      <!-- Center: Navigation (desktop) -->
-      <div class="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 hidden md:flex items-center gap-1.5">
+      <!-- Nav: two levels only — group label then items -->
+      <nav class="flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto px-2.5 pt-6 pb-3">
         <RouterLink
-          to="/"
+          v-for="item in mainNav"
+          :key="item.to"
+          :to="item.to"
           custom
-          v-slot="{ href, navigate, isExactActive }"
+          v-slot="{ href, navigate, isActive, isExactActive }"
         >
           <a
             :href="href"
-            class="flex items-center gap-2.5 px-4 py-2 rounded-[9px] text-sm font-medium transition-all duration-200 [corner-shape:squircle]"
-            :class="isExactActive
-              ? 'bg-primary text-primary-foreground shadow-xs'
-              : 'text-muted-foreground hover:text-foreground hover:bg-muted'"
-            @click="navigate"
+            :title="effectiveCollapsed ? item.label : undefined"
+            class="flex items-center gap-3 rounded-xl px-2.5 py-2 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/30"
+            :class="[
+              (item.to === '/' ? isExactActive : isActive)
+                ? 'bg-sidebar-accent text-foreground'
+                : 'text-muted-foreground hover:bg-sidebar-accent hover:text-foreground',
+              effectiveCollapsed ? 'justify-center px-0' : '',
+            ]"
+            @click="navigate(); closeNav()"
           >
-            <LayoutDashboard class="w-4 h-4" />
-            <span>Overview</span>
+            <component :is="item.icon" class="h-4 w-4 shrink-0" />
+            <span v-if="!effectiveCollapsed" class="truncate">{{ item.label }}</span>
           </a>
         </RouterLink>
 
-        <!-- Manage dropdown -->
-        <div class="relative" @focusout="onManageFocusOut">
-          <button
-            type="button"
-            class="flex items-center gap-2 px-4 py-2 rounded-[9px] text-sm font-medium transition-colors"
-            :class="manageRouteActive || manageDropdownOpen
-              ? 'bg-primary text-primary-foreground shadow-xs'
-              : 'text-muted-foreground hover:text-foreground hover:bg-muted'"
-            @click="toggleManageDropdown"
+        <div class="mt-6">
+          <p
+            v-if="!effectiveCollapsed"
+            class="type-eyebrow mb-2.5 px-2.5 text-muted-foreground"
           >
-            <Settings class="w-4 h-4" />
-            <span>Manage</span>
-            <ChevronDown class="w-3 h-3 opacity-50" />
-          </button>
-          <div
-            v-if="manageDropdownOpen"
-            class="absolute top-full left-0 mt-1.5 w-56 rounded-xl bg-card border border-border shadow-[0_10px_40px_-10px_rgba(28,25,23,0.15)] p-1.5 flex flex-col gap-0.5"
-          >
+            Settings
+          </p>
+          <div v-else class="mb-2.5 h-px bg-sidebar-border" />
+          <div class="flex flex-col gap-1">
+            <RouterLink
+              v-for="item in settingsNav"
+              :key="item.to"
+              :to="item.to"
+              custom
+              v-slot="{ href, navigate, isActive }"
+            >
+              <a
+                :href="href"
+                :title="effectiveCollapsed ? item.label : undefined"
+                class="flex items-center gap-3 rounded-xl px-2.5 py-2 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/30"
+                :class="[
+                  isActive
+                    ? 'bg-sidebar-accent text-foreground'
+                    : 'text-muted-foreground hover:bg-sidebar-accent hover:text-foreground',
+                  effectiveCollapsed ? 'justify-center px-0' : '',
+                ]"
+                @click="navigate(); closeNav()"
+              >
+                <component :is="item.icon" class="h-4 w-4 shrink-0" />
+                <span v-if="!effectiveCollapsed" class="truncate">{{ item.label }}</span>
+              </a>
+            </RouterLink>
+
             <!-- STABLE: nav.manage — plugins need navigate/close/routePath. Do not change :context without tests/slots.spec.ts review. -->
             <Slot
+              v-if="!isNarrow"
               name="nav.manage"
-              :context="{ navigate: navigateTo, close: closeManageMenu, routePath: route.path }"
+              :context="{ navigate: navigateTo, close: closeNav, routePath: route.path }"
             />
-            <a
-              href="/stack"
-              class="flex items-center gap-3 px-3 py-2.5 rounded-[10px] text-sm font-medium transition-colors"
-              :class="route.path === '/stack'
-                ? 'bg-muted text-foreground'
-                : 'text-muted-foreground hover:text-foreground hover:bg-muted/80'"
-              @click.prevent="navigateTo('/stack')"
-            >
-              <Layers class="w-4 h-4 opacity-50" />
-              Stack Editor
-            </a>
-            <div v-if="authStore.canManage" class="h-px bg-border my-1 mx-2"></div>
-            <button
-              v-if="authStore.canManage"
-              type="button"
-              class="flex w-full items-center gap-3 px-3 py-2.5 rounded-[10px] text-sm text-muted-foreground hover:text-destructive hover:bg-muted/80 font-medium transition-colors cursor-pointer text-left"
-              @click="requestReload"
-            >
-              <RefreshCw class="w-4 h-4" />
-              Reload System
-            </button>
+            <!-- STABLE: nav.mobile — plugins need navigate/close. Do not change :context without tests/slots.spec.ts review. -->
+            <Slot
+              v-else
+              name="nav.mobile"
+              :context="{ navigate: navigateTo, close: closeNav }"
+            />
+          </div>
+        </div>
+      </nav>
+
+      <!-- Footer: brand row, then meta row. Never three items on one line. -->
+      <div class="px-4 pb-4">
+        <div class="border-t border-sidebar-border pt-3">
+          <template v-if="!effectiveCollapsed">
+            <div class="text-[11px] leading-4 text-muted-foreground">
+              <span>Powered by </span>
+              <a
+                href="https://github.com/schiplat/super"
+                target="_blank"
+                rel="noopener noreferrer"
+                class="rounded text-foreground/70 transition-colors hover:text-foreground"
+              >schiplat/super&nbsp;↗</a>
+            </div>
+            <div class="mt-1 text-[11px] text-muted-foreground">
+              <a
+                href="https://super.docs.sconts.com/"
+                target="_blank"
+                rel="noopener noreferrer"
+                class="transition-colors hover:text-foreground"
+              >Docs&nbsp;↗</a>
+              <span class="mx-1 text-muted-foreground/50">·</span>
+              <span class="tabular-nums text-muted-foreground/70">v{{ appVersion }}</span>
+            </div>
+          </template>
+          <div
+            v-else
+            class="text-center text-[10px] tabular-nums text-muted-foreground/70"
+            :title="`v${appVersion}`"
+          >
+            v{{ appVersion.split('.')[0] }}
           </div>
         </div>
       </div>
+    </aside>
 
-      <!-- Right: Actions -->
-      <div class="flex items-center justify-end gap-3 z-10 w-[250px]">
-        <button
-          class="inline-flex h-8 w-8 items-center justify-center rounded-[8px] text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
-          @click="toggleDark()"
-          title="Toggle Theme"
-        >
-          <component :is="isDark ? Moon : Sun" class="w-5 h-5" />
-        </button>
-
-        <div class="h-6 w-px bg-border"></div>
-        <NavbarRight />
-      </div>
-    </nav>
-
-    <!-- Mobile Menu -->
-    <div
-      v-if="mobileMenuOpen"
-      class="absolute top-16 left-0 w-full bg-card border-b border-border z-40 md:hidden flex flex-col p-4 gap-2 shadow-lg"
-    >
-      <RouterLink
-        to="/"
-        class="flex items-center gap-3 px-3 py-2.5 rounded-[10px] text-sm font-medium text-foreground hover:bg-muted transition-colors"
-        @click="mobileMenuOpen = false"
+    <!-- Main column: top bar (56px) + scrolling content -->
+    <div class="flex min-w-0 flex-1 flex-col">
+      <header
+        class="flex h-14 shrink-0 items-center justify-between gap-3 border-b border-border/40 px-4 lg:px-6"
       >
-        <LayoutDashboard class="w-4 h-4" />
-        Overview
-      </RouterLink>
+        <div class="flex min-w-0 items-center gap-2">
+          <button
+            type="button"
+            class="inline-flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted/40 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/30 md:hidden"
+            title="Open navigation"
+            @click="mobileOpen = true"
+          >
+            <Menu class="h-4 w-4" />
+          </button>
+          <h1 class="truncate text-sm font-semibold">{{ pageTitle }}</h1>
+        </div>
+        <div class="flex items-center gap-2">
+          <button
+            v-if="authStore.canManage"
+            type="button"
+            class="inline-flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted/40 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/30"
+            title="Reload configuration"
+            @click="requestReload"
+          >
+            <RefreshCw class="h-4 w-4" />
+          </button>
+          <button
+            type="button"
+            class="inline-flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted/40 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/30"
+            title="Toggle theme"
+            @click="toggleDark()"
+          >
+            <component :is="isDark ? Moon : Sun" class="h-4 w-4" />
+          </button>
+          <div class="h-6 w-px bg-border/60"></div>
+          <NavbarRight />
+        </div>
+      </header>
 
-      <button class="flex items-center gap-3 px-3 py-2.5 rounded-[10px] text-sm font-medium text-muted-foreground hover:bg-muted transition-colors" @click="toggleDark()">
-        <component :is="isDark ? Moon : Sun" class="w-4 h-4" />
-        {{ isDark ? 'Light Mode' : 'Dark Mode' }}
-      </button>
-
-      <button
-        v-if="authStore.canManage"
-        type="button"
-        class="flex items-center gap-3 px-3 py-2.5 rounded-[10px] text-sm font-medium text-muted-foreground hover:text-destructive hover:bg-muted/80 transition-colors text-left"
-        @click="requestReload"
-      >
-        <RefreshCw class="w-4 h-4" />
-        Reload Config
-      </button>
-
-      <div class="h-px bg-border my-1"></div>
-
-      <!-- STABLE: nav.mobile — plugins need navigate/close. Do not change :context without tests/slots.spec.ts review. -->
-      <Slot
-        name="nav.mobile"
-        :context="{ navigate: navigateTo, close: closeMobileMenu }"
-      />
-      <a
-        href="/stack"
-        class="flex items-center gap-3 px-3 py-2.5 rounded-[10px] text-sm text-muted-foreground hover:bg-muted transition-colors"
-        @click.prevent="navigateTo('/stack'); mobileMenuOpen = false"
-      >
-        <Layers class="w-4 h-4" /> Stack Editor
-      </a>
+      <main class="flex-1 overflow-y-auto px-4 py-6 lg:px-6 scroll-smooth">
+        <div class="mx-auto flex min-h-full w-full max-w-[1600px] flex-col">
+          <div class="flex-1">
+            <RouterView />
+          </div>
+        </div>
+      </main>
     </div>
 
-    <!-- Main Content -->
-    <main class="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8 scroll-smooth" @click="mobileMenuOpen = false">
-      <!-- flex column + min-h-full pins the footer to the bottom on short pages -->
-      <div class="mx-auto flex min-h-full w-full max-w-[1600px] flex-col">
-        <div class="flex-1">
-          <RouterView />
-        </div>
-        <AppFooter />
-      </div>
-    </main>
-
     <!-- Reload Confirmation Dialog -->
-    <UiDialog :open="showReloadModal" @update:open="val => showReloadModal = val" title="Reload Configuration?">
+    <UiDialog
+      :open="showReloadModal"
+      @update:open="val => (showReloadModal = val)"
+      title="Reload Configuration?"
+    >
       <template #description>
-        This will reload the configuration from disk. Any removed programs will be stopped, and new ones will be added. Running programs with changed configurations may not restart automatically.
+        This will reload the configuration from disk. Any removed programs will be stopped,
+        and new ones will be added. Running programs with changed configurations may not
+        restart automatically.
       </template>
-      <div class="flex items-center gap-3 mt-2">
+      <div class="mt-2 flex items-center gap-3">
         <UiButton variant="secondary" @click="showReloadModal = false">Cancel</UiButton>
         <UiButton variant="destructive" @click="confirmReload">
-          <RefreshCw class="w-4 h-4" />
+          <RefreshCw class="h-4 w-4" />
           Reload Config
         </UiButton>
       </div>
     </UiDialog>
-
   </div>
 </template>
