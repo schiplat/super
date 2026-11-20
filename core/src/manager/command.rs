@@ -81,11 +81,13 @@ pub enum Command {
         query: crate::event_db::EventQuery,
         reply: oneshot::Sender<Vec<common::ProgramEventRecord>>,
     },
-    /// Retention statistics (optional program and time scope).
+    /// Retention statistics (optional program, time, and filter scope).
     EventStats {
         program_id: Option<Uuid>,
         from: Option<u64>,
         to: Option<u64>,
+        event_type: Option<String>,
+        q: Option<String>,
         reply: oneshot::Sender<common::EventStats>,
     },
 

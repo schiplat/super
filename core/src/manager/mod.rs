@@ -566,11 +566,13 @@ impl Manager {
                 program_id,
                 from,
                 to,
+                event_type,
+                q,
                 reply,
             } => {
                 let stats = self
                     .event_db
-                    .stats(program_id, from, to)
+                    .stats(program_id, from, to, event_type.as_deref(), q.as_deref())
                     .await
                     .unwrap_or_default();
                 let _ = reply.send(stats);

@@ -58,7 +58,7 @@ async fn query_clamps_huge_limit() {
     assert_eq!(rest.len(), 10);
 
     // Stats still see everything (clamping affects LIMIT only).
-    let stats = db.stats(None, None, None).await.unwrap();
+    let stats = db.stats(None, None, None, None, None).await.unwrap();
     assert_eq!(stats.total, total);
 }
 
@@ -88,13 +88,13 @@ async fn stats_respect_the_time_window() {
         .unwrap();
     }
 
-    let all = db.stats(None, None, None).await.unwrap();
+    let all = db.stats(None, None, None, None, None).await.unwrap();
     assert_eq!(all.total, 3);
     assert_eq!(all.first_ts, Some(base));
     assert_eq!(all.last_ts, Some(base + 120));
 
     let window = db
-        .stats(None, Some(base + 60), Some(base + 120))
+        .stats(None, Some(base + 60), Some(base + 120), None, None)
         .await
         .unwrap();
     assert_eq!(window.total, 2);
@@ -104,7 +104,24 @@ async fn stats_respect_the_time_window() {
     assert_eq!(window.by_type[0].event, "exit");
     assert_eq!(window.by_type[0].count, 2);
 
-    let empty = db.stats(None, Some(base + 500), None).await.unwrap();
+    let empty = db
+        .stats(None, Some(base + 500), None, None, None)
+        .await
+        .unwrap();
+
+    // The type filter scopes the counts exactly like the list query.
+    let by_type_window = db
+        .stats(None, None, None, Some("start"), None)
+        .await
+        .unwrap();
+    assert_eq!(by_type_window.total, 1);
+    assert_eq!(by_type_window.by_type[0].event, "start");
+
+    let text_window = db
+        .stats(None, None, None, None, Some("test"))
+        .await
+        .unwrap();
+    assert_eq!(text_window.total, 3);
     assert_eq!(empty.total, 0);
     assert!(empty.by_type.is_empty());
 }

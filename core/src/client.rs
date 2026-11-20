@@ -117,12 +117,15 @@ impl ManagerHandle {
         Ok(rx.await?)
     }
 
-    /// Event statistics, optionally scoped to one program and a time window.
+    /// Event statistics, optionally scoped to one program, a time window, and
+    /// the same filters the list query accepts.
     pub async fn event_stats(
         &self,
         program_id: Option<Uuid>,
         from: Option<u64>,
         to: Option<u64>,
+        event_type: Option<String>,
+        q: Option<String>,
     ) -> anyhow::Result<common::EventStats> {
         let (tx, rx) = oneshot::channel();
         self.tx
@@ -130,6 +133,8 @@ impl ManagerHandle {
                 program_id,
                 from,
                 to,
+                event_type,
+                q,
                 reply: tx,
             })
             .await?;

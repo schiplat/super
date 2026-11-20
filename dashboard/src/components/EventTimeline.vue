@@ -14,6 +14,7 @@ import apiClient from '@/api/client'
 import { API_PATHS } from '@/api/paths'
 import { useProgramStore } from '@/stores/program'
 import { eventDayLabel, eventResult, eventTime, eventTimestamp, eventTone, type EventTone } from '@/lib/events'
+import BasePagination from '@/components/BasePagination.vue'
 import UiButton from '@/components/ui/UiButton.vue'
 import UiEmptyState from '@/components/ui/UiEmptyState.vue'
 import UiNotice from '@/components/ui/UiNotice.vue'
@@ -69,6 +70,7 @@ const range = ref<EventRange>(initialRange)
 const query = ref(typeof initialQuery.q === 'string' ? initialQuery.q : '')
 const offset = ref((initialPage - 1) * props.pageSize)
 
+const pageSize = ref(props.pageSize)
 const rows = ref<ProgramEventRecord[]>([])
 const summary = ref<EventStats | null>(null)
 const types = ref<string[]>([])
@@ -80,9 +82,7 @@ const lastLoaded = ref<number>(0)
 const expanded = ref<string | null>(null)
 const copiedKey = ref<string | null>(null)
 
-const page = computed(() => Math.floor(offset.value / props.pageSize) + 1)
-const pageStart = computed(() => (rows.value.length ? offset.value + 1 : 0))
-const pageEnd = computed(() => offset.value + rows.value.length)
+const page = computed(() => Math.floor(offset.value / pageSize.value) + 1)
 
 const toneIcon = {
   danger: CircleAlert,
@@ -158,13 +158,8 @@ function listParams(): Record<string, unknown> {
 }
 
 function statsParams(): Record<string, unknown> {
-  const params: Record<string, unknown> = {}
-  if (selectedProgram.value) params.program_id = selectedProgram.value
-  if (!props.compact) {
-    const from = rangeFrom()
-    if (from != null) params.from = from
-  }
-  return params
+  // Same filters as the list: the total must agree with the page it sits on.
+  return listParams()
 }
 
 function mergeTypes(stats: EventStats | null) {
@@ -271,16 +266,20 @@ watch(live, (enabled) => {
   }, 5000)
 })
 
-function goOlder() {
-  if (rows.value.length < props.pageSize) return
-  offset.value += props.pageSize
+const totalPages = computed(() => Math.ceil((summary.value?.total ?? 0) / pageSize.value) || 1)
+const currentPage = computed(() => Math.floor(offset.value / pageSize.value) + 1)
+
+function changePage(newPage: number) {
+  const clamped = Math.min(Math.max(newPage, 1), totalPages.value)
+  if (clamped === currentPage.value) return
+  offset.value = (clamped - 1) * pageSize.value
   syncUrl()
   void load()
 }
 
-function goNewer() {
-  if (offset.value === 0) return
-  offset.value = Math.max(0, offset.value - props.pageSize)
+function changePageSize(size: number) {
+  pageSize.value = size
+  offset.value = 0
   syncUrl()
   void load()
 }
@@ -554,24 +553,15 @@ onUnmounted(() => {
             Open in Events ↗
           </button>
         </template>
-        <template v-else>
-          <span class="tabular-nums">
-            Showing {{ pageStart }}–{{ pageEnd }} · Page {{ page }}
-          </span>
-          <div class="flex items-center gap-2">
-            <UiButton variant="outline" size="sm" :disabled="offset === 0 || loading" @click="goNewer">
-              Newer
-            </UiButton>
-            <UiButton
-              variant="outline"
-              size="sm"
-              :disabled="rows.length < pageSize || loading"
-              @click="goOlder"
-            >
-              Older
-            </UiButton>
-          </div>
-        </template>
+        <BasePagination
+          v-else
+          :total="summary?.total ?? rows.length"
+          :page="currentPage"
+          :page-size="pageSize"
+          :disabled="loading"
+          @update:page="changePage"
+          @update:page-size="changePageSize"
+        />
       </footer>
     </section>
   </div>

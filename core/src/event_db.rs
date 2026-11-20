@@ -262,11 +262,16 @@ impl EventDb {
 
     /// Retention statistics, optionally scoped to one program.
     /// Event counts, optionally scoped to one program and a time window.
+    /// Event counts, optionally scoped to one program, a time window, and the
+    /// same event-type / message filters the list query accepts — so a summary
+    /// always agrees with the page it is rendered next to.
     pub async fn stats(
         &self,
         program_id: Option<Uuid>,
         from: Option<u64>,
         to: Option<u64>,
+        event_type: Option<&str>,
+        q: Option<&str>,
     ) -> anyhow::Result<EventStats> {
         use sqlx::QueryBuilder;
 
@@ -275,6 +280,8 @@ impl EventDb {
             program_id: Option<Uuid>,
             from: Option<u64>,
             to: Option<u64>,
+            event_type: Option<&str>,
+            q: Option<&str>,
         ) {
             builder.push(" WHERE 1 = 1");
             if let Some(pid) = program_id {
@@ -288,19 +295,27 @@ impl EventDb {
             if let Some(to) = to {
                 builder.push(" AND ts <= ").push_bind(to as i64);
             }
+            if let Some(et) = event_type {
+                builder.push(" AND event = ").push_bind(et.to_string());
+            }
+            if let Some(text) = q {
+                builder
+                    .push(" AND msg LIKE ")
+                    .push_bind(format!("%{text}%"));
+            }
         }
 
         let mut stats = EventStats::default();
 
         let mut total = QueryBuilder::new("SELECT COUNT(*) FROM events");
-        scope(&mut total, program_id, from, to);
+        scope(&mut total, program_id, from, to, event_type, q);
         stats.total = total
             .build_query_scalar::<i64>()
             .fetch_one(&self.pool)
             .await? as u64;
 
         let mut first = QueryBuilder::new("SELECT MIN(ts) FROM events");
-        scope(&mut first, program_id, from, to);
+        scope(&mut first, program_id, from, to, event_type, q);
         stats.first_ts = first
             .build_query_scalar::<Option<i64>>()
             .fetch_one(&self.pool)
@@ -308,7 +323,7 @@ impl EventDb {
             .map(|v| v as u64);
 
         let mut last = QueryBuilder::new("SELECT MAX(ts) FROM events");
-        scope(&mut last, program_id, from, to);
+        scope(&mut last, program_id, from, to, event_type, q);
         stats.last_ts = last
             .build_query_scalar::<Option<i64>>()
             .fetch_one(&self.pool)
@@ -316,7 +331,7 @@ impl EventDb {
             .map(|v| v as u64);
 
         let mut by_type = QueryBuilder::new("SELECT event, COUNT(*) AS c FROM events");
-        scope(&mut by_type, program_id, from, to);
+        scope(&mut by_type, program_id, from, to, event_type, q);
         by_type.push(" GROUP BY event ORDER BY c DESC");
         for row in by_type.build().fetch_all(&self.pool).await? {
             stats.by_type.push(common::EventTypeCount {
