@@ -5,7 +5,7 @@ import {
   X, Terminal as TerminalIcon, FileText, Cpu,
   Copy, Check, Folder, User, PlayCircle, Layers, Activity,
   Link2, TerminalSquare, AlertTriangle, Clock, Edit, Gauge, RefreshCw, History,
-  ChevronLeft, ChevronRight, ArrowDown, ArrowUp
+  ChevronLeft, ChevronRight, ArrowDown, ArrowUp, ArrowLeft
 } from 'lucide-vue-next';
 import { useProgramStore } from '@/stores/program';
 import { useAuthStore } from '@/stores/auth';
@@ -32,6 +32,8 @@ interface PluginDetailTab {
 const props = defineProps<{
   modelValue: boolean;
   processId: string | null;
+  /** Render as a page surface instead of the right-hand quick-peek drawer. */
+  inline?: boolean;
 }>();
 
 const emit = defineEmits(['update:modelValue', 'change-process']);
@@ -553,8 +555,13 @@ function goToEdit() { if (props.processId) router.push(`/programs/${props.proces
 </script>
 
 <template>
-  <div v-if="modelValue" class="fixed inset-0 z-[100] bg-foreground/20 backdrop-blur-[2px] transition-opacity" @click="close"></div>
-  <div class="fixed inset-y-0 right-0 z-[101] w-full md:w-[850px] bg-card shadow-2xl transform transition-transform duration-300 ease-in-out flex flex-col border-l border-border" :class="modelValue ? 'translate-x-0' : 'translate-x-full'">
+  <div v-if="modelValue && !inline" class="fixed inset-0 z-[100] bg-foreground/20 backdrop-blur-[2px] transition-opacity" @click="close"></div>
+  <div
+    class="flex flex-col bg-card"
+    :class="inline
+      ? 'h-full w-full overflow-hidden rounded-2xl ring-1 ring-border/60'
+      : 'fixed inset-y-0 right-0 z-[101] w-full md:w-[850px] shadow-2xl transform transition-transform duration-300 ease-in-out border-l border-border ' + (modelValue ? 'translate-x-0' : 'translate-x-full')"
+  >
     <div v-if="processId" class="flex flex-col h-full">
 
       <!-- Header -->
@@ -608,7 +615,10 @@ function goToEdit() { if (props.processId) router.push(`/programs/${props.proces
             <button v-if="authStore.canManage" class="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-[7px] text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-muted transition-colors" @click="goToEdit">
               <Edit class="w-3.5 h-3.5" /><span class="hidden sm:inline">Edit</span>
             </button>
-            <button class="inline-flex h-8 w-8 items-center justify-center rounded-[8px] text-muted-foreground/50 hover:text-foreground hover:bg-muted transition-colors ml-1" @click="close"><X class="w-4 h-4" /></button>
+            <button class="inline-flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground/60 hover:text-foreground hover:bg-muted transition-colors ml-1" :title="inline ? 'Back to programs' : 'Close'" @click="close">
+              <ArrowLeft v-if="inline" class="w-4 h-4" />
+              <X v-else class="w-4 h-4" />
+            </button>
           </div>
         </div>
         <div class="py-3 border-t border-border/60"><ActionButtons :id="processId" :status="programStatus || 'Stopped'" :name="summaryData?.name" /></div>

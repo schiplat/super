@@ -14,7 +14,6 @@ import TopologyGraph from '@/components/TopologyGraph.vue';
 import EmptyProgramsState from '@/components/EmptyProgramsState.vue';
 import UiButton from '@/components/ui/UiButton.vue';
 import UiBadge from '@/components/ui/UiBadge.vue';
-import ProcessDetailDrawer from '@/components/ProcessDetailDrawer.vue';
 import {
   RefreshCw, AlertCircle, Box, Search,
   Folder, AlertOctagon,
@@ -45,8 +44,6 @@ const searchQuery = ref('');
 const currentPage = ref(1);
 const activeFilter = ref<string>('ALL');
 const selectedGroup = ref<string>('');
-const showDrawer = ref(false);
-const selectedProcessId = ref<string | null>(null);
 
 type SortField = 'name' | 'group' | 'status' | 'pid' | 'uptime' | 'updated' | null;
 const sortField = ref<SortField>('updated');
@@ -141,9 +138,9 @@ watch([searchQuery, () => settingsStore.defaultPageSize, activeFilter, selectedG
 onMounted(() => { store.fetchPrograms(); });
 onUnmounted(() => { if (graphPollTimer) clearInterval(graphPollTimer); });
 
-watch(() => route.query.detail, (id) => { if (id && typeof id === 'string') { openDetails(id); router.replace({ query: {} }); } }, { immediate: true });
+watch(() => route.query.detail, (id) => { if (typeof id === 'string' && id) void router.replace(`/programs/${id}`); }, { immediate: true });
 
-function openDetails(id: string) { selectedProcessId.value = id; showDrawer.value = true; }
+function openDetails(id: string) { void router.push(`/programs/${id}`); }
 function setFilter(status: string) { activeFilter.value = activeFilter.value === status ? 'ALL' : status; }
 function toggleGroupFilter(group: string) { selectedGroup.value = selectedGroup.value === group ? '' : group; }
 
@@ -322,7 +319,6 @@ const hasActiveFilters = computed(() => activeFilter.value !== 'ALL' || !!select
       <div v-else class="h-[420px] sm:h-[520px] lg:h-[600px] w-full bg-muted/50"><TopologyGraph ref="graphRef" :programs="filteredPrograms" @node-click="openDetails" /></div>
     </div>
 
-    <ProcessDetailDrawer v-model="showDrawer" :process-id="selectedProcessId" @change-process="(id: string) => selectedProcessId = id" />
   </div>
 </template>
 

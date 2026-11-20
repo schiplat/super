@@ -42,8 +42,17 @@ const router = createRouter({
       children: [
         {
           path: '',
-          name: 'Dashboard',
+          redirect: '/programs',
+        },
+        {
+          path: 'programs',
+          name: 'Programs',
           component: ProcessList
+        },
+        {
+          path: 'programs/:id',
+          name: 'ProgramDetail',
+          component: () => import('@/views/ProgramDetail.vue'),
         },
         {
           path: 'license',

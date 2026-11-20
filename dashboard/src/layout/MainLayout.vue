@@ -73,7 +73,7 @@ function toggleCollapsed() {
 }
 
 const mainNav = [
-  { to: '/', label: 'Programs', icon: Boxes },
+  { to: '/programs', label: 'Programs', icon: Boxes },
   { to: '/stack', label: 'Stacks', icon: Layers },
 ];
 
@@ -92,7 +92,7 @@ const settingsNav = computed(() => {
 });
 
 const TITLES: Record<string, string> = {
-  '/': 'Programs',
+  '/programs': 'Programs',
   '/stack': 'Stacks',
   '/license': 'License',
   '/settings/authentication': 'Authentication',
@@ -100,12 +100,19 @@ const TITLES: Record<string, string> = {
 };
 
 const pageTitle = computed(() => {
+  if (route.name === 'ProgramDetail') return 'Program';
   if (route.name === 'ProgramEdit') return 'Edit Program';
   return TITLES[route.path] ?? (route.meta.title as string | undefined) ?? '';
 });
 
 function navigateTo(path: string) {
   void router.push(path);
+}
+
+/** Nav items also stay active on their child routes (`/programs/:id`). */
+function navItemActive(target: string, isActive: boolean, isExactActive: boolean) {
+  if (target === '/') return isExactActive;
+  return isActive || route.path === target || route.path.startsWith(`${target}/`);
 }
 
 /** Kept for the `nav.manage` / `nav.mobile` slot contract (plugins call it). */
@@ -182,7 +189,7 @@ onMounted(() => {
             :title="effectiveCollapsed ? item.label : undefined"
             class="flex items-center gap-3 rounded-xl px-2.5 py-2 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/30"
             :class="[
-              (item.to === '/' ? isExactActive : isActive)
+              navItemActive(item.to, isActive, isExactActive)
                 ? 'bg-sidebar-accent text-foreground'
                 : 'text-muted-foreground hover:bg-sidebar-accent hover:text-foreground',
               effectiveCollapsed ? 'justify-center px-0' : '',
@@ -215,7 +222,7 @@ onMounted(() => {
                 :title="effectiveCollapsed ? item.label : undefined"
                 class="flex items-center gap-3 rounded-xl px-2.5 py-2 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/30"
                 :class="[
-                  isActive
+                  navItemActive(item.to, isActive, false)
                     ? 'bg-sidebar-accent text-foreground'
                     : 'text-muted-foreground hover:bg-sidebar-accent hover:text-foreground',
                   effectiveCollapsed ? 'justify-center px-0' : '',
