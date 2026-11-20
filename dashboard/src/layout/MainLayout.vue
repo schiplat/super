@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import { RouterView, RouterLink, useRoute, useRouter } from 'vue-router';
 import {
-  BadgeCheck,
   Boxes,
   History,
   Layers,
@@ -82,17 +81,19 @@ const mainNav = [
 ];
 
 const settingsNav = computed(() => {
-  const items = [{ to: '/license', label: 'License', icon: BadgeCheck }];
-  // SSO settings exist in OSS builds only (the security plugin owns auth in
-  // licensed mode) and are admin-only by API policy.
+  // License lives in the user menu (NavbarRight) — one entry, not two. The
+  // settings group carries only the SSO page: OSS builds, admin role (the
+  // security plugin owns auth in licensed mode and hides the entry).
   if (authStore.isAdmin && !caps.security) {
-    items.unshift({
-      to: '/settings/authentication',
-      label: 'Authentication',
-      icon: ShieldCheck,
-    });
+    return [
+      {
+        to: '/settings/authentication',
+        label: 'Authentication',
+        icon: ShieldCheck,
+      },
+    ];
   }
-  return items;
+  return [];
 });
 
 const TITLES: Record<string, string> = {
@@ -209,8 +210,10 @@ onMounted(() => {
         </RouterLink>
 
         <div class="mt-6">
+          <!-- Label only when the group has its own items; plugin slot items
+               (nav.manage / nav.mobile) still render below the divider. -->
           <p
-            v-if="!effectiveCollapsed"
+            v-if="!effectiveCollapsed && settingsNav.length"
             class="type-eyebrow mb-2.5 px-2.5 text-muted-foreground"
           >
             Settings
