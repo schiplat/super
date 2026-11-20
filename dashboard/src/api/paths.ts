@@ -9,6 +9,12 @@ export const API_PATHS = {
     LICENSE: `${BASE_URL}/system/license`,
   },
 
+  // Global event history (all programs)
+  EVENT_HISTORY: {
+    QUERY: `${BASE_URL}/events`,
+    STATS: `${BASE_URL}/events/stats`,
+  },
+
   // Programs
   PROGRAMS: {
     // List GET /api/v1/programs

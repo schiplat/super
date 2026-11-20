@@ -42,12 +42,18 @@ const router = createRouter({
       children: [
         {
           path: '',
-          redirect: '/programs',
+          name: 'Overview',
+          component: () => import('@/views/Overview.vue'),
         },
         {
           path: 'programs',
           name: 'Programs',
           component: ProcessList
+        },
+        {
+          path: 'events',
+          name: 'Events',
+          component: () => import('@/views/Events.vue'),
         },
         {
           path: 'programs/:id',

@@ -3,7 +3,9 @@ import { RouterView, RouterLink, useRoute, useRouter } from 'vue-router';
 import {
   BadgeCheck,
   Boxes,
+  History,
   Layers,
+  LayoutDashboard,
   Menu,
   Moon,
   PanelLeftClose,
@@ -73,8 +75,10 @@ function toggleCollapsed() {
 }
 
 const mainNav = [
+  { to: '/', label: 'Overview', icon: LayoutDashboard },
   { to: '/programs', label: 'Programs', icon: Boxes },
   { to: '/stack', label: 'Stacks', icon: Layers },
+  { to: '/events', label: 'Events', icon: History },
 ];
 
 const settingsNav = computed(() => {
@@ -92,7 +96,9 @@ const settingsNav = computed(() => {
 });
 
 const TITLES: Record<string, string> = {
+  '/': 'Overview',
   '/programs': 'Programs',
+  '/events': 'Events',
   '/stack': 'Stacks',
   '/license': 'License',
   '/settings/authentication': 'Authentication',

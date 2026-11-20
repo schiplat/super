@@ -140,6 +140,13 @@ onMounted(() => { store.fetchPrograms(); });
 onUnmounted(() => { if (graphPollTimer) clearInterval(graphPollTimer); });
 
 watch(() => route.query.detail, (id) => { if (typeof id === 'string' && id) void router.replace(`/programs/${id}`); }, { immediate: true });
+// Stat cards on the Overview page link here with `?status=Running|Stopped|Fatal`.
+watch(() => route.query.status, (value) => {
+  if (typeof value === 'string' && ['ALL', 'Running', 'Stopped', 'Fatal'].includes(value)) {
+    activeFilter.value = value;
+    currentPage.value = 1;
+  }
+}, { immediate: true });
 
 function openDetails(id: string) { void router.push(`/programs/${id}`); }
 function setFilter(status: string) { activeFilter.value = activeFilter.value === status ? 'ALL' : status; }
