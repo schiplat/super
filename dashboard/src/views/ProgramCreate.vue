@@ -196,7 +196,25 @@ const sections = [
   { key: 'limits', label: 'Limits', required: false },
 ] as const;
 
-const activeSection = ref<string>('run');
+// The Limits section only renders with the isolation plugin; the rail must
+// not offer a jump target that does not exist.
+const visibleSections = computed(() =>
+  sections.filter((section) => section.key !== 'limits' || caps.isolation),
+);
+
+/** Scroll-driven highlight: the last headline above a line in the scrollport. */
+const scrolledSection = ref<string>('run');
+/** Hover-driven highlight: the section under the cursor, if any. */
+const hoverSection = ref<string | null>(null);
+/**
+ * A rail click pins the highlight to the clicked section. Collapsed sections
+ * make neighbours' headlines sit within the fold line, so letting the spy
+ * immediately re-take control would highlight a different section than the
+ * one the user just navigated to — exactly the "rail disconnected from the
+ * content" feeling. Genuine user scrolling (wheel / touch / keys) unpins.
+ */
+const pinnedSection = ref<string | null>(null);
+const activeSection = computed(() => hoverSection.value ?? pinnedSection.value ?? scrolledSection.value);
 
 function sectionDone(key: string): boolean {
   switch (key) {
@@ -224,10 +242,22 @@ function sectionDone(key: string): boolean {
 }
 
 let sectionScroller: HTMLElement | null = null;
+let cursorPoint: { x: number; y: number } | null = null;
+/** Throttle id for hover recomputes (setTimeout — rAF never fires in some
+    embedded webviews, which would leave the rail frozen). */
+let hoverFrame = 0;
+let pollFrame = 0;
+let lastKnownTop = -1;
 
-function onScrollSpy() {
+function sectionAtPoint(x: number, y: number): string | null {
+  const el = document.elementFromPoint(x, y);
+  const host = el?.closest('[data-section]');
+  return (host?.getAttribute('data-section') as string | undefined) ?? null;
+}
+
+function sectionUnderFold(): string {
   const scroller = sectionScroller;
-  if (!scroller) return;
+  if (!scroller) return sections[0].key;
   // "Current" = the last section headline above a line ~120px into the
   // scrollport. Deterministic, unlike band-based intersection matching where
   // several long sections can overlap the window at once.
@@ -237,14 +267,70 @@ function onScrollSpy() {
     const el = document.getElementById(`section-${section.key}`);
     if (el && el.getBoundingClientRect().top <= line) current = section.key;
   }
-  activeSection.value = current;
+  return current;
+}
+
+function refreshHighlight() {
+  if (!pinnedSection.value) {
+    scrolledSection.value = sectionUnderFold();
+  }
+  // The cursor is the attention anchor: while it rests over the form, the rail
+  // follows the section under it — including while wheel-scrolling with the
+  // pointer stationary (elementFromPoint recomputes on every scroll event).
+  hoverSection.value = cursorPoint
+    ? sectionAtPoint(cursorPoint.x, cursorPoint.y)
+    : null;
+}
+
+/** Genuine user scrolling unpins a rail-click highlight. */
+function unpin() {
+  if (pinnedSection.value) {
+    pinnedSection.value = null;
+    refreshHighlight();
+  }
+}
+
+/** Recompute on scroll-position change. The scroll listener covers real
+    browsers; the interval covers embedded webviews where programmatic
+    scrolling never dispatches scroll events (no frames -> no events). The
+    position check makes the poll a no-op while idle. */
+function onScrollSpy() {
+  const scroller = sectionScroller;
+  if (!scroller || scroller.scrollTop === lastKnownTop) return;
+  lastKnownTop = scroller.scrollTop;
+  refreshHighlight();
+}
+
+function onRailHover(event: MouseEvent) {
+  cursorPoint = { x: event.clientX, y: event.clientY };
+  // Trailing-edge throttle: recomputes at most every 50 ms, with one final
+  // pass after the pointer stops moving. setTimeout, not rAF — some embedded
+  // webviews never fire animation frames.
+  if (!hoverFrame) {
+    hoverFrame = window.setTimeout(() => {
+      hoverFrame = 0;
+      refreshHighlight();
+    }, 50);
+  }
+}
+
+function onRailLeave() {
+  cursorPoint = null;
+  hoverSection.value = null;
 }
 
 function observeSections() {
   const scroller = document.querySelector("main");
   if (!scroller) return;
   sectionScroller = scroller;
+  lastKnownTop = scroller.scrollTop;
   scroller.addEventListener("scroll", onScrollSpy, { passive: true });
+  scroller.addEventListener("mousemove", onRailHover, { passive: true });
+  scroller.addEventListener("mouseleave", onRailLeave);
+  scroller.addEventListener("wheel", unpin, { passive: true });
+  scroller.addEventListener("touchmove", unpin, { passive: true });
+  scroller.addEventListener("keydown", unpin);
+  pollFrame = window.setInterval(onScrollSpy, 250);
   onScrollSpy();
 }
 
@@ -271,7 +357,11 @@ function scrollToSection(key: string) {
   // Instant jump: some embedded browsers silently drop programmatic smooth
   // scrolls on this container, and navigation must not depend on the animation.
   scroller.scrollTo({ top: target, behavior: "instant" });
-  activeSection.value = key;
+  lastKnownTop = target;
+  // Pin the highlight to the clicked section; the spy only re-takes control on
+  // genuine user scrolling input (see unpin).
+  pinnedSection.value = key;
+  hoverSection.value = null;
 }
 
 // ----------------------------------------------------------- json preview
@@ -452,7 +542,16 @@ async function handleSubmit() {
 }
 
 onUnmounted(() => {
-  if (sectionScroller) sectionScroller.removeEventListener("scroll", onScrollSpy);
+  if (sectionScroller) {
+    sectionScroller.removeEventListener("scroll", onScrollSpy);
+    sectionScroller.removeEventListener("mousemove", onRailHover);
+    sectionScroller.removeEventListener("mouseleave", onRailLeave);
+    sectionScroller.removeEventListener("wheel", unpin);
+    sectionScroller.removeEventListener("touchmove", unpin);
+    sectionScroller.removeEventListener("keydown", unpin);
+  }
+  clearTimeout(hoverFrame);
+  clearInterval(pollFrame);
 });
 </script>
 
@@ -475,7 +574,7 @@ onUnmounted(() => {
         </div>
         <div class="space-y-1">
           <button
-            v-for="section in sections"
+            v-for="section in visibleSections"
             :key="section.key"
             type="button"
             class="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-left text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/30"
