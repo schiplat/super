@@ -20,8 +20,8 @@ async fn logout() -> StatusCode {
     StatusCode::NO_CONTENT
 }
 
-async fn status() -> Json<AuthStatusResponse> {
-    Json(AuthState::status_response())
+async fn status(State(auth): State<AuthState>) -> Json<AuthStatusResponse> {
+    Json(auth.status_response())
 }
 
 /// Routes nested under the API router. Status is auth-exempt; login is not.

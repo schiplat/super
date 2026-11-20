@@ -13,14 +13,7 @@
 use std::path::{Path, PathBuf};
 
 use crate::config::ServerConfig;
-
-/// SSO configuration (no secrets, but integrity-critical: whoever can write it
-/// can point authentication at their own IdP).
-pub const AUTH_STATE_FILE_NAME: &str = "auth_state.json";
-/// SQLite store for SSO sessions and pending authorization state.
-pub const AUTH_DB_FILE_NAME: &str = "auth.db";
-/// OIDC client secret, kept out of `auth_state.json` on purpose.
-pub const SSO_SECRET_FILE_NAME: &str = "sso_client.secret";
+use crate::paths::auth_db_path;
 
 /// What kind of exposure matters for a path.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -266,13 +259,13 @@ pub fn audit_instance(root: &Path, cfg: &ServerConfig) -> PermissionAudit {
         name.push(suffix);
         push_target(&mut targets, PathBuf::from(name), PathKind::Secret);
     }
-    for name in [
-        AUTH_STATE_FILE_NAME,
-        AUTH_DB_FILE_NAME,
-        SSO_SECRET_FILE_NAME,
-    ] {
-        push_target(&mut targets, data_dir.join(name), PathKind::Secret);
-    }
+    // SSO configuration, client secret and sessions share one store; the
+    // doctor reports the database and its sidecars together.
+    push_target(
+        &mut targets,
+        auth_db_path(root, &storage.data_file),
+        PathKind::Secret,
+    );
     // OSS mode can persist a generated admin secret for restart stability.
     push_target(
         &mut targets,

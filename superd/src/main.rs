@@ -497,26 +497,42 @@ async fn async_main() -> anyhow::Result<()> {
     let (mut api_router, mut auth_required) =
         attach_http_plugins(base_router, &plugin_runtime, &core.paths)?;
 
-    if auth_required {
-        tracing::info!("Plugin HTTP auth middleware active");
-    } else if plugin_host.mode == RunMode::Licensed {
+    // Exactly one gate: the security plugin when loaded, else SSO when
+    // configured, else the static secret. SSO is enabled by the auth store
+    // (data/auth.db), which lands with the SSO gate.
+    let gate = auth::AuthGate::resolve(
+        core.config.server.auth_secret.as_deref(),
+        auth_required,
+        false,
+    );
+    if plugin_host.mode == RunMode::Licensed && gate != auth::AuthGate::Plugin {
         anyhow::bail!(
             "Licensed deployment requires the security plugin HTTP auth middleware, but it is not active. \
              Ensure security.so exports authenticate and re-check superd logs."
         );
-    } else if auth::core_auth_should_activate(core.config.server.auth_secret.as_deref(), false) {
-        let Some(secret) = auth::non_empty_auth_secret(core.config.server.auth_secret.as_deref())
-        else {
-            anyhow::bail!(
-                "[server].auth_secret activated core auth but the value is empty; \
-                 set a non-empty secret in conf/super.toml"
-            );
-        };
-        tracing::info!("API auth using [server].auth_secret from conf/super.toml");
-        let state = auth::AuthState::new(secret);
-        api_router = auth::install_core_auth(api_router, state);
-        auth_required = true;
-        tracing::info!("Core HTTP auth middleware active");
+    }
+    match gate {
+        auth::AuthGate::Plugin => tracing::info!("Plugin HTTP auth middleware active"),
+        auth::AuthGate::CoreSecret => {
+            let Some(secret) =
+                auth::non_empty_auth_secret(core.config.server.auth_secret.as_deref())
+            else {
+                anyhow::bail!(
+                    "[server].auth_secret activated core auth but the value is empty; \
+                     set a non-empty secret in conf/super.toml"
+                );
+            };
+            tracing::info!("API auth using [server].auth_secret from conf/super.toml");
+            let state = auth::AuthState::new(secret);
+            api_router = auth::install_core_auth(api_router, state);
+            auth_required = true;
+            tracing::info!("Core HTTP auth middleware active");
+        }
+        auth::AuthGate::Sso => anyhow::bail!(
+            "SSO authentication is configured but this superd build has no SSO gate; \
+             remove the SSO configuration from data/auth.db or upgrade superd"
+        ),
+        auth::AuthGate::None => {}
     }
 
     let auth_flag = auth_required;

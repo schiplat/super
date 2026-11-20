@@ -26,7 +26,10 @@ pub use daemon::{
     pidfile_parent_unwritable, release_pidfile, resolve_daemonize, resolve_pidfile_path,
     should_write_pidfile, under_systemd,
 };
-pub use paths::{resolve_storage_path, resolve_super_root, resolve_super_root_for_config};
+pub use paths::{
+    AUTH_DB_FILE_NAME, auth_db_path, resolve_storage_path, resolve_super_root,
+    resolve_super_root_for_config,
+};
 pub use security::{
     DEFAULT_SOCKET_MODE, FetchUrlPolicy, MAX_LICENSE_B64_LEN, MAX_LICENSE_JSON_LEN,
     is_loopback_bind_host, mask_env_map, mask_secret_value, parse_socket_mode,
@@ -34,9 +37,8 @@ pub use security::{
     validate_license_grant_ids, validate_outbound_url,
 };
 pub use sensitive_file::{
-    AUTH_DB_FILE_NAME, AUTH_STATE_FILE_NAME, PathKind, PermissionAudit, PermissionFinding,
-    PermissionSeverity, SSO_SECRET_FILE_NAME, audit_instance, ensure_owner_only,
-    ensure_sqlite_owner_only, write_owner_only,
+    PathKind, PermissionAudit, PermissionFinding, PermissionSeverity, audit_instance,
+    ensure_owner_only, ensure_sqlite_owner_only, write_owner_only,
 };
 
 pub use auth::{

@@ -142,8 +142,6 @@ fn audit_instance_only_reports_paths_that_exist() {
     );
     // Correctly-moded and absent paths stay out of the report.
     assert_eq!(find("snapshot.json"), None);
-    assert_eq!(find("auth_state.json"), None);
-    assert_eq!(find("sso_client.secret"), None);
 
     assert_eq!(audit.errors(), 2);
     assert!(audit.warnings() >= 3);

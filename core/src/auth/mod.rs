@@ -1,10 +1,9 @@
-//! Built-in (OSS) HTTP authentication — static Bearer from `auth_secret`.
+//! Built-in (OSS) HTTP authentication.
 //!
-//! When the licensed `security` plugin is loaded, that plugin owns auth and
-//! this module stays dormant. Otherwise core auth activates when
-//! `auth_secret` in `conf/super.toml` is non-empty.
-//!
-//! Non-loopback TCP binds without auth refuse to start.
+//! Exactly one gate guards the API at a time. The licensed `security` plugin
+//! owns auth when loaded; otherwise SSO (OIDC) when configured;
+//! otherwise the static `auth_secret` from `conf/super.toml`. With no gate the
+//! API is open, which is why superd refuses non-loopback binds in that state.
 
 mod middleware;
 mod routes;
@@ -27,15 +26,47 @@ pub fn non_empty_auth_secret(config_secret: Option<&str>) -> Option<String> {
         .map(str::to_string)
 }
 
-/// Whether the OSS core auth middleware should wrap the API router.
-///
-/// Plugin auth always wins: when the security plugin's `authenticate` hook is
-/// active, core auth stays off so there is exactly one gate.
-pub fn core_auth_should_activate(config_secret: Option<&str>, plugin_auth_active: bool) -> bool {
-    if plugin_auth_active {
-        return false;
+/// The single authentication gate in front of the API.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum AuthGate {
+    /// No authentication (loopback development only).
+    None,
+    /// Static Bearer secret from `[server].auth_secret`.
+    CoreSecret,
+    /// The `security` plugin's HTTP auth middleware.
+    Plugin,
+    /// SSO sessions persisted in `data/auth.db`.
+    Sso,
+}
+
+impl AuthGate {
+    /// Pick the one active gate.
+    ///
+    /// The order is a security decision, not a preference: a loaded security
+    /// plugin always wins (it also owns tokens and RBAC), and an enabled SSO
+    /// configuration beats the static secret so that enabling SSO in the UI
+    /// actually switches the gate off the long-lived shared secret. A stale
+    /// `auth_secret` left in `conf/super.toml` stays dormant — and is the
+    /// fallback if the SSO store fails to load at startup.
+    pub fn resolve(
+        config_secret: Option<&str>,
+        plugin_auth_active: bool,
+        signet_enabled: bool,
+    ) -> Self {
+        if plugin_auth_active {
+            Self::Plugin
+        } else if signet_enabled {
+            Self::Sso
+        } else if non_empty_auth_secret(config_secret).is_some() {
+            Self::CoreSecret
+        } else {
+            Self::None
+        }
     }
-    non_empty_auth_secret(config_secret).is_some()
+
+    pub fn requires_auth(self) -> bool {
+        !matches!(self, Self::None)
+    }
 }
 
 /// Mount `/api/v1/auth/{login,status}` and wrap the router with Bearer middleware.

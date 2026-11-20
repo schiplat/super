@@ -13,14 +13,20 @@ use std::sync::Arc;
 /// Shared state for the OSS auth middleware and `/auth/*` handlers.
 #[derive(Clone)]
 pub struct AuthState {
-    pub secret: Arc<str>,
+    gate: super::AuthGate,
+    secret: Arc<str>,
 }
 
 impl AuthState {
     pub fn new(secret: impl Into<String>) -> Self {
         Self {
+            gate: super::AuthGate::CoreSecret,
             secret: Arc::from(secret.into()),
         }
+    }
+
+    pub fn gate(&self) -> super::AuthGate {
+        self.gate
     }
 
     pub fn root_context() -> UserContext {
@@ -31,12 +37,15 @@ impl AuthState {
         }
     }
 
-    pub fn status_response() -> AuthStatusResponse {
+    /// `/api/v1/auth/status` payload. Built from the active gate instead of a
+    /// constant so a future SSO gate reports itself honestly: with SSO on, the
+    /// static secret is not an accepted login.
+    pub fn status_response(&self) -> AuthStatusResponse {
         AuthStatusResponse {
             auth_secret_disabled: false,
             has_admin_token: false,
             can_disable_auth_secret: false,
-            auth_secret_login_allowed: true,
+            auth_secret_login_allowed: self.gate == super::AuthGate::CoreSecret,
             token_management: false,
         }
     }
@@ -196,7 +205,7 @@ fn unauthorized() -> Response {
 }
 
 /// Layer core auth middleware onto an API router. Caller must only invoke this
-/// when [`super::core_auth_should_activate`] is true.
+/// when [`super::AuthGate::resolve`] selected [`super::AuthGate::CoreSecret`].
 pub fn attach_core_auth(router: axum::Router, state: AuthState) -> axum::Router {
     router.layer(axum::middleware::from_fn_with_state(
         state,

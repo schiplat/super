@@ -52,6 +52,8 @@ pub struct SystemPaths {
     pub state_file: PathBuf,
     pub log_dir: PathBuf,
     pub plugins_dir: PathBuf,
+    /// SSO configuration, client secret and local sessions (owner-only).
+    pub auth_db_file: PathBuf,
 }
 
 pub fn resolve_root() -> PathBuf {
@@ -81,6 +83,7 @@ pub async fn bootstrap(extension: Box<dyn Extension>) -> anyhow::Result<SystemCo
         state_file: root.join("data/snapshot.json"),
         log_dir: root.join("logs"),
         plugins_dir: root.join("plugins"),
+        auth_db_file: root.join("data").join(common::AUTH_DB_FILE_NAME),
     };
 
     // Ensure plugin directory exists (drop-in `.so` files at startup).
@@ -247,6 +250,9 @@ pub async fn bootstrap(extension: Box<dyn Extension>) -> anyhow::Result<SystemCo
     let mut paths = paths;
     paths.state_file = storage.data_file.clone();
     paths.log_dir = storage.log_dir.clone();
+    // Keep the auth store beside the resolved snapshot instead of a hard-coded
+    // data/ directory (custom [storage] layouts move the whole instance data).
+    paths.auth_db_file = common::auth_db_path(&root, &storage.data_file);
 
     // 5. Init Manager (core actor)
     let manager = Manager::new(

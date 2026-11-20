@@ -1,6 +1,23 @@
 use std::env;
 use std::path::{Path, PathBuf};
 
+/// SQLite store holding SSO configuration, the OIDC client secret, local
+/// sessions and pending authorization state. Owner-only; treat the file (and
+/// its sidecars) as a credential.
+pub const AUTH_DB_FILE_NAME: &str = "auth.db";
+
+/// Resolve `<data>/auth.db` from the resolved snapshot path.
+///
+/// Custom `[storage].data_file` layouts keep auth state beside the rest of the
+/// instance data instead of a hard-coded `data/` directory.
+pub fn auth_db_path(root: &Path, state_file: &Path) -> PathBuf {
+    state_file
+        .parent()
+        .filter(|p| !p.as_os_str().is_empty())
+        .map(|p| p.join(AUTH_DB_FILE_NAME))
+        .unwrap_or_else(|| root.join("data").join(AUTH_DB_FILE_NAME))
+}
+
 /// Resolve Super instance root: `SUPER_ROOT` → exe-relative layout → cwd.
 ///
 /// Shared by superd and licensed plugins so config paths stay consistent.
