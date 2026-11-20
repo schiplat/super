@@ -70,18 +70,18 @@ function changePage(newPage: number) {
 </script>
 
 <template>
-  <div class="flex flex-col sm:flex-row items-center justify-between px-4 sm:px-6 py-4 border-t border-border bg-muted/30 text-sm gap-4">
-    <div class="text-muted-foreground font-medium order-2 sm:order-1 text-center sm:text-left w-full sm:w-auto">
-      Showing <span class="text-foreground font-bold">{{ start }}-{{ end }}</span> of <span class="text-foreground font-bold">{{ total }}</span>
+  <div class="flex flex-col items-center justify-between gap-3 border-t border-border/40 px-5 py-2.5 text-[11px] text-muted-foreground sm:flex-row">
+    <div class="order-2 w-full text-center sm:order-1 sm:w-auto sm:text-left">
+      Showing <span class="tabular-nums text-foreground">{{ start }}-{{ end }}</span> of <span class="tabular-nums text-foreground">{{ total }}</span>
     </div>
     <div class="flex items-center justify-between sm:justify-end w-full sm:w-auto gap-3 sm:gap-4 order-1 sm:order-2 flex-wrap">
       <div class="flex items-center gap-2">
-        <span class="text-muted-foreground whitespace-nowrap text-xs">Rows:</span>
+        <span class="whitespace-nowrap">Rows:</span>
         <select
           :value="pageSize"
           @change="e => { emit('update:pageSize', Number((e.target as HTMLSelectElement).value)); emit('update:page', 1); }"
           :disabled="disabled"
-          class="field-control !h-8 !w-16 !text-xs !px-2 !rounded-[8px]"
+          class="field-control field-control-sm w-16 px-2"
         >
           <option v-for="opt in displayOptions" :key="opt" :value="opt">{{ opt }}</option>
         </select>
@@ -89,7 +89,7 @@ function changePage(newPage: number) {
       <nav class="flex items-center gap-0.5" aria-label="Pagination">
         <button
           type="button"
-          class="inline-flex h-8 w-8 items-center justify-center rounded-[8px] border border-border bg-card hover:bg-muted transition-colors disabled:opacity-30"
+          class="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-border bg-card transition-colors hover:bg-muted/40 disabled:opacity-30"
           :disabled="page === 1 || disabled"
           aria-label="Previous page"
           @click="changePage(page - 1)"
@@ -106,10 +106,10 @@ function changePage(newPage: number) {
           <button
             v-else
             type="button"
-            class="inline-flex h-8 min-w-8 items-center justify-center rounded-[8px] border text-xs font-semibold tabular-nums transition-colors disabled:opacity-30 px-1.5"
+            class="inline-flex h-8 min-w-8 items-center justify-center rounded-lg border text-xs font-semibold tabular-nums transition-colors disabled:opacity-30 px-1.5"
             :class="item === page
-              ? 'border-primary/40 bg-primary/10 text-primary'
-              : 'border-border bg-card text-muted-foreground hover:bg-muted hover:text-foreground'"
+              ? 'border-border bg-muted text-foreground'
+              : 'border-border bg-card text-muted-foreground hover:bg-muted/40 hover:text-foreground'"
             :disabled="disabled"
             :aria-label="`Page ${item}`"
             :aria-current="item === page ? 'page' : undefined"
@@ -121,7 +121,7 @@ function changePage(newPage: number) {
 
         <button
           type="button"
-          class="inline-flex h-8 w-8 items-center justify-center rounded-[8px] border border-border bg-card hover:bg-muted transition-colors disabled:opacity-30"
+          class="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-border bg-card transition-colors hover:bg-muted/40 disabled:opacity-30"
           :disabled="page === totalPages || disabled"
           aria-label="Next page"
           @click="changePage(page + 1)"

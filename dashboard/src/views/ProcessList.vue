@@ -13,10 +13,11 @@ import OverviewHeader from '@/components/OverviewHeader.vue';
 import TopologyGraph from '@/components/TopologyGraph.vue';
 import EmptyProgramsState from '@/components/EmptyProgramsState.vue';
 import UiButton from '@/components/ui/UiButton.vue';
-import UiBadge from '@/components/ui/UiBadge.vue';
+import UiEmptyState from '@/components/ui/UiEmptyState.vue';
+import UiNotice from '@/components/ui/UiNotice.vue';
 import {
-  RefreshCw, AlertCircle, Box, Search,
-  Folder, AlertOctagon,
+  RefreshCw, Search,
+  AlertOctagon,
   LayoutList, Network, Plus,
   ArrowUp, ArrowDown, Info, Copy, Check
 } from 'lucide-vue-next';
@@ -168,160 +169,227 @@ const hasActiveFilters = computed(() => activeFilter.value !== 'ALL' || !!select
 </script>
 
 <template>
-  <div class="flex flex-col gap-3 sm:gap-4">
+  <div class="space-y-6">
+    <UiNotice v-if="store.error" tone="danger">
+      <div class="flex items-center gap-3">
+        <span class="flex-1">{{ store.error }}</span>
+        <UiButton variant="ghost" size="sm" @click="store.fetchPrograms()">Retry</UiButton>
+      </div>
+    </UiNotice>
 
-    <!-- Error Banner -->
-    <div v-if="store.error" class="rounded-xl border border-destructive/30 bg-destructive/5 flex items-center gap-3 px-4 py-3 shrink-0 text-sm">
-      <AlertCircle class="w-5 h-5 text-destructive" />
-      <span class="font-medium text-foreground flex-1">{{ store.error }}</span>
-      <UiButton variant="ghost" size="sm" @click="store.fetchPrograms()">Retry</UiButton>
-    </div>
+    <EmptyProgramsState
+      v-if="!store.isLoading && store.programs.length === 0"
+      :can-create="authStore.canOperate"
+      premium
+    />
 
-    <EmptyProgramsState v-if="!store.isLoading && store.programs.length === 0" :can-create="authStore.canOperate" premium />
+    <template v-else>
+      <OverviewHeader :stats="stats" :active-filter="activeFilter" @filter="setFilter" />
 
-    <div v-else class="surface-card shadow-xs overflow-visible">
-      <OverviewHeader :stats="stats" :active-filter="activeFilter" class="border-b border-border/70 mx-3 sm:mx-4 mt-3 mb-0" @filter="setFilter" />
-
-      <!-- Toolbar -->
-      <div class="px-4 py-2.5 border-b border-border flex flex-col xl:flex-row justify-between items-center gap-2 sm:gap-3 shrink-0">
-        <div class="flex items-center gap-3 w-full xl:w-auto">
-          <h2 class="font-semibold text-foreground whitespace-nowrap text-sm">{{ activeFilter === 'ALL' ? 'All Processes' : `${activeFilter} Processes` }}</h2>
-          <UiBadge size="sm">{{ filteredPrograms.length }}</UiBadge>
-          <UiBadge v-if="selectedGroup" variant="default" @click="selectedGroup = ''" class="cursor-pointer">Group: {{ selectedGroup }} &times;</UiBadge>
-        </div>
-
-        <div class="flex flex-col sm:flex-row items-center gap-3 w-full xl:w-auto">
-          <div class="bg-muted p-1 rounded-[9px] flex items-center gap-1 border border-border/40 hidden sm:flex">
-            <button class="flex items-center justify-center w-9 h-7 rounded-[7px] transition-all duration-200" :class="viewMode === 'list' ? 'bg-card text-foreground shadow-xs' : 'text-muted-foreground hover:text-foreground'" @click="viewMode = 'list'" title="List View"><LayoutList class="w-4 h-4" /></button>
-            <button class="flex items-center justify-center w-9 h-7 rounded-[7px] transition-all duration-200" :class="viewMode === 'graph' ? 'bg-card text-foreground shadow-xs' : 'text-muted-foreground hover:text-foreground'" @click="viewMode = 'graph'" title="Topology View"><Network class="w-4 h-4" /></button>
+      <section class="overflow-hidden rounded-2xl bg-card ring-1 ring-border/60 shadow-[0_1px_2px_hsl(220_20%_20%/0.04),0_2px_8px_hsl(220_20%_20%/0.03)]">
+        <!-- Toolbar: one 20px gutter, 32px controls -->
+        <div class="flex flex-wrap items-center justify-between gap-3 border-b border-border/40 px-5 py-3">
+          <div class="flex min-w-0 items-center gap-2">
+            <h2 class="whitespace-nowrap text-sm font-semibold">
+              {{ activeFilter === 'ALL' ? 'All programs' : `${activeFilter} programs` }}
+            </h2>
+            <span class="text-[11px] tabular-nums text-muted-foreground">{{ filteredPrograms.length }}</span>
+            <button
+              v-if="selectedGroup"
+              type="button"
+              class="inline-flex items-center gap-1 rounded-lg bg-muted/40 px-1.5 py-0.5 text-[11px] text-muted-foreground transition-colors hover:text-foreground"
+              @click="selectedGroup = ''"
+            >
+              Group: {{ selectedGroup }} &times;
+            </button>
           </div>
-          <div class="w-px h-6 bg-border hidden sm:block"></div>
 
-          <router-link v-if="authStore.canOperate" to="/programs/new">
-            <UiButton size="sm" class="gap-2 shadow-xs whitespace-nowrap">
-              <Plus class="w-4 h-4" />
-              <span class="hidden md:inline">New Program</span><span class="md:hidden">New</span>
-            </UiButton>
-          </router-link>
+          <div class="flex flex-wrap items-center gap-3">
+            <div class="hidden items-center gap-1 rounded-xl bg-muted/40 p-1 sm:flex">
+              <button
+                type="button"
+                class="inline-flex h-8 w-8 items-center justify-center rounded-lg transition-colors"
+                :class="viewMode === 'list' ? 'bg-card text-foreground' : 'text-muted-foreground hover:text-foreground'"
+                title="List view"
+                @click="viewMode = 'list'"
+              >
+                <LayoutList class="h-4 w-4" />
+              </button>
+              <button
+                type="button"
+                class="inline-flex h-8 w-8 items-center justify-center rounded-lg transition-colors"
+                :class="viewMode === 'graph' ? 'bg-card text-foreground' : 'text-muted-foreground hover:text-foreground'"
+                title="Topology view"
+                @click="viewMode = 'graph'"
+              >
+                <Network class="h-4 w-4" />
+              </button>
+            </div>
 
-          <div class="relative w-full sm:w-48">
-            <select v-model="selectedGroup" class="field-control !h-8 !text-xs !rounded-[8px]">
-              <option value="">All Groups</option>
+            <router-link v-if="authStore.canOperate" to="/programs/new">
+              <UiButton size="sm" class="gap-2 whitespace-nowrap">
+                <Plus class="h-4 w-4" />
+                <span class="hidden md:inline">New Program</span><span class="md:hidden">New</span>
+              </UiButton>
+            </router-link>
+
+            <select v-model="selectedGroup" class="field-control field-control-sm w-40">
+              <option value="">All groups</option>
               <option v-for="group in uniqueGroups" :key="group" :value="group">{{ group }}</option>
             </select>
+
+            <div class="relative w-full sm:w-64">
+              <Search class="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground/40" />
+              <input
+                v-model="searchQuery"
+                type="text"
+                placeholder="Search programs…"
+                class="field-control field-control-sm max-w-xs pl-9"
+              />
+            </div>
+
+            <UiButton variant="outline" size="sm" :disabled="store.isLoading" @click="store.fetchPrograms()">
+              <RefreshCw class="h-3.5 w-3.5" :class="{ 'animate-spin': store.isLoading }" />
+              <span class="hidden sm:inline">Refresh</span>
+            </UiButton>
           </div>
-          <div class="relative w-full sm:w-64">
-            <Search class="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground/40" />
-            <input v-model="searchQuery" type="text" placeholder="Search..." class="field-control !h-8 !pl-9 !text-xs !rounded-[8px]" />
+        </div>
+
+        <!-- List view -->
+        <div v-if="viewMode === 'list'">
+          <div class="overflow-x-auto">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th class="cursor-pointer select-none" @click="toggleSort('name')">
+                    <span class="inline-flex items-center gap-1.5">
+                      Name / ID
+                      <ArrowUp v-if="sortField === 'name' && sortDir === 'asc'" class="h-3 w-3" />
+                      <ArrowDown v-else-if="sortField === 'name' && sortDir === 'desc'" class="h-3 w-3" />
+                    </span>
+                  </th>
+                  <th class="cursor-pointer select-none" @click="toggleSort('group')">
+                    <span class="inline-flex items-center gap-1.5">Group<ArrowUp v-if="sortField === 'group' && sortDir === 'asc'" class="h-3 w-3" /><ArrowDown v-else-if="sortField === 'group' && sortDir === 'desc'" class="h-3 w-3" /></span>
+                  </th>
+                  <th class="cursor-pointer select-none" @click="toggleSort('status')">
+                    <span class="inline-flex items-center gap-1.5">Status<ArrowUp v-if="sortField === 'status' && sortDir === 'asc'" class="h-3 w-3" /><ArrowDown v-else-if="sortField === 'status' && sortDir === 'desc'" class="h-3 w-3" /></span>
+                  </th>
+                  <th class="cursor-pointer select-none" @click="toggleSort('pid')">
+                    <span class="inline-flex items-center gap-1.5">PID<ArrowUp v-if="sortField === 'pid' && sortDir === 'asc'" class="h-3 w-3" /><ArrowDown v-else-if="sortField === 'pid' && sortDir === 'desc'" class="h-3 w-3" /></span>
+                  </th>
+                  <th class="cursor-pointer select-none" @click="toggleSort('uptime')">
+                    <span class="inline-flex items-center gap-1.5">Uptime<ArrowUp v-if="sortField === 'uptime' && sortDir === 'asc'" class="h-3 w-3" /><ArrowDown v-else-if="sortField === 'uptime' && sortDir === 'desc'" class="h-3 w-3" /></span>
+                  </th>
+                  <th v-if="hasAnyResourceLimits">Limits</th>
+                  <th class="cursor-pointer select-none" @click="toggleSort('updated')">
+                    <span class="inline-flex items-center gap-1.5">Updated<ArrowUp v-if="sortField === 'updated' && sortDir === 'asc'" class="h-3 w-3" /><ArrowDown v-else-if="sortField === 'updated' && sortDir === 'desc'" class="h-3 w-3" /></span>
+                  </th>
+                  <th class="w-[240px] text-center">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                <template v-if="store.isLoading && store.programs.length === 0">
+                  <tr v-for="row in 3" :key="row" class="border-b border-border/40 last:border-0">
+                    <td :colspan="hasAnyResourceLimits ? 8 : 7">
+                      <div class="h-4 w-full animate-pulse rounded bg-muted/40"></div>
+                    </td>
+                  </tr>
+                </template>
+                <template v-else-if="filteredPrograms.length === 0">
+                  <tr>
+                    <td :colspan="hasAnyResourceLimits ? 8 : 7">
+                      <UiEmptyState
+                        title="No programs match your filters"
+                        :hint="hasActiveFilters ? 'Try clearing the filters or the search.' : undefined"
+                      />
+                    </td>
+                  </tr>
+                </template>
+                <template v-else>
+                  <tr v-for="proc in paginatedPrograms" :key="proc.id" class="clickable">
+                    <td class="group/name">
+                      <div class="flex flex-col">
+                        <span class="inline-flex cursor-pointer items-center gap-1.5 font-semibold text-foreground/90" @click="openDetails(proc.id)">
+                          {{ proc.name }}
+                          <Info class="h-3 w-3 shrink-0 text-muted-foreground/25 transition-colors group-hover/name:text-primary" title="Open details" />
+                        </span>
+                        <span class="mt-0.5 inline-flex items-center gap-0.5">
+                          <span class="font-mono text-xs text-muted-foreground select-all" :title="proc.id">{{ proc.id.slice(0, 8) }}</span>
+                          <button
+                            type="button"
+                            class="inline-flex h-5 w-5 items-center justify-center rounded-lg text-muted-foreground/40 transition-colors hover:bg-muted/40 hover:text-foreground"
+                            :title="copiedId === proc.id ? 'Copied' : 'Copy full id'"
+                            @click="copyProgramId(proc.id, $event)"
+                          >
+                            <Check v-if="copiedId === proc.id" class="h-3 w-3 text-success" />
+                            <Copy v-else class="h-3 w-3" />
+                          </button>
+                        </span>
+                      </div>
+                    </td>
+                    <td>
+                      <span
+                        v-if="proc.group"
+                        class="inline-flex cursor-pointer items-center rounded-lg bg-muted/40 px-1.5 py-0.5 text-[11px] font-medium text-muted-foreground transition-colors hover:text-foreground"
+                        :class="{ 'bg-muted text-foreground': selectedGroup === proc.group }"
+                        title="Filter by this group"
+                        @click="toggleGroupFilter(proc.group)"
+                      >{{ proc.group }}</span>
+                      <span v-else class="text-muted-foreground/20">—</span>
+                    </td>
+                    <td>
+                      <div class="flex items-center gap-2">
+                        <StatusBadge :status="proc.status" :health-error="proc.health_error" />
+                        <div v-if="proc.last_error || proc.health_error" class="group/err relative">
+                          <div class="animate-pulse cursor-help" :class="proc.last_error ? 'text-destructive' : 'text-warning'">
+                            <AlertOctagon class="h-4 w-4" />
+                          </div>
+                          <div
+                            class="pointer-events-none absolute bottom-full left-1/2 z-50 mb-2 w-max max-w-[260px] -translate-x-1/2 whitespace-normal break-words rounded-xl p-2.5 text-center text-xs leading-tight opacity-0 shadow-lg transition-opacity group-hover/err:opacity-100"
+                            :class="proc.last_error ? 'bg-destructive text-destructive-foreground' : 'bg-warning text-warning-foreground'"
+                          >
+                            {{ proc.last_error || proc.health_error }}
+                            <div
+                              class="absolute left-1/2 top-full -translate-x-1/2 border-4 border-transparent"
+                              :class="proc.last_error ? 'border-t-destructive' : 'border-t-warning'"
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    </td>
+                    <td class="font-mono text-xs text-muted-foreground">{{ proc.pid || '—' }}</td>
+                    <td class="font-mono text-xs text-muted-foreground">{{ formatUptime(proc.uptime_sec) }}</td>
+                    <td v-if="hasAnyResourceLimits">
+                      <span v-if="formatResourceLimits(proc)" class="font-mono text-xs text-muted-foreground" :title="`CPU / memory cap: ${formatResourceLimits(proc)}`">{{ formatResourceLimits(proc) }}</span>
+                      <span v-else class="text-muted-foreground/20">—</span>
+                    </td>
+                    <td class="font-mono text-xs tabular-nums text-muted-foreground">{{ formatTime(proc.updated_at) }}</td>
+                    <td>
+                      <div class="flex items-center justify-center gap-0.5">
+                        <!-- STABLE: process.actions — plugins read context.process.{id,name,status,pid}. Do not change :context shape without updating tests/slots.spec.ts + ui-bridge. -->
+                        <Slot name="process.actions" :context="{ process: proc }" />
+                        <ActionButtons :id="proc.id" :status="proc.status" :name="proc.name" />
+                      </div>
+                    </td>
+                  </tr>
+                </template>
+              </tbody>
+            </table>
           </div>
-          <UiButton variant="outline" size="sm" @click="store.fetchPrograms()" :disabled="store.isLoading">
-            <RefreshCw class="w-3.5 h-3.5" :class="{ 'animate-spin': store.isLoading }" />
-            <span class="hidden sm:inline">Refresh</span>
-          </UiButton>
+
+          <BasePagination
+            v-model:page="currentPage"
+            v-model:pageSize="settingsStore.defaultPageSize"
+            :total="filteredPrograms.length"
+            :disabled="store.isLoading"
+          />
         </div>
-      </div>
 
-      <!-- List View -->
-      <div v-if="viewMode === 'list'" class="flex flex-col">
-        <div class="data-table-scroll">
-          <table class="data-table">
-            <thead>
-              <tr>
-                <th class="pl-6 cursor-pointer select-none" @click="toggleSort('name')">
-                  <span class="inline-flex items-center gap-1.5">
-                    Name / ID
-                    <ArrowUp v-if="sortField === 'name' && sortDir === 'asc'" class="w-3 h-3" />
-                    <ArrowDown v-else-if="sortField === 'name' && sortDir === 'desc'" class="w-3 h-3" />
-                  </span>
-                </th>
-                <th class="cursor-pointer select-none" @click="toggleSort('group')"><span class="inline-flex items-center gap-1.5">Group<ArrowUp v-if="sortField === 'group' && sortDir === 'asc'" class="w-3 h-3" /><ArrowDown v-else-if="sortField === 'group' && sortDir === 'desc'" class="w-3 h-3" /></span></th>
-                <th class="cursor-pointer select-none" @click="toggleSort('status')"><span class="inline-flex items-center gap-1.5">Status<ArrowUp v-if="sortField === 'status' && sortDir === 'asc'" class="w-3 h-3" /><ArrowDown v-else-if="sortField === 'status' && sortDir === 'desc'" class="w-3 h-3" /></span></th>
-                <th class="cursor-pointer select-none" @click="toggleSort('pid')"><span class="inline-flex items-center gap-1.5">PID<ArrowUp v-if="sortField === 'pid' && sortDir === 'asc'" class="w-3 h-3" /><ArrowDown v-else-if="sortField === 'pid' && sortDir === 'desc'" class="w-3 h-3" /></span></th>
-                <th class="cursor-pointer select-none" @click="toggleSort('uptime')"><span class="inline-flex items-center gap-1.5">Uptime<ArrowUp v-if="sortField === 'uptime' && sortDir === 'asc'" class="w-3 h-3" /><ArrowDown v-else-if="sortField === 'uptime' && sortDir === 'desc'" class="w-3 h-3" /></span></th>
-                <th v-if="hasAnyResourceLimits">Limits</th>
-                <th class="cursor-pointer select-none" @click="toggleSort('updated')"><span class="inline-flex items-center gap-1.5">Updated<ArrowUp v-if="sortField === 'updated' && sortDir === 'asc'" class="w-3 h-3" /><ArrowDown v-else-if="sortField === 'updated' && sortDir === 'desc'" class="w-3 h-3" /></span></th>
-                <th class="pr-6 text-center w-[240px]">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr v-if="store.isLoading && store.programs.length === 0">
-                <td :colspan="hasAnyResourceLimits ? 8 : 7" class="py-16 text-center text-muted-foreground"><span class="inline-block w-6 h-6 border-2 border-muted-foreground/30 border-t-foreground/50 rounded-full animate-spin"></span></td>
-              </tr>
-              <tr v-else-if="filteredPrograms.length === 0">
-                <td :colspan="hasAnyResourceLimits ? 8 : 7" class="py-16 text-center">
-                  <div class="flex flex-col items-center gap-3 text-muted-foreground/40"><Box class="w-10 h-10" /><p class="font-medium">No processes match your filters</p><p class="text-xs" v-if="hasActiveFilters">Try clearing filters or search.</p></div>
-                </td>
-              </tr>
-              <tr v-else v-for="proc in paginatedPrograms" :key="proc.id" class="clickable">
-                <td class="pl-6 py-3 group/name">
-                  <div class="flex flex-col">
-                    <span class="inline-flex items-center gap-1.5 font-semibold text-foreground/90 cursor-pointer" @click="openDetails(proc.id)">
-                      {{ proc.name }}
-                      <Info class="w-3 h-3 text-muted-foreground/25 group-hover/name:text-primary transition-colors shrink-0" title="Click to view details" />
-                    </span>
-                    <span class="inline-flex items-center gap-0.5 mt-0.5">
-                      <span class="font-mono text-xs text-muted-foreground select-all" :title="proc.id">{{ proc.id.slice(0, 8) }}</span>
-                      <button
-                        type="button"
-                        class="inline-flex h-5 w-5 items-center justify-center rounded text-muted-foreground/40 hover:text-foreground hover:bg-muted transition-colors"
-                        :title="copiedId === proc.id ? 'Copied' : 'Copy full id'"
-                        @click="copyProgramId(proc.id, $event)"
-                      >
-                        <Check v-if="copiedId === proc.id" class="w-3 h-3 text-success" />
-                        <Copy v-else class="w-3 h-3" />
-                      </button>
-                    </span>
-                  </div>
-                </td>
-                <td class="py-3">
-                  <span v-if="proc.group" class="inline-flex items-center px-2 py-0.5 rounded-[5px] text-xs font-medium bg-muted text-muted-foreground hover:bg-accent hover:text-accent-foreground cursor-pointer transition-colors" :class="{ 'bg-primary text-primary-foreground hover:bg-primary hover:text-primary-foreground': selectedGroup === proc.group }" @click="toggleGroupFilter(proc.group)" title="Filter by this group">{{ proc.group }}</span>
-                  <span v-else class="text-muted-foreground/20">-</span>
-                </td>
-                <td class="py-3">
-                  <div class="flex items-center gap-2">
-                    <StatusBadge :status="proc.status" :health-error="proc.health_error" />
-                    <div v-if="proc.last_error || proc.health_error" class="group/err relative">
-                      <div
-                        class="cursor-help animate-pulse"
-                        :class="proc.last_error ? 'text-destructive' : 'text-warning'"
-                      >
-                        <AlertOctagon class="w-4 h-4" />
-                      </div>
-                      <div class="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-max max-w-[260px] p-2.5 text-xs rounded-xl shadow-xl opacity-0 group-hover/err:opacity-100 transition-opacity pointer-events-none z-50 whitespace-normal break-words leading-tight text-center"
-                        :class="proc.last_error ? 'bg-destructive text-destructive-foreground' : 'bg-warning text-warning-foreground'"
-                      >
-                        {{ proc.last_error || proc.health_error }}
-                        <div
-                          class="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent"
-                          :class="proc.last_error ? 'border-t-destructive' : 'border-t-warning'"
-                        />
-                      </div>
-                    </div>
-                  </div>
-                </td>
-                <td class="py-3 font-mono text-xs text-muted-foreground">{{ proc.pid || '-' }}</td>
-                <td class="py-3 font-mono text-xs text-muted-foreground">{{ formatUptime(proc.uptime_sec) }}</td>
-                <td v-if="hasAnyResourceLimits" class="py-3"><span v-if="formatResourceLimits(proc)" class="font-mono text-xs text-violet-600/80" :title="`CPU / memory cap: ${formatResourceLimits(proc)}`">{{ formatResourceLimits(proc) }}</span><span v-else class="text-muted-foreground/20">—</span></td>
-                <td class="py-3 !text-[11px] leading-tight text-muted-foreground font-mono tabular-nums">{{ formatTime(proc.updated_at) }}</td>
-                <td class="pr-6 py-3"><div class="flex items-center justify-center gap-0.5">
-                  <!-- STABLE: process.actions — plugins read context.process.{id,name,status,pid}. Do not change :context shape without updating tests/slots.spec.ts + ui-bridge. -->
-                  <Slot name="process.actions" :context="{ process: proc }" />
-                  <ActionButtons :id="proc.id" :status="proc.status" :name="proc.name" />
-                </div></td>
-              </tr>
-            </tbody>
-          </table>
+        <!-- Topology view -->
+        <div v-else class="h-[420px] w-full bg-muted/40 sm:h-[520px] lg:h-[600px]">
+          <TopologyGraph ref="graphRef" :programs="filteredPrograms" @node-click="openDetails" />
         </div>
-        <BasePagination v-model:page="currentPage" v-model:pageSize="settingsStore.defaultPageSize" :total="filteredPrograms.length" :disabled="store.isLoading" />
-      </div>
-
-      <!-- Graph View -->
-      <div v-else class="h-[420px] sm:h-[520px] lg:h-[600px] w-full bg-muted/50"><TopologyGraph ref="graphRef" :programs="filteredPrograms" @node-click="openDetails" /></div>
-    </div>
-
+      </section>
+    </template>
   </div>
 </template>
-
-
-
-

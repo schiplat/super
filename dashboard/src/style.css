@@ -178,6 +178,12 @@
     @apply disabled:cursor-not-allowed disabled:bg-muted disabled:text-muted-foreground disabled:opacity-70;
   }
 
+  /* Compact toolbar/table control: same field recipe at 32px. Kept in the
+     components layer so it wins over `.field-control` without `!important`. */
+  .field-control.field-control-sm {
+    @apply h-8 text-xs;
+  }
+
   select.field-control {
     @apply appearance-none bg-size-[1rem] bg-position-[right_0.65rem_center] bg-no-repeat pr-9;
     background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%235a534d' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
@@ -207,11 +213,11 @@
   }
 
   .data-table th {
-    @apply px-3.5 py-2.5 text-xs font-semibold uppercase tracking-[0.06em] text-muted-foreground;
+    @apply px-5 py-2.5 text-[11px] font-medium uppercase tracking-[0.04em] text-muted-foreground/80;
   }
 
   .data-table td {
-    @apply px-3.5 py-3 align-middle text-sm;
+    @apply px-5 py-3 align-middle text-sm;
   }
 
   .data-table tbody tr {
@@ -228,15 +234,7 @@
 
   .data-table tbody tr[role='link'],
   .data-table tbody tr.clickable {
-    @apply cursor-pointer hover:bg-muted/80;
-  }
-
-  .data-table tbody tr.clickable td:first-child {
-    @apply rounded-l-xl;
-  }
-
-  .data-table tbody tr.clickable td:last-child {
-    @apply rounded-r-xl;
+    @apply cursor-pointer hover:bg-muted/40;
   }
 
   .field-error {
