@@ -486,3 +486,28 @@ async fn oidc_login_exchange_rbac_and_logout() {
         "/login?auth_error=state"
     );
 }
+
+/// Loopback dev mode: no gate. `/auth/status` keeps its pre-SSO 404 contract
+/// (the shell infers "no auth" from it), while non-exempt routes still receive
+/// the local root identity so admin endpoints work before any gate exists.
+#[tokio::test]
+async fn no_gate_mode_keeps_the_open_instance_contract() {
+    let app = {
+        let api = Router::new().route("/api/v1/programs", axum::routing::get(|| async { "ok" }));
+        install_core_auth(api, AuthState::with_sso(None, None, AuthGate::None, false))
+    };
+
+    let response = app
+        .clone()
+        .oneshot(get("/api/v1/auth/status"))
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::NOT_FOUND);
+
+    let response = app.clone().oneshot(get("/api/v1/programs")).await.unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+
+    let response = app.clone().oneshot(get("/api/v1/auth/me")).await.unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    assert_eq!(json_body(response).await["token_id"], "root");
+}

@@ -4,10 +4,10 @@ use axum::{
     Json, Router,
     extract::{Extension, State},
     http::{HeaderMap, StatusCode},
-    response::IntoResponse,
+    response::{IntoResponse, Response},
     routing::{get, post},
 };
-use common::{AuthStatusResponse, UserContext};
+use common::UserContext;
 
 use super::AuthGate;
 use super::middleware::{AuthState, extract_token};
@@ -28,8 +28,14 @@ async fn logout(State(state): State<AuthState>, headers: HeaderMap) -> StatusCod
     StatusCode::NO_CONTENT
 }
 
-async fn status(State(auth): State<AuthState>) -> Json<AuthStatusResponse> {
-    Json(auth.status_response())
+async fn status(State(auth): State<AuthState>) -> Response {
+    // No gate means the API is open (loopback development). The pre-SSO
+    // contract was 404 here, and the shell infers "no auth" from it; returning
+    // 200 with mode=none would make the SPA demand a login on an open instance.
+    if auth.gate() == AuthGate::None {
+        return StatusCode::NOT_FOUND.into_response();
+    }
+    Json(auth.status_response()).into_response()
 }
 
 /// The caller's own identity. Gateway-agnostic (`secret` → root, `sso` → the

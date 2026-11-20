@@ -11,6 +11,8 @@ export interface LicenseSnapshot {
 interface AuthStatusBody {
   token_management?: boolean;
   auth_secret_login_allowed?: boolean;
+  /** `none` = no gate (loopback dev); older builds omit it. */
+  mode?: string;
 }
 
 /** Probe without axios interceptors (avoids 401 → /login during discovery). */
@@ -107,7 +109,10 @@ export const useCapabilitiesStore = defineStore('capabilities', () => {
       auth.value = true;
       security.value = true;
     } else if (authProbe.status === 200) {
-      auth.value = true;
+      // Gate `none` means the API is open (loopback dev): there is no login
+      // wall, even though the status endpoint answers. Older builds omit
+      // `mode`, which keeps the previous behaviour.
+      auth.value = authProbe.body?.mode !== 'none';
       security.value = authProbe.body?.token_management === true;
     } else {
       auth.value = cfg.auth_required === true;
