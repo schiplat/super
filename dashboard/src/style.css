@@ -124,6 +124,14 @@
     corner-shape: squircle;
   }
 
+  /* Tailwind v4 preflight dropped `cursor: pointer` on buttons (following the
+     UA default). Restore it: every clickable control in this app is a real
+     button, and an arrow-key cursor on hover reads as "not clickable". */
+  button:not(:disabled),
+  [role="button"]:not(:disabled) {
+    cursor: pointer;
+  }
+
   body {
     @apply bg-background text-sm leading-normal text-foreground antialiased;
     margin: 0;
