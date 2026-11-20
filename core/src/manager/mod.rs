@@ -562,8 +562,17 @@ impl Manager {
             Command::QueryEvents { query, reply } => {
                 let _ = reply.send(self.event_db.query(&query).await.unwrap_or_default());
             }
-            Command::EventStats { program_id, reply } => {
-                let stats = self.event_db.stats(program_id).await.unwrap_or_default();
+            Command::EventStats {
+                program_id,
+                from,
+                to,
+                reply,
+            } => {
+                let stats = self
+                    .event_db
+                    .stats(program_id, from, to)
+                    .await
+                    .unwrap_or_default();
                 let _ = reply.send(stats);
             }
 

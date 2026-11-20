@@ -117,15 +117,19 @@ impl ManagerHandle {
         Ok(rx.await?)
     }
 
-    /// Event retention statistics, optionally scoped to one program.
+    /// Event statistics, optionally scoped to one program and a time window.
     pub async fn event_stats(
         &self,
         program_id: Option<Uuid>,
+        from: Option<u64>,
+        to: Option<u64>,
     ) -> anyhow::Result<common::EventStats> {
         let (tx, rx) = oneshot::channel();
         self.tx
             .send(Command::EventStats {
                 program_id,
+                from,
+                to,
                 reply: tx,
             })
             .await?;

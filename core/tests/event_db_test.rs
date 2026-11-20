@@ -58,6 +58,53 @@ async fn query_clamps_huge_limit() {
     assert_eq!(rest.len(), 10);
 
     // Stats still see everything (clamping affects LIMIT only).
-    let stats = db.stats(None).await.unwrap();
+    let stats = db.stats(None, None, None).await.unwrap();
     assert_eq!(stats.total, total);
+}
+
+/// Stats honour the time window (`from`/`to`), including `by_type`, so the
+/// events page summary matches the list it is glued to.
+#[tokio::test]
+async fn stats_respect_the_time_window() {
+    let dir = tempfile::tempdir().unwrap();
+    let db = super_core::event_db::EventDb::open(&dir.path().join("events.db"))
+        .await
+        .unwrap();
+    let base = 1_700_000_000u64;
+    for (index, ts) in [base, base + 60, base + 120].into_iter().enumerate() {
+        db.insert(&ProgramEventRecord {
+            program_id: None,
+            program_name: Some("demo".into()),
+            ts,
+            ts_ms: ts * 1000,
+            event: if index == 0 { "start" } else { "exit" }.into(),
+            exit_code: None,
+            signal: None,
+            retry_count: None,
+            duration_secs: None,
+            msg: "test".into(),
+        })
+        .await
+        .unwrap();
+    }
+
+    let all = db.stats(None, None, None).await.unwrap();
+    assert_eq!(all.total, 3);
+    assert_eq!(all.first_ts, Some(base));
+    assert_eq!(all.last_ts, Some(base + 120));
+
+    let window = db
+        .stats(None, Some(base + 60), Some(base + 120))
+        .await
+        .unwrap();
+    assert_eq!(window.total, 2);
+    assert_eq!(window.first_ts, Some(base + 60));
+    assert_eq!(window.last_ts, Some(base + 120));
+    assert_eq!(window.by_type.len(), 1, "{:?}", window.by_type);
+    assert_eq!(window.by_type[0].event, "exit");
+    assert_eq!(window.by_type[0].count, 2);
+
+    let empty = db.stats(None, Some(base + 500), None).await.unwrap();
+    assert_eq!(empty.total, 0);
+    assert!(empty.by_type.is_empty());
 }

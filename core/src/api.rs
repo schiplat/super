@@ -751,7 +751,7 @@ async fn event_stats(
 ) -> Result<Json<common::EventStats>, AppError> {
     let stats = state
         .manager
-        .event_stats(params.program_id)
+        .event_stats(params.program_id, params.from, params.to)
         .await
         .map_err(|e| AppError(StatusCode::INTERNAL_SERVER_ERROR, e))?;
     Ok(Json(stats))
@@ -799,6 +799,10 @@ impl EventQueryParams {
 #[derive(Debug, Deserialize)]
 struct EventStatsParams {
     program_id: Option<Uuid>,
+    /// Inclusive lower bound on `ts` (Unix seconds).
+    from: Option<u64>,
+    /// Inclusive upper bound on `ts` (Unix seconds).
+    to: Option<u64>,
 }
 
 /// Start a program

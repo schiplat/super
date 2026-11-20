@@ -12,13 +12,14 @@ import { useAuthStore } from '@/stores/auth';
 import apiClient from '@/api/client';
 import { API_PATHS } from '@/api/paths';
 import cronstrue from 'cronstrue';
+import EventTimeline from '@/components/EventTimeline.vue';
 import LogTerminal from '@/components/LogTerminal.vue';
 import StatusBadge from '@/components/StatusBadge.vue';
 import ActionButtons from '@/components/ActionButtons.vue';
 import Slot from '@/slots/Slot.vue';
 import UiBadge from '@/components/ui/UiBadge.vue';
 import UiButton from '@/components/ui/UiButton.vue';
-import type { ProgramDetail, ProgramLogsResponse, ProgramEventRecord, ProcessStatus, EventStats } from '@/types';
+import type { ProgramDetail, ProgramLogsResponse, ProcessStatus } from '@/types';
 import { useClipboard } from '@vueuse/core';
 import { format } from 'date-fns';
 import { alertDialog } from '@/lib/app-dialog';
@@ -68,51 +69,6 @@ const logMode = ref<'live' | 'history'>('live');
 const historyLines = ref(200);
 const historySource = ref<'all' | 'stdout' | 'stderr'>('all');
 const historyHint = ref<string | null>(null);
-
-// Events tab state
-const eventsLoading = ref(false);
-const eventsError = ref<string | null>(null);
-const events = ref<ProgramEventRecord[]>([]);
-const eventsTotal = ref<number | null>(null);
-const eventsPage = ref(1);
-const eventsPageSize = ref(20);
-type EventsSortField = 'time' | 'event' | 'exit_code' | 'signal' | 'retry_count' | 'duration_secs' | 'msg';
-const eventsSortField = ref<EventsSortField>('time');
-const eventsSortDir = ref<'desc' | 'asc'>('desc');
-const eventsFilterType = ref('');
-const eventsFilterExit = ref('');
-const eventsFilterQ = ref('');
-const eventsPageSizeOptions = [10, 20, 50, 100];
-const eventsTypeOptions = [
-  '',
-  'process_fatal',
-  'process_backoff',
-  'process_recovered',
-  'process_started',
-  'process_exit',
-  'health_restart',
-  'cron_started',
-  'cron_exit',
-  'cron_spawn_failed',
-  'queue_full',
-  'memory_pressure',
-  'memory_oom_kill',
-];
-
-const eventsHasPrev = computed(() => eventsPage.value > 1);
-const eventsHasNext = computed(() => {
-  if (eventsTotal.value != null) {
-    return eventsPage.value * eventsPageSize.value < eventsTotal.value;
-  }
-  return events.value.length >= eventsPageSize.value;
-});
-const eventsRangeLabel = computed(() => {
-  if (events.value.length === 0) return '0 events';
-  const start = (eventsPage.value - 1) * eventsPageSize.value + 1;
-  const end = start + events.value.length - 1;
-  if (eventsTotal.value != null) return `${start}–${end} of ${eventsTotal.value}`;
-  return `${start}–${end}`;
-});
 
 const streamOptions = [{ value: 'stderr' as const, label: 'stderr' }, { value: 'stdout' as const, label: 'stdout' }, { value: 'all' as const, label: 'all' }];
 const tailOptions = [100, 200, 500, 1000];
@@ -318,9 +274,7 @@ async function refreshDetailNow() {
   try {
     // Always refresh header/status; also refresh the active tab's data.
     const jobs: Promise<unknown>[] = [fetchDetail(props.processId)];
-    if (activeTab.value === 'events') {
-      jobs.push(fetchEvents(props.processId));
-    } else if (activeTab.value === 'logs' && logMode.value === 'history') {
+    if (activeTab.value === 'logs' && logMode.value === 'history') {
       jobs.push(fetchHistory(props.processId));
     }
     await Promise.all(jobs);
@@ -354,131 +308,6 @@ async function fetchHistory(id: string) {
   finally { historyLoading.value = false; }
 }
 
-async function fetchEvents(id: string, resetPage = false) {
-  if (resetPage) eventsPage.value = 1;
-  eventsLoading.value = true;
-  eventsError.value = null;
-  try {
-    const exitRaw = eventsFilterExit.value.trim();
-    const exitCode = exitRaw === '' ? undefined : Number(exitRaw);
-    const query = {
-      limit: eventsPageSize.value,
-      offset: (eventsPage.value - 1) * eventsPageSize.value,
-      sort_by: eventsSortField.value,
-      order: eventsSortDir.value,
-      event_type: eventsFilterType.value || undefined,
-      exit_code: exitCode != null && !Number.isNaN(exitCode) ? exitCode : undefined,
-      q: eventsFilterQ.value.trim() || undefined,
-    };
-    const [listRes, statsRes] = await Promise.all([
-      apiClient.get<ProgramEventRecord[]>(API_PATHS.PROGRAMS.EVENTS(id, query)),
-      apiClient.get<EventStats>(API_PATHS.EVENTS.STATS(id)).catch(() => null),
-    ]);
-    events.value = listRes.data || [];
-    // Stats is unfiltered retention total — only show as total when no filters.
-    const filtered = !!(query.event_type || query.exit_code != null || query.q);
-    eventsTotal.value = filtered ? null : (statsRes?.data?.total ?? null);
-  } catch (e) {
-    eventsError.value = 'Failed to load event history';
-    events.value = [];
-    eventsTotal.value = null;
-    console.error(e);
-  } finally {
-    eventsLoading.value = false;
-  }
-}
-
-function applyEventFilters() {
-  if (!props.processId) return;
-  void fetchEvents(props.processId, true);
-}
-
-function clearEventFilters() {
-  eventsFilterType.value = '';
-  eventsFilterExit.value = '';
-  eventsFilterQ.value = '';
-  if (props.processId) void fetchEvents(props.processId, true);
-}
-
-function toggleEventsSort(field: EventsSortField) {
-  if (eventsSortField.value === field) {
-    eventsSortDir.value = eventsSortDir.value === 'desc' ? 'asc' : 'desc';
-  } else {
-    eventsSortField.value = field;
-    // Time defaults to newest-first; other columns default ascending.
-    eventsSortDir.value = field === 'time' ? 'desc' : 'asc';
-  }
-  if (props.processId) void fetchEvents(props.processId, true);
-}
-
-function changeEventsPageSize(size: number) {
-  eventsPageSize.value = size;
-  if (props.processId) void fetchEvents(props.processId, true);
-}
-
-function eventsPrevPage() {
-  if (!eventsHasPrev.value || !props.processId) return;
-  eventsPage.value -= 1;
-  void fetchEvents(props.processId);
-}
-
-function eventsNextPage() {
-  if (!eventsHasNext.value || !props.processId) return;
-  eventsPage.value += 1;
-  void fetchEvents(props.processId);
-}
-
-// Signal label helper (matches the notify plugin / OSS semantics)
-function signalLabel(sig: number | null | undefined): string {
-  if (sig == null) return '—';
-  const names: Record<number, string> = { 1: 'HUP', 2: 'INT', 3: 'QUIT', 6: 'ABRT', 9: 'KILL', 11: 'SEGV', 13: 'PIPE', 14: 'ALRM', 15: 'TERM' };
-  return names[sig] ? `${names[sig]} (${sig})` : String(sig);
-}
-
-function eventColor(event: string): string {
-  switch (event) {
-    case 'process_fatal':
-    case 'memory_oom_kill':
-    case 'cron_spawn_failed':
-      return 'text-destructive';
-    case 'process_backoff':
-    case 'health_restart':
-    case 'memory_pressure':
-    case 'queue_full':
-    case 'cron_overtime_kill':
-      return 'text-warning';
-    case 'process_recovered':
-    case 'process_started':
-      return 'text-success';
-    default:
-      return 'text-muted-foreground';
-  }
-}
-
-function eventLabel(event: string): string {
-  switch (event) {
-    case 'process_fatal': return 'Fatal';
-    case 'process_backoff': return 'Backoff';
-    case 'process_recovered': return 'Recovered';
-    case 'process_started': return 'Started';
-    case 'process_exit': return 'Exited';
-    case 'health_restart': return 'Health Restart';
-    case 'cron_started': return 'Cron Started';
-    case 'cron_exit': return 'Cron Exit';
-    case 'cron_spawn_failed': return 'Cron Spawn Failed';
-    case 'cron_overtime_kill': return 'Cron Overtime Kill';
-    case 'queue_full': return 'Queue Full';
-    case 'memory_pressure': return 'Memory Pressure';
-    case 'memory_oom_kill': return 'OOM Kill';
-    default: return event;
-  }
-}
-
-function formatEventTime(ev: ProgramEventRecord): string {
-  const ms = ev.ts_ms ?? (ev.ts ? ev.ts * 1000 : 0);
-  return ms ? format(new Date(ms), 'yyyy-MM-dd HH:mm:ss') : '—';
-}
-
 function viewErrorLogs() { activeTab.value = 'logs'; logMode.value = 'history'; historySource.value = 'stderr'; historyHint.value = isHealthCheckError.value ? 'Look for amber [superd] lines in stderr.' : null; if (props.processId) void fetchHistory(props.processId); }
 
 /** Bind WS log lines into the xterm instance. Must run on every drawer open — closing
@@ -500,7 +329,6 @@ watch(() => props.processId, async (newId, oldId) => {
     bindLiveLogs(newId);
     await fetchDetail(newId); syncLogDefaults();
     if (logMode.value === 'history') await fetchHistory(newId); else if (activeTab.value === 'logs') nextTick(() => terminalRef.value?.fit());
-    void fetchEvents(newId);
   }
 });
 
@@ -517,7 +345,6 @@ watch(() => props.modelValue, (isOpen) => {
     if (logMode.value === 'history') void fetchHistory(props.processId!);
     else setTimeout(() => { if (activeTab.value === 'logs') terminalRef.value?.fit(); }, 300);
   });
-  void fetchEvents(props.processId);
 }, { immediate: true });
 
 // Remounted LogTerminal (v-if) needs a fit after switching back to live; subscription is already active.
@@ -606,7 +433,7 @@ function goToEdit() { if (props.processId) router.push(`/programs/${props.proces
             <button
               class="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-[7px] text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
               :disabled="refreshingDetail"
-              :title="activeTab === 'events' ? 'Refresh status and events' : activeTab === 'logs' && logMode === 'history' ? 'Refresh status and log history' : 'Refresh status'"
+              :title="activeTab === 'logs' && logMode === 'history' ? 'Refresh status and log history' : 'Refresh status'"
               @click="refreshDetailNow"
             >
               <RefreshCw class="w-3.5 h-3.5" :class="{ 'animate-spin': refreshingDetail }" />
@@ -695,133 +522,9 @@ function goToEdit() { if (props.processId) router.push(`/programs/${props.proces
           </div>
         </div>
 
-        <!-- Events -->
+        <!-- Events: same timeline as /events, scoped to this program -->
         <div v-show="activeTab === 'events'" class="absolute inset-0 flex flex-col min-h-0">
-          <div class="px-4 py-3 border-b border-border bg-card shrink-0 space-y-2.5">
-            <div class="flex flex-col gap-2 lg:flex-row lg:items-center lg:flex-wrap">
-              <select
-                v-model="eventsFilterType"
-                class="h-8 rounded-[8px] border border-border bg-background px-2.5 text-xs text-foreground"
-                @change="applyEventFilters"
-              >
-                <option value="">All types</option>
-                <option v-for="t in eventsTypeOptions.filter(Boolean)" :key="t" :value="t">{{ eventLabel(t) }}</option>
-              </select>
-              <input
-                v-model="eventsFilterExit"
-                type="number"
-                placeholder="Exit code"
-                class="h-8 w-28 rounded-lg border border-border bg-background px-2.5 text-xs font-mono text-foreground"
-                @keydown.enter="applyEventFilters"
-              />
-              <input
-                v-model="eventsFilterQ"
-                type="search"
-                placeholder="Search message…"
-                class="h-8 min-w-[10rem] flex-1 rounded-lg border border-border bg-background px-2.5 text-xs text-foreground"
-                @keydown.enter="applyEventFilters"
-              />
-              <div class="flex items-center gap-1.5 shrink-0">
-                <UiButton size="sm" variant="secondary" @click="applyEventFilters">Filter</UiButton>
-                <UiButton size="sm" variant="ghost" @click="clearEventFilters">Clear</UiButton>
-              </div>
-            </div>
-            <div class="flex items-center justify-between gap-3 text-xs text-muted-foreground">
-              <span>{{ eventsRangeLabel }}</span>
-              <div class="flex items-center gap-2">
-                <span class="hidden sm:inline">Rows</span>
-                <select
-                  :value="eventsPageSize"
-                  class="h-7 rounded-[7px] border border-border bg-background px-1.5 text-xs"
-                  @change="changeEventsPageSize(Number(($event.target as HTMLSelectElement).value))"
-                >
-                  <option v-for="n in eventsPageSizeOptions" :key="n" :value="n">{{ n }}</option>
-                </select>
-                <button
-                  type="button"
-                  class="inline-flex h-7 w-7 items-center justify-center rounded-[7px] border border-border disabled:opacity-30 hover:bg-muted"
-                  :disabled="!eventsHasPrev || eventsLoading"
-                  @click="eventsPrevPage"
-                >
-                  <ChevronLeft class="w-4 h-4" />
-                </button>
-                <span class="font-mono tabular-nums min-w-[3rem] text-center">p.{{ eventsPage }}</span>
-                <button
-                  type="button"
-                  class="inline-flex h-7 w-7 items-center justify-center rounded-[7px] border border-border disabled:opacity-30 hover:bg-muted"
-                  :disabled="!eventsHasNext || eventsLoading"
-                  @click="eventsNextPage"
-                >
-                  <ChevronRight class="w-4 h-4" />
-                </button>
-              </div>
-            </div>
-          </div>
-
-          <div class="flex-1 min-h-0 overflow-auto">
-            <div v-if="eventsLoading" class="flex justify-center py-10">
-              <span class="inline-block w-6 h-6 border-2 border-muted-foreground/30 border-t-foreground/50 rounded-full animate-spin"></span>
-            </div>
-            <div v-else-if="eventsError" class="flex flex-col items-center justify-center h-full text-muted-foreground/50 gap-3 py-10">
-              <History class="w-10 h-10" />
-              <p class="text-sm font-medium">{{ eventsError }}</p>
-            </div>
-            <div v-else-if="events.length === 0" class="flex flex-col items-center justify-center h-full text-muted-foreground/50 gap-3 py-10">
-              <History class="w-10 h-10" />
-              <p class="text-sm font-medium">No lifecycle events recorded</p>
-              <p class="text-xs max-w-sm text-center">Crashes, OOM kills (signal 9), backoff retries, cron runs, and recoveries appear here once they happen.</p>
-            </div>
-            <table v-else class="w-full text-left text-xs border-collapse">
-              <thead class="sticky top-0 z-10 bg-muted/95 backdrop-blur-sm border-b border-border">
-                <tr class="text-[10px] uppercase tracking-wider text-muted-foreground">
-                  <th
-                    v-for="col in ([
-                      { field: 'time', label: 'Time' },
-                      { field: 'event', label: 'Event' },
-                      { field: 'exit_code', label: 'Exit' },
-                      { field: 'signal', label: 'Signal' },
-                      { field: 'retry_count', label: 'Retry' },
-                      { field: 'duration_secs', label: 'Duration' },
-                      { field: 'msg', label: 'Message' },
-                    ] as const)"
-                    :key="col.field"
-                    class="px-3 py-2.5 font-semibold whitespace-nowrap cursor-pointer select-none hover:text-foreground"
-                    @click="toggleEventsSort(col.field)"
-                  >
-                    <span class="inline-flex items-center gap-1.5">
-                      {{ col.label }}
-                      <ArrowUp v-if="eventsSortField === col.field && eventsSortDir === 'asc'" class="w-3 h-3" />
-                      <ArrowDown v-else-if="eventsSortField === col.field && eventsSortDir === 'desc'" class="w-3 h-3" />
-                    </span>
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr
-                  v-for="(ev, idx) in events"
-                  :key="`${ev.ts_ms ?? ev.ts}-${ev.event}-${idx}`"
-                  class="border-b border-border/60 hover:bg-muted/40 align-top"
-                >
-                  <td class="px-3 py-2.5 font-mono text-muted-foreground whitespace-nowrap">{{ formatEventTime(ev) }}</td>
-                  <td class="px-3 py-2.5 whitespace-nowrap">
-                    <span class="font-semibold" :class="eventColor(ev.event)">{{ eventLabel(ev.event) }}</span>
-                  </td>
-                  <td class="px-3 py-2.5 font-mono whitespace-nowrap" :class="ev.exit_code != null && ev.exit_code !== 0 ? 'text-destructive' : 'text-foreground/70'">
-                    {{ ev.exit_code ?? '—' }}
-                  </td>
-                  <td class="px-3 py-2.5 font-mono whitespace-nowrap">
-                    <span :class="ev.signal === 9 ? 'text-destructive font-bold' : 'text-foreground/70'">{{ signalLabel(ev.signal) }}</span>
-                    <span v-if="ev.signal === 9" class="ml-1 text-[10px] text-destructive/80">OOM?</span>
-                  </td>
-                  <td class="px-3 py-2.5 font-mono text-muted-foreground whitespace-nowrap">{{ ev.retry_count ?? '—' }}</td>
-                  <td class="px-3 py-2.5 font-mono text-muted-foreground whitespace-nowrap">
-                    {{ ev.duration_secs != null ? `${ev.duration_secs}s` : '—' }}
-                  </td>
-                  <td class="px-3 py-2.5 text-foreground/75 break-words max-w-md">{{ ev.msg || '—' }}</td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
+          <EventTimeline compact :program-id="processId ?? undefined" />
         </div>
 
         <!-- Config -->

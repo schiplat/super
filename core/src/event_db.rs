@@ -261,54 +261,64 @@ impl EventDb {
     }
 
     /// Retention statistics, optionally scoped to one program.
-    pub async fn stats(&self, program_id: Option<Uuid>) -> anyhow::Result<EventStats> {
+    /// Event counts, optionally scoped to one program and a time window.
+    pub async fn stats(
+        &self,
+        program_id: Option<Uuid>,
+        from: Option<u64>,
+        to: Option<u64>,
+    ) -> anyhow::Result<EventStats> {
+        use sqlx::QueryBuilder;
+
+        fn scope(
+            builder: &mut QueryBuilder<sqlx::Sqlite>,
+            program_id: Option<Uuid>,
+            from: Option<u64>,
+            to: Option<u64>,
+        ) {
+            builder.push(" WHERE 1 = 1");
+            if let Some(pid) = program_id {
+                builder
+                    .push(" AND program_id = ")
+                    .push_bind(pid.to_string());
+            }
+            if let Some(from) = from {
+                builder.push(" AND ts >= ").push_bind(from as i64);
+            }
+            if let Some(to) = to {
+                builder.push(" AND ts <= ").push_bind(to as i64);
+            }
+        }
+
         let mut stats = EventStats::default();
 
-        let (total_sql, first_sql, last_sql) = if program_id.is_some() {
-            (
-                "SELECT COUNT(*) FROM events WHERE program_id = ?",
-                "SELECT MIN(ts) FROM events WHERE program_id = ?",
-                "SELECT MAX(ts) FROM events WHERE program_id = ?",
-            )
-        } else {
-            (
-                "SELECT COUNT(*) FROM events",
-                "SELECT MIN(ts) FROM events",
-                "SELECT MAX(ts) FROM events",
-            )
-        };
+        let mut total = QueryBuilder::new("SELECT COUNT(*) FROM events");
+        scope(&mut total, program_id, from, to);
+        stats.total = total
+            .build_query_scalar::<i64>()
+            .fetch_one(&self.pool)
+            .await? as u64;
 
-        let mut cnt = sqlx::query(total_sql);
-        let mut fst = sqlx::query(first_sql);
-        let mut lst = sqlx::query(last_sql);
-        if let Some(pid) = program_id {
-            let s = pid.to_string();
-            cnt = cnt.bind(s.clone());
-            fst = fst.bind(s.clone());
-            lst = lst.bind(s);
-        }
-        stats.total = cnt.fetch_one(&self.pool).await?.try_get::<i64, _>(0)? as u64;
-        stats.first_ts = fst
+        let mut first = QueryBuilder::new("SELECT MIN(ts) FROM events");
+        scope(&mut first, program_id, from, to);
+        stats.first_ts = first
+            .build_query_scalar::<Option<i64>>()
             .fetch_one(&self.pool)
             .await?
-            .try_get::<Option<i64>, _>(0)?
-            .map(|v| v as u64);
-        stats.last_ts = lst
-            .fetch_one(&self.pool)
-            .await?
-            .try_get::<Option<i64>, _>(0)?
             .map(|v| v as u64);
 
-        let by_type_sql = if program_id.is_some() {
-            "SELECT event, COUNT(*) AS c FROM events WHERE program_id = ? GROUP BY event ORDER BY c DESC"
-        } else {
-            "SELECT event, COUNT(*) AS c FROM events GROUP BY event ORDER BY c DESC"
-        };
-        let mut bt = sqlx::query(by_type_sql);
-        if let Some(pid) = program_id {
-            bt = bt.bind(pid.to_string());
-        }
-        for row in bt.fetch_all(&self.pool).await? {
+        let mut last = QueryBuilder::new("SELECT MAX(ts) FROM events");
+        scope(&mut last, program_id, from, to);
+        stats.last_ts = last
+            .build_query_scalar::<Option<i64>>()
+            .fetch_one(&self.pool)
+            .await?
+            .map(|v| v as u64);
+
+        let mut by_type = QueryBuilder::new("SELECT event, COUNT(*) AS c FROM events");
+        scope(&mut by_type, program_id, from, to);
+        by_type.push(" GROUP BY event ORDER BY c DESC");
+        for row in by_type.build().fetch_all(&self.pool).await? {
             stats.by_type.push(common::EventTypeCount {
                 event: row.try_get("event")?,
                 count: row.try_get::<i64, _>("c")? as u64,
