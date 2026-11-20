@@ -538,31 +538,32 @@ onUnmounted(() => {
         </div>
       </div>
 
+      <!-- Compact mode: simple status bar. Full mode: the shared pagination
+           footer (summary left, rows + page controls right, like /programs). -->
       <footer
+        v-if="compact"
         class="flex items-center justify-between gap-3 border-t border-border/40 px-5 py-2.5 text-[11px] text-muted-foreground"
       >
-        <template v-if="compact">
-          <span class="tabular-nums">
-            {{ lastLoaded ? `Updated ${eventTime(Math.floor(lastLoaded / 1000))}` : '—' }}
-          </span>
-          <button
-            type="button"
-            class="rounded text-muted-foreground transition-colors hover:text-foreground"
-            @click="openInEvents"
-          >
-            Open in Events ↗
-          </button>
-        </template>
-        <BasePagination
-          v-else
-          :total="summary?.total ?? rows.length"
-          :page="currentPage"
-          :page-size="pageSize"
-          :disabled="loading"
-          @update:page="changePage"
-          @update:page-size="changePageSize"
-        />
+        <span class="tabular-nums">
+          {{ lastLoaded ? `Updated ${eventTime(Math.floor(lastLoaded / 1000))}` : '—' }}
+        </span>
+        <button
+          type="button"
+          class="rounded text-muted-foreground transition-colors hover:text-foreground"
+          @click="openInEvents"
+        >
+          Open in Events ↗
+        </button>
       </footer>
+      <BasePagination
+        v-else
+        :total="summary?.total ?? rows.length"
+        :page="currentPage"
+        :page-size="pageSize"
+        :disabled="loading"
+        @update:page="changePage"
+        @update:page-size="changePageSize"
+      />
     </section>
   </div>
 </template>
