@@ -463,7 +463,7 @@ onUnmounted(() => {
       <div class="sticky top-6 py-1">
         <div class="mb-4">
           <div class="flex items-center gap-2">
-            <button class="inline-flex h-7 w-7 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted/40 hover:text-foreground" title="Back" @click="router.back()">
+            <button class="inline-flex h-7 w-7 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted hover:text-foreground" title="Back" @click="router.back()">
               <ArrowLeft class="h-3.5 w-3.5" />
             </button>
             <h1 class="text-sm font-semibold tracking-tight">New Program</h1>
@@ -509,7 +509,7 @@ onUnmounted(() => {
     <div class="min-w-0">
       <!-- Compact header for narrow screens, where the rail is hidden -->
       <div class="mb-6 flex items-center gap-3 lg:hidden">
-        <button class="inline-flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted/40 hover:text-foreground" @click="router.back()">
+        <button class="inline-flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted hover:text-foreground" @click="router.back()">
           <ArrowLeft class="w-4 h-4" />
         </button>
         <div>

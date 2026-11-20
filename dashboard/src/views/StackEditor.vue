@@ -213,7 +213,7 @@ async function confirmPruneApply() {
 </script>
 
 <template>
-  <div class="flex h-[calc(100vh-6.5rem)] flex-col overflow-hidden rounded-2xl bg-card ring-1 ring-border/60 shadow-[0_1px_2px_hsl(220_20%_20%/0.04),0_2px_8px_hsl(220_20%_20%/0.03)]">
+  <div class="flex h-[calc(100vh-5rem)] flex-col overflow-hidden rounded-2xl bg-card ring-1 ring-border/60 shadow-[0_1px_2px_hsl(220_20%_20%/0.04),0_2px_8px_hsl(220_20%_20%/0.03)]">
 
     <!-- Toolbar Area -->
     <div class="border-b border-border/40">

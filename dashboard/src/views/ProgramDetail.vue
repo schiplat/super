@@ -18,7 +18,7 @@ function changeProcess(id: string) {
 </script>
 
 <template>
-  <div class="h-[calc(100vh-6.5rem)]">
+  <div class="h-[calc(100vh-5rem)]">
     <ProcessDetailDrawer
       :model-value="true"
       :process-id="processId"

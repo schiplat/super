@@ -331,7 +331,11 @@ onMounted(() => {
         </div>
       </header>
 
-      <main class="flex-1 overflow-y-auto px-4 py-6 lg:px-6 scroll-smooth">
+      <!-- No bottom padding: sticky page footers (e.g. the create form's
+           action bar) must sit flush with the scroll edge — overflow clips at
+           the padding box, so bottom padding would let scrolled content show
+           through a gap under pinned bars. -->
+      <main class="flex-1 overflow-y-auto px-4 pt-6 lg:px-6 scroll-smooth">
         <div class="mx-auto flex min-h-full w-full max-w-[1600px] flex-col">
           <div class="flex-1">
             <RouterView />
