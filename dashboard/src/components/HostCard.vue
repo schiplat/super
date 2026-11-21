@@ -69,7 +69,13 @@ function trendPoints(values: number[]): string {
 }
 
 const cpuTrend = computed(() => trendPoints(cpuHistory.value))
-const memTrend = computed(() => trendPoints(memHistory.value))
+
+/** Area variant of the trend line: same points, closed to the chart floor. */
+const cpuArea = computed(() => {
+  const points = cpuTrend.value
+  if (!points) return ''
+  return `M${points.replace(/ /g, ' L')} L100,32 L0,32 Z`
+})
 
 const version = getSuperConfig().version
 
@@ -101,28 +107,47 @@ onUnmounted(() => {
       </div>
     </template>
 
-    <div v-if="!current" class="grid grid-cols-2 gap-6">
-      <div v-for="block in ['CPU', 'MEMORY']" :key="block" class="animate-pulse">
-        <div class="h-3 w-14 rounded bg-muted/40"></div>
-        <div class="mt-3 h-9 w-24 rounded bg-muted/40"></div>
-        <div class="mt-3 h-10 w-full rounded bg-muted/40"></div>
+    <div v-if="!current" class="grid gap-6 sm:grid-cols-2 sm:gap-0">
+      <div class="animate-pulse sm:pr-6">
+        <div class="flex items-center justify-between">
+          <div class="h-3 w-14 rounded bg-muted/40"></div>
+          <div class="h-6 w-16 rounded bg-muted/40"></div>
+        </div>
+        <div class="mt-4 h-20 w-full rounded bg-muted/40"></div>
+      </div>
+      <div class="animate-pulse border-t border-border/40 pt-6 sm:border-t-0 sm:border-l sm:border-border/40 sm:pl-6 sm:pt-0">
+        <div class="flex items-center justify-between">
+          <div class="h-3 w-16 rounded bg-muted/40"></div>
+          <div class="h-6 w-16 rounded bg-muted/40"></div>
+        </div>
+        <div class="mt-4 h-2.5 w-full rounded-full bg-muted/40"></div>
+        <div class="mt-3 h-3 w-40 rounded bg-muted/40"></div>
       </div>
     </div>
 
-    <div v-else class="grid grid-cols-2 gap-6">
+    <div v-else class="grid gap-6 sm:grid-cols-2 sm:gap-0">
       <!-- CPU -->
-      <div class="min-w-0">
-        <div class="flex items-center gap-2">
-          <Cpu class="h-4 w-4 text-muted-foreground/50" />
-          <span class="type-eyebrow">CPU</span>
+      <div class="min-w-0 sm:pr-6">
+        <div class="flex items-center justify-between gap-2">
+          <div class="flex items-center gap-2">
+            <Cpu class="h-4 w-4 text-muted-foreground/50" />
+            <span class="type-eyebrow">CPU</span>
+          </div>
+          <span class="text-2xl font-semibold tabular-nums">{{ cpuLabel }}</span>
         </div>
-        <p class="mt-2 text-3xl font-semibold tabular-nums">{{ cpuLabel }}</p>
         <svg
           viewBox="0 0 100 32"
           preserveAspectRatio="none"
-          class="mt-3 h-12 w-full opacity-90"
+          class="mt-4 h-20 w-full"
           aria-hidden="true"
         >
+          <defs>
+            <linearGradient id="cpu-area" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stop-color="#8b5cf6" stop-opacity="0.28" />
+              <stop offset="100%" stop-color="#8b5cf6" stop-opacity="0" />
+            </linearGradient>
+          </defs>
+          <path v-if="cpuArea" :d="cpuArea" fill="url(#cpu-area)" />
           <polyline
             v-if="cpuTrend"
             fill="none"
@@ -136,40 +161,27 @@ onUnmounted(() => {
         </svg>
       </div>
 
-      <!-- MEMORY -->
-      <div class="min-w-0">
-        <div class="flex items-center gap-2">
-          <MemoryStick class="h-4 w-4 text-muted-foreground/50" />
-          <span class="type-eyebrow">MEMORY</span>
+      <!-- MEMORY: current level is the information — bar + usage, no trend -->
+      <div class="min-w-0 border-t border-border/40 pt-6 sm:border-t-0 sm:border-l sm:border-border/40 sm:pl-6 sm:pt-0">
+        <div class="flex items-center justify-between gap-2">
+          <div class="flex items-center gap-2">
+            <MemoryStick class="h-4 w-4 text-muted-foreground/50" />
+            <span class="type-eyebrow">MEMORY</span>
+          </div>
+          <span class="text-2xl font-semibold tabular-nums">{{ memLabel }}</span>
         </div>
-        <p class="mt-2 text-3xl font-semibold tabular-nums">{{ memLabel }}</p>
-        <div class="mt-3 h-2 w-full overflow-hidden rounded-full bg-muted">
+        <div class="mt-4 h-2.5 w-full overflow-hidden rounded-full bg-muted">
           <div
             class="h-full rounded-full transition-[width] duration-500"
             :class="memHigh ? 'bg-warning' : 'bg-primary'"
             :style="{ width: `${Math.min(memPct, 100)}%` }"
           />
         </div>
-        <p class="mt-2 text-xs text-muted-foreground">
-          {{ memUsedLabel }} <span class="text-muted-foreground/50">of</span> {{ memTotalLabel }}
+        <p class="mt-3 text-xs text-muted-foreground">
+          <span class="font-medium text-foreground">{{ memUsedLabel }}</span>
+          <span class="text-muted-foreground/50"> of </span>
+          {{ memTotalLabel }}
         </p>
-        <svg
-          viewBox="0 0 100 32"
-          preserveAspectRatio="none"
-          class="mt-3 h-12 w-full opacity-90"
-          aria-hidden="true"
-        >
-          <polyline
-            v-if="memTrend"
-            fill="none"
-            class="stroke-sky-500"
-            stroke-width="1.5"
-            stroke-linejoin="round"
-            stroke-linecap="round"
-            vector-effect="non-scaling-stroke"
-            :points="memTrend"
-          />
-        </svg>
       </div>
     </div>
   </UiSection>
