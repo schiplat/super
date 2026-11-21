@@ -144,6 +144,16 @@ fn default_scopes() -> String {
     DEFAULT_SCOPES.to_string()
 }
 
+/// Scopes accept comma or space separation in the UI and CLI; the
+/// authorization request itself is space-separated (OAuth 2.0). Stored
+/// configs are normalized so a comma never leaks into the wire format.
+pub fn normalize_scopes(raw: &str) -> String {
+    raw.split(|c: char| c == ',' || c.is_whitespace())
+        .filter(|s| !s.is_empty())
+        .collect::<Vec<_>>()
+        .join(" ")
+}
+
 fn default_groups_claim() -> String {
     DEFAULT_GROUPS_CLAIM.to_string()
 }

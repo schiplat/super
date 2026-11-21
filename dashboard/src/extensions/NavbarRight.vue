@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import { useAuthStore } from '@/stores/auth';
 import { useProgramStore } from '@/stores/program';
-import { useCapabilitiesStore } from '@/stores/capabilities';
 import { LogOut, ChevronDown, ShieldCheck, Wifi, WifiOff } from 'lucide-vue-next';
 import { useRouter } from 'vue-router';
 import { ref } from 'vue';
@@ -10,7 +9,6 @@ import Slot from '@/slots/Slot.vue';
 
 const authStore = useAuthStore();
 const programStore = useProgramStore();
-const caps = useCapabilitiesStore();
 const router = useRouter();
 
 const userMenuOpen = ref(false);
@@ -38,16 +36,22 @@ async function handleLogout() {
   // deployments end the provider session too (RP-initiated logout via
   // `GET /auth/sso/logout`); a full navigation — the SPA session is over
   // either way.
+  let mode: string | undefined;
   let ssoActive = false;
   try {
     const res = await apiClient.get('/api/v1/auth/status');
-    ssoActive = res.data?.mode === 'sso';
+    mode = res.data?.mode;
+    ssoActive = mode === 'sso';
   } catch {
     // Status is auth-exempt; a failure means fall back to a local sign-out.
   }
   await authStore.logout();
   if (ssoActive) {
     window.location.assign('/api/v1/auth/sso/logout');
+  } else if (!mode || mode === 'none') {
+    // No gate (loopback dev): there is no credential to revoke, but the menu
+    // still offers Sign out — reset the SPA state instead of doing nothing.
+    window.location.assign('/');
   }
 }
 </script>
@@ -120,17 +124,15 @@ async function handleLogout() {
           License
         </a>
 
-        <template v-if="caps.auth">
-          <div class="h-px bg-border my-1 mx-2"></div>
+        <div class="h-px bg-border my-1 mx-2"></div>
 
-          <a
-            @click="handleLogout"
-            class="flex items-center gap-3 px-3 py-2.5 rounded-[10px] text-sm text-destructive hover:bg-destructive/10 font-medium transition-colors cursor-pointer"
-          >
-            <LogOut class="w-4 h-4 opacity-50" />
-            Sign out
-          </a>
-        </template>
+        <a
+          @click="handleLogout"
+          class="flex items-center gap-3 px-3 py-2.5 rounded-[10px] text-sm text-destructive hover:bg-destructive/10 font-medium transition-colors cursor-pointer"
+        >
+          <LogOut class="w-4 h-4 opacity-50" />
+          Sign out
+        </a>
       </div>
     </div>
 

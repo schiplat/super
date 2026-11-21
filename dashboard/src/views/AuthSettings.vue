@@ -567,8 +567,8 @@ onMounted(async () => {
               >
                 <UiInput v-model="config.public_base_url" placeholder="https://super.example.com" />
               </UiField>
-              <UiField label="Scopes" hint="Must include openid">
-                <UiInput v-model="config.scopes" placeholder="openid profile email" />
+              <UiField label="Scopes" hint="Comma or space separated · must include openid">
+                <UiInput v-model="config.scopes" placeholder="openid, profile, email" />
               </UiField>
               <UiField label="Groups claim" hint="ID-token claim holding group membership">
                 <UiInput v-model="config.groups_claim" placeholder="groups" />

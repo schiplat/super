@@ -866,6 +866,10 @@ async fn put_config(
     let Some(sso) = state.sso() else {
         return not_found();
     };
+    // The UI may submit comma-separated scopes; the authorization request is
+    // space-separated, so normalize before validating and storing.
+    let mut config = config;
+    config.scopes = common::auth_sso::normalize_scopes(&config.scopes);
 
     let errors = config.validate();
     if !errors.is_empty() {

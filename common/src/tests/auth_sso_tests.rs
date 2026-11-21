@@ -291,3 +291,19 @@ fn selector_less_rule_never_matches_even_if_it_reaches_us() {
     let groups: Vec<String> = Vec::new();
     assert_eq!(resolve_role(&rules, &claims(&groups, None, false)), None);
 }
+
+#[test]
+fn scopes_normalize_commas_and_whitespace() {
+    use super::normalize_scopes;
+    assert_eq!(
+        normalize_scopes("openid, profile,email"),
+        "openid profile email"
+    );
+    assert_eq!(normalize_scopes("openid ,  profile , "), "openid profile");
+    assert_eq!(
+        normalize_scopes("openid profile email"),
+        "openid profile email"
+    );
+    assert_eq!(normalize_scopes("  "), "");
+    assert_eq!(normalize_scopes(",,,"), "");
+}
