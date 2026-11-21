@@ -766,6 +766,14 @@ impl AuthStore {
         Ok(())
     }
 
+    /// Total audit rows (for the paginated audit endpoint's `total`).
+    pub async fn count_audit(&self) -> anyhow::Result<i64> {
+        sqlx::query_scalar("SELECT COUNT(*) FROM auth_events")
+            .fetch_one(&self.pool)
+            .await
+            .context("count auth audit events")
+    }
+
     /// Whether at least one live (non-revoked, unexpired) admin token exists
     /// (the `has_admin_token` fact in `/auth/status`).
     pub async fn has_active_admin_token(&self) -> anyhow::Result<bool> {
@@ -974,12 +982,15 @@ impl AuthStore {
         Ok(())
     }
 
-    pub async fn list_audit(&self, limit: i64) -> anyhow::Result<Vec<AuditRow>> {
+    /// One page of audit events, newest first. `page_size` is clamped to 500
+    /// like the old `limit`; `offset` must already be `page * page_size`.
+    pub async fn list_audit(&self, page_size: i64, offset: i64) -> anyhow::Result<Vec<AuditRow>> {
         let rows = sqlx::query(
             "SELECT at, kind, sub, email, ip, ua, detail FROM auth_events \
-             ORDER BY at DESC, id DESC LIMIT ?",
+             ORDER BY at DESC, id DESC LIMIT ? OFFSET ?",
         )
-        .bind(limit.clamp(1, 500))
+        .bind(page_size.clamp(1, 500))
+        .bind(offset.max(0))
         .fetch_all(&self.pool)
         .await
         .context("list auth audit events")?;

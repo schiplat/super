@@ -1204,26 +1204,41 @@ async fn revoke_all(
 
 #[derive(Debug, Deserialize)]
 struct AuditQuery {
+    /// Legacy alias for `page_size` (page 1); prefer page/page_size.
     limit: Option<i64>,
+    page: Option<i64>,
+    page_size: Option<i64>,
 }
 
 async fn list_audit(State(state): State<AuthState>, Query(query): Query<AuditQuery>) -> Response {
     let Some(sso) = state.sso() else {
         return not_found();
     };
-    match sso.store().list_audit(query.limit.unwrap_or(50)).await {
-        Ok(rows) => Json(json!({
-            "events": rows.into_iter().map(|row| json!({
-                "at": row.at,
-                "kind": row.kind,
-                "sub": row.sub,
-                "email": row.email,
-                "ip": row.ip,
-                "user_agent": row.ua,
-                "detail": row.detail,
-            })).collect::<Vec<_>>(),
-        }))
-        .into_response(),
+    let page_size = query.page_size.or(query.limit).unwrap_or(25).clamp(1, 500);
+    let page = query.page.unwrap_or(1).max(1);
+    let offset = (page - 1) * page_size;
+    match sso.store().list_audit(page_size, offset).await {
+        Ok(rows) => match sso.store().count_audit().await {
+            Ok(total) => Json(json!({
+                "events": rows.into_iter().map(|row| json!({
+                    "at": row.at,
+                    "kind": row.kind,
+                    "sub": row.sub,
+                    "email": row.email,
+                    "ip": row.ip,
+                    "user_agent": row.ua,
+                    "detail": row.detail,
+                })).collect::<Vec<_>>(),
+                "page": page,
+                "page_size": page_size,
+                "total": total,
+            }))
+            .into_response(),
+            Err(e) => {
+                tracing::error!(error = %e, "cannot count the auth audit log");
+                server_error()
+            }
+        },
         Err(e) => {
             tracing::error!(error = %e, "cannot read the auth audit log");
             server_error()

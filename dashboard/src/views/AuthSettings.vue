@@ -13,6 +13,7 @@ import { useRouter } from 'vue-router'
 import { ArrowDown, ArrowUp, Check, Copy, Plus, Trash2 } from 'lucide-vue-next'
 import apiClient from '@/api/client'
 import { useCapabilitiesStore } from '@/stores/capabilities'
+import BasePagination from '@/components/BasePagination.vue'
 import UiButton from '@/components/ui/UiButton.vue'
 import UiDataTable from '@/components/ui/UiDataTable.vue'
 import type { DataColumn } from '@/types/ui'
@@ -64,6 +65,10 @@ const probe = ref<SsoProbe | null>(null)
 
 const sessions = ref<SsoSession[]>([])
 const audit = ref<SsoAuditEvent[]>([])
+const auditPage = ref(1)
+const auditPageSize = ref(20)
+const auditTotal = ref(0)
+const auditLoading = ref(false)
 const copiedKey = ref('')
 
 /** Live gate facts from /auth/status (secret source) — best-effort probe. */
@@ -220,8 +225,8 @@ async function load() {
     const [configResponse, sessionsResponse, auditResponse] = await Promise.all([
       apiClient.get<SsoConfigView>('/api/v1/auth/sso/config'),
       apiClient.get<{ sessions: SsoSession[] }>('/api/v1/auth/sso/sessions'),
-      apiClient.get<{ events: SsoAuditEvent[] }>('/api/v1/auth/sso/audit', {
-        params: { limit: 25 },
+      apiClient.get<{ events: SsoAuditEvent[]; total: number }>('/api/v1/auth/sso/audit', {
+        params: { page: auditPage.value, page_size: auditPageSize.value },
       }),
     ])
     view.value = configResponse.data
@@ -231,6 +236,7 @@ async function load() {
     idleMinutes.value = String(Math.round(config.value.idle_timeout_secs / 60))
     sessions.value = sessionsResponse.data.sessions ?? []
     audit.value = auditResponse.data.events ?? []
+    auditTotal.value = auditResponse.data.total ?? 0
   } catch (error) {
     notice.value = { tone: 'danger', text: apiError(error) }
   } finally {
@@ -350,12 +356,36 @@ async function disable() {
 async function refreshLists() {
   const [sessionsResponse, auditResponse] = await Promise.all([
     apiClient.get<{ sessions: SsoSession[] }>('/api/v1/auth/sso/sessions'),
-    apiClient.get<{ events: SsoAuditEvent[] }>('/api/v1/auth/sso/audit', {
-      params: { limit: 25 },
+    apiClient.get<{ events: SsoAuditEvent[]; total: number }>('/api/v1/auth/sso/audit', {
+      params: { page: auditPage.value, page_size: auditPageSize.value },
     }),
   ])
   sessions.value = sessionsResponse.data.sessions ?? []
   audit.value = auditResponse.data.events ?? []
+  auditTotal.value = auditResponse.data.total ?? 0
+}
+
+/** Pagination changes only refetch the audit list, not the whole page. */
+async function changeAuditPage(page: number) {
+  auditPage.value = page
+  auditLoading.value = true
+  try {
+    const response = await apiClient.get<{ events: SsoAuditEvent[]; total: number }>(
+      '/api/v1/auth/sso/audit',
+      { params: { page: auditPage.value, page_size: auditPageSize.value } },
+    )
+    audit.value = response.data.events ?? []
+    auditTotal.value = response.data.total ?? 0
+  } catch (error) {
+    notice.value = { tone: 'danger', text: apiError(error) }
+  } finally {
+    auditLoading.value = false
+  }
+}
+
+async function changeAuditPageSize(size: number) {
+  auditPageSize.value = size
+  await changeAuditPage(1)
 }
 
 async function revoke(session: SsoSession) {
@@ -842,6 +872,7 @@ onMounted(async () => {
         description="Logins, denials, configuration changes, provider sign-outs, and revocations."
         :columns="auditColumns"
         :rows-count="audit.length"
+        :loading="auditLoading"
         empty="No authentication events yet"
       >
         <tr
@@ -863,6 +894,16 @@ onMounted(async () => {
           <td class="px-5 py-3 text-xs text-muted-foreground">{{ event.ip || '—' }}</td>
           <td class="px-5 py-3 text-xs text-muted-foreground">{{ event.detail || '—' }}</td>
         </tr>
+        <template #footer>
+          <BasePagination
+            :total="auditTotal"
+            :page="auditPage"
+            :page-size="auditPageSize"
+            :disabled="auditLoading"
+            @update:page="changeAuditPage"
+            @update:page-size="changeAuditPageSize"
+          />
+        </template>
       </UiDataTable>
     </template>
 

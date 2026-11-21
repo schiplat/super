@@ -277,7 +277,7 @@ async fn audit_round_trip_and_retention() {
         .await
         .unwrap();
 
-    let rows = store.list_audit(10).await.unwrap();
+    let rows = store.list_audit(10, 0).await.unwrap();
     assert_eq!(rows.len(), 1);
     assert_eq!(rows[0].kind, "login_success");
     assert_eq!(rows[0].sub.as_deref(), Some("u1"));
@@ -285,7 +285,7 @@ async fn audit_round_trip_and_retention() {
     // A "now" far enough ahead makes the row older than the retention window.
     let removed = store.prune_audit(now() + 31 * 24 * 60 * 60).await.unwrap();
     assert_eq!(removed, 1);
-    assert!(store.list_audit(10).await.unwrap().is_empty());
+    assert!(store.list_audit(10, 0).await.unwrap().is_empty());
 }
 
 fn api_token<'a>(id: &'a str, hash: &'a [u8], role: &'a str) -> NewApiToken<'a> {
