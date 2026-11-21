@@ -43,6 +43,7 @@ watch(isDark, (val) => { editorTheme.value = val ? 'vs-dark' : 'vs'; });
 // 2. Core state
 const code = ref('');
 const loading = ref(false);
+const initialLoading = ref(true);
 const applying = ref(false);
 
 // 3. Result modal state
@@ -72,9 +73,15 @@ const defaultTemplate = {
   ]
 };
 
-onMounted(() => {
-  if (code.value.length < 20) {
-    code.value = JSON.stringify(defaultTemplate, null, 2);
+onMounted(async () => {
+  // Load the current inventory right away — the page is useless until the
+  // real stack is on screen. Fall back to the default template on failure.
+  try {
+    if (!(await fetchStack())) {
+      code.value = JSON.stringify(defaultTemplate, null, 2);
+    }
+  } finally {
+    initialLoading.value = false;
   }
 });
 
@@ -100,7 +107,25 @@ function closePruneModal() {
   pruneConfirmInput.value = '';
 }
 
-// 6. Load current stack from API
+// Load current stack from the API (pretty-printed, including prune).
+async function fetchStack() {
+  loading.value = true;
+  try {
+    const res = await apiClient.get('/api/v1/stack');
+    code.value = JSON.stringify(res.data, null, 2);
+    return true;
+  } catch (e: any) {
+    await alertDialog('Failed to load stack: ' + e.message, {
+      title: 'Load failed',
+      variant: 'destructive',
+    });
+    return false;
+  } finally {
+    loading.value = false;
+  }
+}
+
+// Manual refresh — guards edits already in the buffer.
 async function loadCurrentStack() {
   if (code.value.length > 50) {
     const ok = await confirmDialog('Discard current changes and load from system?', {
@@ -110,20 +135,7 @@ async function loadCurrentStack() {
     });
     if (!ok) return;
   }
-
-  loading.value = true;
-  try {
-    const res = await apiClient.get('/api/v1/stack');
-    // Pretty-print full JSON including prune
-    code.value = JSON.stringify(res.data, null, 2);
-  } catch (e: any) {
-    await alertDialog('Failed to load stack: ' + e.message, {
-      title: 'Load failed',
-      variant: 'destructive',
-    });
-  } finally {
-    loading.value = false;
-  }
+  await fetchStack();
 }
 
 async function executeApply(payload: Record<string, unknown>) {
@@ -265,7 +277,14 @@ async function confirmPruneApply() {
 
     <!-- Editor Area -->
     <div class="flex-1 relative">
+      <div v-if="initialLoading" class="absolute inset-0 z-10 grid place-items-center bg-card">
+        <div class="flex flex-col items-center gap-3 text-muted-foreground">
+          <span class="inline-block w-8 h-8 border-2 border-foreground/20 border-t-foreground/50 rounded-full animate-spin"></span>
+          <span class="text-sm">Loading current stack…</span>
+        </div>
+      </div>
       <VueMonacoEditor
+        v-show="!initialLoading"
         v-model:value="code"
         language="json"
         :theme="editorTheme"
