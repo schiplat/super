@@ -872,7 +872,7 @@ onMounted(async () => {
         description="Logins, denials, configuration changes, provider sign-outs, and revocations."
         :columns="auditColumns"
         :rows-count="audit.length"
-        :loading="auditLoading"
+        :loading="auditLoading && !audit.length"
         empty="No authentication events yet"
       >
         <tr
