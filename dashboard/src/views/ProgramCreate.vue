@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, reactive, computed, onMounted, onUnmounted, watch } from 'vue';
+import { ref, reactive, computed, onMounted, watch } from 'vue';
 import { useRouter } from 'vue-router';
 import {
   Save, ArrowLeft, Trash2, Terminal, Zap,
@@ -14,6 +14,7 @@ import UiButton from '@/components/ui/UiButton.vue';
 import UiDialog from '@/components/ui/UiDialog.vue';
 import UiNotice from '@/components/ui/UiNotice.vue';
 import UiSwitch from '@/components/ui/UiSwitch.vue';
+import FormAnchorRail from '@/components/FormAnchorRail.vue';
 import ProgramDependencyFields from '@/components/ProgramDependencyFields.vue';
 import ProgramSectionCard from '@/components/ProgramSectionCard.vue';
 
@@ -38,7 +39,6 @@ onMounted(async () => {
   if (!authStore.canOperate) {
     router.replace('/');
   }
-  observeSections();
 });
 
 // Form state
@@ -203,165 +203,21 @@ const visibleSections = computed(() =>
 );
 
 /** Scroll-driven highlight: the last headline above a line in the scrollport. */
-const scrolledSection = ref<string>('run');
-/** Hover-driven highlight: the section under the cursor, if any. */
-const hoverSection = ref<string | null>(null);
-/**
- * A rail click pins the highlight to the clicked section. Collapsed sections
- * make neighbours' headlines sit within the fold line, so letting the spy
- * immediately re-take control would highlight a different section than the
- * one the user just navigated to — exactly the "rail disconnected from the
- * content" feeling. Genuine user scrolling (wheel / touch / keys) unpins.
- */
-const pinnedSection = ref<string | null>(null);
-const activeSection = computed(() => hoverSection.value ?? pinnedSection.value ?? scrolledSection.value);
+const sectionDone = computed<Record<string, boolean>>(() => ({
+  run: !!form.command.trim(),
+  lifecycle: true,
+  scheduling: form.enableCron && !!form.cron.trim(),
+  health: form.enableHealthCheck,
+  updates: form.enableArtifact,
+  hooks: form.enableHooks && Object.values(form.hooks).some((value) => !!value.trim()),
+  logs: form.enableLogs,
+  dependencies: form.depends_on.some((d) => !!d.value.trim()),
+  limits: showLimits.value && !!(form.cpu_quota || form.memory_mb),
+}));
 
-function sectionDone(key: string): boolean {
-  switch (key) {
-    case 'run':
-      return !!form.command.trim();
-    case 'lifecycle':
-      return true; // always configured through defaults
-    case 'scheduling':
-      return form.enableCron && !!form.cron.trim();
-    case 'health':
-      return form.enableHealthCheck;
-    case 'updates':
-      return form.enableArtifact;
-    case 'hooks':
-      return form.enableHooks && Object.values(form.hooks).some((value) => !!value.trim());
-    case 'logs':
-      return form.enableLogs;
-    case 'dependencies':
-      return form.depends_on.some((d) => !!d.value.trim());
-    case 'limits':
-      return showLimits.value && !!(form.cpu_quota || form.memory_mb);
-    default:
-      return false;
-  }
-}
-
-let sectionScroller: HTMLElement | null = null;
-let cursorPoint: { x: number; y: number } | null = null;
-/** Throttle id for hover recomputes (setTimeout — rAF never fires in some
-    embedded webviews, which would leave the rail frozen). */
-let hoverFrame = 0;
-let pollFrame = 0;
-let lastKnownTop = -1;
-
-function sectionAtPoint(x: number, y: number): string | null {
-  const el = document.elementFromPoint(x, y);
-  const host = el?.closest('[data-section]');
-  return (host?.getAttribute('data-section') as string | undefined) ?? null;
-}
-
-function sectionUnderFold(): string {
-  const scroller = sectionScroller;
-  if (!scroller) return sections[0].key;
-  // "Current" = the last section headline above a line ~120px into the
-  // scrollport. Deterministic, unlike band-based intersection matching where
-  // several long sections can overlap the window at once.
-  const line = scroller.getBoundingClientRect().top + 120;
-  let current: string = sections[0].key;
-  for (const section of sections) {
-    const el = document.getElementById(`section-${section.key}`);
-    if (el && el.getBoundingClientRect().top <= line) current = section.key;
-  }
-  return current;
-}
-
-function refreshHighlight() {
-  if (!pinnedSection.value) {
-    scrolledSection.value = sectionUnderFold();
-  }
-  // The cursor is the attention anchor: while it rests over the form, the rail
-  // follows the section under it — including while wheel-scrolling with the
-  // pointer stationary (elementFromPoint recomputes on every scroll event).
-  hoverSection.value = cursorPoint
-    ? sectionAtPoint(cursorPoint.x, cursorPoint.y)
-    : null;
-}
-
-/** Genuine user scrolling unpins a rail-click highlight. */
-function unpin() {
-  if (pinnedSection.value) {
-    pinnedSection.value = null;
-    refreshHighlight();
-  }
-}
-
-/** Recompute on scroll-position change. The scroll listener covers real
-    browsers; the interval covers embedded webviews where programmatic
-    scrolling never dispatches scroll events (no frames -> no events). The
-    position check makes the poll a no-op while idle. */
-function onScrollSpy() {
-  const scroller = sectionScroller;
-  if (!scroller || scroller.scrollTop === lastKnownTop) return;
-  lastKnownTop = scroller.scrollTop;
-  refreshHighlight();
-}
-
-function onRailHover(event: MouseEvent) {
-  cursorPoint = { x: event.clientX, y: event.clientY };
-  // Trailing-edge throttle: recomputes at most every 50 ms, with one final
-  // pass after the pointer stops moving. setTimeout, not rAF — some embedded
-  // webviews never fire animation frames.
-  if (!hoverFrame) {
-    hoverFrame = window.setTimeout(() => {
-      hoverFrame = 0;
-      refreshHighlight();
-    }, 50);
-  }
-}
-
-function onRailLeave() {
-  cursorPoint = null;
-  hoverSection.value = null;
-}
-
-function observeSections() {
-  const scroller = document.querySelector("main");
-  if (!scroller) return;
-  sectionScroller = scroller;
-  lastKnownTop = scroller.scrollTop;
-  scroller.addEventListener("scroll", onScrollSpy, { passive: true });
-  scroller.addEventListener("mousemove", onRailHover, { passive: true });
-  scroller.addEventListener("mouseleave", onRailLeave);
-  scroller.addEventListener("wheel", unpin, { passive: true });
-  scroller.addEventListener("touchmove", unpin, { passive: true });
-  scroller.addEventListener("keydown", unpin);
-  pollFrame = window.setInterval(onScrollSpy, 250);
-  onScrollSpy();
-}
-
+const railRef = ref<InstanceType<typeof FormAnchorRail> | null>(null);
 function scrollToSection(key: string) {
-  const el = document.getElementById(`section-${key}`);
-  if (!el) return;
-  const scroller = el.closest("main");
-  if (!scroller) {
-    el.scrollIntoView({ block: "start" });
-    return;
-  }
-  // Coordinates are measured against the scroll container, not the document:
-  // the rail sits beside it and offsetTop alone would include the shell chrome.
-  const target = Math.max(
-    0,
-    Math.min(
-      el.getBoundingClientRect().top -
-        scroller.getBoundingClientRect().top +
-        scroller.scrollTop -
-        16,
-      scroller.scrollHeight - scroller.clientHeight,
-    ),
-  );
-  // Instant jump: some embedded browsers silently drop programmatic smooth
-  // scrolls on this container, and navigation must not depend on the animation.
-  scroller.scrollTo({ top: target, behavior: "instant" });
-  lastKnownTop = target;
-  // Pin the highlight to the clicked section; the spy only re-takes control on
-  // genuine user scrolling input (see unpin).
-  pinnedSection.value = key;
-  hoverSection.value = null;
+  railRef.value?.scrollToSection(key);
 }
 
 // ----------------------------------------------------------- json preview
@@ -541,68 +397,18 @@ async function handleSubmit() {
   }
 }
 
-onUnmounted(() => {
-  if (sectionScroller) {
-    sectionScroller.removeEventListener("scroll", onScrollSpy);
-    sectionScroller.removeEventListener("mousemove", onRailHover);
-    sectionScroller.removeEventListener("mouseleave", onRailLeave);
-    sectionScroller.removeEventListener("wheel", unpin);
-    sectionScroller.removeEventListener("touchmove", unpin);
-    sectionScroller.removeEventListener("keydown", unpin);
-  }
-  clearTimeout(hoverFrame);
-  clearInterval(pollFrame);
-});
 </script>
 
 <template>
   <div class="lg:grid lg:grid-cols-[13rem_1fr] lg:gap-6">
-    <!-- Anchor rail: page header + section spine + completion state -->
-    <nav class="hidden lg:block" aria-label="Form sections">
-      <div class="sticky top-6 py-1">
-        <div class="mb-4">
-          <div class="flex items-center gap-2">
-            <button class="inline-flex h-7 w-7 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted hover:text-foreground" title="Back" @click="router.back()">
-              <ArrowLeft class="h-3.5 w-3.5" />
-            </button>
-            <h1 class="text-sm font-semibold tracking-tight">New Program</h1>
-          </div>
-          <p class="mt-2 text-xs leading-snug text-muted-foreground">
-            Only <span class="font-medium text-foreground">Run</span> is required — everything
-            else has safe defaults.
-          </p>
-        </div>
-        <div class="space-y-1">
-          <button
-            v-for="section in visibleSections"
-            :key="section.key"
-            type="button"
-            class="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-left text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/30"
-            :class="activeSection === section.key
-              ? 'bg-muted text-foreground'
-              : 'text-muted-foreground hover:bg-muted/40 hover:text-foreground'"
-            @click="scrollToSection(section.key)"
-          >
-            <span
-              class="h-1.5 w-1.5 shrink-0 rounded-full"
-              :class="sectionDone(section.key)
-                ? 'bg-success'
-                : section.required
-                  ? 'bg-destructive'
-                  : 'bg-muted-foreground/30'"
-              aria-hidden="true"
-            />
-            <span class="truncate">{{ section.label }}</span>
-          </button>
-        </div>
-        <p class="mt-3 px-2.5 text-[11px] leading-snug text-muted-foreground">
-          <span class="inline-block h-1.5 w-1.5 rounded-full bg-success align-middle" />
-          configured ·
-          <span class="inline-block h-1.5 w-1.5 rounded-full bg-muted-foreground/30 align-middle" />
-          defaults
-        </p>
-      </div>
-    </nav>
+    <!-- Anchor rail (shared component) -->
+    <FormAnchorRail
+      :sections="visibleSections"
+      :done="sectionDone"
+      title="New Program"
+      subtitle="Only Run is required — everything else has safe defaults."
+      @back="router.back()"
+    />
 
     <!-- Main column -->
     <div class="min-w-0">

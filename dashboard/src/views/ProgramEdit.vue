@@ -2,8 +2,8 @@
 import { ref, reactive, computed, onMounted, watch } from 'vue';
 import { useRouter, useRoute } from 'vue-router';
 import {
-  Save, ArrowLeft, Trash2, Terminal, Zap,
-  Cpu, Activity, Clock, Layers, Box, Edit3, AlertTriangle, ExternalLink
+  Save, Trash2, Terminal, Zap,
+  Cpu, Activity, Clock, Layers, Box, AlertTriangle, ExternalLink
 } from 'lucide-vue-next';
 import apiClient from '@/api/client';
 import { API_PATHS } from '@/api/paths';
@@ -13,6 +13,9 @@ import { useCapabilitiesStore } from '@/stores/capabilities';
 import UiSwitch from '@/components/ui/UiSwitch.vue';
 import ProgramDependencyFields from '@/components/ProgramDependencyFields.vue';
 import ProgramSectionCard from '@/components/ProgramSectionCard.vue';
+import FormAnchorRail from '@/components/FormAnchorRail.vue';
+import UiButton from '@/components/ui/UiButton.vue';
+import UiNotice from '@/components/ui/UiNotice.vue';
 import { alertDialog } from '@/lib/app-dialog';
 
 const router = useRouter();
@@ -463,7 +466,7 @@ async function handleSubmit() {
       'Program updated successfully. You may need to restart it for changes to take effect.',
       { title: 'Updated' },
     );
-    router.push('/');
+    router.push(`/programs/${programId}`);
   } catch (e: any) {
     submitError.value = formatApiError(e);
   } finally {
@@ -471,416 +474,175 @@ async function handleSubmit() {
   }
 }
 
+
+// --------------------------------------------------------------- sections
+
+const sections = [
+  { key: 'run', label: 'Run', required: true },
+  { key: 'lifecycle', label: 'Lifecycle', required: false },
+  { key: 'scheduling', label: 'Scheduling', required: false },
+  { key: 'health', label: 'Health', required: false },
+  { key: 'updates', label: 'Updates', required: false },
+  { key: 'hooks', label: 'Hooks', required: false },
+  { key: 'logs', label: 'Logs', required: false },
+  { key: 'dependencies', label: 'Depends on', required: false },
+  { key: 'limits', label: 'Limits', required: false },
+] as const;
+
+// The Limits section only renders with the isolation plugin.
+const visibleSections = computed(() =>
+  sections.filter((section) => section.key !== 'limits' || caps.isolation),
+);
+
+const sectionDone = computed<Record<string, boolean>>(() => ({
+  run: !!form.command.trim(),
+  lifecycle: true,
+  scheduling: form.enableCron && !!form.cron.trim(),
+  health: form.enableHealthCheck,
+  updates: form.enableArtifact,
+  hooks: form.enableHooks && Object.values(form.hooks).some((value) => !!value.trim()),
+  logs: form.enableLogs,
+  dependencies: form.depends_on.some((d) => !!d.value.trim()),
+  limits: showLimits.value && !!(form.cpu_quota || form.memory_mb),
+}));
+
+const railRef = ref<InstanceType<typeof FormAnchorRail> | null>(null);
+function scrollToSection(key: string) {
+  railRef.value?.scrollToSection(key);
+}
+
 </script>
 
 <template>
-  <div class="mx-auto max-w-5xl space-y-6">
+  <div v-if="loading" class="flex flex-col items-center justify-center py-20 gap-4">
+    <span class="inline-block w-8 h-8 border-3 border-foreground/20 border-t-foreground/50 rounded-full animate-spin"></span>
+    <span class="text-foreground/50 font-medium">Loading configuration...</span>
+  </div>
 
-    <!-- Loading State -->
-    <div v-if="loading" class="flex flex-col items-center justify-center py-20 gap-4">
-      <span class="inline-block w-8 h-8 border-3 border-foreground/20 border-t-foreground/50 rounded-full animate-spin"></span>
-      <span class="text-foreground/50 font-medium">Loading configuration...</span>
-    </div>
+  <div v-else class="lg:grid lg:grid-cols-[13rem_1fr] lg:gap-6">
+    <FormAnchorRail
+      :sections="visibleSections"
+      :done="sectionDone"
+      title="Edit Program"
+      :subtitle="programId"
+      @navigate="scrollToSection"
+      @back="router.push(`/programs/${programId}`)"
+    />
 
-    <div v-else>
-      <!-- Header -->
-      <div class="flex items-center justify-between mb-6">
-        <div class="flex items-center gap-4">
-          <button class="inline-flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted/40 hover:text-foreground" @click="router.push(`/programs/${programId}`)">
-            <ArrowLeft class="w-5 h-5" />
-          </button>
-          <div>
-            <h1 class="text-xl font-semibold tracking-tight flex items-center gap-2">
-              <Edit3 class="w-6 h-6 text-primary" /> Edit Program
-            </h1>
-            <p class="text-sm text-foreground/60 font-mono">{{ programId }}</p>
-          </div>
-        </div>
-        <button class="inline-flex h-9 items-center justify-center gap-2 whitespace-nowrap rounded-xl bg-primary px-4 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-50" :disabled="submitting" @click="handleSubmit">
-          <span v-if="submitting" class="inline-block w-3 h-3 border-2 border-foreground/20 border-t-foreground/50 rounded-full animate-spin"></span>
-          <Save v-else class="w-4 h-4" />
-          Update Configuration
-        </button>
-      </div>
+    <div class="min-w-0">
+      <UiNotice v-if="submitError" tone="danger" class="mb-6">{{ submitError }}</UiNotice>
 
-      <div v-if="submitError" class="alert alert-error text-sm mb-6" role="alert">
-        {{ submitError }}
-      </div>
-
-      <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-
-        <!-- LEFT COLUMN: Main Config (8/12) -->
-        <div class="lg:col-span-8 space-y-6">
-
-          <!-- 1. Basic Info -->
-          <div class="surface-card ring-1 ring-border/60 shadow-[0_1px_2px_hsl(220_20%_20%/0.04),0_2px_8px_hsl(220_20%_20%/0.03)] overflow-visible">
-            <div class="p-6">
-              <h3 class="type-eyebrow text-muted-foreground mb-4 flex items-center gap-2">
-                <Box class="w-4 h-4" /> Essentials
-              <a :href="docRef('identity--execution')" target="_blank" class="inline-flex ml-1.5 text-foreground/25 hover:text-primary transition-colors" title="Docs: Identity & execution"><ExternalLink class="w-3 h-3" /></a>
-              </h3>
-
-              <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
-                <div class="form-control">
-                  <label class="label pt-0 pb-2"><span class="label-text text-xs font-medium text-foreground/75">Program Name<a :href="docRef('identity--execution')" target="_blank" class="inline-flex ml-1 text-foreground/25 hover:text-primary align-text-bottom" title="Docs"><ExternalLink class="w-3 h-3" /></a></span></label>
-                  <input v-model="form.name" type="text" class="field-control" />
-                </div>
-                <div class="form-control">
-                  <label class="label pt-0 pb-2"><span class="label-text text-xs font-medium text-foreground/75">Group<a :href="docRef('identity--execution')" target="_blank" class="inline-flex ml-1 text-foreground/25 hover:text-primary align-text-bottom" title="Docs"><ExternalLink class="w-3 h-3" /></a></span></label>
-                  <input v-model="form.group" type="text" class="field-control" />
-                </div>
+      <div class="space-y-6 pb-24">
+        <!-- RUN -->
+        <section id="section-run" data-section="run" class="overflow-visible rounded-2xl bg-card ring-1 ring-border/60 shadow-[0_1px_2px_hsl(220_20%_20%/0.04),0_2px_8px_hsl(220_20%_20%/0.03)]">
+          <div class="p-6">
+            <h2 class="type-eyebrow text-muted-foreground mb-4 flex items-center gap-2">
+              Run
+              <span class="text-destructive">*</span>
+              <a :href="docRef('identity--execution')" target="_blank" class="inline-flex text-foreground/25 hover:text-primary transition-colors" title="Docs: Identity & execution"><ExternalLink class="w-3 h-3" /></a>
+            </h2>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <div class="form-control">
+                <label class="label pt-0 pb-2"><span class="label-text text-xs font-medium text-foreground/75">Program Name<a :href="docRef('identity--execution')" target="_blank" class="inline-flex ml-1 text-foreground/25 hover:text-primary align-text-bottom" title="Docs"><ExternalLink class="w-3 h-3" /></a></span></label>
+                <input v-model="form.name" type="text" class="field-control" />
               </div>
-
-              <div class="form-control mt-4">
-                <label class="label pt-0 pb-2 justify-start gap-2">
-                  <span class="label-text text-xs font-medium text-foreground/75">Command<a :href="docRef('identity--execution')" target="_blank" class="inline-flex ml-1 text-foreground/25 hover:text-primary align-text-bottom" title="Docs"><ExternalLink class="w-3 h-3" /></a></span>
-                  <span class="text-destructive text-xs">*</span>
-                </label>
-                <div class="relative flex gap-1">
-                  <div class="relative flex-1">
-                    <Terminal class="w-4 h-4 absolute left-3 top-3 text-foreground/40" />
-                    <input v-model="form.command" type="text" class="field-control !pl-10 font-mono text-sm w-full" />
-                  </div>
-                  <button
-                    v-if="commandHasArgs"
-                    class="inline-flex items-center justify-center rounded-[10px] font-medium text-xs h-10 px-2 text-warning/70 hover:text-warning hover:bg-warning/10 transition-colors"
-                    title="Split command into command + arguments"
-                    @click="autoSplitCommand"
-                  >
-                    <Zap class="w-3.5 h-3.5" />
-                  </button>
-                </div>
-                <div v-if="commandHasArgs" class="flex items-center gap-1.5 mt-2 text-xs text-warning">
-                  <AlertTriangle class="w-3 h-3 shrink-0" />
-                  <span>Command contains spaces — did you mean to put arguments separately? <button class="underline hover:text-warning-focus font-medium" @click="autoSplitCommand">Auto-split</button></span>
-                </div>
-              </div>
-
-              <!-- Arguments List -->
-              <div class="form-control mt-4">
-                <div class="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1 mb-1.5">
-                  <label class="label p-0"><span class="label-text text-xs font-medium text-foreground/75">Arguments<a :href="docRef('identity--execution')" target="_blank" class="inline-flex ml-1 text-foreground/25 hover:text-primary align-text-bottom" title="Docs"><ExternalLink class="w-3 h-3" /></a></span></label>
-                  <span class="text-[11px] text-muted-foreground/80">One token per row. Paste a line and press Enter to split.</span>
-                </div>
-                <div class="space-y-2.5">
-                  <div v-for="(arg, idx) in form.args" :key="idx" class="flex gap-2">
-                    <input
-                      v-model="arg.value"
-                      type="text"
-                      class="field-control font-mono"
-                      placeholder="--flag"
-                      @keydown="onArgKeydown(idx, $event)"
-                    />
-                    <button type="button" class="inline-flex h-7 w-7 items-center justify-center rounded-[7px] text-muted-foreground hover:text-destructive hover:bg-destructive/5 transition-colors" @click="removeArg(idx)"><Trash2 class="w-3.5 h-3.5" /></button>
-                  </div>
-                </div>
-                <button type="button" class="inline-flex items-center px-2.5 py-1.5 rounded-[7px] text-xs border border-dashed border-border text-muted-foreground hover:text-foreground hover:bg-muted transition-colors w-full mt-3" @click="addArg">+ Add Argument</button>
-              </div>
-              <!-- Full command preview -->
-              <div v-if="form.command.trim()" class="mt-3 p-3 rounded-lg bg-muted/60 border border-border/50">
-                <span class="text-xs uppercase tracking-wider text-foreground/40 font-semibold">Preview</span>
-                <code class="block mt-1 text-xs font-mono text-foreground/80 break-all">{{ fullCommandLine || '(empty)' }}</code>
-              </div>
-
-              <div class="grid grid-cols-1 md:grid-cols-2 gap-3 mt-4">
-                <div class="form-control">
-                  <label class="label pt-0 pb-2"><span class="label-text text-xs font-medium text-foreground/75">Working Directory<a :href="docRef('identity--execution')" target="_blank" class="inline-flex ml-1 text-foreground/25 hover:text-primary align-text-bottom" title="Docs"><ExternalLink class="w-3 h-3" /></a></span></label>
-                  <input v-model="form.cwd" type="text" class="field-control font-mono text-sm" />
-                </div>
-                <div class="form-control">
-                  <label class="label pt-0 pb-2"><span class="label-text text-xs font-medium text-foreground/75">Run As User<a :href="docRef('identity--execution')" target="_blank" class="inline-flex ml-1 text-foreground/25 hover:text-primary align-text-bottom" title="Docs"><ExternalLink class="w-3 h-3" /></a></span></label>
-                  <input v-model="form.user" type="text" class="field-control font-mono text-sm" />
-                </div>
+              <div class="form-control">
+                <label class="label pt-0 pb-2"><span class="label-text text-xs font-medium text-foreground/75">Group<a :href="docRef('identity--execution')" target="_blank" class="inline-flex ml-1 text-foreground/25 hover:text-primary align-text-bottom" title="Docs"><ExternalLink class="w-3 h-3" /></a></span></label>
+                <input v-model="form.group" type="text" class="field-control" />
               </div>
             </div>
-          </div>
+            <div class="form-control mt-4">
+              <label class="label pt-0 pb-2 justify-start gap-2">
+                <span class="label-text text-xs font-medium text-foreground/75">Command<a :href="docRef('identity--execution')" target="_blank" class="inline-flex ml-1 text-foreground/25 hover:text-primary align-text-bottom" title="Docs"><ExternalLink class="w-3 h-3" /></a></span>
+                <span class="text-destructive text-xs">*</span>
+              </label>
+              <div class="relative flex gap-1">
+                <div class="relative flex-1">
+                  <Terminal class="w-4 h-4 absolute left-3 top-3 text-foreground/40" />
+                  <input v-model="form.command" type="text" class="field-control !pl-10 font-mono text-sm w-full" />
+                </div>
+                <button
+                  v-if="commandHasArgs"
+                  class="inline-flex items-center justify-center rounded-[10px] font-medium text-xs h-10 px-2 text-warning/70 hover:text-warning hover:bg-warning/10 transition-colors"
+                  title="Split command into command + arguments"
+                  @click="autoSplitCommand"
+                >
+                  <Zap class="w-3.5 h-3.5" />
+                </button>
+              </div>
+              <div v-if="commandHasArgs" class="flex items-center gap-1.5 mt-2 text-xs text-warning">
+                <AlertTriangle class="w-3 h-3 shrink-0" />
+                <span>Command contains spaces — did you mean to put arguments separately? <button class="underline hover:text-warning-focus font-medium" @click="autoSplitCommand">Auto-split</button></span>
+              </div>
+            </div>
+            <div class="form-control mt-4">
+              <div class="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1 mb-1.5">
+                <label class="label p-0"><span class="label-text text-xs font-medium text-foreground/75">Arguments<a :href="docRef('identity--execution')" target="_blank" class="inline-flex ml-1 text-foreground/25 hover:text-primary align-text-bottom" title="Docs"><ExternalLink class="w-3 h-3" /></a></span></label>
+                <span class="text-[11px] text-muted-foreground/80">One token per row. Paste a line and press Enter to split.</span>
+              </div>
+              <div class="space-y-2.5">
+                <div v-for="(arg, idx) in form.args" :key="idx" class="flex gap-2">
+                  <input
+                    v-model="arg.value"
+                    type="text"
+                    class="field-control font-mono"
+                    placeholder="--flag"
+                    @keydown="onArgKeydown(idx, $event)"
+                  />
+                  <button type="button" class="inline-flex h-7 w-7 items-center justify-center rounded-lg text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors" @click="removeArg(idx)"><Trash2 class="w-3.5 h-3.5" /></button>
+                </div>
+              </div>
+              <button type="button" class="inline-flex items-center px-2.5 py-1.5 rounded-lg text-xs border border-dashed border-border text-muted-foreground hover:text-foreground hover:bg-muted transition-colors w-full mt-3" @click="addArg">+ Add Argument</button>
+            </div>
+            <div v-if="form.command.trim()" class="mt-3 rounded-xl bg-muted/40 px-3 py-2">
+              <span class="text-[11px] uppercase tracking-wider text-muted-foreground/70 font-semibold">Preview</span>
+              <code class="block mt-1 text-xs font-mono text-foreground/80 break-all">{{ fullCommandLine || '(empty)' }}</code>
+            </div>
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-3 mt-4">
+              <div class="form-control">
+                <label class="label pt-0 pb-2"><span class="label-text text-xs font-medium text-foreground/75">Working Directory<a :href="docRef('identity--execution')" target="_blank" class="inline-flex ml-1 text-foreground/25 hover:text-primary align-text-bottom" title="Docs"><ExternalLink class="w-3 h-3" /></a></span></label>
+                <input v-model="form.cwd" type="text" class="field-control font-mono text-sm" />
+              </div>
+              <div class="form-control">
+                <label class="label pt-0 pb-2"><span class="label-text text-xs font-medium text-foreground/75">Run As User<a :href="docRef('identity--execution')" target="_blank" class="inline-flex ml-1 text-foreground/25 hover:text-primary align-text-bottom" title="Docs"><ExternalLink class="w-3 h-3" /></a></span></label>
+                <input v-model="form.user" type="text" class="field-control font-mono text-sm" />
+              </div>
+              <div class="form-control">
+                <label class="label pt-0 pb-2"><span class="label-text text-xs font-medium text-foreground/75">Run As Group</span></label>
+                <input v-model="form.group" type="text" class="field-control font-mono text-sm" />
+              </div>
+            </div>
 
-          <!-- 2. Environment Variables -->
-          <div class="surface-card ring-1 ring-border/60 shadow-[0_1px_2px_hsl(220_20%_20%/0.04),0_2px_8px_hsl(220_20%_20%/0.03)] overflow-visible">
-            <div class="p-6">
-              <h3 class="type-eyebrow text-muted-foreground mb-4 flex items-center gap-2">
-                <Layers class="w-4 h-4" /> Environment Variables
-                <a :href="docRef('identity--execution')" target="_blank" class="inline-flex ml-1.5 text-foreground/25 hover:text-primary transition-colors" title="Docs: Identity & execution"><ExternalLink class="w-3 h-3" /></a>
-              </h3>
+            <div class="mt-4 rounded-xl bg-muted/40 p-3">
+              <p class="type-eyebrow text-muted-foreground mb-2">Environment</p>
               <div class="space-y-2">
                 <div v-for="(item, idx) in form.env" :key="idx" class="grid grid-cols-[1fr_1fr_auto] gap-2">
-                  <input v-model="item.key" placeholder="KEY" class="field-control font-mono" />
-                  <input v-model="item.value" placeholder="VALUE" class="field-control font-mono" />
-                  <button class="inline-flex h-7 w-7 items-center justify-center rounded-[7px] text-muted-foreground hover:text-destructive hover:bg-destructive/5 transition-colors" @click="removeEnv(idx)"><Trash2 class="w-3.5 h-3.5" /></button>
+                  <input v-model="item.key" placeholder="KEY" class="field-control field-control-sm font-mono" />
+                  <input v-model="item.value" placeholder="VALUE" class="field-control field-control-sm font-mono" />
+                  <button class="inline-flex h-7 w-7 items-center justify-center rounded-lg text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors" @click="removeEnv(idx)"><Trash2 class="w-3.5 h-3.5" /></button>
                 </div>
-                <button class="inline-flex items-center px-2.5 py-1 rounded-[6px] text-xs border border-dashed border-border text-muted-foreground hover:text-foreground hover:bg-muted transition-colors w-full" @click="addEnv">+ Add Variable</button>
+                <button class="inline-flex items-center px-2.5 py-1 rounded-lg text-xs border border-dashed border-border text-muted-foreground hover:text-foreground hover:bg-muted transition-colors w-full" @click="addEnv">+ Add Variable</button>
               </div>
             </div>
           </div>
+        </section>
 
-          <!-- 3. Dependencies -->
-          <ProgramDependencyFields
-            v-model="form.depends_on"
-            :exclude-name="form.name"
-            :doc-href="docRef('orchestration')"
-          />
-
-          <!-- 4. Health Check -->
-          <ProgramSectionCard
-            v-model="form.enableHealthCheck"
-            title="Health Check"
-            hint="TCP / HTTP / exec probes"
-            :doc-href="docRef('programshealth_check')"
-            doc-title="Docs: Health checks"
-          >
-            <template #icon><Activity /></template>
-            <p v-if="isSignalRestartPolicy" class="text-xs text-amber-700 dark:text-amber-400 mb-4">
-              Required for signal restart policy — use a real TCP/HTTP/exec probe, not <code class="bg-muted px-1 rounded">true</code>.
-            </p>
-            <div class="space-y-6">
-                <div>
-                  <label class="label pt-0 pb-2"><span class="label-text text-xs font-medium text-foreground/75">Check Strategy</span></label>
-                  <div class="grid grid-cols-3 gap-3">
-                    <button
-                      type="button"
-                      class="flex flex-col items-center justify-center p-4 rounded-xl border text-center transition-colors"
-                      :class="form.healthCheckType === 'tcp'
-                        ? 'border-primary bg-primary/5 text-primary'
-                        : 'border-border bg-muted/50 text-foreground hover:bg-card'"
-                      @click="form.healthCheckType = 'tcp'"
-                    >
-                      <span class="text-sm font-medium">TCP Port</span>
-                      <span class="text-xs opacity-60 mt-1">Connect to socket</span>
-                    </button>
-                    <button
-                      type="button"
-                      class="flex flex-col items-center justify-center p-4 rounded-xl border text-center transition-colors"
-                      :class="form.healthCheckType === 'http'
-                        ? 'border-primary bg-primary/5 text-primary'
-                        : 'border-border bg-muted/50 text-foreground hover:bg-card'"
-                      @click="form.healthCheckType = 'http'"
-                    >
-                      <span class="text-sm font-medium">HTTP Request</span>
-                      <span class="text-xs opacity-60 mt-1">Expect 2xx status</span>
-                    </button>
-                    <button
-                      type="button"
-                      class="flex flex-col items-center justify-center p-4 rounded-xl border text-center transition-colors"
-                      :class="form.healthCheckType === 'exec'
-                        ? 'border-primary bg-primary/5 text-primary'
-                        : 'border-border bg-muted/50 text-foreground hover:bg-card'"
-                      @click="form.healthCheckType = 'exec'"
-                    >
-                      <span class="text-sm font-medium">Shell Command</span>
-                      <span class="text-xs opacity-60 mt-1">Exit code 0</span>
-                    </button>
-                  </div>
-                </div>
-
-                <div class="h-px bg-border"></div>
-
-                <div class="min-h-[6.5rem]">
-                  <div v-show="form.healthCheckType === 'tcp'" class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <div class="form-control">
-                      <label class="label pt-0 pb-2"><span class="label-text text-xs font-medium text-foreground/75">Host</span></label>
-                      <input v-model="form.hc_host" class="field-control font-mono text-sm" />
-                    </div>
-                    <div class="form-control">
-                      <label class="label pt-0 pb-2"><span class="label-text text-xs font-medium text-foreground/75">Port</span></label>
-                      <input v-model="form.hc_port" type="number" class="field-control font-mono text-sm" />
-                    </div>
-                  </div>
-
-                  <div v-show="form.healthCheckType === 'http'" class="grid grid-cols-1 md:grid-cols-12 gap-4">
-                    <div class="form-control md:col-span-3">
-                      <label class="label pt-0 pb-2"><span class="label-text text-xs font-medium text-foreground/75">Method</span></label>
-                      <select v-model="form.hc_method" class="field-control font-mono text-sm">
-                        <option>GET</option><option>POST</option><option>HEAD</option>
-                      </select>
-                    </div>
-                    <div class="form-control md:col-span-9">
-                      <label class="label pt-0 pb-2"><span class="label-text text-xs font-medium text-foreground/75">URL</span></label>
-                      <input v-model="form.hc_url" class="field-control font-mono text-sm" />
-                    </div>
-                  </div>
-
-                  <div v-show="form.healthCheckType === 'exec'" class="form-control">
-                    <label class="label pt-0 pb-2"><span class="label-text text-xs font-medium text-foreground/75">Command</span></label>
-                    <div class="relative">
-                      <span class="absolute left-3 top-2.5 font-mono text-sm text-foreground/40">$</span>
-                      <input v-model="form.hc_command" class="field-control pl-7 font-mono text-sm" />
-                    </div>
-                  </div>
-                </div>
-
-                <div class="h-px bg-border"></div>
-
-                <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
-                  <div class="form-control">
-                    <label class="label pt-0 pb-2"><span class="label-text text-xs font-medium text-foreground/75">Probe Interval (s)</span></label>
-                    <input v-model="form.hc_interval" type="number" min="0" class="field-control" placeholder="10 (default)" />
-                  </div>
-                  <div class="form-control">
-                    <label class="label pt-0 pb-2"><span class="label-text text-xs font-medium text-foreground/75">Probe Timeout (s)</span></label>
-                    <input v-model="form.hc_timeout" type="number" min="0" class="field-control" placeholder="0 (default)" />
-                  </div>
-                  <div class="form-control">
-                    <label class="label pt-0 pb-2"><span class="label-text text-xs font-medium text-foreground/75">Start Period (s)</span></label>
-                    <input v-model="form.hc_start_period" type="number" min="0" class="field-control" placeholder="0" />
-                  </div>
-                  <div class="form-control">
-                    <label class="label pt-0 pb-2"><span class="label-text text-xs font-medium text-foreground/75">Max Failures</span></label>
-                    <input v-model="form.hc_max_failures" type="number" min="0" class="field-control" placeholder="3 (default)" />
-                  </div>
-                </div>
-                <p class="text-xs text-muted-foreground">0 / empty = backend default. <code class="bg-muted px-1 rounded">max_failures 0</code> disables health-triggered auto-restart.</p>
-            </div>
-          </ProgramSectionCard>
-
-          <!-- 5. OTA Artifact -->
-          <ProgramSectionCard
-            v-model="form.enableArtifact"
-            title="OTA Artifact"
-            hint="Fail-safe binary upgrade"
-            doc-href="https://super.docs.sconts.com/docs/04-production-scenarios/delivery/fail-safe-ota/"
-            doc-title="Docs: Fail-Safe OTA"
-          >
-            <template #icon><Zap /></template>
-            <p class="text-xs text-muted-foreground">Define an artifact to download and replace the binary before the next restart.</p>
-            <div class="form-control">
-              <label class="label pt-0 pb-2"><span class="label-text text-xs font-medium text-foreground/75">Source URL</span></label>
-              <input v-model="form.artifact_source" type="url" placeholder="https://artifacts.example.com/releases/my-app.tar.gz" class="field-control font-mono" />
-            </div>
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
-              <div class="form-control">
-                <label class="label pt-0 pb-2"><span class="label-text text-xs font-medium text-foreground/75">Checksum</span></label>
-                <input v-model="form.artifact_checksum" type="text" placeholder="sha256:abc123..." class="field-control font-mono" />
-              </div>
-              <div class="form-control">
-                <label class="label pt-0 pb-2"><span class="label-text text-xs font-medium text-foreground/75">Destination Path</span></label>
-                <input v-model="form.artifact_destination" type="text" placeholder="/opt/my-app" class="field-control font-mono" />
-              </div>
-            </div>
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
-              <label class="flex items-center justify-between cursor-pointer group">
-                <span class="font-medium text-sm group-hover:text-primary transition-colors">Extract archive</span>
-                <UiSwitch v-model="form.artifact_extract" />
-              </label>
-              <div class="form-control">
-                <label class="label pt-0 pb-2"><span class="label-text text-xs font-medium text-foreground/75">Restart Policy</span></label>
-                <div class="relative">
-                  <select v-model="form.artifact_restart_policy" class="appearance-none bg-muted/60 hover:bg-border/60 focus:bg-border/60 focus:outline-hidden cursor-pointer text-sm font-medium h-9 min-h-0 w-full pl-3 pr-8 rounded-[9px] border border-transparent">
-                    <option value="immediate">immediate — restart process (SIGTERM), then verify</option>
-                    <option value="manual">manual — commit swap only (no restart / no verify)</option>
-                    <option value="signal:hup">signal:hup — in-place reload (requires health check)</option>
-                    <option value="signal:int">signal:int — in-place reload (requires health check)</option>
-                    <option value="signal:term">signal:term — in-place reload (requires health check)</option>
-                    <option value="signal:quit">signal:quit — in-place reload (requires health check)</option>
-                    <option value="signal:usr1">signal:usr1 — in-place reload (requires health check)</option>
-                    <option value="signal:usr2">signal:usr2 — in-place reload (requires health check)</option>
-                  </select>
-                  <span class="absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none text-foreground/40">
-                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
-                  </span>
-                </div>
-                <p v-if="isSignalRestartPolicy" class="text-xs text-amber-700 dark:text-amber-400 mt-1.5">
-                  Hot-reload does not exec a new process. An enabled Health Check is required and will be turned on automatically.
-                </p>
-              </div>
-            </div>
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
-              <div class="form-control">
-                <label class="label pt-0 pb-2"><span class="label-text text-xs font-medium text-foreground/75">Download timeout (s)</span></label>
-                <input v-model.number="form.artifact_download_timeout" type="number" min="0" placeholder="60" class="field-control font-mono" />
-                <p class="text-xs text-muted-foreground mt-1">HTTP download deadline. <code class="text-[10px]">0</code> disables overall transfer timeout.</p>
-              </div>
-              <div class="form-control">
-                <label class="label pt-0 pb-2"><span class="label-text text-xs font-medium text-foreground/75">Verify timeout (s)</span></label>
-                <input v-model.number="form.artifact_verify_timeout" type="number" min="0" placeholder="60" class="field-control font-mono" />
-                <p class="text-xs text-muted-foreground mt-1">Post-swap health window before auto-rollback. <code class="text-[10px]">0</code> disables.</p>
-              </div>
-            </div>
-          </ProgramSectionCard>
-
-          <!-- 6. Lifecycle Hooks -->
-          <ProgramSectionCard
-            v-model="form.enableHooks"
-            title="Lifecycle Hooks"
-            hint="Pre/post start & stop scripts"
-            :doc-href="docRef('programshooks')"
-            doc-title="Docs: Hooks"
-          >
-            <template #icon><Activity /></template>
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div class="form-control">
-                <label class="label pt-0 pb-2"><span class="label-text text-xs font-medium text-foreground/75">Pre-Start</span></label>
-                <textarea v-model="form.hooks.pre_start" class="field-control font-mono h-24 py-2 leading-relaxed resize-y"></textarea>
-              </div>
-              <div class="form-control">
-                <label class="label pt-0 pb-2"><span class="label-text text-xs font-medium text-foreground/75">Post-Start</span></label>
-                <textarea v-model="form.hooks.post_start" class="field-control font-mono h-24 py-2 leading-relaxed resize-y"></textarea>
-              </div>
-              <div class="form-control">
-                <label class="label pt-0 pb-2"><span class="label-text text-xs font-medium text-foreground/75">Pre-Stop</span></label>
-                <textarea v-model="form.hooks.pre_stop" class="field-control font-mono h-24 py-2 leading-relaxed resize-y"></textarea>
-              </div>
-              <div class="form-control">
-                <label class="label pt-0 pb-2"><span class="label-text text-xs font-medium text-foreground/75">Post-Stop</span></label>
-                <textarea v-model="form.hooks.post_stop" class="field-control font-mono h-24 py-2 leading-relaxed resize-y"></textarea>
-              </div>
-            </div>
-          </ProgramSectionCard>
-
-          <!-- 7. Log Files -->
-          <ProgramSectionCard
-            v-model="form.enableLogs"
-            title="Log Files"
-            hint="Custom stdout / stderr paths"
-            :doc-href="docRef('logging-1')"
-            doc-title="Docs: Logging"
-          >
-            <template #icon><Box /></template>
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
-              <div class="form-control">
-                <label class="label pt-0 pb-2"><span class="label-text text-xs font-medium text-foreground/75">Stdout Log File</span></label>
-                <input v-model="form.stdout_logfile" type="text" placeholder="auto (managed in log dir)" class="field-control font-mono" />
-              </div>
-              <div class="form-control">
-                <label class="label pt-0 pb-2"><span class="label-text text-xs font-medium text-foreground/75">Stderr Log File</span></label>
-                <input v-model="form.stderr_logfile" type="text" placeholder="auto (managed in log dir)" class="field-control font-mono" />
-              </div>
-            </div>
-          </ProgramSectionCard>
-
-        </div>
-
-        <!-- RIGHT COLUMN -->
-        <div class="lg:col-span-4 space-y-6">
-
-          <!-- Control + Lifecycle (merged) -->
-          <div class="surface-card ring-1 ring-border/60 shadow-[0_1px_2px_hsl(220_20%_20%/0.04),0_2px_8px_hsl(220_20%_20%/0.03)] p-5 space-y-5">
-            <h3 class="type-eyebrow text-muted-foreground flex items-center gap-2">
-              Control & Lifecycle
+        <!-- LIFECYCLE -->
+        <section id="section-lifecycle" data-section="lifecycle" class="overflow-visible rounded-2xl bg-card ring-1 ring-border/60 shadow-[0_1px_2px_hsl(220_20%_20%/0.04),0_2px_8px_hsl(220_20%_20%/0.03)]">
+          <div class="p-6">
+            <h2 class="type-eyebrow text-muted-foreground mb-4 flex items-center gap-2">
+              Lifecycle
               <a :href="docRef('restart--stop-behaviour')" target="_blank" class="inline-flex text-foreground/25 hover:text-primary transition-colors" title="Docs"><ExternalLink class="w-3 h-3" /></a>
-            </h3>
-            <label class="flex items-center justify-between cursor-pointer group">
+            </h2>
+            <label class="mb-4 flex items-center justify-between cursor-pointer group">
               <span class="font-medium text-sm group-hover:text-primary transition-colors">Autostart</span>
               <UiSwitch v-model="form.autostart" />
             </label>
-            <div class="form-control">
-              <label class="label pt-0 pb-2"><span class="label-text text-xs font-medium text-foreground/75">Retry Limit</span></label>
-              <input v-model="form.retry_limit" type="number" min="0" class="field-control" />
-            </div>
-            <div class="h-px bg-border"></div>
-            <div class="form-control">
-              <label class="label pt-0 pb-2"><span class="label-text text-xs font-medium text-foreground/75">Autorestart Policy</span></label>
-              <div class="relative">
-                <select v-model="form.autorestart" class="appearance-none bg-muted/60 hover:bg-border/60 focus:bg-border/60 focus:outline-hidden cursor-pointer text-sm font-medium h-9 min-h-0 w-full pl-3 pr-8 rounded-[9px] border border-transparent">
-                  <option value="unexpected">unexpected — only on non-zero / unknown exits</option>
-                  <option value="true">true — always restart</option>
-                  <option value="false">false — never restart</option>
-                </select>
-                <span class="absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none text-foreground/40">
-                  <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
-                </span>
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
+              <div class="form-control">
+                <label class="label pt-0 pb-2"><span class="label-text text-xs font-medium text-foreground/75">Retry Limit</span></label>
+                <input v-model="form.retry_limit" type="number" min="0" class="field-control" />
               </div>
-            </div>
-            <div class="grid grid-cols-2 gap-3">
               <div class="form-control">
                 <label class="label pt-0 pb-2"><span class="label-text text-xs font-medium text-foreground/75">Startsecs</span></label>
                 <input v-model="form.startsecs" type="number" min="0" class="field-control" placeholder="10" />
@@ -891,30 +653,42 @@ async function handleSubmit() {
                 <input v-model.number="form.stopsecs" type="number" min="0" class="field-control" placeholder="global timeout" />
                 <span class="text-xs text-muted-foreground mt-0.5">SIGTERM → SIGKILL wait</span>
               </div>
+              <div class="form-control">
+                <label class="label pt-0 pb-2"><span class="label-text text-xs font-medium text-foreground/75">Priority</span></label>
+                <input v-model="form.priority" type="number" class="field-control" placeholder="999" />
+                <span class="text-xs text-muted-foreground mt-0.5">Lower = earlier</span>
+              </div>
             </div>
-            <div class="form-control">
-              <label class="label pt-0 pb-2"><span class="label-text text-xs font-medium text-foreground/75">Priority</span></label>
-              <input v-model="form.priority" type="number" class="field-control" placeholder="999" />
-              <span class="text-xs text-muted-foreground mt-0.5">Lower = earlier startup order</span>
+            <div class="mt-4 grid grid-cols-1 md:grid-cols-2 gap-3">
+              <div class="form-control">
+                <label class="label pt-0 pb-2"><span class="label-text text-xs font-medium text-foreground/75">Autorestart Policy</span></label>
+                <select v-model="form.autorestart" class="field-control">
+                  <option value="unexpected">unexpected — only on non-zero / unknown exits</option>
+                  <option value="true">true — always restart</option>
+                  <option value="false">false — never restart</option>
+                </select>
+              </div>
             </div>
-            <div class="form-control">
+            <div class="form-control mt-4 max-w-sm">
               <label class="label pt-0 pb-2"><span class="label-text text-xs font-medium text-foreground/75">Exit Codes</span></label>
               <p class="text-xs text-muted-foreground mb-2">Expected success codes. Defaults to <code class="bg-muted px-1 rounded">[0]</code>.</p>
               <div class="space-y-2">
                 <div v-for="(ec, idx) in form.exitcodes" :key="idx" class="flex gap-2">
                   <input v-model.number="ec.value" type="number" class="field-control font-mono" placeholder="0" />
-                  <button class="inline-flex h-7 w-7 items-center justify-center rounded-[7px] text-muted-foreground hover:text-destructive hover:bg-destructive/5 transition-colors" @click="removeExitcode(idx)"><Trash2 class="w-3.5 h-3.5" /></button>
+                  <button class="inline-flex h-7 w-7 items-center justify-center rounded-lg text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors" @click="removeExitcode(idx)"><Trash2 class="w-3.5 h-3.5" /></button>
                 </div>
-                <button class="inline-flex items-center px-2.5 py-1 rounded-[6px] text-xs border border-dashed border-border text-muted-foreground hover:text-foreground hover:bg-muted transition-colors w-full" @click="addExitcode">+ Add Exit Code</button>
+                <button class="inline-flex items-center px-2.5 py-1 rounded-lg text-xs border border-dashed border-border text-muted-foreground hover:text-foreground hover:bg-muted transition-colors w-full" @click="addExitcode">+ Add Exit Code</button>
               </div>
             </div>
           </div>
+        </section>
 
-          <!-- Cron Schedule -->
+        <!-- SCHEDULING -->
+        <section id="section-scheduling" data-section="scheduling">
           <ProgramSectionCard
             v-model="form.enableCron"
-            title="Cron Schedule"
-            hint="Timed runs"
+            title="Scheduling"
+            hint="No cron schedule"
             :doc-href="docRef('orchestration')"
             doc-title="Docs: Orchestration"
           >
@@ -943,29 +717,19 @@ async function handleSubmit() {
             <div class="grid grid-cols-2 gap-3">
               <div class="form-control">
                 <label class="label pt-0 pb-2"><span class="label-text text-xs font-medium text-foreground/75">On Overlap</span></label>
-                <div class="relative">
-                  <select v-model="form.on_overlap" class="appearance-none bg-muted/60 hover:bg-border/60 focus:bg-border/60 focus:outline-hidden cursor-pointer text-sm font-medium h-9 min-h-0 w-full pl-3 pr-8 rounded-[9px] border border-transparent">
-                    <option value="skip">skip — drop tick</option>
-                    <option value="queue">queue — run after exit</option>
-                    <option value="kill">kill — terminate running</option>
-                  </select>
-                  <span class="absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none text-foreground/40">
-                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
-                  </span>
-                </div>
+                <select v-model="form.on_overlap" class="field-control">
+                  <option value="skip">skip — drop tick</option>
+                  <option value="queue">queue — run after exit</option>
+                  <option value="kill">kill — terminate running</option>
+                </select>
               </div>
               <div class="form-control">
                 <label class="label pt-0 pb-2"><span class="label-text text-xs font-medium text-foreground/75">Catchup</span></label>
-                <div class="relative">
-                  <select v-model="form.catchup" class="appearance-none bg-muted/60 hover:bg-border/60 focus:bg-border/60 focus:outline-hidden cursor-pointer text-sm font-medium h-9 min-h-0 w-full pl-3 pr-8 rounded-[9px] border border-transparent">
-                    <option value="skip">skip — no backfill</option>
-                    <option value="latest">latest — last missed</option>
-                    <option value="all">all — every missed slot</option>
-                  </select>
-                  <span class="absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none text-foreground/40">
-                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
-                  </span>
-                </div>
+                <select v-model="form.catchup" class="field-control">
+                  <option value="skip">skip — no backfill</option>
+                  <option value="latest">latest — last missed</option>
+                  <option value="all">all — every missed slot</option>
+                </select>
               </div>
             </div>
             <div class="form-control">
@@ -974,13 +738,250 @@ async function handleSubmit() {
               <span class="text-xs text-muted-foreground mt-0.5">Random delay before each trigger</span>
             </div>
           </ProgramSectionCard>
+        </section>
 
-          <!-- Resource Limits (isolation plugin) -->
+        <!-- HEALTH -->
+        <section id="section-health" data-section="health">
           <ProgramSectionCard
-            v-if="caps.isolation"
+            v-model="form.enableHealthCheck"
+            title="Health Check"
+            hint="No probe configured"
+            :doc-href="docRef('programshealth_check')"
+            doc-title="Docs: Health checks"
+          >
+            <template #icon><Activity /></template>
+            <UiNotice v-if="isSignalRestartPolicy" tone="warning" class="mb-4">
+              Required for signal restart policy — use a real TCP/HTTP/exec probe, not <code class="bg-muted px-1 rounded">true</code>.
+            </UiNotice>
+            <div class="space-y-6">
+              <div>
+                <label class="label pt-0 pb-2"><span class="label-text text-xs font-medium text-foreground/75">Check Strategy</span></label>
+                <div class="grid grid-cols-3 gap-3">
+                  <button
+                    type="button"
+                    class="flex flex-col items-center justify-center p-4 rounded-xl border text-center transition-colors"
+                    :class="form.healthCheckType === 'tcp'
+                      ? 'border-primary bg-primary/10 text-primary'
+                      : 'border-border bg-muted/40 text-foreground hover:bg-muted/40'"
+                    @click="form.healthCheckType = 'tcp'"
+                  >
+                    <span class="text-sm font-medium">TCP Port</span>
+                    <span class="text-xs opacity-60 mt-1">Connect to socket</span>
+                  </button>
+                  <button
+                    type="button"
+                    class="flex flex-col items-center justify-center p-4 rounded-xl border text-center transition-colors"
+                    :class="form.healthCheckType === 'http'
+                      ? 'border-primary bg-primary/10 text-primary'
+                      : 'border-border bg-muted/40 text-foreground hover:bg-muted/40'"
+                    @click="form.healthCheckType = 'http'"
+                  >
+                    <span class="text-sm font-medium">HTTP Request</span>
+                    <span class="text-xs opacity-60 mt-1">Expect 2xx status</span>
+                  </button>
+                  <button
+                    type="button"
+                    class="flex flex-col items-center justify-center p-4 rounded-xl border text-center transition-colors"
+                    :class="form.healthCheckType === 'exec'
+                      ? 'border-primary bg-primary/10 text-primary'
+                      : 'border-border bg-muted/40 text-foreground hover:bg-muted/40'"
+                    @click="form.healthCheckType = 'exec'"
+                  >
+                    <span class="text-sm font-medium">Shell Command</span>
+                    <span class="text-xs opacity-60 mt-1">Exit code 0</span>
+                  </button>
+                </div>
+              </div>
+
+              <div class="min-h-[6.5rem]">
+                <div v-show="form.healthCheckType === 'tcp'" class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div class="form-control">
+                    <label class="label pt-0 pb-2"><span class="label-text text-xs font-medium text-foreground/75">Host</span></label>
+                    <input v-model="form.hc_host" class="field-control font-mono text-sm" placeholder="127.0.0.1" />
+                  </div>
+                  <div class="form-control">
+                    <label class="label pt-0 pb-2"><span class="label-text text-xs font-medium text-foreground/75">Port</span></label>
+                    <input v-model="form.hc_port" type="number" class="field-control font-mono text-sm" placeholder="8080" />
+                  </div>
+                </div>
+
+                <div v-show="form.healthCheckType === 'http'" class="grid grid-cols-1 md:grid-cols-12 gap-4">
+                  <div class="form-control md:col-span-3">
+                    <label class="label pt-0 pb-2"><span class="label-text text-xs font-medium text-foreground/75">Method</span></label>
+                    <select v-model="form.hc_method" class="field-control font-mono text-sm">
+                      <option>GET</option>
+                      <option>POST</option>
+                      <option>HEAD</option>
+                    </select>
+                  </div>
+                  <div class="form-control md:col-span-9">
+                    <label class="label pt-0 pb-2"><span class="label-text text-xs font-medium text-foreground/75">URL</span></label>
+                    <input v-model="form.hc_url" class="field-control font-mono text-sm" placeholder="http://127.0.0.1:8080/health" />
+                  </div>
+                </div>
+
+                <div v-show="form.healthCheckType === 'exec'" class="space-y-3">
+                  <div class="form-control">
+                    <label class="label pt-0 pb-2"><span class="label-text text-xs font-medium text-foreground/75">Command (Exit 0 = Healthy)</span></label>
+                    <textarea v-model="form.hc_command" class="field-control font-mono text-sm h-24 py-2 leading-relaxed resize-y" placeholder="curl -f http://localhost:8080 || exit 1"></textarea>
+                  </div>
+                </div>
+              </div>
+
+              <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <div class="form-control">
+                  <label class="label pt-0 pb-2"><span class="label-text text-xs font-medium text-foreground/75">Probe Interval (s)</span></label>
+                  <input v-model="form.hc_interval" type="number" min="0" class="field-control" placeholder="10 (default)" />
+                </div>
+                <div class="form-control">
+                  <label class="label pt-0 pb-2"><span class="label-text text-xs font-medium text-foreground/75">Probe Timeout (s)</span></label>
+                  <input v-model="form.hc_timeout" type="number" min="0" class="field-control" placeholder="0 (default)" />
+                </div>
+                <div class="form-control">
+                  <label class="label pt-0 pb-2"><span class="label-text text-xs font-medium text-foreground/75">Start Period (s)</span></label>
+                  <input v-model="form.hc_start_period" type="number" min="0" class="field-control" placeholder="0" />
+                </div>
+                <div class="form-control">
+                  <label class="label pt-0 pb-2"><span class="label-text text-xs font-medium text-foreground/75">Max Failures</span></label>
+                  <input v-model="form.hc_max_failures" type="number" min="0" class="field-control" placeholder="3 (default)" />
+                </div>
+              </div>
+              <p class="text-xs text-muted-foreground">0 / empty = backend default. <code class="bg-muted px-1 rounded">max_failures 0</code> disables health-triggered auto-restart.</p>
+            </div>
+          </ProgramSectionCard>
+        </section>
+
+        <!-- UPDATES (OTA) -->
+        <section id="section-updates" data-section="updates">
+          <ProgramSectionCard
+            v-model="form.enableArtifact"
+            title="OTA Artifact"
+            hint="No artifact configured"
+            doc-href="https://super.docs.sconts.com/docs/04-production-scenarios/delivery/fail-safe-ota/"
+            doc-title="Docs: Fail-Safe OTA"
+          >
+            <template #icon><Zap /></template>
+            <p class="text-xs text-muted-foreground">Define an artifact to download and replace the binary before the next restart.</p>
+            <div class="form-control">
+              <label class="label pt-0 pb-2"><span class="label-text text-xs font-medium text-foreground/75">Source URL</span></label>
+              <input v-model="form.artifact_source" type="url" placeholder="https://artifacts.example.com/releases/my-app.tar.gz" class="field-control font-mono" />
+            </div>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <div class="form-control">
+                <label class="label pt-0 pb-2"><span class="label-text text-xs font-medium text-foreground/75">Checksum</span></label>
+                <input v-model="form.artifact_checksum" type="text" placeholder="sha256:abc123..." class="field-control font-mono" />
+              </div>
+              <div class="form-control">
+                <label class="label pt-0 pb-2"><span class="label-text text-xs font-medium text-foreground/75">Destination Path</span></label>
+                <input v-model="form.artifact_destination" type="text" placeholder="/opt/my-app" class="field-control font-mono" />
+              </div>
+            </div>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <label class="flex items-center justify-between cursor-pointer group">
+                <span class="font-medium text-sm group-hover:text-primary transition-colors">Extract archive</span>
+                <UiSwitch v-model="form.artifact_extract" />
+              </label>
+              <div class="form-control">
+                <label class="label pt-0 pb-2"><span class="label-text text-xs font-medium text-foreground/75">Restart Policy</span></label>
+                <select v-model="form.artifact_restart_policy" class="field-control">
+                  <option value="immediate">immediate — restart process (SIGTERM), then verify</option>
+                  <option value="manual">manual — commit swap only (no restart / no verify)</option>
+                  <option value="signal:hup">signal:hup — in-place reload (requires health check)</option>
+                  <option value="signal:int">signal:int — in-place reload (requires health check)</option>
+                  <option value="signal:term">signal:term — in-place reload (requires health check)</option>
+                  <option value="signal:quit">signal:quit — in-place reload (requires health check)</option>
+                  <option value="signal:usr1">signal:usr1 — in-place reload (requires health check)</option>
+                  <option value="signal:usr2">signal:usr2 — in-place reload (requires health check)</option>
+                </select>
+                <UiNotice v-if="isSignalRestartPolicy" tone="warning" class="mt-2">
+                  Hot-reload does not exec a new process. An enabled Health Check is required and will be turned on automatically.
+                </UiNotice>
+              </div>
+            </div>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <div class="form-control">
+                <label class="label pt-0 pb-2"><span class="label-text text-xs font-medium text-foreground/75">Download timeout (s)</span></label>
+                <input v-model.number="form.artifact_download_timeout" type="number" min="0" placeholder="60" class="field-control font-mono" />
+                <p class="text-xs text-muted-foreground mt-1">HTTP download deadline. <code class="text-[10px]">0</code> disables overall transfer timeout.</p>
+              </div>
+              <div class="form-control">
+                <label class="label pt-0 pb-2"><span class="label-text text-xs font-medium text-foreground/75">Verify timeout (s)</span></label>
+                <input v-model.number="form.artifact_verify_timeout" type="number" min="0" placeholder="60" class="field-control font-mono" />
+                <p class="text-xs text-muted-foreground mt-1">Post-swap health window before auto-rollback. <code class="text-[10px]">0</code> disables.</p>
+              </div>
+            </div>
+          </ProgramSectionCard>
+        </section>
+
+        <!-- HOOKS -->
+        <section id="section-hooks" data-section="hooks">
+          <ProgramSectionCard
+            v-model="form.enableHooks"
+            title="Hooks"
+            hint="No hook scripts"
+            :doc-href="docRef('programshooks')"
+            doc-title="Docs: Hooks"
+          >
+            <template #icon><Activity /></template>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div class="form-control">
+                <label class="label pt-0 pb-2"><span class="label-text text-xs font-medium text-foreground/75">Pre-Start</span></label>
+                <textarea v-model="form.hooks.pre_start" class="field-control font-mono h-24 py-2 leading-relaxed resize-y" placeholder="Scripts to run before process spawn..."></textarea>
+              </div>
+              <div class="form-control">
+                <label class="label pt-0 pb-2"><span class="label-text text-xs font-medium text-foreground/75">Post-Start</span></label>
+                <textarea v-model="form.hooks.post_start" class="field-control font-mono h-24 py-2 leading-relaxed resize-y" placeholder="Scripts to run after process spawns..."></textarea>
+              </div>
+              <div class="form-control">
+                <label class="label pt-0 pb-2"><span class="label-text text-xs font-medium text-foreground/75">Pre-Stop</span></label>
+                <textarea v-model="form.hooks.pre_stop" class="field-control font-mono h-24 py-2 leading-relaxed resize-y" placeholder="Scripts to run before sending kill signal..."></textarea>
+              </div>
+              <div class="form-control">
+                <label class="label pt-0 pb-2"><span class="label-text text-xs font-medium text-foreground/75">Post-Stop</span></label>
+                <textarea v-model="form.hooks.post_stop" class="field-control font-mono h-24 py-2 leading-relaxed resize-y" placeholder="Scripts to run after process exits..."></textarea>
+              </div>
+            </div>
+          </ProgramSectionCard>
+        </section>
+
+        <!-- LOGS -->
+        <section id="section-logs" data-section="logs">
+          <ProgramSectionCard
+            v-model="form.enableLogs"
+            title="Log Files"
+            hint="Auto (managed in log dir)"
+            :doc-href="docRef('logging-1')"
+            doc-title="Docs: Logging"
+          >
+            <template #icon><Box /></template>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <div class="form-control">
+                <label class="label pt-0 pb-2"><span class="label-text text-xs font-medium text-foreground/75">Stdout Log File</span></label>
+                <input v-model="form.stdout_logfile" type="text" placeholder="auto (managed in log dir)" class="field-control font-mono" />
+              </div>
+              <div class="form-control">
+                <label class="label pt-0 pb-2"><span class="label-text text-xs font-medium text-foreground/75">Stderr Log File</span></label>
+                <input v-model="form.stderr_logfile" type="text" placeholder="auto (managed in log dir)" class="field-control font-mono" />
+              </div>
+            </div>
+          </ProgramSectionCard>
+        </section>
+
+        <!-- DEPENDENCIES -->
+        <section id="section-dependencies" data-section="dependencies">
+          <ProgramDependencyFields
+            v-model="form.depends_on"
+            :exclude-name="form.name"
+            :doc-href="docRef('orchestration')"
+          />
+        </section>
+
+        <!-- LIMITS -->
+        <section v-if="caps.isolation" id="section-limits" data-section="limits">
+          <ProgramSectionCard
             v-model="showLimits"
             title="Resource Limits"
-            hint="CPU / memory"
+            hint="No limits configured"
             :doc-href="docRef('programsresource_limits-')"
             doc-title="Docs: Resource limits"
           >
@@ -1008,9 +1009,23 @@ async function handleSubmit() {
               </div>
             </div>
           </ProgramSectionCard>
+        </section>
+      </div>
 
+      <!-- Sticky action bar -->
+      <div class="sticky bottom-0 z-10 -mx-4 border-t border-border/40 bg-background/95 px-4 py-3 backdrop-blur-sm sm:-mx-6 sm:px-6">
+        <UiNotice v-if="submitError" tone="danger" class="mb-3">{{ submitError }}</UiNotice>
+        <div class="flex flex-wrap items-center justify-between gap-3">
+          <div class="min-w-0 text-xs text-muted-foreground">
+            <span class="font-medium text-foreground">{{ form.name || 'unnamed' }}</span>
+            <span v-if="fullCommandLine" class="ml-2 hidden truncate font-mono sm:inline">{{ fullCommandLine }}</span>
+          </div>
+          <UiButton :disabled="submitting" @click="handleSubmit">
+            <span v-if="submitting" class="inline-block h-3 w-3 animate-spin rounded-full border-2 border-primary-foreground/30 border-t-primary-foreground"></span>
+            <Save v-else class="h-4 w-4" />
+            Update Configuration
+          </UiButton>
         </div>
-
       </div>
     </div>
   </div>

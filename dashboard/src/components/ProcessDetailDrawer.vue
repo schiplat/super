@@ -502,14 +502,14 @@ function formatUptime(sec?: number): string {
 
       <!-- Capsule tabs: Runtime | Configuration | plugin tabs -->
       <div class="px-5 md:px-7 pt-4 pb-3 shrink-0">
-        <div class="inline-flex items-center gap-1 bg-muted p-1 rounded-full border border-border/40">
-          <button type="button" class="px-4 py-1.5 rounded-full text-xs font-medium transition-all" :class="activeTab === 'runtime' ? 'bg-card text-foreground shadow-xs' : 'text-muted-foreground hover:text-foreground'" @click="activeTab = 'runtime'"><TerminalIcon class="w-3.5 h-3.5 inline mr-1 -mt-px" />Runtime</button>
-          <button type="button" class="px-4 py-1.5 rounded-full text-xs font-medium transition-all" :class="activeTab === 'config' ? 'bg-card text-foreground shadow-xs' : 'text-muted-foreground hover:text-foreground'" @click="activeTab = 'config'"><FileText class="w-3.5 h-3.5 inline mr-1 -mt-px" />Configuration</button>
+        <div class="inline-flex items-center gap-1 bg-muted p-1 rounded-xl border border-border/40">
+          <button type="button" class="px-4 py-1.5 rounded-lg text-xs font-medium transition-all" :class="activeTab === 'runtime' ? 'bg-card text-foreground shadow-xs' : 'text-muted-foreground hover:text-foreground'" @click="activeTab = 'runtime'"><TerminalIcon class="w-3.5 h-3.5 inline mr-1 -mt-px" />Runtime</button>
+          <button type="button" class="px-4 py-1.5 rounded-lg text-xs font-medium transition-all" :class="activeTab === 'config' ? 'bg-card text-foreground shadow-xs' : 'text-muted-foreground hover:text-foreground'" @click="activeTab = 'config'"><FileText class="w-3.5 h-3.5 inline mr-1 -mt-px" />Configuration</button>
           <button
             v-for="tab in pluginTabs"
             :key="tab.id"
             type="button"
-            class="px-4 py-1.5 rounded-full text-xs font-medium transition-all"
+            class="px-4 py-1.5 rounded-lg text-xs font-medium transition-all"
             :class="activeTab === tab.id ? 'bg-card text-foreground shadow-xs' : 'text-muted-foreground hover:text-foreground'"
             @click="activeTab = tab.id"
           >{{ tab.label }}</button>
@@ -545,9 +545,9 @@ function formatUptime(sec?: number): string {
             <div class="flex items-center justify-between gap-3 mb-2">
               <h3 class="text-[11px] font-semibold uppercase tracking-[0.06em] text-muted-foreground">Logs</h3>
               <div class="flex items-center gap-2">
-                <div class="bg-muted p-0.5 rounded-full inline-flex border border-border/40">
-                  <button type="button" class="px-3 py-1 rounded-full text-xs font-medium transition-all" :class="logMode === 'live' ? 'bg-card text-foreground shadow-xs' : 'text-muted-foreground hover:text-foreground'" @click="logMode = 'live'">Live</button>
-                  <button type="button" class="px-3 py-1 rounded-full text-xs font-medium transition-all" :class="logMode === 'history' ? 'bg-card text-foreground shadow-xs' : 'text-muted-foreground hover:text-foreground'" @click="logMode = 'history'">History</button>
+                <div class="bg-muted p-0.5 rounded-xl inline-flex border border-border/40">
+                  <button type="button" class="px-3 py-1 rounded-lg text-xs font-medium transition-all" :class="logMode === 'live' ? 'bg-card text-foreground shadow-xs' : 'text-muted-foreground hover:text-foreground'" @click="logMode = 'live'">Live</button>
+                  <button type="button" class="px-3 py-1 rounded-lg text-xs font-medium transition-all" :class="logMode === 'history' ? 'bg-card text-foreground shadow-xs' : 'text-muted-foreground hover:text-foreground'" @click="logMode = 'history'">History</button>
                 </div>
                 <button type="button" class="inline-flex h-7 w-7 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-muted/40 hover:text-foreground" :disabled="historyLoading || !processId" title="Refresh logs" @click="processId && fetchHistory(processId)">
                   <RefreshCw class="w-3.5 h-3.5" :class="{ 'animate-spin': historyLoading }" />
@@ -555,12 +555,12 @@ function formatUptime(sec?: number): string {
               </div>
             </div>
             <div v-if="logMode === 'history'" class="mb-2 flex flex-wrap items-center gap-2">
-              <div class="bg-muted p-0.5 rounded-full inline-flex border border-border/40">
-                <button v-for="opt in streamOptions" :key="opt.value" type="button" class="px-2.5 py-1 rounded-full text-xs font-medium transition-all" :class="historySource === opt.value ? 'bg-card text-foreground shadow-xs' : 'text-muted-foreground hover:text-foreground'" @click="historySource = opt.value">{{ opt.label }}</button>
+              <div class="bg-muted p-0.5 rounded-xl inline-flex border border-border/40">
+                <button v-for="opt in streamOptions" :key="opt.value" type="button" class="px-2.5 py-1 rounded-lg text-xs font-medium transition-all" :class="historySource === opt.value ? 'bg-card text-foreground shadow-xs' : 'text-muted-foreground hover:text-foreground'" @click="historySource = opt.value">{{ opt.label }}</button>
               </div>
               <div class="flex items-center gap-1.5">
-                <div class="bg-muted p-0.5 rounded-full inline-flex border border-border/40">
-                  <button v-for="n in tailOptions" :key="n" type="button" class="min-w-[2rem] px-2 py-1 rounded-full text-xs font-medium font-mono transition-all" :class="historyLines === n ? 'bg-card text-foreground shadow-xs' : 'text-muted-foreground hover:text-foreground'" @click="historyLines = n; processId && fetchHistory(processId)">{{ n }}</button>
+                <div class="bg-muted p-0.5 rounded-xl inline-flex border border-border/40">
+                  <button v-for="n in tailOptions" :key="n" type="button" class="min-w-[2rem] px-2 py-1 rounded-lg text-xs font-medium font-mono transition-all" :class="historyLines === n ? 'bg-card text-foreground shadow-xs' : 'text-muted-foreground hover:text-foreground'" @click="historyLines = n; processId && fetchHistory(processId)">{{ n }}</button>
                 </div>
                 <span class="text-xs text-muted-foreground/50">lines</span>
               </div>
