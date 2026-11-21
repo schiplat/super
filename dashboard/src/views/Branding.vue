@@ -96,17 +96,18 @@ onMounted(() => {
       description="A custom logo replaces the bundled Super logo in the sidebar for every operator of this instance."
     >
       <div class="flex flex-col gap-6 sm:flex-row sm:items-start">
-        <!-- Preview: the sidebar's brand row, roughly to scale -->
-        <div class="w-full max-w-[248px] shrink-0 rounded-xl bg-sidebar p-3">
-          <div class="flex h-16 items-center px-3">
-            <img
-              :src="currentLogoSrc"
-              alt="Current sidebar logo"
-              class="h-8 max-w-[150px] object-contain"
-              @error="($event.target as HTMLImageElement).style.visibility = 'hidden'"
-              @load="($event.target as HTMLImageElement).style.visibility = 'visible'"
-            />
-          </div>
+        <!-- Preview: neutral inset (L2), the logo at its true display size.
+             The sidebar's own background varies by theme, so faking it here
+             only adds a second competing surface. -->
+        <div class="shrink-0 rounded-xl bg-muted/40 p-6">
+          <img
+            :src="currentLogoSrc"
+            alt="Current sidebar logo"
+            class="h-8 max-w-[150px] object-contain"
+            @error="($event.target as HTMLImageElement).style.visibility = 'hidden'"
+            @load="($event.target as HTMLImageElement).style.visibility = 'visible'"
+          />
+          <p class="mt-2 text-center text-[11px] text-muted-foreground">Display size · 32 px</p>
         </div>
 
         <div class="min-w-0 flex-1">
