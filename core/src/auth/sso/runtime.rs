@@ -128,6 +128,16 @@ impl SsoRuntime {
             .map_err(|e| anyhow::anyhow!(e))
     }
 
+    /// Client for key-only operations (back-channel logout validation) that
+    /// never touch the token endpoint, so no stored secret is required.
+    pub async fn client_without_secret(&self) -> anyhow::Result<OidcClient> {
+        let config = self
+            .config()
+            .ok_or_else(|| anyhow::anyhow!("SSO is not configured"))?;
+        OidcClient::with_cache(config, String::new(), None, self.cache())
+            .map_err(|e| anyhow::anyhow!(e))
+    }
+
     pub async fn prune(&self) -> anyhow::Result<()> {
         self.store.prune_ephemeral(now_secs()).await
     }

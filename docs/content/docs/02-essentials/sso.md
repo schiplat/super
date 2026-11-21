@@ -6,7 +6,7 @@ aliases:
   - /docs/02-essentials/sso/
 ---
 
-**On this page:** [How it works](#how-it-works) → [Setup](#setup) → [Role mapping](#role-mapping) → [CLI sign-in](#cli-sign-in) → [Break-glass](#break-glass) → [FAQ](#faq).
+**On this page:** [How it works](#how-it-works) → [Setup](#setup) → [Role mapping](#role-mapping) → [CLI sign-in](#cli-sign-in) → [Sign-out](#sign-out) → [Break-glass](#break-glass) → [FAQ](#faq).
 
 OSS superd supports standard **OpenID Connect (OIDC)** sign-in for the dashboard and CLI: point it at your own identity provider (Keycloak, Authentik, Okta, Entra ID, …), map people to the existing `viewer` / `operator` / `admin` roles, and stop sharing the static `auth_secret`.
 
@@ -29,7 +29,10 @@ SSO is unavailable when the licensed `security` plugin is loaded (that plugin ow
 
 Everything is configured in the dashboard: **Settings → Authentication** (admin role required). No config-file changes, no restart.
 
-1. **Register the client at your IdP** with redirect URI `https://<your-superd-host>/api/v1/auth/sso/callback` (the page shows the exact value derived from your *Public base URL*).
+1. **Register the client at your IdP.** The settings page shows the exact values, derived from your *Public base URL*:
+   - **Callback** — `https://<your-superd-host>/api/v1/auth/sso/callback` (missing → sign-in fails)
+   - **Back-channel logout** — `https://<your-superd-host>/api/v1/auth/sso/backchannel-logout` (missing → an IdP-side disable waits for the session's natural expiry instead of revoking immediately)
+   - **Post-logout landing** — `https://<your-superd-host>/login?signedout=1` (missing → the browser stays on the provider page after sign-out)
 2. **Fill the form**: issuer URL, client id, public base URL (origin only), scopes (`openid profile email` is the default), groups claim.
 3. **Store the client secret** (write-only; it is kept in the local auth store and never returned by the API).
 4. **Add role rules** — first match wins, no match rejects the sign-in:
@@ -42,7 +45,7 @@ Everything is configured in the dashboard: **Settings → Authentication** (admi
    ]
    ```
    Email selectors only match a **verified** address. `sub` is the stable identity — prefer it for grants.
-5. **Test connection** validates discovery + JWKS, then enable SSO. The gate flips immediately; the next dashboard visit shows *Sign in with SSO*.
+5. **Test connection** validates discovery + JWKS and reports issuer match, the token endpoint, whether the provider supports RP-initiated logout (end-session), and the negotiated client auth. Then enable SSO. The gate flips immediately; the next dashboard visit shows *Sign in with SSO*.
 
 The CLI can do the same without the dashboard:
 
@@ -80,6 +83,17 @@ super login --sso
 
 The CLI session inherits the approving user's role and is revoked by the same controls as any browser session (session list, logout, disable).
 
+## Sign-out
+
+Sign-out works in both directions, so access ends when *you* leave or when the IdP says so:
+
+| Direction | Mechanism | Effect |
+| :--- | :--- | :--- |
+| You click **Sign out** | RP-initiated logout (`GET /api/v1/auth/sso/logout`) | The local session is revoked immediately; when the provider advertises an `end_session_endpoint`, the browser is sent there with the last sign-in's ID token as the hint, so the **provider session ends too** — the provider then fires its back-channel logout and returns the browser to the login page. |
+| The IdP disables or signs out the user | Back-channel logout (`POST /api/v1/auth/sso/backchannel-logout`) | The provider posts a signed logout token; superd verifies it (signature, issuer, audience, event member, freshness) and **revokes all of that identity's sessions immediately**. Registered providers only — without the back-channel URI, an IdP-side disable takes effect at the session's natural expiry. |
+
+Administrators can additionally revoke any or all sessions from the settings page; revocation is always immediate. If the provider does not support RP-initiated logout, Sign out still clears the local session and lands on the login page.
+
 ## Break-glass
 
 | Scenario | Path |
@@ -95,6 +109,8 @@ Keep `auth_secret` set while SSO is enabled (it is dormant, but it is the recove
 **Does the IdP need a specific protocol?** Any provider that speaks standard OIDC discovery with `authorization_code` + PKCE S256 works. No proprietary APIs.
 
 **Are users stored locally?** No accounts are created. Sessions reference IdP identities; roles come from your rules.
+
+**How fast does an IdP-side disable take effect?** With the back-channel logout URI registered: immediately (roles are also re-evaluated per request, so a demoted but still-valid session loses its rights at once). Without it: at the session's natural expiry (12 h absolute / 60 min idle by default, or until an admin revokes the session).
 
 **What happens on downgrade to a pre-SSO release?** The old superd ignores `data/auth.db` and falls back to `auth_secret` (or refuses to start on a non-loopback bind). Keep `auth_secret` configured while you evaluate SSO.
 

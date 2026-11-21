@@ -12,6 +12,12 @@ use serde_json::{Map, Value};
 
 /// Clock skew allowance for `exp` / `iat`.
 pub const CLOCK_LEEWAY_SECS: u64 = 60;
+/// The `events` member a back-channel logout token must carry
+/// (`OpenID Connect Back-Channel Logout 1.0`).
+pub const BACKCHANNEL_LOGOUT_EVENT: &str = "http://schemas.openid.net/event/backchannel-logout";
+/// How old a back-channel logout token may be (the spec recommends a short
+/// window; replay within it is harmless because revocation is idempotent).
+pub const BACKCHANNEL_MAX_AGE_SECS: u64 = 300;
 const MAX_SUB_LEN: usize = 255;
 const MAX_GROUPS: usize = 200;
 const MAX_GROUP_LEN: usize = 256;
@@ -172,6 +178,114 @@ pub fn verify(
             .filter(|n| !n.is_empty()),
         groups: extract_groups(&claims.extra, expected.groups_claim),
     })
+}
+
+/// A back-channel logout token (`OpenID Connect Back-Channel Logout 1.0`).
+/// `iss`/`aud` are validated by the JWT layer; `exp` is optional on logout
+/// tokens and only checked when present, like buz's validation.
+#[derive(Debug, Deserialize)]
+struct LogoutTokenClaims {
+    #[serde(default)]
+    sub: Option<String>,
+    #[serde(default)]
+    sid: Option<String>,
+    iat: u64,
+    #[serde(default)]
+    exp: Option<u64>,
+    #[serde(default)]
+    nonce: Option<String>,
+    #[serde(default)]
+    events: Option<Value>,
+}
+
+/// Validate a back-channel logout token and return the subject whose sessions
+/// must be revoked. `Ok(None)` is a *valid* `sid`-only token: this deployment
+/// tracks users, not provider session ids, so there is nothing to map.
+///
+/// Signature + `iss`/`aud` are checked here; the caller refetches the JWKS
+/// once on [`VerifyError::UnknownKid`], exactly as for ID tokens.
+pub fn validate_logout_token(
+    token: &str,
+    issuer: &str,
+    client_id: &str,
+    jwks: &JwkSet,
+) -> Result<Option<String>, VerifyError> {
+    let header = jsonwebtoken::decode_header(token)
+        .map_err(|e| VerifyError::Invalid(format!("malformed logout token header: {e}")))?;
+    if !ALLOWED_ALGORITHMS.contains(&header.alg) {
+        return Err(VerifyError::Invalid(format!(
+            "signing algorithm {:?} is not allowed",
+            header.alg
+        )));
+    }
+
+    let jwk = select_key(jwks, header.kid.as_deref())?;
+    let key = DecodingKey::from_jwk(jwk)
+        .map_err(|e| VerifyError::Invalid(format!("unusable signing key: {e}")))?;
+
+    let mut validation = Validation::new(header.alg);
+    validation.leeway = CLOCK_LEEWAY_SECS;
+    // `exp` is optional on logout tokens: checked manually below when present.
+    validation.validate_exp = false;
+    validation.validate_aud = true;
+    validation.set_issuer(&[issuer]);
+    validation.set_audience(&[client_id]);
+    validation.required_spec_claims.clear();
+
+    let claims = jsonwebtoken::decode::<LogoutTokenClaims>(token, &key, &validation)
+        .map_err(|e| VerifyError::Invalid(e.to_string()))?
+        .claims;
+
+    // A logout token must not carry a nonce: that would make it replayable
+    // as an ID token for this client.
+    if claims.nonce.is_some() {
+        return Err(VerifyError::Invalid(
+            "logout token must not carry a nonce".into(),
+        ));
+    }
+
+    // The spec says `events` is an object with the event URI as a member.
+    match &claims.events {
+        Some(Value::Object(map)) if map.contains_key(BACKCHANNEL_LOGOUT_EVENT) => {}
+        _ => {
+            return Err(VerifyError::Invalid(
+                "logout token lacks the back-channel logout event".into(),
+            ));
+        }
+    }
+
+    let now = chrono::Utc::now().timestamp().max(0) as u64;
+    if let Some(exp) = claims.exp
+        && exp + CLOCK_LEEWAY_SECS < now
+    {
+        return Err(VerifyError::Invalid("logout token is expired".into()));
+    }
+    if claims.iat > now + CLOCK_LEEWAY_SECS {
+        return Err(VerifyError::Invalid(
+            "logout token was issued in the future".into(),
+        ));
+    }
+    if now.saturating_sub(claims.iat) > BACKCHANNEL_MAX_AGE_SECS {
+        return Err(VerifyError::Invalid("logout token is stale".into()));
+    }
+
+    let sub = claims
+        .sub
+        .as_deref()
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .map(str::to_string);
+    if sub.is_none() && claims.sid.is_none() {
+        return Err(VerifyError::Invalid(
+            "logout token carries neither sub nor sid".into(),
+        ));
+    }
+    match &sub {
+        Some(sub) if sub.len() > MAX_SUB_LEN => {
+            Err(VerifyError::Invalid("sub is missing or too long".into()))
+        }
+        other => Ok(other.clone()),
+    }
 }
 
 fn select_key<'a>(jwks: &'a JwkSet, kid: Option<&str>) -> Result<&'a Jwk, VerifyError> {

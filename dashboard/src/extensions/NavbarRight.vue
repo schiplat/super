@@ -5,6 +5,7 @@ import { useCapabilitiesStore } from '@/stores/capabilities';
 import { LogOut, ChevronDown, ShieldCheck, Wifi, WifiOff } from 'lucide-vue-next';
 import { useRouter } from 'vue-router';
 import { ref } from 'vue';
+import apiClient from '@/api/client';
 import Slot from '@/slots/Slot.vue';
 
 const authStore = useAuthStore();
@@ -31,9 +32,23 @@ function handleBlur() {
   window.setTimeout(() => { userMenuOpen.value = false; }, 200);
 }
 
-function handleLogout() {
-  authStore.logout();
+async function handleLogout() {
   userMenuOpen.value = false;
+  // Ask the backend which gate is active; it decides the way out. SSO
+  // deployments end the provider session too (RP-initiated logout via
+  // `GET /auth/sso/logout`); a full navigation — the SPA session is over
+  // either way.
+  let ssoActive = false;
+  try {
+    const res = await apiClient.get('/api/v1/auth/status');
+    ssoActive = res.data?.mode === 'sso';
+  } catch {
+    // Status is auth-exempt; a failure means fall back to a local sign-out.
+  }
+  await authStore.logout();
+  if (ssoActive) {
+    window.location.assign('/api/v1/auth/sso/logout');
+  }
 }
 </script>
 

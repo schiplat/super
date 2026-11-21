@@ -267,6 +267,10 @@ pub fn is_sso_public(path: &str) -> bool {
         path,
         "/api/v1/auth/sso/login"
             | "/api/v1/auth/sso/callback"
+            | "/api/v1/auth/sso/logout"
+            // The signed logout token is the credential (no session, no CSRF
+            // token); it is verified against the provider's JWKS.
+            | "/api/v1/auth/sso/backchannel-logout"
             | "/api/v1/auth/sso/exchange"
             | "/api/v1/auth/sso/cli/start"
             | "/api/v1/auth/sso/cli/poll"

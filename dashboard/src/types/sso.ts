@@ -32,11 +32,30 @@ export interface SsoConfigView {
   configured: boolean
   config: SsoConfig | null
   redirect_uri: string | null
+  /** Derived from the public base URL: register at the provider. */
+  backchannel_logout_uri: string | null
+  /** Landing page the provider returns the browser to after sign-out. */
+  post_logout_redirect_uri: string | null
+  /** From cached discovery: null means "unknown — run Test connection". */
+  end_session_available: boolean | null
   secret_updated_at: number | null
   updated_at: number | null
   updated_by: string | null
   gate: SsoGate
   break_glass: boolean
+}
+
+/** Result of `POST /api/v1/auth/sso/test`. */
+export interface SsoProbe {
+  ok: boolean
+  issuer?: string
+  issuer_match?: boolean
+  discovered_issuer?: string
+  token_endpoint?: string
+  jwks_uri?: string
+  end_session_available?: boolean
+  client_auth?: string
+  error?: string
 }
 
 export interface SsoSession {

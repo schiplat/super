@@ -634,6 +634,19 @@ impl AuthStore {
         Ok(result.rows_affected())
     }
 
+    /// Revoke every active session of one identity — the back-channel logout
+    /// path (the IdP disabled or signed out the user on its side).
+    pub async fn revoke_by_sub(&self, sub: &str) -> anyhow::Result<u64> {
+        let result =
+            sqlx::query("UPDATE sessions SET revoked_at = ? WHERE sub = ? AND revoked_at IS NULL")
+                .bind(now_secs() as i64)
+                .bind(sub)
+                .execute(&self.pool)
+                .await
+                .context("revoke sessions by subject")?;
+        Ok(result.rows_affected())
+    }
+
     pub async fn count_active_sessions(&self, now: u64) -> anyhow::Result<i64> {
         sqlx::query_scalar(
             "SELECT COUNT(*) FROM sessions WHERE revoked_at IS NULL AND expires_at > ?",

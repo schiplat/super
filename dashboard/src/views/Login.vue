@@ -21,6 +21,8 @@ const ssoEnabled = computed(() => status.value?.sso?.enabled === true);
 const token = ref('');
 const loading = ref(true);
 const error = ref('');
+/** Set by `GET /auth/sso/logout` after an RP-initiated sign-out. */
+const signedOut = ref(route.query.signedout === '1');
 
 const AUTH_ERRORS: Record<string, string> = {
   state: 'The sign-in request expired or was already used. Please try again.',
@@ -139,6 +141,13 @@ onMounted(async () => {
               ? 'Sign in with your identity provider'
               : 'Sign in to manage your services'
           }}
+        </p>
+
+        <p
+          v-if="signedOut"
+          class="mb-4 rounded-xl bg-muted/40 px-3 py-2 text-center text-xs text-muted-foreground"
+        >
+          You are signed out — including your provider session where supported.
         </p>
 
         <div v-if="loading" class="flex justify-center py-6">

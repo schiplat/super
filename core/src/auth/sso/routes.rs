@@ -8,16 +8,18 @@
 use std::net::{IpAddr, SocketAddr};
 use std::sync::Arc;
 
-use axum::extract::{ConnectInfo, Extension, Path, Query, State};
+use axum::extract::{ConnectInfo, Extension, Form, Path, Query, State};
 use axum::http::{HeaderMap, StatusCode, header};
 use axum::response::{IntoResponse, Redirect, Response};
 use axum::routing::{delete, get, post};
 use axum::{Json, Router};
+use base64::Engine;
+use base64::engine::general_purpose::URL_SAFE_NO_PAD as BASE64_URL_NO_PAD;
 use common::{IdentityClaims, SsoConfig, UserContext, resolve_role};
 use serde::Deserialize;
 use serde_json::json;
 
-use super::client::OidcClient;
+use super::client::{OidcClient, validate_browser_endpoint};
 use super::rate_limit::{self, Bucket};
 use super::runtime::now_secs;
 use crate::auth::store::{AuditEvent, NewSession, PendingAuth};
@@ -25,6 +27,12 @@ use crate::auth::{AuthGate, AuthState};
 
 const COOKIE_NAME: &str = "super_sso";
 const COOKIE_PATH: &str = "/api/v1/auth/sso/exchange";
+/// Carries the last sign-in's raw `id_token` as the RP-logout hint
+/// (`OpenID Connect RP-initiated logout` expects the RP to retain it).
+/// HttpOnly, scoped to the SSO paths, expires with the id_token itself;
+/// losing it only degrades sign-out to "local only".
+const HINT_COOKIE_NAME: &str = "super_sso_hint";
+const HINT_COOKIE_PATH: &str = "/api/v1/auth/sso";
 const PENDING_TTL_SECS: u64 = 10 * 60;
 const EXCHANGE_WINDOW_SECS: u64 = 120;
 
@@ -38,6 +46,11 @@ pub fn sso_routes() -> Router<AuthState> {
     Router::new()
         .route("/api/v1/auth/sso/login", get(login))
         .route("/api/v1/auth/sso/callback", get(callback))
+        .route("/api/v1/auth/sso/logout", get(logout))
+        .route(
+            "/api/v1/auth/sso/backchannel-logout",
+            post(backchannel_logout),
+        )
         .route("/api/v1/auth/sso/exchange", post(exchange))
         .route("/api/v1/auth/sso/cli/start", post(cli_start))
         .route("/api/v1/auth/sso/cli/poll", post(cli_poll))
@@ -277,8 +290,15 @@ async fn callback(
 
     let secure = config.public_base_url.starts_with("https://");
     let mut response = Redirect::to("/login?sso=ok").into_response();
-    if let Ok(value) = header::HeaderValue::from_str(&session_cookie(&session_token, secure)) {
-        response.headers_mut().insert(header::SET_COOKIE, value);
+    // Two cookies: the one-time exchange ticket for the SPA, and the RP-logout
+    // hint (the raw id_token) that only `GET /logout` ever reads.
+    for cookie in [
+        session_cookie(&session_token, secure),
+        hint_cookie(id_token, secure),
+    ] {
+        if let Ok(value) = header::HeaderValue::from_str(&cookie) {
+            response.headers_mut().append(header::SET_COOKIE, value);
+        }
     }
     response
 }
@@ -352,6 +372,167 @@ async fn exchange(State(state): State<AuthState>, headers: HeaderMap, peer: Peer
         response.headers_mut().insert(header::SET_COOKIE, value);
     }
     response
+}
+
+/// `GET /api/v1/auth/sso/logout` — RP-initiated logout, reached as a top-level
+/// GET navigation (the provider's SameSite=Lax session cookie rides along; a
+/// POST would not, by the provider's logout-CSRF design).
+///
+/// - SSO off → straight to the SPA login page.
+/// - Fresh hint cookie (unexpired `id_token` from the last sign-in) and the
+///   provider advertises `end_session_endpoint` → redirect to
+///   `{end_session}?client_id=…&id_token_hint=…&post_logout_redirect_uri=…`:
+///   the provider destroys its session, fires its back-channel logout (which
+///   revokes superd's sessions), and returns the browser to the landing page.
+/// - No hint / expired hint / no advertised endpoint → purely local sign-out,
+///   landing page directly. Every branch clears the hint cookie.
+///
+/// The *local* session is revoked by the SPA beforehand (`POST
+/// /api/v1/auth/logout` with the bearer token), so sign-out never depends on
+/// the back-channel being registered.
+async fn logout(State(state): State<AuthState>, headers: HeaderMap) -> Response {
+    let hint = hint_token(&headers);
+    let mut response = if state.gate() != AuthGate::Sso {
+        Redirect::to("/login").into_response()
+    } else {
+        rp_logout_redirect(&state, hint.as_deref()).await
+    };
+    if hint.is_some()
+        && let Ok(value) = header::HeaderValue::from_str(&clear_hint_cookie())
+    {
+        response.headers_mut().append(header::SET_COOKIE, value);
+    }
+    response
+}
+
+/// Build the provider sign-out redirect, or fall back to the local landing.
+async fn rp_logout_redirect(state: &AuthState, hint: Option<&str>) -> Response {
+    let local = || {
+        let mut response = Redirect::to("/login?signedout=1").into_response();
+        no_store(&mut response);
+        response
+    };
+    let Some(sso) = state.sso() else {
+        return local();
+    };
+    let Some(config) = sso.config().filter(|config| config.enabled) else {
+        return local();
+    };
+    // The hint is only superd's own fallback UX; the provider re-validates it.
+    let Some(hint) = hint.filter(|token| hint_fresh(token)) else {
+        return local();
+    };
+    if config.public_base_url.is_empty() {
+        return local();
+    }
+    let client = match sso.client_without_secret().await {
+        Ok(client) => client,
+        Err(e) => {
+            tracing::warn!(error = %e, "cannot build a client for RP logout");
+            return local();
+        }
+    };
+    let Ok(discovery) = client.discovery().await else {
+        return local();
+    };
+    let Some(end_session) = discovery.end_session_endpoint.clone() else {
+        return local();
+    };
+    if validate_browser_endpoint(&end_session, "end_session_endpoint").is_err() {
+        return local();
+    }
+
+    let mut url = match url::Url::parse(&end_session) {
+        Ok(url) => url,
+        Err(_) => return local(),
+    };
+    url.query_pairs_mut()
+        .append_pair("client_id", &config.client_id)
+        .append_pair("id_token_hint", hint)
+        .append_pair(
+            "post_logout_redirect_uri",
+            &format!(
+                "{}/login?signedout=1",
+                config.public_base_url.trim_end_matches('/')
+            ),
+        );
+    let mut response = Redirect::to(url.as_str()).into_response();
+    no_store(&mut response);
+    response
+}
+
+#[derive(Debug, Deserialize)]
+struct BackchannelLogoutForm {
+    logout_token: Option<String>,
+}
+
+/// `POST /api/v1/auth/sso/backchannel-logout` — provider-initiated session
+/// revocation (`OpenID Connect Back-Channel Logout 1.0`). Public by design:
+/// the signed logout token is the credential. Answers 200 for every verified
+/// token, including subjects superd does not know (no account enumeration)
+/// and sid-only tokens (nothing to map); 400 for anything that does not verify.
+async fn backchannel_logout(
+    State(state): State<AuthState>,
+    peer: Peer,
+    Form(form): Form<BackchannelLogoutForm>,
+) -> Response {
+    if state.gate() != AuthGate::Sso {
+        return bad_request("SSO is not active");
+    }
+    let Some(sso) = state.sso() else {
+        return bad_request("SSO is not configured");
+    };
+    if sso.config().is_none() {
+        return bad_request("SSO is not configured");
+    }
+    if let Some(ip) = peer_ip(&peer)
+        && !rate_limit::allow(ip, Bucket::Callback)
+    {
+        return too_many_requests();
+    }
+    let Some(logout_token) = form.logout_token.as_deref().filter(|t| !t.is_empty()) else {
+        return bad_request("missing logout_token");
+    };
+
+    let client = match sso.client_without_secret().await {
+        Ok(client) => client,
+        Err(e) => {
+            tracing::warn!(error = %e, "cannot build a client for back-channel logout");
+            return bad_request("logout token rejected");
+        }
+    };
+    let sub = match client.validate_logout_token(logout_token).await {
+        Ok(sub) => sub,
+        Err(e) => {
+            tracing::warn!(error = %e, "back-channel logout token rejected");
+            return bad_request("logout token rejected");
+        }
+    };
+    let Some(sub) = sub else {
+        // sid-only: this deployment tracks users, not provider session ids.
+        return StatusCode::OK.into_response();
+    };
+
+    match sso.store().revoke_by_sub(&sub).await {
+        Ok(revoked) => {
+            let _ = sso
+                .store()
+                .audit(AuditEvent {
+                    kind: "sso_backchannel_logout",
+                    sub: Some(&sub),
+                    email: None,
+                    ip: None,
+                    ua: None,
+                    detail: Some(&format!("{revoked} session(s) revoked by the provider")),
+                })
+                .await;
+            Json(json!({ "revoked": revoked })).into_response()
+        }
+        Err(e) => {
+            tracing::error!(error = %e, "cannot revoke sessions for back-channel logout");
+            server_error()
+        }
+    }
 }
 
 // -------------------------------------------------------------- CLI sign-in
@@ -654,10 +835,20 @@ async fn get_config(State(state): State<AuthState>) -> Response {
         }
     };
     let secret_updated_at = sso.store().secret_updated_at().await.ok().flatten();
+    let base = stored
+        .as_ref()
+        .map(|s| s.config.public_base_url.trim_end_matches('/').to_string());
     Json(json!({
         "configured": stored.is_some(),
         "config": stored.as_ref().map(|s| &s.config),
         "redirect_uri": stored.as_ref().map(|s| s.config.redirect_uri()),
+        "backchannel_logout_uri": base.as_ref()
+            .map(|base| format!("{base}/api/v1/auth/sso/backchannel-logout")),
+        "post_logout_redirect_uri": base.as_ref()
+            .map(|base| format!("{base}/login?signedout=1")),
+        // From the cached discovery only: no network on a settings-page read.
+        // `POST /sso/test` reports the definitive answer.
+        "end_session_available": sso.cache().cached_end_session().await,
         "secret_updated_at": secret_updated_at,
         "updated_at": stored.as_ref().map(|s| s.updated_at),
         "updated_by": stored.as_ref().and_then(|s| s.updated_by.clone()),
@@ -814,19 +1005,29 @@ async fn test(State(state): State<AuthState>) -> Response {
     let Some(config) = sso.config() else {
         return bad_request("SSO is not configured");
     };
-    let client = match OidcClient::for_probe(config) {
+    let client = match OidcClient::for_probe(config.clone()) {
         Ok(client) => client,
         Err(e) => return bad_request(e.to_string()),
     };
     match client.probe().await {
-        Ok(discovery) => Json(json!({
-            "ok": true,
-            "issuer": discovery.issuer,
-            "authorization_endpoint": discovery.authorization_endpoint,
-            "token_endpoint": discovery.token_endpoint,
-            "jwks_uri": discovery.jwks_uri,
-        }))
-        .into_response(),
+        Ok(discovery) => {
+            // Discovery validation already rejected a mismatched issuer, so a
+            // successful probe always reports issuer_match: true.
+            let issuer_match =
+                discovery.issuer.trim().trim_end_matches('/') == config.normalized_issuer();
+            Json(json!({
+                "ok": true,
+                "issuer": discovery.issuer,
+                "issuer_match": issuer_match,
+                "discovered_issuer": discovery.issuer,
+                "authorization_endpoint": discovery.authorization_endpoint,
+                "token_endpoint": discovery.token_endpoint,
+                "jwks_uri": discovery.jwks_uri,
+                "end_session_available": discovery.end_session_endpoint.is_some(),
+                "client_auth": config.token_auth_method.as_str(),
+            }))
+            .into_response()
+        }
         Err(e) => (
             StatusCode::BAD_GATEWAY,
             Json(json!({ "ok": false, "error": e.to_string() })),
@@ -1076,6 +1277,60 @@ fn clear_cookie(secure: bool) -> String {
         cookie.push_str("; Secure");
     }
     cookie
+}
+
+/// The RP-logout hint: the raw id_token from the last sign-in. It is never
+/// used for anything but `GET /logout`, and losing it only degrades sign-out
+/// to "local only".
+fn hint_cookie(id_token: &str, secure: bool) -> String {
+    let max_age = id_token_exp(id_token).unwrap_or(0);
+    let mut cookie = format!(
+        "{HINT_COOKIE_NAME}={id_token}; Path={HINT_COOKIE_PATH}; HttpOnly; SameSite=Lax; Max-Age={max_age}"
+    );
+    if secure {
+        cookie.push_str("; Secure");
+    }
+    cookie
+}
+
+fn clear_hint_cookie() -> String {
+    format!("{HINT_COOKIE_NAME}=; Path={HINT_COOKIE_PATH}; HttpOnly; SameSite=Lax; Max-Age=0")
+}
+
+fn hint_token(headers: &HeaderMap) -> Option<String> {
+    let raw = headers.get(header::COOKIE)?.to_str().ok()?;
+    for part in raw.split(';') {
+        if let Some((name, value)) = part.trim().split_once('=')
+            && name == HINT_COOKIE_NAME
+            && !value.is_empty()
+        {
+            return Some(value.to_string());
+        }
+    }
+    None
+}
+
+/// Payload-only decode of the id_token's `exp`, deciding the hint's freshness
+/// (cookie Max-Age and the logout fallback). The signature was verified at
+/// sign-in; the provider re-validates the hint for real.
+fn id_token_exp(token: &str) -> Option<u64> {
+    let payload = token.split('.').nth(1)?;
+    let bytes = BASE64_URL_NO_PAD.decode(payload).ok()?;
+    let claims: serde_json::Value = serde_json::from_slice(&bytes).ok()?;
+    claims.get("exp")?.as_u64()
+}
+
+fn hint_fresh(token: &str) -> bool {
+    id_token_exp(token).is_some_and(|exp| exp > now_secs())
+}
+
+/// `Cache-Control: no-store` for every logout response: a cached redirect
+/// would replay a stale hint.
+fn no_store(response: &mut Response) {
+    response.headers_mut().insert(
+        header::CACHE_CONTROL,
+        header::HeaderValue::from_static("no-store"),
+    );
 }
 
 fn not_found() -> Response {

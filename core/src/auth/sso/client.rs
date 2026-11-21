@@ -73,6 +73,11 @@ pub struct Discovery {
     pub code_challenge_methods_supported: Option<Vec<String>>,
     #[serde(default)]
     pub token_endpoint_auth_methods_supported: Option<Vec<String>>,
+    /// Present when the provider supports RP-initiated logout (`OpenID
+    /// Connect Session Management` / its `end_session` successor): sign-out
+    /// can end the provider session, not only the local one.
+    #[serde(default)]
+    pub end_session_endpoint: Option<String>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -116,6 +121,19 @@ pub struct OidcCache {
     discovery: Mutex<Option<Cached<Discovery>>>,
     jwks: Mutex<Option<Cached<JwkSet>>>,
     forced_jwks_at: Mutex<Option<Instant>>,
+}
+
+impl OidcCache {
+    /// `end_session_endpoint` from the cached discovery document, without any
+    /// network access. `None` also covers "nothing cached yet" — the settings
+    /// page gets the definitive answer from `POST /sso/test`.
+    pub async fn cached_end_session(&self) -> Option<bool> {
+        self.discovery
+            .lock()
+            .await
+            .as_ref()
+            .map(|cached| cached.value.end_session_endpoint.is_some())
+    }
 }
 
 /// One client per login request, holding a snapshot of the configuration and
@@ -435,6 +453,27 @@ impl OidcClient {
         }
     }
 
+    /// Validate a back-channel logout token and return the subject whose
+    /// sessions must be revoked (`None` = valid sid-only token).
+    pub async fn validate_logout_token(
+        &self,
+        logout_token: &str,
+    ) -> Result<Option<String>, OidcError> {
+        let discovery = self.discovery().await?;
+        let issuer = self.config.normalized_issuer();
+        let keys = self.jwks(&discovery.jwks_uri, false).await?;
+        match idtoken::validate_logout_token(logout_token, &issuer, &self.config.client_id, &keys) {
+            Ok(sub) => Ok(sub),
+            Err(VerifyError::UnknownKid(kid)) => {
+                tracing::debug!(kid = %kid, "unknown signing key on a logout token; refetching JWKS once");
+                let keys = self.jwks(&discovery.jwks_uri, true).await?;
+                idtoken::validate_logout_token(logout_token, &issuer, &self.config.client_id, &keys)
+                    .map_err(verify_error)
+            }
+            Err(error) => Err(verify_error(error)),
+        }
+    }
+
     async fn jwks(&self, uri: &str, force: bool) -> Result<JwkSet, OidcError> {
         let mut cache = self.cache.jwks.lock().await;
         if !force
@@ -519,7 +558,7 @@ fn verify_error(error: VerifyError) -> OidcError {
 }
 
 /// Endpoints the browser is sent to: https, or loopback http for a local IdP.
-fn validate_browser_endpoint(raw: &str, what: &str) -> Result<(), OidcError> {
+pub(crate) fn validate_browser_endpoint(raw: &str, what: &str) -> Result<(), OidcError> {
     let url = url::Url::parse(raw)
         .map_err(|e| OidcError::Misconfigured(format!("{what} is not a URL: {e}")))?;
     match url.scheme() {

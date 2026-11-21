@@ -198,6 +198,106 @@ fn query_param(url: &str, key: &str) -> String {
     panic!("missing {key} in {url}");
 }
 
+async fn mount_discovery_with_end_session(server: &MockServer) {
+    let doc = json!({
+        "issuer": server.uri(),
+        "authorization_endpoint": format!("{}/authorize", server.uri()),
+        "token_endpoint": format!("{}/token", server.uri()),
+        "jwks_uri": format!("{}/jwks", server.uri()),
+        "end_session_endpoint": format!("{}/end-session", server.uri()),
+        "code_challenge_methods_supported": ["S256"],
+        "grant_types_supported": ["authorization_code"],
+        "response_types_supported": ["code"],
+        "token_endpoint_auth_methods_supported": ["client_secret_basic"]
+    });
+    Mock::given(method("GET"))
+        .and(path("/.well-known/openid-configuration"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(doc))
+        .mount(server)
+        .await;
+}
+
+/// All Set-Cookie headers of a response (the callback sets two).
+fn set_cookies(response: &axum::response::Response) -> Vec<String> {
+    response
+        .headers()
+        .get_all(header::SET_COOKIE)
+        .iter()
+        .filter_map(|value| value.to_str().ok())
+        .map(str::to_string)
+        .collect()
+}
+
+fn cookie_value<'a>(cookies: &'a [String], name: &str) -> Option<&'a str> {
+    cookies.iter().find_map(|cookie| {
+        cookie
+            .split(';')
+            .next()
+            .and_then(|pair| pair.trim().strip_prefix(&format!("{name}=")))
+    })
+}
+
+/// A back-channel logout token (`OpenID Connect Back-Channel Logout`):
+/// `sub` for a user revocation, `sid` only when the provider cannot name one.
+fn logout_token(issuer: &str, sub: Option<&str>, iat_offset: i64, extra: Value) -> Value {
+    let mut claims = json!({
+        "iss": issuer,
+        "aud": "super",
+        "iat": now() + iat_offset,
+        "events": {
+            "http://schemas.openid.net/event/backchannel-logout": {}
+        }
+    });
+    if let Some(sub) = sub {
+        claims["sub"] = json!(sub);
+    } else {
+        claims["sid"] = json!("provider-session-1");
+    }
+    if !extra.is_null() {
+        for (key, value) in extra.as_object().unwrap() {
+            claims[key.as_str()] = value.clone();
+        }
+    }
+    claims
+}
+
+async fn post_backchannel(app: &Router, logout_token: Option<&str>) -> (StatusCode, Value) {
+    let body = match logout_token {
+        Some(token) => format!("logout_token={token}"),
+        None => String::new(),
+    };
+    let request = Request::builder()
+        .method("POST")
+        .uri("/api/v1/auth/sso/backchannel-logout")
+        .header(header::CONTENT_TYPE, "application/x-www-form-urlencoded")
+        .body(Body::from(body))
+        .unwrap();
+    let response = app.clone().oneshot(request).await.unwrap();
+    let status = response.status();
+    let bytes = axum::body::to_bytes(response.into_body(), 1 << 20)
+        .await
+        .unwrap();
+    let value = if bytes.is_empty() {
+        Value::Null
+    } else {
+        serde_json::from_slice(&bytes).unwrap_or(Value::Null)
+    };
+    (status, value)
+}
+
+async fn get_logout(app: &Router, hint: Option<&str>) -> axum::response::Response {
+    let mut builder = Request::builder()
+        .method("GET")
+        .uri("/api/v1/auth/sso/logout");
+    if let Some(hint) = hint {
+        builder = builder.header(header::COOKIE, format!("super_sso_hint={hint}"));
+    }
+    app.clone()
+        .oneshot(builder.body(Body::empty()).unwrap())
+        .await
+        .unwrap()
+}
+
 async fn begin_login(app: &Router) -> (String, String) {
     let response = app
         .clone()
@@ -510,4 +610,221 @@ async fn no_gate_mode_keeps_the_open_instance_contract() {
     let response = app.clone().oneshot(get("/api/v1/auth/me")).await.unwrap();
     assert_eq!(response.status(), StatusCode::OK);
     assert_eq!(json_body(response).await["token_id"], "root");
+}
+
+/// RP-initiated logout: a fresh hint cookie plus an advertised
+/// `end_session_endpoint` redirects the browser to the provider; without one
+/// of them the sign-out degrades to the local landing page. The probe reports
+/// the end-session availability either way.
+#[tokio::test]
+async fn rp_logout_hops_to_the_provider_only_with_a_fresh_hint() {
+    let idp = MockServer::start().await;
+    mount_discovery_with_end_session(&idp).await;
+    mount_jwks(&idp).await;
+    let nonce = Arc::new(Mutex::new(String::new()));
+    let subject = Arc::new(Mutex::new(("u1".to_string(), vec!["admins".to_string()])));
+    mount_token(&idp, nonce.clone(), subject.clone()).await;
+
+    let dir = tempfile::tempdir().unwrap();
+    let store = Arc::new(AuthStore::open(&dir.path().join("auth.db")).await.unwrap());
+    store.put_secret("client-secret").await.unwrap();
+    store.save_config(&config(&idp.uri()), None).await.unwrap();
+    let runtime = Arc::new(SsoRuntime::load(store.clone()).await.unwrap());
+    let state = AuthState::with_sso(None, Some(runtime.clone()), AuthGate::Sso, false);
+    let app = {
+        let api = Router::new().route("/api/v1/programs", axum::routing::get(|| async { "ok" }));
+        install_core_auth(api, state)
+    };
+
+    let (admin_token, _cookie, _body) = login(&app, &nonce, &subject, "u1", &["admins"]).await;
+
+    // The probe reports what the settings page shows: issuer match, endpoints,
+    // and the end-session availability.
+    let response = app
+        .clone()
+        .oneshot(auth_request("POST", "/api/v1/auth/sso/test", &admin_token))
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    let probe = json_body(response).await;
+    assert_eq!(probe["ok"], true);
+    assert_eq!(probe["issuer_match"], true);
+    assert_eq!(probe["token_endpoint"], format!("{}/token", idp.uri()));
+    assert_eq!(probe["end_session_available"], true);
+    assert_eq!(probe["client_auth"], "client_secret_basic");
+
+    // The logout redirect needs the hint cookie, which the callback set
+    // alongside the exchange ticket — one more login to capture both cookies.
+    let (oauth_state, nonce_value) = begin_login(&app).await;
+    *nonce.lock().unwrap() = nonce_value;
+    let response = app
+        .clone()
+        .oneshot(get(&format!(
+            "/api/v1/auth/sso/callback?code=code-1&state={oauth_state}"
+        )))
+        .await
+        .unwrap();
+    let cookies = set_cookies(&response);
+    let hint = cookie_value(&cookies, "super_sso_hint")
+        .unwrap()
+        .to_string();
+    assert!(hint.contains('.'), "the hint carries the raw id_token");
+
+    let response = get_logout(&app, Some(&hint)).await;
+    assert_eq!(response.status(), StatusCode::SEE_OTHER);
+    assert_eq!(header_string(&response, header::CACHE_CONTROL), "no-store");
+    let location = header_string(&response, header::LOCATION);
+    assert!(
+        location.starts_with(&format!("{}/end-session?", idp.uri())),
+        "{location}"
+    );
+    assert_eq!(query_param(&location, "client_id"), "super");
+    assert_eq!(query_param(&location, "id_token_hint"), hint);
+    assert_eq!(
+        query_param(&location, "post_logout_redirect_uri"),
+        "http%3A%2F%2F127.0.0.1%3A9002%2Flogin%3Fsignedout%3D1"
+    );
+    let cleared = set_cookies(&response);
+    assert!(
+        cleared
+            .iter()
+            .any(|cookie| cookie.starts_with("super_sso_hint=;") && cookie.contains("Max-Age=0")),
+        "{cleared:?}"
+    );
+
+    // Without a hint: local sign-out only, still no-store.
+    let response = get_logout(&app, None).await;
+    assert_eq!(response.status(), StatusCode::SEE_OTHER);
+    assert_eq!(header_string(&response, header::CACHE_CONTROL), "no-store");
+    assert_eq!(
+        header_string(&response, header::LOCATION),
+        "/login?signedout=1"
+    );
+
+    // An expired hint degrades the same way (the provider would reject it too).
+    let expired = sign(&json!({
+        "iss": idp.uri(),
+        "aud": "super",
+        "sub": "u1",
+        "exp": now() - 10,
+        "iat": now() - 400,
+    }));
+    let response = get_logout(&app, Some(&expired)).await;
+    assert_eq!(
+        header_string(&response, header::LOCATION),
+        "/login?signedout=1"
+    );
+
+    // SSO off: plain redirect to the login page, no signedout marker.
+    let state = AuthState::with_sso(None, None, AuthGate::None, false);
+    let open_app = {
+        let api = Router::new().route("/api/v1/programs", axum::routing::get(|| async { "ok" }));
+        install_core_auth(api, state)
+    };
+    let response = get_logout(&open_app, None).await;
+    assert_eq!(header_string(&response, header::LOCATION), "/login");
+}
+
+/// Back-channel logout: a signed logout token is the credential. Verified
+/// tokens always answer 200 (unknown subjects and sid-only tokens included,
+/// no account enumeration); anything that does not verify answers 400.
+#[tokio::test]
+async fn backchannel_logout_revokes_the_subjects_sessions() {
+    let idp = MockServer::start().await;
+    mount_discovery(&idp).await;
+    mount_jwks(&idp).await;
+    let nonce = Arc::new(Mutex::new(String::new()));
+    let subject = Arc::new(Mutex::new(("u1".to_string(), vec!["admins".to_string()])));
+    mount_token(&idp, nonce.clone(), subject.clone()).await;
+
+    let dir = tempfile::tempdir().unwrap();
+    let store = Arc::new(AuthStore::open(&dir.path().join("auth.db")).await.unwrap());
+    store.put_secret("client-secret").await.unwrap();
+    store.save_config(&config(&idp.uri()), None).await.unwrap();
+    let runtime = Arc::new(SsoRuntime::load(store.clone()).await.unwrap());
+    let state = AuthState::with_sso(None, Some(runtime), AuthGate::Sso, false);
+    let app = {
+        let api = Router::new().route("/api/v1/programs", axum::routing::get(|| async { "ok" }));
+        install_core_auth(api, state)
+    };
+
+    let (admin_token, _cookie, _body) = login(&app, &nonce, &subject, "u1", &["admins"]).await;
+    let (viewer_token, _cookie2, _body2) = login(&app, &nonce, &subject, "u2", &["viewers"]).await;
+
+    async fn alive(app: &Router, token: &str) -> StatusCode {
+        app.clone()
+            .oneshot(auth_request("GET", "/api/v1/programs", token))
+            .await
+            .unwrap()
+            .status()
+    }
+    assert_eq!(alive(&app, &admin_token).await, StatusCode::OK);
+    assert_eq!(alive(&app, &viewer_token).await, StatusCode::OK);
+
+    // A valid token for u1 revokes exactly that identity's sessions.
+    let token = sign(&logout_token(&idp.uri(), Some("u1"), 0, Value::Null));
+    let (status, body) = post_backchannel(&app, Some(&token)).await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    assert_eq!(body["revoked"], 1);
+    assert_eq!(alive(&app, &admin_token).await, StatusCode::UNAUTHORIZED);
+    assert_eq!(alive(&app, &viewer_token).await, StatusCode::OK);
+
+    // Replays are harmless: revocation is idempotent.
+    let (status, body) = post_backchannel(&app, Some(&token)).await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(body["revoked"], 0);
+
+    // An unknown subject answers 200 as well — no account enumeration.
+    let token = sign(&logout_token(&idp.uri(), Some("nobody"), 0, Value::Null));
+    let (status, body) = post_backchannel(&app, Some(&token)).await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+
+    // sid-only: valid, nothing to map.
+    let token = sign(&logout_token(&idp.uri(), None, 0, Value::Null));
+    let (status, _) = post_backchannel(&app, Some(&token)).await;
+    assert_eq!(status, StatusCode::OK);
+
+    // Rejections: nonce present, event missing, stale or future iat, broken
+    // signature, empty body.
+    let token = sign(&logout_token(
+        &idp.uri(),
+        Some("u2"),
+        0,
+        json!({ "nonce": "n" }),
+    ));
+    let (status, _) = post_backchannel(&app, Some(&token)).await;
+    assert_eq!(status, StatusCode::BAD_REQUEST, "nonce must reject");
+    assert_eq!(alive(&app, &viewer_token).await, StatusCode::OK);
+
+    let token = sign(&logout_token(
+        &idp.uri(),
+        Some("u2"),
+        0,
+        json!({ "events": {} }),
+    ));
+    let (status, _) = post_backchannel(&app, Some(&token)).await;
+    assert_eq!(status, StatusCode::BAD_REQUEST, "missing event must reject");
+
+    let token = sign(&logout_token(&idp.uri(), Some("u2"), -400, Value::Null));
+    let (status, _) = post_backchannel(&app, Some(&token)).await;
+    assert_eq!(status, StatusCode::BAD_REQUEST, "stale iat must reject");
+
+    let token = sign(&logout_token(&idp.uri(), Some("u2"), 120, Value::Null));
+    let (status, _) = post_backchannel(&app, Some(&token)).await;
+    assert_eq!(status, StatusCode::BAD_REQUEST, "future iat must reject");
+
+    let mut tampered = sign(&logout_token(&idp.uri(), Some("u2"), 0, Value::Null));
+    tampered.pop();
+    tampered.push('A');
+    let (status, _) = post_backchannel(&app, Some(&tampered)).await;
+    assert_eq!(
+        status,
+        StatusCode::BAD_REQUEST,
+        "broken signature must reject"
+    );
+
+    let (status, _) = post_backchannel(&app, None).await;
+    assert_eq!(status, StatusCode::BAD_REQUEST, "empty body must reject");
+
+    assert_eq!(alive(&app, &viewer_token).await, StatusCode::OK);
 }
