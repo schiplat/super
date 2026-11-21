@@ -66,9 +66,14 @@ const router = createRouter({
           component: License
         },
         {
-          path: 'settings/authentication',
+          path: 'settings/sso',
           name: 'AuthSettings',
           component: () => import('@/views/AuthSettings.vue'),
+        },
+        // Old URL: bookmarks and docs linked here before the rename.
+        {
+          path: 'settings/authentication',
+          redirect: '/settings/sso',
         },
         {
           path: 'settings/tokens',

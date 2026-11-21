@@ -95,14 +95,14 @@ const mainNav = [
 ];
 
 const settingsNav = computed(() => {
-  // License lives in the user menu (NavbarRight) — one entry, not two. The
-  // settings group carries only the SSO page: OSS builds, admin role (the
-  // security plugin owns auth in licensed mode and hides the entry).
+  // License lives in the user menu (NavbarRight) — one entry, not two.
+  // The settings group carries the OSS auth surfaces: admin role only — the
+  // security plugin owns auth in licensed mode and hides the whole group.
   if (authStore.isAdmin && !caps.security) {
     return [
       {
-        to: '/settings/authentication',
-        label: 'Authentication',
+        to: '/settings/sso',
+        label: 'SSO',
         icon: ShieldCheck,
       },
       {
@@ -127,7 +127,7 @@ const TITLES: Record<string, string> = {
   '/stack': 'Stacks',
   '/events': 'Events',
   '/license': 'License',
-  '/settings/authentication': 'Authentication',
+  '/settings/sso': 'SSO',
   '/settings/tokens': 'API Tokens',
   '/settings/branding': 'Branding',
   '/programs/new': 'New Program',

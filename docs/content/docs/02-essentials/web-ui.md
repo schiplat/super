@@ -29,7 +29,7 @@ The Dashboard is the browser UI for `superd`. **OSS builds embed the shell** (pr
 
 ## Dashboard tour (OSS shell)
 
-The shell uses a left sidebar with two groups: **Overview · Programs · Stacks · Events** and **Settings** (Authentication · API Tokens · Branding on OSS admin sessions). The top bar carries connection state, theme, and the account menu.
+The shell uses a left sidebar with two groups: **Overview · Programs · Stacks · Events** and **Settings** (SSO · API Tokens · Branding on OSS admin sessions). The top bar carries connection state, theme, and the account menu.
 
 **Custom logo (OSS):** Settings → Branding replaces the bundled sidebar logo for every operator of the instance — SVG (best) or transparent PNG, shown 32 px tall (supply ≥128 px height), ≤1 MiB. `GET /api/v1/branding/logo` serves it publicly; `PUT`/`DELETE` are Admin.
 
@@ -38,6 +38,6 @@ The shell uses a left sidebar with two groups: **Overview · Programs · Stacks 
 - **New / Edit Program** — a sectioned form with an anchor rail (Run · Lifecycle · Scheduling · Health · Updates · Hooks · Logs · Depends on · Limits), completion dots, and a sticky footer; create additionally offers a read-only JSON preview of the request.
 - **Stacks** — the JSON stack editor with diff/confirm before apply.
 - **Events** — the global event history across every program (filters, severity chips, pagination).
-- **Settings → Authentication** — SSO (OIDC) provider, client secret, ordered role rules, sessions and audit; see [SSO (OIDC)](/docs/02-essentials/sso/). License status lives in the account menu.
+- **Settings → SSO** — SSO (OIDC) provider, client secret, ordered role rules, sessions and audit; see [SSO (OIDC)](/docs/02-essentials/sso/). License status lives in the account menu.
 
 Pro extensions keep registering through the same slot system (extra pages, process actions, detail tabs); those stay hidden until the matching plugins are licensed.

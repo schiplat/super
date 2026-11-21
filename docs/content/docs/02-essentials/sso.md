@@ -27,7 +27,7 @@ SSO is unavailable when the licensed `security` plugin is loaded (that plugin ow
 
 ## Setup
 
-Everything is configured in the dashboard: **Settings → Authentication** (admin role required). No config-file changes, no restart.
+Everything is configured in the dashboard: **Settings → SSO** (admin role required). No config-file changes, no restart.
 
 1. **Register the client at your IdP.** The settings page shows the exact values, derived from your *Public base URL*:
    - **Callback** — `https://<your-superd-host>/api/v1/auth/oidc/callback` (missing → sign-in fails)
