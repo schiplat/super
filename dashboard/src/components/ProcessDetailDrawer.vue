@@ -400,7 +400,6 @@ function formatUptime(sec?: number): string {
   return `${Math.floor(hr / 24)}d ${hr % 24}h`;
 }
 </script>
-
 <template>
   <div v-if="modelValue && !inline" class="fixed inset-0 z-[100] bg-foreground/20 backdrop-blur-[2px] transition-opacity" @click="close"></div>
   <div
@@ -411,9 +410,7 @@ function formatUptime(sec?: number): string {
   >
     <div v-if="processId" class="flex flex-col h-full min-h-0">
 
-      <!-- Scrollable single-page flow -->
-      <div class="flex-1 min-h-0 overflow-y-auto">
-
+      <!-- Hero: identity only -->
         <!-- Hero -->
         <div class="px-5 md:px-7 pt-5">
           <div class="flex items-start gap-3">
@@ -482,6 +479,28 @@ function formatUptime(sec?: number): string {
             </div>
           </div>
 
+      <!-- Tabs: Runtime | Configuration | plugin tabs -->
+      <div class="px-5 md:px-7 border-b border-border bg-muted/40 shrink-0">
+        <div class="flex gap-0">
+          <button type="button" class="flex items-center gap-2 px-4 py-3 text-sm font-medium border-b-[3px] transition-all -mb-px" :class="activeTab === 'runtime' ? 'border-foreground text-foreground' : 'border-transparent text-muted-foreground hover:text-foreground hover:border-border'" @click="activeTab = 'runtime'"><TerminalIcon class="w-4 h-4" />Runtime</button>
+          <button type="button" class="flex items-center gap-2 px-4 py-3 text-sm font-medium border-b-[3px] transition-all -mb-px" :class="activeTab === 'config' ? 'border-foreground text-foreground' : 'border-transparent text-muted-foreground hover:text-foreground hover:border-border'" @click="activeTab = 'config'"><FileText class="w-4 h-4" />Configuration</button>
+          <button
+            v-for="tab in pluginTabs"
+            :key="tab.id"
+            type="button"
+            class="flex items-center gap-2 px-4 py-3 text-sm font-medium border-b-[3px] transition-all -mb-px"
+            :class="activeTab === tab.id ? 'border-foreground text-foreground' : 'border-transparent text-muted-foreground hover:text-foreground hover:border-border'"
+            @click="activeTab = tab.id"
+          >{{ tab.label }}</button>
+          <!-- STABLE: process.detail.tabs — plugins call registerTab; need process + activeTab. Do not change without tests/slots.spec.ts / ui-bridge review. -->
+          <Slot name="process.detail.tabs" :context="{ process: summaryData, registerTab, activeTab }" />
+        </div>
+      </div>
+
+      <!-- Tab content -->
+      <div class="flex-1 overflow-hidden relative bg-muted/30">
+        <!-- Runtime -->
+        <div v-show="activeTab === 'runtime'" class="absolute inset-0 overflow-y-auto">
           <!-- Metric tiles: live facts only (a stopped/fatal program has none) -->
           <div v-if="summaryData?.pid" class="mt-4 grid grid-cols-4 gap-2">
             <div class="rounded-xl bg-muted/55 px-3 py-2.5">
@@ -503,7 +522,7 @@ function formatUptime(sec?: number): string {
           </div>
         </div>
 
-        <!-- Error banner -->
+          <!-- Error banner -->
         <div v-if="currentError" class="px-5 md:px-7 mt-4">
           <div class="flex items-start gap-3 rounded-xl px-4 py-3" :class="isHealthCheckError ? 'bg-warning/10' : 'bg-destructive/10'">
             <div class="mt-0.5 shrink-0" :class="isHealthCheckError ? 'text-warning' : 'text-destructive'"><AlertTriangle class="w-5 h-5" /></div>
@@ -521,7 +540,7 @@ function formatUptime(sec?: number): string {
           </div>
         </div>
 
-        <!-- Logs -->
+          <!-- Logs -->
         <div id="detail-logs" class="px-5 md:px-7 mt-6">
           <div class="flex items-center justify-between gap-3 mb-2">
             <h3 class="text-[11px] font-semibold uppercase tracking-[0.06em] text-muted-foreground">Logs</h3>
@@ -559,7 +578,7 @@ function formatUptime(sec?: number): string {
           </div>
         </div>
 
-        <!-- Events -->
+          <!-- Events -->
         <div class="px-5 md:px-7 mt-6">
           <div class="flex items-center justify-between gap-3 mb-2">
             <h3 class="text-[11px] font-semibold uppercase tracking-[0.06em] text-muted-foreground">Events</h3>
@@ -571,20 +590,19 @@ function formatUptime(sec?: number): string {
         </div>
 
         <!-- Configuration -->
-        <div id="detail-config" class="px-5 md:px-7 mt-6 pb-2">
-          <div class="flex items-center justify-between gap-3 mb-3">
-            <h3 class="text-[11px] font-semibold uppercase tracking-[0.06em] text-muted-foreground">Configuration</h3>
-            <button v-if="authStore.canManage" type="button" class="text-xs text-muted-foreground transition-colors hover:text-foreground" @click="goToEdit">
-              Edit ↗
-            </button>
-          </div>
+
+          <div class="h-6"></div>
+        </div>
+
+        <!-- Configuration -->
+        <div v-show="activeTab === 'config'" class="absolute inset-0 overflow-y-auto p-5 md:p-7">
           <div v-if="isLoadingDetail" class="flex justify-center py-10"><span class="inline-block w-6 h-6 border-2 border-muted-foreground/30 border-t-foreground/50 rounded-full animate-spin"></span></div>
-          <div v-else-if="!detailData" class="flex flex-col items-center justify-center py-10 text-muted-foreground/50 gap-3">
+          <div v-else-if="!detailData" class="flex flex-col items-center justify-center h-full text-muted-foreground/50 gap-3">
             <FileText class="w-10 h-10" />
             <p class="text-sm font-medium">No configuration data available</p>
-            <p class="text-xs">Try refreshing or reopening this page.</p>
+            <p class="text-xs">Try refreshing the page or reopening this detail panel.</p>
           </div>
-            <div v-else class="flex flex-col gap-5 md:gap-6 max-w-4xl pb-10">
+          <div v-else class="flex flex-col gap-5 md:gap-6 max-w-4xl pb-10">
             <!-- Execution Context -->
             <section>
               <h3 class="text-xs font-bold text-muted-foreground/60 uppercase tracking-[0.06em] mb-3 flex items-center gap-2"><PlayCircle class="w-3.5 h-3.5" />Execution Context</h3>
@@ -827,19 +845,15 @@ function formatUptime(sec?: number): string {
           </div>
         </div>
 
-
-        <!-- Plugin detail tabs (same section flow) -->
-        <div v-for="tab in pluginTabs" :key="tab.id" class="px-5 md:px-7 mt-6 pb-2">
-          <div class="mb-3">
-            <h3 class="text-[11px] font-semibold uppercase tracking-[0.06em] text-muted-foreground">{{ tab.label }}</h3>
-          </div>
+        <!-- Plugin detail tabs -->
+        <div
+          v-for="tab in pluginTabs"
+          :key="tab.id"
+          v-show="activeTab === tab.id"
+          class="absolute inset-0 overflow-y-auto p-5 md:p-7"
+        >
           <component :is="tab.component" :process="summaryData" />
         </div>
-
-        <!-- STABLE: process.detail.tabs — plugins call registerTab; need process + activeTab. Do not change without tests/slots.spec.ts / ui-bridge review. -->
-        <Slot name="process.detail.tabs" :context="{ process: summaryData, registerTab, activeTab }" />
-
-        <div class="h-5"></div>
       </div>
 
       <!-- Pinned action bar -->
