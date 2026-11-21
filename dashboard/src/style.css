@@ -197,8 +197,10 @@
     background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%235a534d' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
   }
 
+  /* Settings pages end with a card/table, never a pinned bar, so they keep
+     breathing room above the scroll edge (the shell has no bottom padding). */
   .page-stack {
-    @apply w-full max-w-none space-y-6;
+    @apply w-full max-w-none space-y-6 pb-6;
   }
 
   /* Shared shell inset: TopNav copy + main column share the same edges.
