@@ -76,6 +76,11 @@ const router = createRouter({
           component: () => import('@/views/ApiTokens.vue'),
         },
         {
+          path: 'settings/branding',
+          name: 'Branding',
+          component: () => import('@/views/Branding.vue'),
+        },
+        {
           path: 'stacks',
           alias: '/stack',
           name: 'StackEditor',

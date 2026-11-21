@@ -79,6 +79,8 @@ export const useCapabilitiesStore = defineStore('capabilities', () => {
   const ready = ref(false);
   const auth = ref(false);
   const security = ref(false);
+  /** True when the instance serves a user-uploaded sidebar logo. */
+  const customLogo = ref(false);
   const notify = ref(false);
   const isolation = ref(false);
   const licensed = ref(false);
@@ -120,6 +122,10 @@ export const useCapabilitiesStore = defineStore('capabilities', () => {
       auth.value = cfg.auth_required === true;
       security.value = false;
     }
+
+    // Branding: the logo endpoint answers 200 only when a custom logo is
+    // stored; anything else (404/401/unreachable) means the bundled default.
+    customLogo.value = (await probeStatus('/api/v1/branding/logo')) === 200;
 
     // Not signed in yet: skip the license/notify probes. With the auth gate on
     // they would all answer 401 and feed the daemon's per-IP failed-auth
@@ -187,6 +193,7 @@ export const useCapabilitiesStore = defineStore('capabilities', () => {
     ready,
     auth,
     security,
+    customLogo,
     notify,
     isolation,
     licensed,

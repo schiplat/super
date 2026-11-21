@@ -48,6 +48,8 @@ pub struct AppState {
     pub config: ServerConfig,
     /// Verified license + loaded plugin versions (None in OSS mode).
     pub license: Option<LicenseInfo>,
+    /// Instance data directory's branding folder (custom sidebar logo).
+    pub branding_dir: std::path::PathBuf,
 }
 
 #[derive(Debug)]
@@ -257,6 +259,7 @@ pub fn make_api_router(
     config: ServerConfig,
     mount_docs: bool,
     license: Option<LicenseInfo>,
+    branding_dir: std::path::PathBuf,
 ) -> Router {
     let state = AppState {
         manager,
@@ -264,6 +267,7 @@ pub fn make_api_router(
         shutdown_tx,
         config: config.clone(),
         license,
+        branding_dir,
     };
 
     // Business APIs under `/api/v1`; `/health` at root; `/ws` + `/metrics` stay root.
@@ -296,6 +300,7 @@ pub fn make_api_router(
     let mut api_router = Router::new()
         .route("/health", get(health_check))
         .nest("/api/v1", v1)
+        .merge(crate::branding::branding_routes())
         .route("/ws", get(ws_handler))
         .route("/metrics", get(metrics_handler))
         .layer(DefaultBodyLimit::max(API_BODY_LIMIT))

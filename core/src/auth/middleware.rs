@@ -390,6 +390,12 @@ pub async fn core_auth_middleware(
     if is_auth_exempt(&path) {
         return next.run(req).await;
     }
+    // The sidebar renders the custom logo with a plain <img>, which cannot
+    // carry a Bearer header — the logo GET is public; writes are not (they
+    // are Admin via the policy below).
+    if path == "/api/v1/branding/logo" && req.method() == axum::http::Method::GET {
+        return next.run(req).await;
+    }
     // No gate means loopback development; superd refuses that on a public bind.
     // Inject the local root identity so admin-only endpoints (SSO settings,
     // reload/shutdown) work in that mode, where nobody can authenticate.

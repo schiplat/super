@@ -29,7 +29,9 @@ The Dashboard is the browser UI for `superd`. **OSS builds embed the shell** (pr
 
 ## Dashboard tour (OSS shell)
 
-The shell uses a left sidebar with two groups: **Overview · Programs · Stacks · Events** and **Settings** (Authentication on OSS admin sessions, License). The top bar carries connection state, theme, and the account menu.
+The shell uses a left sidebar with two groups: **Overview · Programs · Stacks · Events** and **Settings** (Authentication · API Tokens · Branding on OSS admin sessions). The top bar carries connection state, theme, and the account menu.
+
+**Custom logo (OSS):** Settings → Branding replaces the bundled sidebar logo for every operator of the instance — SVG (best) or transparent PNG, shown 32 px tall (supply ≥128 px height), ≤1 MiB. `GET /api/v1/branding/logo` serves it publicly; `PUT`/`DELETE` are Admin.
 
 - **Overview** — status counters, a *Needs attention* list (failing / flapping / unhealthy programs), recent events, and host CPU/memory trends.
 - **Programs** — the process table (search, group and status filters, pagination) and the per-program detail page at `/programs/<id>`: status hero with live tiles (CPU / memory / uptime / pid), a Logs section (live stream or file history with stdout/stderr and tail controls), an Events timeline scoped to the program, and the full read-only Configuration reference. Lifecycle buttons (Start / Restart / Stop) are pinned to the bottom bar.

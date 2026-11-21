@@ -38,6 +38,8 @@ pub fn required_role(method: &Method, path: &str) -> UserRole {
         // neither enumerate nor mint credentials (buz denies its identity
         // plane to API tokens for the same reason).
         || path.starts_with("/api/v1/auth/tokens")
+        // Branding writes change what every operator sees.
+        || path.starts_with("/api/v1/branding")
         || path == "/api/v1/system/shutdown"
         || path == "/api/v1/system/reload"
     {

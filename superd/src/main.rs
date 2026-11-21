@@ -485,6 +485,13 @@ async fn async_main() -> anyhow::Result<()> {
     // Spare sender so a second listener can subscribe to the same shutdown signal.
     let extra_shutdown_tx = core.shutdown_tx.clone();
 
+    // Branding lives beside the auth store in the instance data directory.
+    let branding_dir = core
+        .paths
+        .auth_db_file
+        .parent()
+        .map(|data| data.join("branding"))
+        .unwrap_or_else(|| core.paths.root.join("data").join("branding"));
     let base_router = api::make_api_router(
         core.manager_handle.clone(),
         core.log_tx,
@@ -492,6 +499,7 @@ async fn async_main() -> anyhow::Result<()> {
         core.config.clone(),
         !auth_expected,
         license_info,
+        branding_dir,
     );
 
     let (mut api_router, plugin_auth_active) =

@@ -5,6 +5,7 @@ import {
   History,
   Layers,
   LayoutDashboard,
+  Image as ImageIcon,
   KeyRound,
   Menu,
   Moon,
@@ -16,7 +17,7 @@ import {
 import { useProgramStore } from '@/stores/program';
 import { useAuthStore } from '@/stores/auth';
 import { useCapabilitiesStore } from '@/stores/capabilities';
-import { computed, onMounted, ref } from 'vue';
+import { computed, onMounted, ref, watch } from 'vue';
 import { useDark, useToggle, useWindowSize } from '@vueuse/core';
 import UiButton from '@/components/ui/UiButton.vue';
 import UiDialog from '@/components/ui/UiDialog.vue';
@@ -73,6 +74,19 @@ function toggleCollapsed() {
   localStorage.setItem(COLLAPSE_KEY, collapsed.value ? '1' : '0');
 }
 
+// Sidebar logo: the instance's uploaded logo when one is stored, otherwise
+// the bundled default. A failed load (stale probe, licensed mode) falls back.
+const logoBroken = ref(false);
+const logoSrc = computed(() =>
+  caps.customLogo && !logoBroken.value ? '/api/v1/branding/logo' : '/super.png',
+);
+watch(
+  () => caps.customLogo,
+  () => {
+    logoBroken.value = false;
+  },
+);
+
 const mainNav = [
   { to: '/', label: 'Overview', icon: LayoutDashboard },
   { to: '/programs', label: 'Programs', icon: Boxes },
@@ -96,6 +110,11 @@ const settingsNav = computed(() => {
         label: 'API Tokens',
         icon: KeyRound,
       },
+      {
+        to: '/settings/branding',
+        label: 'Branding',
+        icon: ImageIcon,
+      },
     ];
   }
   return [];
@@ -110,6 +129,7 @@ const TITLES: Record<string, string> = {
   '/license': 'License',
   '/settings/authentication': 'Authentication',
   '/settings/tokens': 'API Tokens',
+  '/settings/branding': 'Branding',
   '/programs/new': 'New Program',
 };
 
@@ -163,10 +183,10 @@ onMounted(() => {
       class="flex h-full flex-col bg-sidebar text-sidebar-foreground"
       :class="sidebarClass"
     >
-      <!-- Brand row: monogram tile + two-line wordmark when expanded; the
-           collapsed rail shows ONLY the centered tile — the expand affordance
-           lives in the top bar instead of squeezing a second element into
-           68px. -->
+      <!-- Brand row: instance logo (custom upload or bundled default) +
+           two-line wordmark when expanded; the collapsed rail shows ONLY the
+           centered logo — the expand affordance lives in the top bar instead
+           of squeezing a second element into 68px. -->
       <div
         class="flex h-16 shrink-0 items-center px-3"
         :class="effectiveCollapsed ? 'justify-center' : 'justify-between'"
@@ -177,12 +197,13 @@ onMounted(() => {
           :title="effectiveCollapsed ? 'Super' : undefined"
           @click.prevent="navigateTo('/'); closeNav()"
         >
-          <span
-            class="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary text-xs font-semibold tracking-wide text-primary-foreground"
-            aria-hidden="true"
-          >
-            Su
-          </span>
+          <img
+            :src="logoSrc"
+            alt="Super Process Manager"
+            class="h-8 w-auto object-contain"
+            :class="effectiveCollapsed ? 'max-w-9' : 'max-w-[150px]'"
+            @error="logoBroken = true"
+          />
           <span v-if="!effectiveCollapsed" class="min-w-0">
             <span class="block truncate text-sm font-semibold tracking-tight">Super</span>
             <span class="block truncate text-xs text-muted-foreground">Process Manager</span>

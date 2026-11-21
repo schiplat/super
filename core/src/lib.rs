@@ -1,5 +1,6 @@
 pub mod api;
 pub mod auth;
+pub mod branding;
 pub mod event_db;
 pub mod logger;
 pub mod manager;
