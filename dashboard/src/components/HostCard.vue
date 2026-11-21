@@ -142,9 +142,12 @@ onUnmounted(() => {
           aria-hidden="true"
         >
           <defs>
+            <!-- Keep a visible floor: fading to 0 makes the full-width area
+                 read as a wedge narrower than the memory bar below it. -->
             <linearGradient id="cpu-area" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stop-color="#8b5cf6" stop-opacity="0.28" />
-              <stop offset="100%" stop-color="#8b5cf6" stop-opacity="0" />
+              <stop offset="0%" stop-color="#8b5cf6" stop-opacity="0.30" />
+              <stop offset="60%" stop-color="#8b5cf6" stop-opacity="0.14" />
+              <stop offset="100%" stop-color="#8b5cf6" stop-opacity="0.06" />
             </linearGradient>
           </defs>
           <path v-if="cpuArea" :d="cpuArea" fill="url(#cpu-area)" />
