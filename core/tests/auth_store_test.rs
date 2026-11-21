@@ -297,6 +297,7 @@ fn api_token<'a>(id: &'a str, hash: &'a [u8], role: &'a str) -> NewApiToken<'a> 
         role,
         created_by: "tester",
         created_at: now(),
+        expires_at: None,
     }
 }
 
@@ -362,4 +363,83 @@ async fn api_token_lifecycle() {
             .unwrap()
             .is_none()
     );
+}
+
+/// Expired tokens stay listed (so an operator can see why auth failed) but
+/// never authenticate, and do not count as a live admin token.
+#[tokio::test]
+async fn expired_tokens_authenticate_no_longer() {
+    let (_dir, store) = open().await;
+    let now = now();
+    store
+        .insert_api_token(NewApiToken {
+            id: "expired",
+            token_sha256: &[3; 32],
+            token_prefix: "su_deadbeef…",
+            name: "expired",
+            role: "admin",
+            created_by: "tester",
+            created_at: now - 7200,
+            expires_at: Some(now - 60),
+        })
+        .await
+        .unwrap();
+    store
+        .insert_api_token(NewApiToken {
+            id: "live",
+            token_sha256: &[4; 32],
+            token_prefix: "su_live1234…",
+            name: "live",
+            role: "operator",
+            created_by: "tester",
+            created_at: now,
+            expires_at: Some(now + 3600),
+        })
+        .await
+        .unwrap();
+    store
+        .insert_api_token(NewApiToken {
+            id: "forever",
+            token_sha256: &[5; 32],
+            token_prefix: "su_forever…",
+            name: "forever",
+            role: "admin",
+            created_by: "tester",
+            created_at: now,
+            expires_at: None,
+        })
+        .await
+        .unwrap();
+
+    // Expired tokens remain visible in the list…
+    let rows = store.list_api_tokens().await.unwrap();
+    assert_eq!(rows.len(), 3);
+
+    // …but never authenticate again.
+    assert!(
+        store
+            .find_api_token_by_hash(&[3; 32])
+            .await
+            .unwrap()
+            .is_none()
+    );
+    assert!(
+        store
+            .find_api_token_by_hash(&[4; 32])
+            .await
+            .unwrap()
+            .is_some()
+    );
+    assert!(
+        store
+            .find_api_token_by_hash(&[5; 32])
+            .await
+            .unwrap()
+            .is_some()
+    );
+
+    // An expired admin token does not satisfy `has_admin_token`.
+    assert!(store.has_active_admin_token().await.unwrap());
+    store.revoke_api_token("forever").await.unwrap();
+    assert!(!store.has_active_admin_token().await.unwrap());
 }

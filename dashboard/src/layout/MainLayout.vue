@@ -5,6 +5,7 @@ import {
   History,
   Layers,
   LayoutDashboard,
+  KeyRound,
   Menu,
   Moon,
   PanelLeftClose,
@@ -91,6 +92,11 @@ const settingsNav = computed(() => {
         label: 'Authentication',
         icon: ShieldCheck,
       },
+      {
+        to: '/settings/tokens',
+        label: 'API Tokens',
+        icon: KeyRound,
+      },
     ];
   }
   return [];
@@ -104,6 +110,7 @@ const TITLES: Record<string, string> = {
   '/events': 'Events',
   '/license': 'License',
   '/settings/authentication': 'Authentication',
+  '/settings/tokens': 'API Tokens',
   '/programs/new': 'New Program',
 };
 

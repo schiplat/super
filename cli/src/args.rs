@@ -555,6 +555,9 @@ pub enum TokenCommands {
         /// Role: viewer, operator, admin
         #[arg(short, long, default_value = "operator")]
         role: String,
+        /// Expire the token after N days (omit for no expiry)
+        #[arg(long)]
+        expires: Option<u64>,
     },
     /// Revoke (delete) a token by ID
     #[command(alias = "rm")]

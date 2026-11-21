@@ -817,8 +817,12 @@ async fn backchannel_logout_revokes_the_subjects_sessions() {
     assert_eq!(status, StatusCode::BAD_REQUEST, "future iat must reject");
 
     let mut tampered = sign(&logout_token(&idp.uri(), Some("u2"), 0, Value::Null));
-    tampered.pop();
-    tampered.push('A');
+    // Flip a mid-signature character: the trailing char can encode only
+    // padding bits, so popping it sometimes yields the same bytes.
+    let mid = tampered.len() - 40;
+    let original = tampered.as_bytes()[mid];
+    let replacement = if original == b'A' { b'B' } else { b'A' };
+    tampered.replace_range(mid..mid + 1, &(replacement as char).to_string());
     let (status, _) = post_backchannel(&app, Some(&tampered)).await;
     assert_eq!(
         status,
@@ -1043,4 +1047,103 @@ async fn api_tokens_authenticate_under_the_secret_gate() {
     let list = json_body(response).await;
     assert_eq!(list.as_array().unwrap().len(), 2);
     assert!(!list.to_string().contains("ci"));
+}
+
+/// Token expiry: creation validates the date, the list carries it, and an
+/// expired token (seeded directly, since the API refuses past dates) answers
+/// 401 immediately.
+#[tokio::test]
+async fn api_tokens_honour_expiry() {
+    let dir = tempfile::tempdir().unwrap();
+    let store = Arc::new(AuthStore::open(&dir.path().join("auth.db")).await.unwrap());
+    let runtime = Arc::new(SsoRuntime::load(store.clone()).await.unwrap());
+    let state = AuthState::with_sso(
+        Some("oss-secret".into()),
+        Some(runtime),
+        AuthGate::CoreSecret,
+        false,
+        None,
+    );
+    let app = {
+        let api = Router::new().route("/api/v1/programs", axum::routing::get(|| async { "ok" }));
+        install_core_auth(api, state)
+    };
+
+    // A past date is rejected.
+    let response = app
+        .clone()
+        .oneshot(json_request(
+            "POST",
+            "/api/v1/auth/tokens",
+            Some("oss-secret"),
+            json!({ "name": "stale", "role": "viewer", "expires_at": now() - 10 }),
+        ))
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+
+    // A future date is accepted and reported back in the list.
+    let response = app
+        .clone()
+        .oneshot(json_request(
+            "POST",
+            "/api/v1/auth/tokens",
+            Some("oss-secret"),
+            json!({ "name": "shortlived", "role": "viewer", "expires_at": now() + 3600 }),
+        ))
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::CREATED);
+    let created = json_body(response).await;
+    let token = created["token"].as_str().unwrap().to_string();
+    let response = app
+        .clone()
+        .oneshot(auth_request("GET", "/api/v1/auth/tokens", "oss-secret"))
+        .await
+        .unwrap();
+    let list = json_body(response).await;
+    assert_eq!(list[0]["expires_at"], now() + 3600);
+
+    // Still valid: authenticates.
+    let response = app
+        .clone()
+        .oneshot(auth_request("GET", "/api/v1/programs", &token))
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+
+    // Seed an expired token behind the API's back (the API refuses past
+    // dates): authentication ends immediately while the row stays listed for
+    // operators to see.
+    let expired_token = format!("su_{}", super_core::auth::sso::pkce::random_token());
+    store
+        .insert_api_token(super_core::auth::store::NewApiToken {
+            id: "seeded-expired",
+            token_sha256: &super_core::auth::sso::pkce::token_hash(&expired_token),
+            token_prefix: "su_deadbeef…",
+            name: "seeded-expired",
+            role: "viewer",
+            created_by: "test",
+            created_at: (now() - 10) as u64,
+            expires_at: Some((now() - 5) as u64),
+        })
+        .await
+        .unwrap();
+    let response = app
+        .clone()
+        .oneshot(auth_request("GET", "/api/v1/programs", &expired_token))
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+    let response = app
+        .clone()
+        .oneshot(auth_request("GET", "/api/v1/auth/tokens", "oss-secret"))
+        .await
+        .unwrap();
+    let list = json_body(response).await;
+    assert_eq!(
+        list.as_array().unwrap().len(),
+        2,
+        "expired row stays listed"
+    );
 }

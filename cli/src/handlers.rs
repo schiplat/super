@@ -6,7 +6,7 @@ use common::{
     CreateProgramRequest, CronCatchup, CronOverlap, ProgramInfo, ProgramLogsResponse,
     ProgramSummary, ResourceLimits, StackApplyRequest, UpdateProgramRequest,
 };
-use common::{CreateTokenRequest, CreateTokenResponse, UserRole};
+use common::{CreateTokenResponse, UserRole};
 use std::collections::HashMap;
 use std::path::PathBuf;
 use uuid::Uuid;
@@ -906,20 +906,33 @@ pub async fn handle_token(ctx: &Context, action: &TokenCommands) -> anyhow::Resu
                 return Err(api_error_from_body(status, &body));
             }
         }
-        TokenCommands::Create { name, role } => {
+        TokenCommands::Create {
+            name,
+            role,
+            expires,
+        } => {
             let role_enum = match role.to_lowercase().as_str() {
                 "admin" => UserRole::Admin,
                 "viewer" => UserRole::Viewer,
                 _ => UserRole::Operator,
             };
-            let req = CreateTokenRequest {
-                name: name.clone(),
-                role: role_enum,
-            };
+            // Raw body instead of CreateTokenRequest: core accepts an optional
+            // expires_at (unix seconds) the shared contract does not carry.
+            let expires_at = expires.map(|days| {
+                std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .map(|d| d.as_secs() + days * 86_400)
+                    .unwrap_or(0)
+            });
+            let body = serde_json::json!({
+                "name": name.clone(),
+                "role": role_enum,
+                "expires_at": expires_at,
+            });
             let resp = ctx
                 .client
                 .post(format!("{base_url}/api/v1/auth/tokens"))
-                .json(&req)
+                .json(&body)
                 .send()
                 .await?;
 

@@ -105,6 +105,8 @@ export interface ApiTokenInfo {
   created_at: number
   /** Superset of the plugin contract — core adds usage tracking. */
   last_used_at: number | null
+  /** Unix seconds; null = never expires. Expired tokens never authenticate. */
+  expires_at: number | null
 }
 
 export interface ApiTokenCreateResult {

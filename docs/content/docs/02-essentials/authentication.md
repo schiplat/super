@@ -88,20 +88,22 @@ Dashboard: open `/`, paste the same string when prompted.
 Named, revocable credentials for the CLI and automation. Each token authenticates **with its own role** — the first time OSS RBAC applies to real credentials — so a viewer token cannot mutate anything. The dashboard login itself still uses the static secret.
 
 ```bash
-super --token "$SECRET" token create ci --role operator   # plaintext shown once
+super --token "$SECRET" token create ci --role operator             # plaintext shown once
+super --token "$SECRET" token create ci --role operator --expires 30 # expires in 30 days
 super --token "$SECRET" token list
 super --token "$SECRET" token revoke <id>
-super --token "$OP_TOKEN" list                            # the token is a Bearer credential
+super --token "$OP_TOKEN" list                                       # the token is a Bearer credential
 ```
 
 | Fact | Behavior |
 | :--- | :--- |
 | Storage | Only the SHA-256 hash, in the owner-only `data/auth.db` (next to SSO sessions) |
 | Roles | `viewer` (read-only) · `operator` (read + manage programs) · `admin` (everything, incl. tokens) |
+| Expiry | Optional custom date (dashboard) or `--expires <days>` (CLI); expired tokens stop authenticating immediately but stay listed with an `expired` badge |
 | Revocation | Immediate; `last_used` is tracked per token |
 | Gate | Lives under the static-secret gate — dormant once [SSO](/docs/02-essentials/sso/) owns the gate, exactly like the secret itself |
-| REST | `GET/POST /api/v1/auth/tokens`, `DELETE /api/v1/auth/tokens/{id}` (Admin; the list is a bare array) |
-| Dashboard | Settings → Authentication → **API tokens** (create with one-time reveal, revoke) |
+| REST | `GET/POST /api/v1/auth/tokens`, `DELETE /api/v1/auth/tokens/{id}` (Admin; the list is a bare array; create accepts `expires_at` unix seconds) |
+| Dashboard | Settings → **API Tokens** (create with optional expiry date, one-time reveal, revoke) |
 
 Licensed deployments: the `security` plugin serves the **same paths** with its `sk-…` Access Tokens and richer per-token management (renew, disable `auth_secret`) — see below.
 

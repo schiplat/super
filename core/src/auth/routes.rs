@@ -109,6 +109,7 @@ async fn list_tokens(State(state): State<AuthState>) -> Response {
                         "role": row.role,
                         "created_at": row.created_at,
                         "last_used_at": row.last_used_at,
+                        "expires_at": row.expires_at,
                     })
                 })
                 .collect::<Vec<_>>(),
@@ -125,6 +126,9 @@ async fn list_tokens(State(state): State<AuthState>) -> Response {
 struct CreateTokenBody {
     name: String,
     role: common::UserRole,
+    /// Unix seconds; absent = never expires.
+    #[serde(default)]
+    expires_at: Option<u64>,
 }
 
 async fn create_token(
@@ -146,6 +150,13 @@ async fn create_token(
             "token name must be 1-64 characters of letters, digits, '.', '_' or '-'",
         );
     }
+
+    let expires_at = match body.expires_at {
+        Some(expires_at) if expires_at <= now_secs() => {
+            return bad_request("expires_at must be in the future");
+        }
+        other => other,
+    };
 
     let token = format!("su_{}", super::sso::pkce::random_token());
     let token_sha256 = super::sso::pkce::token_hash(&token);
@@ -169,6 +180,7 @@ async fn create_token(
             role,
             created_by: &user.name,
             created_at: now_secs(),
+            expires_at,
         })
         .await
     {

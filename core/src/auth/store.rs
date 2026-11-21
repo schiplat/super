@@ -161,6 +161,8 @@ pub struct NewApiToken<'a> {
     pub role: &'a str,
     pub created_by: &'a str,
     pub created_at: u64,
+    /// Unix seconds; `None` = never expires.
+    pub expires_at: Option<u64>,
 }
 
 #[derive(Debug, Clone)]
@@ -172,6 +174,9 @@ pub struct ApiTokenRow {
     pub created_by: String,
     pub created_at: u64,
     pub last_used_at: Option<u64>,
+    /// Unix seconds; `None` = never expires. Expired rows stay listed but
+    /// never authenticate.
+    pub expires_at: Option<u64>,
 }
 
 /// One audit row to write.
@@ -256,6 +261,9 @@ fn api_token_from_row(row: &sqlx::sqlite::SqliteRow) -> anyhow::Result<ApiTokenR
         created_at: row.try_get::<i64, _>("created_at")? as u64,
         last_used_at: row
             .try_get::<Option<i64>, _>("last_used_at")?
+            .map(|v| v as u64),
+        expires_at: row
+            .try_get::<Option<i64>, _>("expires_at")?
             .map(|v| v as u64),
     })
 }
@@ -689,8 +697,8 @@ impl AuthStore {
 
     pub async fn insert_api_token(&self, token: NewApiToken<'_>) -> anyhow::Result<()> {
         sqlx::query(
-            "INSERT INTO api_tokens (id, token_sha256, token_prefix, name, role, created_by, created_at) \
-             VALUES (?, ?, ?, ?, ?, ?, ?)",
+            "INSERT INTO api_tokens (id, token_sha256, token_prefix, name, role, created_by, created_at, expires_at) \
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
         )
         .bind(token.id)
         .bind(token.token_sha256)
@@ -699,16 +707,18 @@ impl AuthStore {
         .bind(token.role)
         .bind(token.created_by)
         .bind(token.created_at as i64)
+        .bind(token.expires_at.map(|v| v as i64))
         .execute(&self.pool)
         .await
         .context("insert api token")?;
         Ok(())
     }
 
-    /// Active (non-revoked) tokens, oldest first.
+    /// Every non-revoked token, oldest first — expired ones stay visible so
+    /// an operator can see why authentication failed.
     pub async fn list_api_tokens(&self) -> anyhow::Result<Vec<ApiTokenRow>> {
         let rows = sqlx::query(
-            "SELECT id, token_prefix, name, role, created_by, created_at, last_used_at \
+            "SELECT id, token_prefix, name, role, created_by, created_at, last_used_at, expires_at \
              FROM api_tokens WHERE revoked_at IS NULL ORDER BY created_at, id",
         )
         .fetch_all(&self.pool)
@@ -717,12 +727,17 @@ impl AuthStore {
         rows.iter().map(api_token_from_row).collect()
     }
 
+    /// Resolve a live credential: revoked and expired tokens never
+    /// authenticate, even though expired ones remain visible in the list.
     pub async fn find_api_token_by_hash(&self, hash: &[u8]) -> anyhow::Result<Option<ApiTokenRow>> {
         let row = sqlx::query(
-            "SELECT id, token_prefix, name, role, created_by, created_at, last_used_at \
-             FROM api_tokens WHERE token_sha256 = ? AND revoked_at IS NULL",
+            "SELECT id, token_prefix, name, role, created_by, created_at, last_used_at, expires_at \
+             FROM api_tokens \
+             WHERE token_sha256 = ? AND revoked_at IS NULL \
+               AND (expires_at IS NULL OR expires_at > ?)",
         )
         .bind(hash)
+        .bind(now_secs() as i64)
         .fetch_optional(&self.pool)
         .await
         .context("find api token")?;
@@ -751,12 +766,15 @@ impl AuthStore {
         Ok(())
     }
 
-    /// Whether at least one active admin token exists (the `has_admin_token`
-    /// fact in `/auth/status`).
+    /// Whether at least one live (non-revoked, unexpired) admin token exists
+    /// (the `has_admin_token` fact in `/auth/status`).
     pub async fn has_active_admin_token(&self) -> anyhow::Result<bool> {
         let count: i64 = sqlx::query_scalar(
-            "SELECT COUNT(*) FROM api_tokens WHERE revoked_at IS NULL AND role = 'admin'",
+            "SELECT COUNT(*) FROM api_tokens \
+             WHERE revoked_at IS NULL AND role = 'admin' \
+               AND (expires_at IS NULL OR expires_at > ?)",
         )
+        .bind(now_secs() as i64)
         .fetch_one(&self.pool)
         .await
         .context("count admin api tokens")?;

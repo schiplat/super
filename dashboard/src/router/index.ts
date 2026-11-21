@@ -71,6 +71,11 @@ const router = createRouter({
           component: () => import('@/views/AuthSettings.vue'),
         },
         {
+          path: 'settings/tokens',
+          name: 'ApiTokens',
+          component: () => import('@/views/ApiTokens.vue'),
+        },
+        {
           path: 'stacks',
           alias: '/stack',
           name: 'StackEditor',

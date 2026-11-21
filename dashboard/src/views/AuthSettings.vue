@@ -24,8 +24,6 @@ import UiSection from '@/components/ui/UiSection.vue'
 import UiStatusChip from '@/components/ui/UiStatusChip.vue'
 import UiSwitch from '@/components/ui/UiSwitch.vue'
 import type {
-  ApiTokenCreateResult,
-  ApiTokenInfo,
   RoleRule,
   SsoAuditEvent,
   SsoConfig,
@@ -68,17 +66,7 @@ const sessions = ref<SsoSession[]>([])
 const audit = ref<SsoAuditEvent[]>([])
 const copiedKey = ref('')
 
-// API tokens (OSS core; the security plugin serves the same paths in
-// licensed mode, where this page body is hidden anyway).
-const tokens = ref<ApiTokenInfo[]>([])
-const tokensLoading = ref(true)
-const showCreateToken = ref(false)
-const newTokenName = ref('')
-const newTokenRole = ref<SsoRole>('viewer')
-const creatingToken = ref(false)
-const createTokenError = ref('')
-const revealedToken = ref<ApiTokenCreateResult | null>(null)
-/** Live gate facts from /auth/status (secret source, token availability). */
+/** Live gate facts from /auth/status (secret source) — best-effort probe. */
 const authStatus = ref<{ token_management: boolean; secret_source: string | null } | null>(null)
 
 const breakGlassLabel = computed(() => {
@@ -93,15 +81,6 @@ const breakGlassLabel = computed(() => {
       return 'not configured'
   }
 })
-
-const tokenColumns: DataColumn[] = [
-  { key: 'name', label: 'Name' },
-  { key: 'prefix', label: 'Token' },
-  { key: 'role', label: 'Role' },
-  { key: 'created', label: 'Created' },
-  { key: 'used', label: 'Last used' },
-  { key: 'actions', label: '', align: 'right' },
-]
 
 const pluginOwnsAuth = computed(() => caps.security)
 const gate = computed<SsoGate>(() => view.value?.gate ?? 'none')
@@ -388,73 +367,6 @@ async function revoke(session: SsoSession) {
   }
 }
 
-// ---- API tokens ------------------------------------------------------------
-
-async function loadTokens() {
-  tokensLoading.value = true
-  try {
-    const response = await apiClient.get<ApiTokenInfo[]>('/api/v1/auth/tokens')
-    tokens.value = Array.isArray(response.data) ? response.data : []
-  } catch (error) {
-    notice.value = { tone: 'danger', text: apiError(error) }
-  } finally {
-    tokensLoading.value = false
-  }
-}
-
-function openCreateToken() {
-  newTokenName.value = ''
-  newTokenRole.value = 'viewer'
-  createTokenError.value = ''
-  showCreateToken.value = true
-}
-
-async function createToken() {
-  const name = newTokenName.value.trim()
-  if (!name) {
-    createTokenError.value = 'A name is required.'
-    return
-  }
-  creatingToken.value = true
-  createTokenError.value = ''
-  try {
-    const response = await apiClient.post<ApiTokenCreateResult>('/api/v1/auth/tokens', {
-      name,
-      role: newTokenRole.value,
-    })
-    showCreateToken.value = false
-    // The plaintext is shown exactly once, then never again.
-    revealedToken.value = response.data
-    await loadTokens()
-  } catch (error) {
-    createTokenError.value = apiError(error)
-  } finally {
-    creatingToken.value = false
-  }
-}
-
-async function revokeToken(token: ApiTokenInfo) {
-  try {
-    await apiClient.delete(`/api/v1/auth/tokens/${token.id}`)
-    await loadTokens()
-  } catch (error) {
-    notice.value = { tone: 'danger', text: apiError(error) }
-  }
-}
-
-async function copyRevealedToken() {
-  if (!revealedToken.value) return
-  try {
-    await navigator.clipboard.writeText(revealedToken.value.token)
-    copiedKey.value = 'reveal'
-    window.setTimeout(() => {
-      if (copiedKey.value === 'reveal') copiedKey.value = ''
-    }, 1500)
-  } catch {
-    // clipboard unavailable — the field stays selectable on screen
-  }
-}
-
 async function copyUri(key: string, value: string) {
   try {
     await navigator.clipboard.writeText(value)
@@ -492,7 +404,6 @@ onMounted(async () => {
     return
   }
   await load()
-  await loadTokens()
 })
 </script>
 
@@ -884,50 +795,6 @@ onMounted(async () => {
       </UiSection>
 
       <UiDataTable
-        title="API tokens"
-        description="Named credentials for the CLI and automation. Each token authenticates with its own role; revocation is immediate. The secret is shown once at creation."
-        :columns="tokenColumns"
-        :rows-count="tokens.length"
-        :loading="tokensLoading"
-        empty="No API tokens"
-      >
-        <template #toolbar>
-          <div class="flex flex-1 items-center justify-end gap-2">
-            <UiButton type="button" size="sm" @click="openCreateToken">
-              <Plus class="h-3.5 w-3.5" />
-              New token
-            </UiButton>
-          </div>
-        </template>
-        <tr
-          v-for="token in tokens"
-          :key="token.id"
-          class="border-b border-border/40 last:border-0 hover:bg-muted/40"
-        >
-          <td class="px-5 py-3">
-            <p class="font-medium">{{ token.name }}</p>
-          </td>
-          <td class="px-5 py-3">
-            <code class="font-mono text-xs text-muted-foreground">{{ token.token_prefix }}</code>
-          </td>
-          <td class="px-5 py-3">
-            <UiStatusChip :tone="token.role === 'admin' ? 'success' : token.role === 'operator' ? 'info' : 'neutral'">
-              {{ token.role }}
-            </UiStatusChip>
-          </td>
-          <td class="px-5 py-3 text-xs text-muted-foreground">{{ formatTime(token.created_at) }}</td>
-          <td class="px-5 py-3 text-xs text-muted-foreground">
-            {{ token.last_used_at ? formatTime(token.last_used_at) : 'never' }}
-          </td>
-          <td class="px-5 py-3 text-right">
-            <UiButton variant="ghost" size="sm" class="text-destructive hover:bg-destructive/10" @click="revokeToken(token)">
-              Revoke
-            </UiButton>
-          </td>
-        </tr>
-      </UiDataTable>
-
-      <UiDataTable
         title="Sessions"
         description="Local sessions issued after an SSO login. Revocation is immediate; the provider's back-channel logout revokes by identity."
         :columns="sessionColumns"
@@ -1016,71 +883,5 @@ onMounted(async () => {
       </div>
     </UiDialog>
 
-    <UiDialog
-      :open="showCreateToken"
-      @update:open="(value) => (showCreateToken = value)"
-      title="New API token"
-    >
-      <template #description>
-        A named credential for the CLI or automation. It authenticates with the role you pick
-        here — grant the least that works.
-      </template>
-      <div class="mt-2 space-y-3">
-        <UiField label="Name" hint="Letters, digits, '.', '_' or '-'">
-          <UiInput v-model="newTokenName" placeholder="ci-deploy" @keyup.enter="createToken" />
-        </UiField>
-        <UiField label="Role">
-          <select v-model="newTokenRole" class="field-control">
-            <option value="viewer">Viewer — read-only</option>
-            <option value="operator">Operator — read and manage programs</option>
-            <option value="admin">Admin — everything, including tokens</option>
-          </select>
-        </UiField>
-        <p v-if="createTokenError" class="text-xs font-medium text-destructive">
-          {{ createTokenError }}
-        </p>
-        <div class="flex items-center justify-end gap-3">
-          <UiButton variant="secondary" @click="showCreateToken = false">Cancel</UiButton>
-          <UiButton :disabled="creatingToken || !newTokenName.trim()" @click="createToken">
-            {{ creatingToken ? 'Creating…' : 'Create token' }}
-          </UiButton>
-        </div>
-      </div>
-    </UiDialog>
-
-    <!-- one-time reveal: this plaintext is never retrievable again -->
-    <UiDialog
-      :open="revealedToken !== null"
-      @update:open="(value) => { if (!value) revealedToken = null }"
-      :title="`Token “${revealedToken?.record.name ?? ''}”`"
-    >
-      <template #description>
-        Copy it now — it will not be shown again. Only the prefix identifies the token after
-        this dialog closes.
-      </template>
-      <div class="mt-2 space-y-3">
-        <div class="flex items-center gap-2 rounded-xl bg-muted/40 px-3 py-2">
-          <code class="min-w-0 flex-1 truncate font-mono text-xs">{{ revealedToken?.token }}</code>
-          <UiButton
-            type="button"
-            variant="secondary"
-            size="sm"
-            :class="copiedKey === 'reveal' ? 'text-success' : 'text-muted-foreground'"
-            @click="copyRevealedToken"
-          >
-            <Check v-if="copiedKey === 'reveal'" class="h-3.5 w-3.5" />
-            <Copy v-else class="h-3.5 w-3.5" />
-            {{ copiedKey === 'reveal' ? 'Copied' : 'Copy' }}
-          </UiButton>
-        </div>
-        <p class="text-xs text-muted-foreground">
-          Use it as <code class="font-mono">Authorization: Bearer su_…</code>, or save it with
-          <code class="font-mono">super login su_…</code>.
-        </p>
-        <div class="flex justify-end">
-          <UiButton @click="revealedToken = null">Done</UiButton>
-        </div>
-      </div>
-    </UiDialog>
   </div>
 </template>
