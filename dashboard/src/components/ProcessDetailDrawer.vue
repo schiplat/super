@@ -272,11 +272,8 @@ async function refreshDetailNow() {
   if (!props.processId) return;
   refreshingDetail.value = true;
   try {
-    // Always refresh header/status; also refresh the active tab's data.
+    // Refresh the header/status; log history refreshes via its own button.
     const jobs: Promise<unknown>[] = [fetchDetail(props.processId)];
-    if (activeTab.value === 'logs' && logMode.value === 'history') {
-      jobs.push(fetchHistory(props.processId));
-    }
     await Promise.all(jobs);
   } finally {
     refreshingDetail.value = false;
@@ -291,7 +288,7 @@ function syncLogDefaults() {
 }
 
 watch(historySource, async () => { if (logMode.value === 'history' && props.processId && props.modelValue) await fetchHistory(props.processId); });
-watch(activeTab, (newTab) => { if (newTab === 'logs' && logMode.value === 'live') nextTick(() => terminalRef.value?.fit()); });
+watch(logMode, (mode) => { if (mode === 'live') nextTick(() => terminalRef.value?.fit()); });
 
 async function fetchHistory(id: string) {
   historyLoading.value = true; historyError.value = null; historyHint.value = null;
@@ -308,7 +305,13 @@ async function fetchHistory(id: string) {
   finally { historyLoading.value = false; }
 }
 
-function viewErrorLogs() { activeTab.value = 'logs'; logMode.value = 'history'; historySource.value = 'stderr'; historyHint.value = isHealthCheckError.value ? 'Look for amber [superd] lines in stderr.' : null; if (props.processId) void fetchHistory(props.processId); }
+function viewErrorLogs() {
+  logMode.value = 'history';
+  historySource.value = 'stderr';
+  historyHint.value = isHealthCheckError.value ? 'Look for amber [superd] lines in stderr.' : null;
+  if (props.processId) void fetchHistory(props.processId);
+  document.getElementById('detail-logs')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
 
 /** Bind WS log lines into the xterm instance. Must run on every drawer open — closing
  *  unsubscribes, and reopening the same processId does not re-fire the processId watcher. */
@@ -379,6 +382,23 @@ async function jumpToDependency(depName: string) {
 onUnmounted(() => { unbindLiveLogs(props.processId); });
 function close() { emit('update:modelValue', false); }
 function goToEdit() { if (props.processId) router.push(`/programs/${props.processId}/edit`); }
+
+function formatMem(bytes?: number): string {
+  if (!bytes) return '—';
+  if (bytes >= 1024 ** 3) return `${(bytes / 1024 ** 3).toFixed(1)}G`;
+  if (bytes >= 1024 ** 2) return `${Math.round(bytes / 1024 / 1024)}M`;
+  return `${Math.round(bytes / 1024)}K`;
+}
+
+function formatUptime(sec?: number): string {
+  if (sec == null) return '—';
+  if (sec < 60) return `${sec}s`;
+  const min = Math.floor(sec / 60);
+  if (min < 60) return `${min}m ${sec % 60}s`;
+  const hr = Math.floor(min / 60);
+  if (hr < 24) return `${hr}h ${min % 60}m`;
+  return `${Math.floor(hr / 24)}d ${hr % 24}h`;
+}
 </script>
 
 <template>
@@ -389,151 +409,180 @@ function goToEdit() { if (props.processId) router.push(`/programs/${props.proces
       ? 'h-full w-full overflow-hidden rounded-2xl ring-1 ring-border/60'
       : 'fixed inset-y-0 right-0 z-[101] w-full md:w-[850px] shadow-2xl transform transition-transform duration-300 ease-in-out border-l border-border ' + (modelValue ? 'translate-x-0' : 'translate-x-full')"
   >
-    <div v-if="processId" class="flex flex-col h-full">
+    <div v-if="processId" class="flex flex-col h-full min-h-0">
 
-      <!-- Header -->
-      <div class="px-5 md:px-7 pt-5 pb-0 bg-card shrink-0" :class="currentError ? '' : 'border-b border-border'">
-        <div class="flex items-start gap-3">
-          <div class="w-11 h-11 bg-muted rounded-2xl flex items-center justify-center text-muted-foreground shrink-0 mt-0.5 border border-border/60"><Cpu class="w-5 h-5" /></div>
-          <div class="min-w-0 flex-1">
-            <div class="flex items-center gap-2 min-w-0">
-              <h2 class="text-lg font-bold tracking-tight truncate text-foreground">{{ summaryData?.name || 'Loading...' }}</h2>
-              <button
-                v-if="summaryData?.name"
-                type="button"
-                class="inline-flex h-7 w-7 items-center justify-center rounded-[7px] text-muted-foreground/50 hover:text-foreground hover:bg-muted transition-colors shrink-0"
-                :title="nameCopied ? 'Copied' : 'Copy name'"
-                @click="copyProgramName"
-              >
-                <Check v-if="nameCopied" class="w-3.5 h-3.5 text-success" />
-                <Copy v-else class="w-3.5 h-3.5" />
-              </button>
-              <StatusBadge
-                :status="programStatus || 'Stopped'"
-                :health-error="displayHealthError"
-              />
-            </div>
-            <div class="flex items-center gap-1.5 mt-1.5 mb-3 min-w-0">
-              <span class="text-xs text-muted-foreground font-mono tracking-tight truncate" :title="processId">{{ processId.slice(0, 8) }}</span>
-              <button
-                v-if="processId"
-                type="button"
-                class="inline-flex h-5 w-5 items-center justify-center rounded text-muted-foreground/40 hover:text-foreground hover:bg-muted transition-colors shrink-0"
-                :title="idCopied ? 'Copied' : 'Copy full id'"
-                @click="copyProgramId"
-              >
-                <Check v-if="idCopied" class="w-3 h-3 text-success" />
-                <Copy v-else class="w-3 h-3" />
-              </button>
-              <span v-if="summaryData?.pid" class="text-xs text-muted-foreground/30 select-none">·</span>
-              <span v-if="summaryData?.pid" class="text-xs text-muted-foreground font-mono">pid {{ summaryData.pid }}</span>
-            </div>
-          </div>
-          <div class="flex items-center gap-1 shrink-0 -mt-0.5">
+      <!-- Scrollable single-page flow -->
+      <div class="flex-1 min-h-0 overflow-y-auto">
+
+        <!-- Hero -->
+        <div class="px-5 md:px-7 pt-5">
+          <div class="flex items-start gap-3">
             <button
-              class="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-[7px] text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
-              :disabled="refreshingDetail"
-              :title="activeTab === 'logs' && logMode === 'history' ? 'Refresh status and log history' : 'Refresh status'"
-              @click="refreshDetailNow"
+              type="button"
+              class="inline-flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted/40 hover:text-foreground shrink-0 mt-0.5"
+              :title="inline ? 'Back to programs' : 'Close'"
+              @click="close"
             >
-              <RefreshCw class="w-3.5 h-3.5" :class="{ 'animate-spin': refreshingDetail }" />
-              <span class="hidden sm:inline">Refresh</span>
-            </button>
-            <button v-if="authStore.canManage" class="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-[7px] text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-muted transition-colors" @click="goToEdit">
-              <Edit class="w-3.5 h-3.5" /><span class="hidden sm:inline">Edit</span>
-            </button>
-            <button class="inline-flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground/60 hover:text-foreground hover:bg-muted transition-colors ml-1" :title="inline ? 'Back to programs' : 'Close'" @click="close">
               <ArrowLeft v-if="inline" class="w-4 h-4" />
               <X v-else class="w-4 h-4" />
             </button>
+            <div class="min-w-0 flex-1">
+              <div class="flex items-center gap-2 min-w-0">
+                <h2 class="text-lg font-bold tracking-tight truncate text-foreground">{{ summaryData?.name || 'Loading...' }}</h2>
+                <button
+                  v-if="summaryData?.name"
+                  type="button"
+                  class="inline-flex h-7 w-7 items-center justify-center rounded-lg text-muted-foreground/50 hover:text-foreground hover:bg-muted transition-colors shrink-0"
+                  :title="nameCopied ? 'Copied' : 'Copy name'"
+                  @click="copyProgramName"
+                >
+                  <Check v-if="nameCopied" class="w-3.5 h-3.5 text-success" />
+                  <Copy v-else class="w-3.5 h-3.5" />
+                </button>
+                <StatusBadge
+                  :status="programStatus || 'Stopped'"
+                  :health-error="displayHealthError"
+                />
+              </div>
+              <div class="flex items-center gap-1.5 mt-1.5 min-w-0">
+                <span class="text-xs text-muted-foreground font-mono tracking-tight truncate" :title="processId">{{ processId.slice(0, 8) }}</span>
+                <button
+                  v-if="processId"
+                  type="button"
+                  class="inline-flex h-5 w-5 items-center justify-center rounded text-muted-foreground/40 hover:text-foreground hover:bg-muted transition-colors shrink-0"
+                  :title="idCopied ? 'Copied' : 'Copy full id'"
+                  @click="copyProgramId"
+                >
+                  <Check v-if="idCopied" class="w-3 h-3 text-success" />
+                  <Copy v-else class="w-3 h-3" />
+                </button>
+                <span v-if="summaryData?.group" class="text-xs text-muted-foreground/30 select-none">·</span>
+                <span v-if="summaryData?.group" class="text-xs text-muted-foreground">{{ summaryData.group }}</span>
+              </div>
+            </div>
+            <div class="flex items-center gap-1 shrink-0">
+              <button
+                type="button"
+                class="inline-flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted/40 hover:text-foreground"
+                :disabled="refreshingDetail"
+                title="Refresh status"
+                @click="refreshDetailNow"
+              >
+                <RefreshCw class="w-4 h-4" :class="{ 'animate-spin': refreshingDetail }" />
+              </button>
+              <button
+                v-if="authStore.canManage"
+                type="button"
+                class="inline-flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted/40 hover:text-foreground"
+                title="Edit configuration"
+                @click="goToEdit"
+              >
+                <Edit class="w-4 h-4" />
+              </button>
+            </div>
+          </div>
+
+          <!-- Metric tiles: live facts only (a stopped/fatal program has none) -->
+          <div v-if="summaryData?.pid" class="mt-4 grid grid-cols-4 gap-2">
+            <div class="rounded-xl bg-muted/55 px-3 py-2.5">
+              <div class="text-[10px] font-semibold uppercase tracking-[0.06em] text-muted-foreground">CPU</div>
+              <div class="mt-0.5 font-mono text-sm font-semibold tabular-nums">{{ summaryData.cpu_usage != null ? summaryData.cpu_usage.toFixed(1) + '%' : '—' }}</div>
+            </div>
+            <div class="rounded-xl bg-muted/55 px-3 py-2.5">
+              <div class="text-[10px] font-semibold uppercase tracking-[0.06em] text-muted-foreground">MEM</div>
+              <div class="mt-0.5 font-mono text-sm font-semibold tabular-nums">{{ formatMem(summaryData.mem_usage) }}</div>
+            </div>
+            <div class="rounded-xl bg-muted/55 px-3 py-2.5">
+              <div class="text-[10px] font-semibold uppercase tracking-[0.06em] text-muted-foreground">UPTIME</div>
+              <div class="mt-0.5 font-mono text-sm font-semibold tabular-nums">{{ formatUptime(summaryData.uptime_sec) }}</div>
+            </div>
+            <div class="rounded-xl bg-muted/55 px-3 py-2.5">
+              <div class="text-[10px] font-semibold uppercase tracking-[0.06em] text-muted-foreground">PID</div>
+              <div class="mt-0.5 font-mono text-sm font-semibold tabular-nums">{{ summaryData.pid }}</div>
+            </div>
           </div>
         </div>
-        <div class="py-3 border-t border-border/60"><ActionButtons :id="processId" :status="programStatus || 'Stopped'" :name="summaryData?.name" /></div>
-      </div>
 
-      <!-- Error banner -->
-      <div v-if="currentError" class="px-6 py-4 flex items-start gap-3 shrink-0" :class="isHealthCheckError ? 'bg-warning/5' : 'bg-destructive/5'">
-        <div class="mt-0.5 shrink-0" :class="isHealthCheckError ? 'text-warning' : 'text-destructive'"><AlertTriangle class="w-5 h-5" /></div>
-        <div class="flex-1 min-w-0">
-          <h3 class="text-sm font-bold" :class="isHealthCheckError ? 'text-warning' : 'text-destructive'">{{ isHealthCheckError ? 'Health Check Failed' : 'Latest Error' }}</h3>
-          <p class="text-xs mt-1 font-mono break-words leading-relaxed select-text" :class="isHealthCheckError ? 'text-warning/80' : 'text-destructive/80'">{{ currentError }}</p>
-          <p class="text-xs mt-2 text-muted-foreground">
-            <template v-if="isHealthCheckError">Check <strong>Configuration → health_check</strong>. Use the button below to open stderr file history.</template>
-            <template v-else>superd keeps only the most recent error in memory. Use file logs below for full history.</template>
-          </p>
-          <button type="button" class="inline-flex items-center gap-1 mt-2 px-2.5 py-1 rounded-[6px] text-xs font-medium border transition-colors" :class="isHealthCheckError ? 'border-warning/30 text-warning hover:bg-warning/10' : 'border-destructive/30 text-destructive hover:bg-destructive/10'" @click="viewErrorLogs">
-            {{ isHealthCheckError ? 'View stderr diagnostics' : 'View file log history' }}
-          </button>
+        <!-- Error banner -->
+        <div v-if="currentError" class="px-5 md:px-7 mt-4">
+          <div class="flex items-start gap-3 rounded-xl px-4 py-3" :class="isHealthCheckError ? 'bg-warning/10' : 'bg-destructive/10'">
+            <div class="mt-0.5 shrink-0" :class="isHealthCheckError ? 'text-warning' : 'text-destructive'"><AlertTriangle class="w-5 h-5" /></div>
+            <div class="flex-1 min-w-0">
+              <h3 class="text-sm font-bold" :class="isHealthCheckError ? 'text-warning' : 'text-destructive'">{{ isHealthCheckError ? 'Health Check Failed' : 'Latest Error' }}</h3>
+              <p class="text-xs mt-1 font-mono break-words leading-relaxed select-text" :class="isHealthCheckError ? 'text-warning/80' : 'text-destructive/80'">{{ currentError }}</p>
+              <p class="text-xs mt-2 text-muted-foreground">
+                <template v-if="isHealthCheckError">Check <strong>Configuration → health_check</strong>. Use the button below to open stderr file history.</template>
+                <template v-else>superd keeps only the most recent error in memory. Use file logs below for full history.</template>
+              </p>
+              <button type="button" class="inline-flex items-center gap-1 mt-2 px-2.5 py-1 rounded-[6px] text-xs font-medium border transition-colors" :class="isHealthCheckError ? 'border-warning/30 text-warning hover:bg-warning/10' : 'border-destructive/30 text-destructive hover:bg-destructive/10'" @click="viewErrorLogs">
+                {{ isHealthCheckError ? 'View stderr diagnostics' : 'View file log history' }}
+              </button>
+            </div>
+          </div>
         </div>
-      </div>
 
-      <!-- Tabs -->
-      <div class="px-5 md:px-7 border-b border-border bg-muted/40 shrink-0">
-        <div class="flex gap-0">
-          <button class="flex items-center gap-2 px-4 py-3 text-sm font-medium border-b-[3px] transition-all -mb-px" :class="activeTab === 'logs' ? 'border-foreground text-foreground' : 'border-transparent text-muted-foreground hover:text-foreground hover:border-border'" @click="activeTab = 'logs'"><TerminalIcon class="w-4 h-4" />Logs</button>
-          <button class="flex items-center gap-2 px-4 py-3 text-sm font-medium border-b-[3px] transition-all -mb-px" :class="activeTab === 'events' ? 'border-foreground text-foreground' : 'border-transparent text-muted-foreground hover:text-foreground hover:border-border'" @click="activeTab = 'events'"><History class="w-4 h-4" />Events</button>
-          <button class="flex items-center gap-2 px-4 py-3 text-sm font-medium border-b-[3px] transition-all -mb-px" :class="activeTab === 'config' ? 'border-foreground text-foreground' : 'border-transparent text-muted-foreground hover:text-foreground hover:border-border'" @click="activeTab = 'config'"><FileText class="w-4 h-4" />Configuration</button>
-          <button
-            v-for="tab in pluginTabs"
-            :key="tab.id"
-            type="button"
-            class="flex items-center gap-2 px-4 py-3 text-sm font-medium border-b-[3px] transition-all -mb-px"
-            :class="activeTab === tab.id ? 'border-foreground text-foreground' : 'border-transparent text-muted-foreground hover:text-foreground hover:border-border'"
-            @click="activeTab = tab.id"
-          >{{ tab.label }}</button>
-          <!-- STABLE: process.detail.tabs — plugins call registerTab; need process + activeTab. Do not change without tests/slots.spec.ts / ui-bridge review. -->
-          <Slot name="process.detail.tabs" :context="{ process: summaryData, registerTab, activeTab }" />
-        </div>
-      </div>
-
-      <!-- Content -->
-      <div class="flex-1 overflow-hidden relative bg-muted/30">
         <!-- Logs -->
-        <div v-show="activeTab === 'logs'" class="absolute inset-0 flex flex-col">
-          <div class="px-4 py-2.5 border-b border-border bg-card shrink-0 space-y-2">
-            <div class="flex items-center justify-between gap-3">
-              <div class="bg-muted/80 p-0.5 rounded-lg inline-flex border border-border/40">
-                <button type="button" class="px-3 py-1.5 rounded-[7px] text-xs font-medium transition-all" :class="logMode === 'live' ? 'bg-card text-foreground shadow-xs' : 'text-muted-foreground hover:text-foreground'" @click="logMode = 'live'">Live stream</button>
-                <button type="button" class="px-3 py-1.5 rounded-[7px] text-xs font-medium transition-all" :class="logMode === 'history' ? 'bg-card text-foreground shadow-xs' : 'text-muted-foreground hover:text-foreground'" @click="logMode = 'history'">Log history</button>
+        <div id="detail-logs" class="px-5 md:px-7 mt-6">
+          <div class="flex items-center justify-between gap-3 mb-2">
+            <h3 class="text-[11px] font-semibold uppercase tracking-[0.06em] text-muted-foreground">Logs</h3>
+            <div class="flex items-center gap-2">
+              <div class="bg-muted p-0.5 rounded-lg inline-flex border border-border/40">
+                <button type="button" class="px-3 py-1 rounded-md text-xs font-medium transition-all" :class="logMode === 'live' ? 'bg-card text-foreground shadow-xs' : 'text-muted-foreground hover:text-foreground'" @click="logMode = 'live'">Live</button>
+                <button type="button" class="px-3 py-1 rounded-md text-xs font-medium transition-all" :class="logMode === 'history' ? 'bg-card text-foreground shadow-xs' : 'text-muted-foreground hover:text-foreground'" @click="logMode = 'history'">History</button>
               </div>
-              <span v-if="logMode === 'live'" class="text-xs text-muted-foreground/50 hidden sm:inline">WebSocket tail</span>
-            </div>
-            <div v-if="logMode === 'history'" class="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-3">
-              <div class="bg-muted/80 p-0.5 rounded-lg inline-flex border border-border/40 shrink-0">
-                <button v-for="opt in streamOptions" :key="opt.value" type="button" class="px-2.5 py-1 rounded-[6px] text-xs font-medium transition-all" :class="historySource === opt.value ? 'bg-card text-foreground shadow-xs' : 'text-muted-foreground hover:text-foreground'" @click="historySource = opt.value">{{ opt.label }}</button>
-              </div>
-              <div class="flex items-center gap-2 shrink-0">
-                <div class="bg-muted/80 p-0.5 rounded-lg inline-flex border border-border/40">
-                  <button v-for="n in tailOptions" :key="n" type="button" class="min-w-[2.25rem] px-2 py-1 rounded-[6px] text-xs font-medium font-mono transition-all" :class="historyLines === n ? 'bg-card text-foreground shadow-xs' : 'text-muted-foreground hover:text-foreground'" @click="historyLines = n; processId && fetchHistory(processId)">{{ n }}</button>
-                </div>
-                <span class="text-xs text-muted-foreground/50">lines</span>
-              </div>
-              <button type="button" class="inline-flex items-center px-2.5 py-1 rounded-[6px] text-xs font-medium border border-border text-muted-foreground hover:text-foreground hover:bg-muted transition-colors shrink-0 self-start sm:self-auto" :disabled="historyLoading || !processId" @click="processId && fetchHistory(processId)">Refresh</button>
+              <button type="button" class="inline-flex h-7 w-7 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted/40 hover:text-foreground" :disabled="historyLoading || !processId" title="Refresh logs" @click="processId && fetchHistory(processId)">
+                <RefreshCw class="w-3.5 h-3.5" :class="{ 'animate-spin': historyLoading }" />
+              </button>
             </div>
           </div>
-          <div v-if="logMode === 'live'" class="flex-1 p-0 bg-[#1e1e1e] min-h-0"><LogTerminal ref="terminalRef" :logs="[]" /></div>
-          <div v-else class="flex-1 min-h-0 overflow-auto bg-[#1e1e1e] p-4">
-            <div v-if="historyLoading" class="text-gray-400 text-sm">Loading...</div>
-            <div v-else-if="historyError" class="text-destructive/70 text-sm">{{ historyError }}</div>
-            <template v-else>
-              <p v-if="historyHint" class="text-amber-300/90 text-xs mb-3">{{ historyHint }}</p>
-              <pre class="text-xs text-gray-200 font-mono whitespace-pre-wrap break-words">{{ historyContent }}</pre>
-            </template>
+          <div v-if="logMode === 'history'" class="mb-2 flex flex-wrap items-center gap-2">
+            <div class="bg-muted p-0.5 rounded-lg inline-flex border border-border/40">
+              <button v-for="opt in streamOptions" :key="opt.value" type="button" class="px-2.5 py-1 rounded-md text-xs font-medium transition-all" :class="historySource === opt.value ? 'bg-card text-foreground shadow-xs' : 'text-muted-foreground hover:text-foreground'" @click="historySource = opt.value">{{ opt.label }}</button>
+            </div>
+            <div class="flex items-center gap-1.5">
+              <div class="bg-muted p-0.5 rounded-lg inline-flex border border-border/40">
+                <button v-for="n in tailOptions" :key="n" type="button" class="min-w-[2rem] px-2 py-1 rounded-md text-xs font-medium font-mono transition-all" :class="historyLines === n ? 'bg-card text-foreground shadow-xs' : 'text-muted-foreground hover:text-foreground'" @click="historyLines = n; processId && fetchHistory(processId)">{{ n }}</button>
+              </div>
+              <span class="text-xs text-muted-foreground/50">lines</span>
+            </div>
+          </div>
+          <div class="rounded-xl border border-border/60 overflow-hidden bg-[#1e1e1e]">
+            <div v-if="logMode === 'live'" class="h-64"><LogTerminal ref="terminalRef" :logs="[]" /></div>
+            <div v-else class="h-64 overflow-auto p-3">
+              <div v-if="historyLoading" class="text-gray-400 text-sm">Loading...</div>
+              <div v-else-if="historyError" class="text-destructive/70 text-sm">{{ historyError }}</div>
+              <template v-else>
+                <p v-if="historyHint" class="text-amber-300/90 text-xs mb-3">{{ historyHint }}</p>
+                <pre class="text-xs text-gray-200 font-mono whitespace-pre-wrap break-words">{{ historyContent }}</pre>
+              </template>
+            </div>
           </div>
         </div>
 
-        <!-- Events: same timeline as /events, scoped to this program -->
-        <div v-show="activeTab === 'events'" class="absolute inset-0 flex flex-col min-h-0">
+        <!-- Events -->
+        <div class="px-5 md:px-7 mt-6">
+          <div class="flex items-center justify-between gap-3 mb-2">
+            <h3 class="text-[11px] font-semibold uppercase tracking-[0.06em] text-muted-foreground">Events</h3>
+            <button type="button" class="text-xs text-muted-foreground transition-colors hover:text-foreground" @click="processId && router.push(`/events?program_id=${processId}`)">
+              View all ↗
+            </button>
+          </div>
           <EventTimeline compact :program-id="processId ?? undefined" />
         </div>
 
-        <!-- Config -->
-        <div v-show="activeTab === 'config'" class="absolute inset-0 overflow-y-auto p-4 md:p-6 lg:p-8">
+        <!-- Configuration -->
+        <div id="detail-config" class="px-5 md:px-7 mt-6 pb-2">
+          <div class="flex items-center justify-between gap-3 mb-3">
+            <h3 class="text-[11px] font-semibold uppercase tracking-[0.06em] text-muted-foreground">Configuration</h3>
+            <button v-if="authStore.canManage" type="button" class="text-xs text-muted-foreground transition-colors hover:text-foreground" @click="goToEdit">
+              Edit ↗
+            </button>
+          </div>
           <div v-if="isLoadingDetail" class="flex justify-center py-10"><span class="inline-block w-6 h-6 border-2 border-muted-foreground/30 border-t-foreground/50 rounded-full animate-spin"></span></div>
-          <div v-else-if="!detailData" class="flex flex-col items-center justify-center h-full text-muted-foreground/50 gap-3">
+          <div v-else-if="!detailData" class="flex flex-col items-center justify-center py-10 text-muted-foreground/50 gap-3">
             <FileText class="w-10 h-10" />
             <p class="text-sm font-medium">No configuration data available</p>
-            <p class="text-xs">Try refreshing the page or reopening this detail panel.</p>
+            <p class="text-xs">Try refreshing or reopening this page.</p>
           </div>
             <div v-else class="flex flex-col gap-5 md:gap-6 max-w-4xl pb-10">
             <!-- Execution Context -->
@@ -778,15 +827,24 @@ function goToEdit() { if (props.processId) router.push(`/programs/${props.proces
           </div>
         </div>
 
-        <!-- Plugin detail tabs -->
-        <div
-          v-for="tab in pluginTabs"
-          :key="tab.id"
-          v-show="activeTab === tab.id"
-          class="absolute inset-0 overflow-y-auto p-4 md:p-6 lg:p-8"
-        >
+
+        <!-- Plugin detail tabs (same section flow) -->
+        <div v-for="tab in pluginTabs" :key="tab.id" class="px-5 md:px-7 mt-6 pb-2">
+          <div class="mb-3">
+            <h3 class="text-[11px] font-semibold uppercase tracking-[0.06em] text-muted-foreground">{{ tab.label }}</h3>
+          </div>
           <component :is="tab.component" :process="summaryData" />
         </div>
+
+        <!-- STABLE: process.detail.tabs — plugins call registerTab; need process + activeTab. Do not change without tests/slots.spec.ts / ui-bridge review. -->
+        <Slot name="process.detail.tabs" :context="{ process: summaryData, registerTab, activeTab }" />
+
+        <div class="h-5"></div>
+      </div>
+
+      <!-- Pinned action bar -->
+      <div class="shrink-0 border-t border-border bg-background/95 backdrop-blur px-4 py-3">
+        <ActionButtons :id="processId ?? ''" :status="programStatus || 'Stopped'" :name="summaryData?.name ?? undefined" />
       </div>
     </div>
   </div>

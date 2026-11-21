@@ -1,0 +1,404 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Program detail — H5 mockup</title>
+<style>
+  /* Dashboard design tokens (dark) */
+  :root {
+    --bg: hsl(215 20% 6%);
+    --card: hsl(215 15% 8%);
+    --muted: hsl(185 12% 14%);
+    --muted-fg: hsl(180 10% 56%);
+    --fg: hsl(185 15% 93%);
+    --primary: hsl(172 72% 48%);
+    --primary-fg: hsl(180 30% 8%);
+    --border: hsl(185 10% 20%);
+    --destructive: hsl(0 62% 50%);
+    --warning: hsl(36 75% 48%);
+    --success: hsl(155 55% 42%);
+    --violet: #8b5cf6;
+    --radius: 16px;
+  }
+  * { box-sizing: border-box; margin: 0; }
+  body {
+    background: hsl(215 20% 4%);
+    color: var(--fg);
+    font: 14px/1.45 -apple-system, "SF Pro Text", "Segoe UI", sans-serif;
+    display: flex; gap: 28px; justify-content: center; align-items: flex-start;
+    padding: 24px; min-height: 100vh;
+  }
+  .frame-title { text-align: center; color: var(--muted-fg); font-size: 12px; margin-bottom: 10px; }
+  .phone {
+    width: 390px; display: flex; flex-direction: column;
+    background: var(--card); border: 1px solid var(--border); border-radius: 24px;
+    overflow: hidden; box-shadow: 0 12px 40px rgba(0,0,0,.45);
+  }
+  .screen { height: 760px; overflow-y: auto; scrollbar-width: thin; position: relative; }
+  .pad { padding: 16px; }
+
+  /* Hero */
+  .hero { padding: 16px 16px 0; }
+  .hero-top { display: flex; align-items: flex-start; gap: 10px; }
+  .back {
+    width: 32px; height: 32px; flex: none; display: grid; place-items: center;
+    border-radius: 10px; color: var(--muted-fg); background: transparent;
+    border: 0; cursor: pointer; font-size: 16px;
+  }
+  .back:hover { background: var(--muted); color: var(--fg); }
+  .hero-name { flex: 1; min-width: 0; }
+  .hero-name h1 { font-size: 20px; font-weight: 700; letter-spacing: -.02em; }
+  .hero-name .id { font: 11px ui-monospace, monospace; color: var(--muted-fg); margin-top: 2px; }
+  .kebab {
+    width: 32px; height: 32px; flex: none; display: grid; place-items: center;
+    border-radius: 10px; color: var(--muted-fg); background: transparent; border: 0; cursor: pointer;
+  }
+  .kebab:hover { background: var(--muted); color: var(--fg); }
+  .hero-meta { display: flex; align-items: center; gap: 8px; margin-top: 10px; flex-wrap: wrap; }
+  .chip {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 2px 8px; border-radius: 8px; font-size: 11px; font-weight: 600;
+    letter-spacing: .04em; text-transform: uppercase;
+  }
+  .chip .dot { width: 6px; height: 6px; border-radius: 999px; }
+  .chip.healthy { background: hsl(155 55% 42% / .12); color: hsl(155 55% 60%); }
+  .chip.healthy .dot { background: var(--success); }
+  .chip.fatal { background: hsl(0 62% 50% / .12); color: hsl(0 70% 68%); }
+  .chip.fatal .dot { background: var(--destructive); }
+  .chip.group { background: var(--muted); color: var(--muted-fg); text-transform: none; font-weight: 500; }
+  .pid { font: 11px ui-monospace, monospace; color: var(--muted-fg); }
+
+  /* Metric tiles */
+  .tiles { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-top: 14px; }
+  .tile { background: var(--muted); border-radius: 12px; padding: 10px 10px 8px; }
+  .tile .k { font-size: 10px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--muted-fg); }
+  .tile .v { font-size: 16px; font-weight: 600; font-variant-numeric: tabular-nums; margin-top: 3px; }
+
+  /* Action bar */
+  .actions {
+    position: sticky; bottom: 0; display: flex; gap: 8px; padding: 12px 16px;
+    background: hsl(215 20% 6% / .92); backdrop-filter: blur(8px);
+    border-top: 1px solid var(--border);
+  }
+  .btn {
+    flex: 1; height: 38px; border-radius: 12px; border: 1px solid var(--border);
+    background: var(--muted); color: var(--fg); font-weight: 600; font-size: 13px; cursor: pointer;
+  }
+  .btn:hover { background: hsl(185 12% 18%); }
+  .btn.primary { background: var(--primary); border-color: transparent; color: var(--primary-fg); }
+  .btn.primary:hover { filter: brightness(1.08); }
+  .btn.primary:disabled { opacity: .4; cursor: default; }
+  .btn.danger { background: transparent; color: hsl(0 70% 68%); }
+  .btn.danger:hover { background: hsl(0 62% 50% / .10); }
+
+  /* Error banner */
+  .banner {
+    margin: 14px 16px 0; display: flex; gap: 10px;
+    background: hsl(0 62% 50% / .10); color: hsl(0 70% 68%);
+    border-radius: 12px; padding: 10px 12px; font-size: 12px; line-height: 1.5;
+  }
+  .banner .mark { font-weight: 800; }
+  .banner code { font: 11px ui-monospace, monospace; background: hsl(0 62% 50% / .15); padding: 1px 5px; border-radius: 6px; }
+
+  /* Sections */
+  .section { margin-top: 18px; padding: 0 16px; }
+  .sec-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+  .sec-head h2 { font-size: 12px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--muted-fg); }
+  .sec-link { font-size: 12px; color: var(--muted-fg); background: none; border: 0; cursor: pointer; }
+  .sec-link:hover { color: var(--fg); }
+  .seg { display: inline-flex; background: var(--muted); border-radius: 10px; padding: 2px; }
+  .seg button { border: 0; background: transparent; color: var(--muted-fg); font-size: 11px; font-weight: 600; padding: 3px 10px; border-radius: 8px; cursor: pointer; }
+  .seg button.on { background: var(--card); color: var(--fg); }
+
+  /* Terminal */
+  .term {
+    background: #14161a; border: 1px solid var(--border); border-radius: 12px;
+    padding: 10px 12px; font: 11px/1.7 ui-monospace, "SF Mono", monospace; overflow: hidden;
+  }
+  .term .t { color: hsl(185 10% 45%); }
+  .term .ok { color: hsl(155 55% 58%); }
+  .term .err { color: hsl(0 70% 68%); }
+  .term .dim { color: hsl(185 10% 45%); }
+  .term .mark { color: var(--violet); }
+
+  /* Events list */
+  .ev { display: flex; align-items: center; gap: 10px; padding: 8px 4px; border-bottom: 1px solid hsl(185 10% 20% / .6); }
+  .ev:last-child { border-bottom: 0; }
+  .ev .dot { width: 7px; height: 7px; border-radius: 999px; flex: none; }
+  .ev .dot.ok { background: var(--success); } .ev .dot.warn { background: var(--warning); } .ev .dot.bad { background: var(--destructive); }
+  .ev .time { font: 11px ui-monospace, monospace; color: var(--muted-fg); flex: none; }
+  .ev .what { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 12px; color: var(--fg); }
+  .ev .what small { color: var(--muted-fg); }
+
+  /* Config kv */
+  .kv { background: var(--muted); border-radius: 12px; padding: 4px 12px; }
+  .kv .row { display: flex; justify-content: space-between; gap: 12px; padding: 8px 0; border-bottom: 1px solid hsl(185 10% 20% / .6); font-size: 12px; }
+  .kv .row:last-child { border-bottom: 0; }
+  .kv .k { color: var(--muted-fg); }
+  .kv .v { font: 11px ui-monospace, monospace; text-align: right; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 220px; }
+  .kv .v.on { color: var(--primary); }
+
+  .foot { height: 12px; }
+  /* Desktop frame: same IA, wider canvas, duo grid at the bottom */
+  .phone.wide { width: 760px; }
+  .phone.wide .tiles { grid-template-columns: repeat(4, 1fr); gap: 10px; }
+  .phone.wide .tile { padding: 14px 14px 12px; }
+  .phone.wide .tile .v { font-size: 20px; }
+  .phone.wide .term { font-size: 12px; padding: 14px 16px; }
+  .duo { display: grid; grid-template-columns: 1.2fr 1fr; gap: 20px; margin-top: 18px; }
+  .duo .section { margin-top: 0; padding: 0; }
+  .wide-only { display: none; }
+  body.show-wide .wide-only { display: block; }
+  .hero-actions { display: flex; gap: 8px; }
+  .wide .hero-actions { display: flex; }
+  .btn.slim { flex: none; padding: 0 14px; }
+</style>
+</head>
+<body class="show-wide">
+
+  <!-- ============ Variant 1: Healthy ============ -->
+  <div>
+    <div class="frame-title">Healthy 状态</div>
+    <div class="phone">
+      <div class="screen">
+        <div class="hero">
+          <div class="hero-top">
+            <button class="back">‹</button>
+            <div class="hero-name">
+              <h1>demo-web</h1>
+              <div class="id">48b39470 · group <b>demo</b></div>
+            </div>
+            <button class="kebab">⋯</button>
+          </div>
+          <div class="hero-meta">
+            <span class="chip healthy"><span class="dot"></span>Healthy</span>
+            <span class="pid">pid 63345</span>
+          </div>
+          <div class="tiles">
+            <div class="tile"><div class="k">CPU</div><div class="v">0.4%</div></div>
+            <div class="tile"><div class="k">MEM</div><div class="v">12.9M</div></div>
+            <div class="tile"><div class="k">UPTIME</div><div class="v">3h 12m</div></div>
+            <div class="tile"><div class="k">RESTARTS</div><div class="v">2</div></div>
+          </div>
+        </div>
+
+        <div class="section">
+          <div class="sec-head">
+            <h2>Logs</h2>
+            <div class="seg">
+              <button class="on">Live</button>
+              <button>History</button>
+              <button>stderr</button>
+            </div>
+          </div>
+          <div class="term">
+            <div><span class="t">08:31:02</span>  <span class="mark">[superd]</span> spawn: node server.js --port 8080</div>
+            <div><span class="t">08:31:02</span>  <span class="ok">demo-web listening on :8080</span></div>
+            <div><span class="t">08:31:03</span>  GET /healthz <span class="ok">200</span> <span class="dim">2ms</span></div>
+            <div><span class="t">08:31:07</span>  GET / <span class="ok">200</span> <span class="dim">5ms</span></div>
+            <div><span class="t">08:31:12</span>  GET /api/items <span class="ok">200</span> <span class="dim">8ms</span></div>
+            <div><span class="t">08:31:15</span>  <span class="dim">gc pause 1.2ms</span></div>
+          </div>
+        </div>
+
+        <div class="section">
+          <div class="sec-head">
+            <h2>Events</h2>
+            <button class="sec-link">View all ↗</button>
+          </div>
+          <div class="ev"><span class="dot ok"></span><span class="time">08:31:02</span><span class="what">process_started</span></div>
+          <div class="ev"><span class="dot ok"></span><span class="time">08:30:58</span><span class="what">process_exit <small>· exit 0</small></span></div>
+          <div class="ev"><span class="dot warn"></span><span class="time">20:58:11</span><span class="what">process_backoff <small>· retry 1</small></span></div>
+        </div>
+
+        <div class="section">
+          <div class="sec-head">
+            <h2>Configuration</h2>
+            <button class="sec-link">Edit ↗</button>
+          </div>
+          <div class="kv">
+            <div class="row"><span class="k">Command</span><span class="v">node server.js --port 8080</span></div>
+            <div class="row"><span class="k">Working dir</span><span class="v">/srv/demo</span></div>
+            <div class="row"><span class="k">Autostart</span><span class="v on">on</span></div>
+            <div class="row"><span class="k">Restart</span><span class="v">unexpected</span></div>
+            <div class="row"><span class="k">Health</span><span class="v">GET /healthz · 10s</span></div>
+          </div>
+        </div>
+
+        <div class="foot"></div>
+      </div>
+      <div class="actions">
+        <button class="btn primary" disabled>Start</button>
+        <button class="btn">Restart</button>
+        <button class="btn danger">Stop</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ Variant 2: Fatal ============ -->
+  <div>
+    <div class="frame-title">Fatal 状态（错误横幅 + 受限操作）</div>
+    <div class="phone">
+      <div class="screen">
+        <div class="hero">
+          <div class="hero-top">
+            <button class="back">‹</button>
+            <div class="hero-name">
+              <h1>demo-worker-0</h1>
+              <div class="id">3348c5c2 · group <b>demo</b></div>
+            </div>
+            <button class="kebab">⋯</button>
+          </div>
+          <div class="hero-meta">
+            <span class="chip fatal"><span class="dot"></span>Fatal</span>
+          </div>
+        </div>
+
+        <div class="banner">
+          <span class="mark">!</span>
+          <div>
+            FLAPPING DETECTED: Restarted too frequently in 60s.
+            <div style="margin-top:6px">Last stderr: <code>exit status 1</code></div>
+          </div>
+        </div>
+
+        <div class="section">
+          <div class="sec-head">
+            <h2>Logs</h2>
+            <div class="seg">
+              <button>Live</button>
+              <button class="on">stderr</button>
+            </div>
+          </div>
+          <div class="term">
+            <div><span class="t">08:29:41</span>  <span class="err">Error: connect ECONNREFUSED 127.0.0.1:6379</span></div>
+            <div><span class="t">08:29:41</span>      <span class="err">at TCPConnectWrap.afterConnect</span></div>
+            <div><span class="t">08:29:40</span>  <span class="err">exit status 1</span></div>
+            <div><span class="t">08:29:38</span>  retry 1/3 in 1s…</div>
+          </div>
+        </div>
+
+        <div class="section">
+          <div class="sec-head">
+            <h2>Events</h2>
+            <button class="sec-link">View all ↗</button>
+          </div>
+          <div class="ev"><span class="dot bad"></span><span class="time">08:29:41</span><span class="what">process_fatal <small>· exit 1</small></span></div>
+          <div class="ev"><span class="dot warn"></span><span class="time">08:29:38</span><span class="what">process_backoff <small>· retry 2</small></span></div>
+          <div class="ev"><span class="dot warn"></span><span class="time">08:29:30</span><span class="what">health_restart</span></div>
+        </div>
+
+        <div class="section">
+          <div class="sec-head">
+            <h2>Configuration</h2>
+            <button class="sec-link">Edit ↗</button>
+          </div>
+          <div class="kv">
+            <div class="row"><span class="k">Command</span><span class="v">worker --queue a</span></div>
+            <div class="row"><span class="k">Autostart</span><span class="v on">on</span></div>
+            <div class="row"><span class="k">Restart</span><span class="v">unexpected</span></div>
+            <div class="row"><span class="k">Retry limit</span><span class="v">3</span></div>
+          </div>
+        </div>
+
+        <div class="foot"></div>
+      </div>
+      <div class="actions">
+        <button class="btn primary">Start</button>
+        <button class="btn">Restart</button>
+        <button class="btn danger">Remove</button>
+      </div>
+    </div>
+  </div>
+
+
+  <!-- ============ PC: same page, 760px content ============ -->
+  <div class="wide-only">
+    <div class="frame-title">PC 端（760px 内容宽 · 同一信息架构）</div>
+    <div class="phone wide">
+      <div class="screen">
+        <div class="hero">
+          <div class="hero-top">
+            <button class="back">‹</button>
+            <div class="hero-name">
+              <h1>demo-web</h1>
+              <div class="id">48b39470 · group <b>demo</b></div>
+            </div>
+            <div class="hero-actions">
+              <button class="btn slim">Edit</button>
+              <button class="kebab">⋯</button>
+            </div>
+          </div>
+          <div class="hero-meta">
+            <span class="chip healthy"><span class="dot"></span>Healthy</span>
+            <span class="pid">pid 63345</span>
+            <span class="pid">started 05:19:02</span>
+          </div>
+          <div class="tiles">
+            <div class="tile"><div class="k">CPU</div><div class="v">0.4%</div></div>
+            <div class="tile"><div class="k">MEM</div><div class="v">12.9 MB</div></div>
+            <div class="tile"><div class="k">UPTIME</div><div class="v">3h 12m</div></div>
+            <div class="tile"><div class="k">RESTARTS</div><div class="v">2</div></div>
+          </div>
+        </div>
+
+        <div class="section">
+          <div class="sec-head">
+            <h2>Logs</h2>
+            <div class="seg">
+              <button class="on">Live</button>
+              <button>stdout</button>
+              <button>stderr</button>
+            </div>
+          </div>
+          <div class="term" style="height: 190px;">
+            <div><span class="t">08:31:02</span>  <span class="mark">[superd]</span> spawn: node server.js --port 8080</div>
+            <div><span class="t">08:31:02</span>  <span class="ok">demo-web listening on :8080</span></div>
+            <div><span class="t">08:31:03</span>  GET /healthz <span class="ok">200</span> <span class="dim">2ms</span></div>
+            <div><span class="t">08:31:07</span>  GET / <span class="ok">200</span> <span class="dim">5ms</span></div>
+            <div><span class="t">08:31:12</span>  GET /api/items <span class="ok">200</span> <span class="dim">8ms</span></div>
+            <div><span class="t">08:31:15</span>  <span class="dim">gc pause 1.2ms</span></div>
+            <div><span class="t">08:31:18</span>  GET /healthz <span class="ok">200</span> <span class="dim">1ms</span></div>
+            <div><span class="t">08:31:22</span>  POST /api/deploy <span class="ok">202</span> <span class="dim">41ms</span></div>
+          </div>
+        </div>
+
+        <div class="duo">
+          <div class="section">
+            <div class="sec-head">
+              <h2>Events</h2>
+              <button class="sec-link">View all ↗</button>
+            </div>
+            <div class="ev"><span class="dot ok"></span><span class="time">08:31:02</span><span class="what">process_started</span></div>
+            <div class="ev"><span class="dot ok"></span><span class="time">08:30:58</span><span class="what">process_exit <small>· exit 0 · 3h 11m</small></span></div>
+            <div class="ev"><span class="dot warn"></span><span class="time">20:58:11</span><span class="what">process_backoff <small>· retry 1</small></span></div>
+            <div class="ev"><span class="dot ok"></span><span class="time">20:58:09</span><span class="what">process_recovered</span></div>
+          </div>
+          <div class="section">
+            <div class="sec-head">
+              <h2>Configuration</h2>
+              <button class="sec-link">Edit ↗</button>
+            </div>
+            <div class="kv">
+              <div class="row"><span class="k">Command</span><span class="v">node server.js --port 8080</span></div>
+              <div class="row"><span class="k">Working dir</span><span class="v">/srv/demo</span></div>
+              <div class="row"><span class="k">Autostart</span><span class="v on">on</span></div>
+              <div class="row"><span class="k">Restart</span><span class="v">unexpected</span></div>
+              <div class="row"><span class="k">Health</span><span class="v">GET /healthz · 10s</span></div>
+              <div class="row"><span class="k">Hooks</span><span class="v">post_start: notify.sh</span></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="foot"></div>
+      </div>
+      <div class="actions">
+        <button class="btn primary" disabled>Start</button>
+        <button class="btn">Restart</button>
+        <button class="btn danger">Stop</button>
+      </div>
+    </div>
+  </div>
+</body>
+</html>

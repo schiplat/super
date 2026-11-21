@@ -1,10 +1,12 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import ProcessDetailDrawer from '@/components/ProcessDetailDrawer.vue'
+import { useProgramStore } from '@/stores/program'
 
 const route = useRoute()
 const router = useRouter()
+const store = useProgramStore()
 
 const processId = computed(() => String(route.params.id ?? ''))
 
@@ -15,6 +17,12 @@ function back() {
 function changeProcess(id: string) {
   void router.replace(`/programs/${id}`)
 }
+
+// Deep link / refresh: the drawer's summary (name, status, pid) resolves from
+// the program store, so the list must be fetched here too.
+onMounted(() => {
+  void store.fetchPrograms()
+})
 </script>
 
 <template>
