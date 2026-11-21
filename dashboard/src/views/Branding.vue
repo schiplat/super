@@ -99,11 +99,11 @@ onMounted(() => {
         <!-- Preview: neutral inset (L2), the logo at its true display size.
              The sidebar's own background varies by theme, so faking it here
              only adds a second competing surface. -->
-        <div class="shrink-0 rounded-xl bg-muted/40 p-6">
+        <div class="flex shrink-0 flex-col items-center rounded-xl bg-muted/40 p-6">
           <img
             :src="currentLogoSrc"
             alt="Current sidebar logo"
-            class="h-8 max-w-[150px] object-contain"
+            class="block h-8 max-w-[150px] object-contain"
             @error="($event.target as HTMLImageElement).style.visibility = 'hidden'"
             @load="($event.target as HTMLImageElement).style.visibility = 'visible'"
           />
