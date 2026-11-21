@@ -252,7 +252,7 @@ onMounted(loadTokens)
         <p v-if="createTokenError" class="text-xs font-medium text-destructive">
           {{ createTokenError }}
         </p>
-        <div class="flex items-center justify-end gap-3">
+        <div class="flex items-center justify-end gap-2">
           <UiButton variant="secondary" @click="showCreateToken = false">Cancel</UiButton>
           <UiButton :disabled="creatingToken || !newTokenName.trim()" @click="createToken">
             {{ creatingToken ? 'Creating…' : 'Create token' }}

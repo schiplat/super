@@ -406,7 +406,7 @@ onMounted(() => {
         and new ones will be added. Running programs with changed configurations may not
         restart automatically.
       </template>
-      <div class="mt-2 flex items-center gap-3">
+      <div class="mt-2 flex items-center justify-end gap-2">
         <UiButton variant="secondary" @click="showReloadModal = false">Cancel</UiButton>
         <UiButton variant="destructive" @click="confirmReload">
           <RefreshCw class="h-4 w-4" />

@@ -916,7 +916,7 @@ onMounted(async () => {
         All SSO sessions are revoked immediately. Users sign in with
         <code class="font-mono">[server].auth_secret</code> until SSO is enabled again.
       </template>
-      <div class="mt-2 flex items-center gap-3">
+      <div class="mt-2 flex items-center justify-end gap-2">
         <UiButton variant="secondary" @click="showDisable = false">Cancel</UiButton>
         <UiButton variant="destructive" :disabled="disabling" @click="disable">
           {{ disabling ? 'Disabling…' : 'Disable SSO' }}

@@ -184,7 +184,7 @@ const programLabel = computed(() => {
         {{ modalContent.msg }}
       </template>
       <p class="mt-1 font-bold text-foreground">{{ programLabel }}</p>
-      <div class="flex items-center gap-3 mt-4">
+      <div class="mt-4 flex items-center justify-end gap-2">
         <UiButton variant="secondary" @click="showModal = false">Cancel</UiButton>
         <UiButton :variant="modalContent.variant" @click="executeAction">Confirm</UiButton>
       </div>
