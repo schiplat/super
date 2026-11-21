@@ -8,8 +8,7 @@ import {
   KeyRound,
   Menu,
   Moon,
-  PanelLeftClose,
-  PanelLeftOpen,
+  PanelLeft,
   RefreshCw,
   ShieldCheck,
   Sun,
@@ -164,29 +163,39 @@ onMounted(() => {
       class="flex h-full flex-col bg-sidebar text-sidebar-foreground"
       :class="sidebarClass"
     >
-      <!-- Brand row -->
+      <!-- Brand row: monogram tile + two-line wordmark when expanded; the
+           collapsed rail shows ONLY the centered tile — the expand affordance
+           lives in the top bar instead of squeezing a second element into
+           68px. -->
       <div
         class="flex h-16 shrink-0 items-center px-3"
         :class="effectiveCollapsed ? 'justify-center' : 'justify-between'"
       >
         <a
           href="/"
-          class="flex items-center gap-3 rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/30"
+          class="flex min-w-0 items-center gap-2.5 rounded-lg px-1 py-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/30"
+          :title="effectiveCollapsed ? 'Super' : undefined"
           @click.prevent="navigateTo('/'); closeNav()"
         >
-          <img src="/super.png" alt="Super Process Manager" class="h-8 w-auto object-contain" />
-          <span v-if="!effectiveCollapsed" class="text-sm font-semibold tracking-tight">
-            Super
+          <span
+            class="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary text-xs font-semibold tracking-wide text-primary-foreground"
+            aria-hidden="true"
+          >
+            Su
+          </span>
+          <span v-if="!effectiveCollapsed" class="min-w-0">
+            <span class="block truncate text-sm font-semibold tracking-tight">Super</span>
+            <span class="block truncate text-xs text-muted-foreground">Process Manager</span>
           </span>
         </a>
         <button
-          v-if="!isNarrow"
+          v-if="!isNarrow && !effectiveCollapsed"
           type="button"
-          class="inline-flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-sidebar-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/30"
-          :title="collapsed ? 'Expand sidebar' : 'Collapse sidebar'"
+          class="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-sidebar-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/30"
+          title="Collapse sidebar"
           @click="toggleCollapsed"
         >
-          <component :is="collapsed ? PanelLeftOpen : PanelLeftClose" class="h-4 w-4" />
+          <PanelLeft class="h-4 w-4" />
         </button>
       </div>
 
@@ -315,6 +324,17 @@ onMounted(() => {
             @click="mobileOpen = true"
           >
             <Menu class="h-4 w-4" />
+          </button>
+          <!-- Collapsed rail: the sidebar has no room for a toggle, so the
+               expand affordance lives here (buz's placement). -->
+          <button
+            v-if="!isNarrow && effectiveCollapsed"
+            type="button"
+            class="inline-flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted/40 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/30"
+            title="Expand sidebar"
+            @click="toggleCollapsed"
+          >
+            <PanelLeft class="h-4 w-4" />
           </button>
           <h1 class="truncate text-sm font-semibold">{{ pageTitle }}</h1>
         </div>
