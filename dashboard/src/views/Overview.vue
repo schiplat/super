@@ -134,7 +134,7 @@ onMounted(async () => {
         <UiEmptyState v-else title="Everything is healthy" hint="No failing or unhealthy programs." />
         </UiSection>
 
-        <HostCard class="flex-1" />
+        <HostCard />
       </div>
 
       <!-- Right column: the event timeline stretches to match -->

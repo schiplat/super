@@ -83,7 +83,7 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <UiSection title="Host" class="h-full">
+  <UiSection title="Host">
     <template #actions>
       <div class="flex items-center gap-2 text-[11px] text-muted-foreground">
         <span
