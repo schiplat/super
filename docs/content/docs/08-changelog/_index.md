@@ -17,6 +17,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **OIDC SSO for the dashboard and CLI.** Sign in with your own identity provider (Authorization Code + PKCE, confidential client): provider discovery + JWKS validation, local hashed sessions in an owner-only store, ordered role rules (first match wins, default deny, roles re-evaluated per request), session list/revocation, audit trail, and the CLI device-code flow (`super login --sso`, `super auth sso status|enable|secret|test|disable`). Configured entirely in the dashboard (**Settings → Authentication**) — see [SSO (OIDC)](/docs/02-essentials/sso/). Enabling SSO switches the gate off `auth_secret`, which stays dormant as the break-glass credential; licensed installs with the `security` plugin are unchanged.
+- **`GET /api/v1/auth/me`** — the caller's identity (name, role), gateway-agnostic.
+- **`/api/v1/events/stats`** accepts `from`/`to`/`event_type`/`q` so summaries match filtered event lists.
+
+### Changed
+
+- **Dashboard redesign.** Left-sidebar shell (Overview · Programs · Stacks · Events · Settings), rebuilt Overview page (status counters, Needs attention, recent events, host CPU/memory trends), global Events timeline with filters and pagination, rebuilt create/edit forms with an anchor rail and sticky footer, and a program detail page with a Runtime | Configuration tab split and a pinned lifecycle bar. Same field sets and payloads; plugin slots and routes are unchanged.
+- **Program detail page** moves to `/programs/<id>` (the drawer remains as a quick peek); `?detail=<id>` deep links redirect there.
+- **License entry** now lives in the account menu only (removed from the settings group).
+
+### Fixed
+
+- Credential-bearing files (snapshot temp file, CLI config, SQLite sidecars) are created owner-only instead of tightened after writing.
+- `super doctor` audits permissions on every sensitive path (config, snapshot, event store and sidecars, auth store) and flags group/world access.
+- Events summary totals now respect the same filters as the event list.
+
 ## [1.9.4] - 2026-11-19
 
 Hotfix on top of 1.9.3: **upgrading from 1.9.2–1.9.3 is recommended** — 1.9.2 shipped a broken web dashboard (security-header CSP regression) and 1.9.3 still carried a broken Stack Editor page.

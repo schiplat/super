@@ -29,55 +29,13 @@ The Dashboard is the browser UI for `superd`. **OSS builds embed the shell** (pr
 
 ## Dashboard tour (OSS shell)
 
-Screenshots below show the embedded shell (`docs/static/images/`). Use the tabs to browse each area — images are capped in width; **click to enlarge**.
+The shell uses a left sidebar with two groups: **Overview · Programs · Stacks · Events** and **Settings** (Authentication on OSS admin sessions, License). The top bar carries connection state, theme, and the account menu.
 
-{{< tabs >}}
+- **Overview** — status counters, a *Needs attention* list (failing / flapping / unhealthy programs), recent events, and host CPU/memory trends.
+- **Programs** — the process table (search, group and status filters, pagination) and the per-program detail page at `/programs/<id>`: status hero with live tiles (CPU / memory / uptime / pid), a Logs section (live stream or file history with stdout/stderr and tail controls), an Events timeline scoped to the program, and the full read-only Configuration reference. Lifecycle buttons (Start / Restart / Stop) are pinned to the bottom bar.
+- **New / Edit Program** — a sectioned form with an anchor rail (Run · Lifecycle · Scheduling · Health · Updates · Hooks · Logs · Depends on · Limits), completion dots, and a sticky footer; create additionally offers a read-only JSON preview of the request.
+- **Stacks** — the JSON stack editor with diff/confirm before apply.
+- **Events** — the global event history across every program (filters, severity chips, pagination).
+- **Settings → Authentication** — SSO (OIDC) provider, client secret, ordered role rules, sessions and audit; see [SSO (OIDC)](/docs/02-essentials/sso/). License status lives in the account menu.
 
-  {{< tab name="Overview" icon="view-grid" >}}
-Process list with host CPU/memory metrics (from the machine running **superd**), status filters, search, and topology view.
-
-{{< ui-screenshot src="/images/overview.png" alt="Dashboard overview — process list and host metrics" caption="Overview — programs, host metrics, filters" >}}
-  {{< /tab >}}
-
-  {{< tab name="Program detail" icon="cog" >}}
-Process detail drawer: actions, configuration (command, hooks, health checks, resource limits, environment). **Create / Edit Program** also exposes an **OTA Artifact** section (source, checksum, destination, extract, restart policy, download/verify timeouts). Saving with a **new checksum** triggers transactional OTA — same rule as the API/CLI; see [Atomic OTA Updates — When OTA runs](/docs/03-orchestration/ota-updates#when-ota-runs).
-
-{{< ui-screenshot src="/images/program_config.png" alt="Program configuration in the detail drawer" caption="Program detail — Configuration" >}}
-  {{< /tab >}}
-
-  {{< tab name="Logs" icon="terminal" >}}
-Live stdout/stderr streaming from the process detail drawer, plus file log history.
-
-{{< ui-screenshot src="/images/program_logtails.png" alt="Live program log tail in the detail drawer" caption="Program detail — Logs" >}}
-  {{< /tab >}}
-
-{{< /tabs >}}
-
-## Pro UI extensions
-
-💎 **Subscription.** With a valid license, install the **`ui`** plugin into `$SUPER_ROOT/plugins/` and restart `superd`. The shell then loads extension assets and nav only when peer plugins are present — OSS never shows empty Pro stubs.
-
-| Surface | Needs | Docs |
-| :--- | :--- | :--- |
-| Access Tokens (Account menu) | `security` + `ui` | [Authentication](/docs/02-essentials/authentication/) · [Access control](/docs/05-advanced-management/access-control) |
-| Notification Settings (Webhooks / Inhibition / Delivery) | `notify` + `ui` | [Event notifications](/docs/05-advanced-management/event-notifications) |
-| Process hot-reload action | `ui` (+ license) | Process detail action strip |
-
-## Feature summary
-
-| Area | OSS shell | Subscription (`ui` + peers) |
-| :--- | :--- | :--- |
-| **Overview / detail / logs** | ✅ | ✅ (+ optional Hot Reload) |
-| **Stack editor / create-edit** | ✅ | ✅ |
-| **License page** | ✅ (Community CTA) | ✅ (status when licensed) |
-| **Access Tokens** | — | ✅ |
-| **Notification Settings** | — | ✅ (see [Event notifications](/docs/05-advanced-management/event-notifications)) |
-
-## Security
-
-**OSS:** Dashboard and API follow [core auth](/docs/02-essentials/authentication/#oss-admin-secret) (loopback open by default; set `auth_secret` to require login; non-loopback without secret refuses to start). Multi-user tokens are not available without `security`.
-
-**Licensed:** `security` **must** load — startup fails otherwise. Prefer generated Access Tokens for day-to-day login. See [Access control](/docs/05-advanced-management/access-control) and [Authentication](/docs/02-essentials/authentication).
-
-> [!WARNING]
-> Binding beyond localhost without a secret is unsafe. Non-loopback binds already require [core auth](/docs/02-essentials/authentication/) (or the `security` plugin when licensed). Prefer loopback, a reverse proxy with TLS, or a licensed multi-user deployment.
+Pro extensions keep registering through the same slot system (extra pages, process actions, detail tabs); those stay hidden until the matching plugins are licensed.

@@ -7,7 +7,7 @@ aliases:
   - /docs/05-advanced-management/authentication
 ---
 
-**On this page:** [OSS admin secret](#oss-admin-secret) (Community / no plugins) → [Licensed `security`](#licensed-deployments-require-security) (multi-user Access Tokens). Day-to-day RBAC and audit deep-dives live under [Advanced Management](/docs/05-advanced-management/).
+**On this page:** [OSS admin secret](#oss-admin-secret) (Community / no plugins) → [Licensed `security`](#licensed-deployments-require-security) (multi-user Access Tokens). Day-to-day RBAC and audit deep-dives live under [Advanced Management](/docs/05-advanced-management/). For signing in with your own identity provider, see [SSO (OIDC)](/docs/02-essentials/sso/).
 
 ## Can OSS use `--token`?
 
@@ -31,6 +31,7 @@ super --token 'your-auth-secret' list
 | :--- | :--- | :--- |
 | `auth_secret` (`[server]` in `conf/super.toml`) | ✅ single shared secret | ✅ bootstrap Admin Bearer |
 | Multi-user Access Tokens (`sk-…`) | ❌ | ✅ |
+| [SSO / OIDC](/docs/02-essentials/sso/) (own identity provider) | ✅ | — (the `security` plugin owns users) |
 
 ---
 
