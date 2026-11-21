@@ -63,7 +63,7 @@ async function copyProgramId() {
 }
 const router = useRouter();
 
-const activeTab = ref<string>('logs');
+const activeTab = ref<string>('runtime');
 const pluginTabs = ref<PluginDetailTab[]>([]);
 const logMode = ref<'live' | 'history'>('live');
 const historyLines = ref(200);
@@ -306,6 +306,7 @@ async function fetchHistory(id: string) {
 }
 
 function viewErrorLogs() {
+  activeTab.value = 'runtime';
   logMode.value = 'history';
   historySource.value = 'stderr';
   historyHint.value = isHealthCheckError.value ? 'Look for amber [superd] lines in stderr.' : null;
@@ -410,86 +411,106 @@ function formatUptime(sec?: number): string {
   >
     <div v-if="processId" class="flex flex-col h-full min-h-0">
 
-      <!-- Hero: identity only -->
-        <!-- Hero -->
-        <div class="px-5 md:px-7 pt-5">
-          <div class="flex items-start gap-3">
-            <button
-              type="button"
-              class="inline-flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted/40 hover:text-foreground shrink-0 mt-0.5"
-              :title="inline ? 'Back to programs' : 'Close'"
-              @click="close"
-            >
-              <ArrowLeft v-if="inline" class="w-4 h-4" />
-              <X v-else class="w-4 h-4" />
-            </button>
-            <div class="min-w-0 flex-1">
-              <div class="flex items-center gap-2 min-w-0">
-                <h2 class="text-lg font-bold tracking-tight truncate text-foreground">{{ summaryData?.name || 'Loading...' }}</h2>
-                <button
-                  v-if="summaryData?.name"
-                  type="button"
-                  class="inline-flex h-7 w-7 items-center justify-center rounded-lg text-muted-foreground/50 hover:text-foreground hover:bg-muted transition-colors shrink-0"
-                  :title="nameCopied ? 'Copied' : 'Copy name'"
-                  @click="copyProgramName"
-                >
-                  <Check v-if="nameCopied" class="w-3.5 h-3.5 text-success" />
-                  <Copy v-else class="w-3.5 h-3.5" />
-                </button>
-                <StatusBadge
-                  :status="programStatus || 'Stopped'"
-                  :health-error="displayHealthError"
-                />
-              </div>
-              <div class="flex items-center gap-1.5 mt-1.5 min-w-0">
-                <span class="text-xs text-muted-foreground font-mono tracking-tight truncate" :title="processId">{{ processId.slice(0, 8) }}</span>
-                <button
-                  v-if="processId"
-                  type="button"
-                  class="inline-flex h-5 w-5 items-center justify-center rounded text-muted-foreground/40 hover:text-foreground hover:bg-muted transition-colors shrink-0"
-                  :title="idCopied ? 'Copied' : 'Copy full id'"
-                  @click="copyProgramId"
-                >
-                  <Check v-if="idCopied" class="w-3 h-3 text-success" />
-                  <Copy v-else class="w-3 h-3" />
-                </button>
-                <span v-if="summaryData?.group" class="text-xs text-muted-foreground/30 select-none">·</span>
-                <span v-if="summaryData?.group" class="text-xs text-muted-foreground">{{ summaryData.group }}</span>
-              </div>
+      <!-- Hero: identity + live tiles -->
+      <div class="px-5 md:px-7 pt-5 shrink-0">
+        <div class="flex items-start gap-3">
+          <button
+            type="button"
+            class="inline-flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted/40 hover:text-foreground shrink-0 mt-0.5"
+            :title="inline ? 'Back to programs' : 'Close'"
+            @click="close"
+          >
+            <ArrowLeft v-if="inline" class="w-4 h-4" />
+            <X v-else class="w-4 h-4" />
+          </button>
+          <div class="min-w-0 flex-1">
+            <div class="flex items-center gap-2 min-w-0">
+              <h2 class="text-lg font-bold tracking-tight truncate text-foreground">{{ summaryData?.name || 'Loading...' }}</h2>
+              <button
+                v-if="summaryData?.name"
+                type="button"
+                class="inline-flex h-7 w-7 items-center justify-center rounded-lg text-muted-foreground/50 hover:text-foreground hover:bg-muted transition-colors shrink-0"
+                :title="nameCopied ? 'Copied' : 'Copy name'"
+                @click="copyProgramName"
+              >
+                <Check v-if="nameCopied" class="w-3.5 h-3.5 text-success" />
+                <Copy v-else class="w-3.5 h-3.5" />
+              </button>
+              <StatusBadge
+                :status="programStatus || 'Stopped'"
+                :health-error="displayHealthError"
+              />
             </div>
-            <div class="flex items-center gap-1 shrink-0">
+            <div class="flex items-center gap-1.5 mt-1.5 min-w-0">
+              <span class="text-xs text-muted-foreground font-mono tracking-tight truncate" :title="processId">{{ processId.slice(0, 8) }}</span>
               <button
+                v-if="processId"
                 type="button"
-                class="inline-flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted/40 hover:text-foreground"
-                :disabled="refreshingDetail"
-                title="Refresh status"
-                @click="refreshDetailNow"
+                class="inline-flex h-5 w-5 items-center justify-center rounded text-muted-foreground/40 hover:text-foreground hover:bg-muted transition-colors shrink-0"
+                :title="idCopied ? 'Copied' : 'Copy full id'"
+                @click="copyProgramId"
               >
-                <RefreshCw class="w-4 h-4" :class="{ 'animate-spin': refreshingDetail }" />
+                <Check v-if="idCopied" class="w-3 h-3 text-success" />
+                <Copy v-else class="w-3 h-3" />
               </button>
-              <button
-                v-if="authStore.canManage"
-                type="button"
-                class="inline-flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted/40 hover:text-foreground"
-                title="Edit configuration"
-                @click="goToEdit"
-              >
-                <Edit class="w-4 h-4" />
-              </button>
+              <span v-if="summaryData?.group" class="text-xs text-muted-foreground/30 select-none">·</span>
+              <span v-if="summaryData?.group" class="text-xs text-muted-foreground">{{ summaryData.group }}</span>
             </div>
           </div>
+          <div class="flex items-center gap-1 shrink-0">
+            <button
+              type="button"
+              class="inline-flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted/40 hover:text-foreground"
+              :disabled="refreshingDetail"
+              title="Refresh status"
+              @click="refreshDetailNow"
+            >
+              <RefreshCw class="w-4 h-4" :class="{ 'animate-spin': refreshingDetail }" />
+            </button>
+            <button
+              v-if="authStore.canManage"
+              type="button"
+              class="inline-flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted/40 hover:text-foreground"
+              title="Edit configuration"
+              @click="goToEdit"
+            >
+              <Edit class="w-4 h-4" />
+            </button>
+          </div>
+        </div>
 
-      <!-- Tabs: Runtime | Configuration | plugin tabs -->
-      <div class="px-5 md:px-7 border-b border-border bg-muted/40 shrink-0">
-        <div class="flex gap-0">
-          <button type="button" class="flex items-center gap-2 px-4 py-3 text-sm font-medium border-b-[3px] transition-all -mb-px" :class="activeTab === 'runtime' ? 'border-foreground text-foreground' : 'border-transparent text-muted-foreground hover:text-foreground hover:border-border'" @click="activeTab = 'runtime'"><TerminalIcon class="w-4 h-4" />Runtime</button>
-          <button type="button" class="flex items-center gap-2 px-4 py-3 text-sm font-medium border-b-[3px] transition-all -mb-px" :class="activeTab === 'config' ? 'border-foreground text-foreground' : 'border-transparent text-muted-foreground hover:text-foreground hover:border-border'" @click="activeTab = 'config'"><FileText class="w-4 h-4" />Configuration</button>
+        <!-- Metric tiles: live facts only (a stopped/fatal program has none) -->
+        <div v-if="summaryData?.pid" class="mt-4 grid grid-cols-4 gap-2">
+          <div class="rounded-xl bg-muted/55 px-3 py-2.5">
+            <div class="text-[10px] font-semibold uppercase tracking-[0.06em] text-muted-foreground">CPU</div>
+            <div class="mt-0.5 font-mono text-sm font-semibold tabular-nums">{{ summaryData.cpu_usage != null ? summaryData.cpu_usage.toFixed(1) + '%' : '—' }}</div>
+          </div>
+          <div class="rounded-xl bg-muted/55 px-3 py-2.5">
+            <div class="text-[10px] font-semibold uppercase tracking-[0.06em] text-muted-foreground">MEM</div>
+            <div class="mt-0.5 font-mono text-sm font-semibold tabular-nums">{{ formatMem(summaryData.mem_usage) }}</div>
+          </div>
+          <div class="rounded-xl bg-muted/55 px-3 py-2.5">
+            <div class="text-[10px] font-semibold uppercase tracking-[0.06em] text-muted-foreground">UPTIME</div>
+            <div class="mt-0.5 font-mono text-sm font-semibold tabular-nums">{{ formatUptime(summaryData.uptime_sec) }}</div>
+          </div>
+          <div class="rounded-xl bg-muted/55 px-3 py-2.5">
+            <div class="text-[10px] font-semibold uppercase tracking-[0.06em] text-muted-foreground">PID</div>
+            <div class="mt-0.5 font-mono text-sm font-semibold tabular-nums">{{ summaryData.pid }}</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Capsule tabs: Runtime | Configuration | plugin tabs -->
+      <div class="px-5 md:px-7 pt-4 pb-3 shrink-0">
+        <div class="inline-flex items-center gap-1 bg-muted p-1 rounded-full border border-border/40">
+          <button type="button" class="px-4 py-1.5 rounded-full text-xs font-medium transition-all" :class="activeTab === 'runtime' ? 'bg-card text-foreground shadow-xs' : 'text-muted-foreground hover:text-foreground'" @click="activeTab = 'runtime'"><TerminalIcon class="w-3.5 h-3.5 inline mr-1 -mt-px" />Runtime</button>
+          <button type="button" class="px-4 py-1.5 rounded-full text-xs font-medium transition-all" :class="activeTab === 'config' ? 'bg-card text-foreground shadow-xs' : 'text-muted-foreground hover:text-foreground'" @click="activeTab = 'config'"><FileText class="w-3.5 h-3.5 inline mr-1 -mt-px" />Configuration</button>
           <button
             v-for="tab in pluginTabs"
             :key="tab.id"
             type="button"
-            class="flex items-center gap-2 px-4 py-3 text-sm font-medium border-b-[3px] transition-all -mb-px"
-            :class="activeTab === tab.id ? 'border-foreground text-foreground' : 'border-transparent text-muted-foreground hover:text-foreground hover:border-border'"
+            class="px-4 py-1.5 rounded-full text-xs font-medium transition-all"
+            :class="activeTab === tab.id ? 'bg-card text-foreground shadow-xs' : 'text-muted-foreground hover:text-foreground'"
             @click="activeTab = tab.id"
           >{{ tab.label }}</button>
           <!-- STABLE: process.detail.tabs — plugins call registerTab; need process + activeTab. Do not change without tests/slots.spec.ts / ui-bridge review. -->
@@ -497,104 +518,79 @@ function formatUptime(sec?: number): string {
         </div>
       </div>
 
-      <!-- Tab content -->
+      <!-- Tab panes -->
       <div class="flex-1 overflow-hidden relative bg-muted/30">
-        <!-- Runtime -->
-        <div v-show="activeTab === 'runtime'" class="absolute inset-0 overflow-y-auto">
-          <!-- Metric tiles: live facts only (a stopped/fatal program has none) -->
-          <div v-if="summaryData?.pid" class="mt-4 grid grid-cols-4 gap-2">
-            <div class="rounded-xl bg-muted/55 px-3 py-2.5">
-              <div class="text-[10px] font-semibold uppercase tracking-[0.06em] text-muted-foreground">CPU</div>
-              <div class="mt-0.5 font-mono text-sm font-semibold tabular-nums">{{ summaryData.cpu_usage != null ? summaryData.cpu_usage.toFixed(1) + '%' : '—' }}</div>
-            </div>
-            <div class="rounded-xl bg-muted/55 px-3 py-2.5">
-              <div class="text-[10px] font-semibold uppercase tracking-[0.06em] text-muted-foreground">MEM</div>
-              <div class="mt-0.5 font-mono text-sm font-semibold tabular-nums">{{ formatMem(summaryData.mem_usage) }}</div>
-            </div>
-            <div class="rounded-xl bg-muted/55 px-3 py-2.5">
-              <div class="text-[10px] font-semibold uppercase tracking-[0.06em] text-muted-foreground">UPTIME</div>
-              <div class="mt-0.5 font-mono text-sm font-semibold tabular-nums">{{ formatUptime(summaryData.uptime_sec) }}</div>
-            </div>
-            <div class="rounded-xl bg-muted/55 px-3 py-2.5">
-              <div class="text-[10px] font-semibold uppercase tracking-[0.06em] text-muted-foreground">PID</div>
-              <div class="mt-0.5 font-mono text-sm font-semibold tabular-nums">{{ summaryData.pid }}</div>
-            </div>
-          </div>
-        </div>
-
+        <!-- Runtime pane -->
+        <div v-show="activeTab === 'runtime'" class="absolute inset-0 overflow-y-auto px-5 md:px-7 pb-6">
           <!-- Error banner -->
-        <div v-if="currentError" class="px-5 md:px-7 mt-4">
-          <div class="flex items-start gap-3 rounded-xl px-4 py-3" :class="isHealthCheckError ? 'bg-warning/10' : 'bg-destructive/10'">
-            <div class="mt-0.5 shrink-0" :class="isHealthCheckError ? 'text-warning' : 'text-destructive'"><AlertTriangle class="w-5 h-5" /></div>
-            <div class="flex-1 min-w-0">
-              <h3 class="text-sm font-bold" :class="isHealthCheckError ? 'text-warning' : 'text-destructive'">{{ isHealthCheckError ? 'Health Check Failed' : 'Latest Error' }}</h3>
-              <p class="text-xs mt-1 font-mono break-words leading-relaxed select-text" :class="isHealthCheckError ? 'text-warning/80' : 'text-destructive/80'">{{ currentError }}</p>
-              <p class="text-xs mt-2 text-muted-foreground">
-                <template v-if="isHealthCheckError">Check <strong>Configuration → health_check</strong>. Use the button below to open stderr file history.</template>
-                <template v-else>superd keeps only the most recent error in memory. Use file logs below for full history.</template>
-              </p>
-              <button type="button" class="inline-flex items-center gap-1 mt-2 px-2.5 py-1 rounded-[6px] text-xs font-medium border transition-colors" :class="isHealthCheckError ? 'border-warning/30 text-warning hover:bg-warning/10' : 'border-destructive/30 text-destructive hover:bg-destructive/10'" @click="viewErrorLogs">
-                {{ isHealthCheckError ? 'View stderr diagnostics' : 'View file log history' }}
-              </button>
+          <div v-if="currentError" class="mt-4">
+            <div class="flex items-start gap-3 rounded-xl px-4 py-3" :class="isHealthCheckError ? 'bg-warning/10' : 'bg-destructive/10'">
+              <div class="mt-0.5 shrink-0" :class="isHealthCheckError ? 'text-warning' : 'text-destructive'"><AlertTriangle class="w-5 h-5" /></div>
+              <div class="flex-1 min-w-0">
+                <h3 class="text-sm font-bold" :class="isHealthCheckError ? 'text-warning' : 'text-destructive'">{{ isHealthCheckError ? 'Health Check Failed' : 'Latest Error' }}</h3>
+                <p class="text-xs mt-1 font-mono break-words leading-relaxed select-text" :class="isHealthCheckError ? 'text-warning/80' : 'text-destructive/80'">{{ currentError }}</p>
+                <p class="text-xs mt-2 text-muted-foreground">
+                  <template v-if="isHealthCheckError">Check <strong>Configuration → health_check</strong>. Use the button below to open stderr file history.</template>
+                  <template v-else>superd keeps only the most recent error in memory. Use file logs below for full history.</template>
+                </p>
+                <button type="button" class="inline-flex items-center gap-1 mt-2 px-2.5 py-1 rounded-[6px] text-xs font-medium border transition-colors" :class="isHealthCheckError ? 'border-warning/30 text-warning hover:bg-warning/10' : 'border-destructive/30 text-destructive hover:bg-destructive/10'" @click="viewErrorLogs">
+                  {{ isHealthCheckError ? 'View stderr diagnostics' : 'View file log history' }}
+                </button>
+              </div>
             </div>
           </div>
-        </div>
 
           <!-- Logs -->
-        <div id="detail-logs" class="px-5 md:px-7 mt-6">
-          <div class="flex items-center justify-between gap-3 mb-2">
-            <h3 class="text-[11px] font-semibold uppercase tracking-[0.06em] text-muted-foreground">Logs</h3>
-            <div class="flex items-center gap-2">
-              <div class="bg-muted p-0.5 rounded-lg inline-flex border border-border/40">
-                <button type="button" class="px-3 py-1 rounded-md text-xs font-medium transition-all" :class="logMode === 'live' ? 'bg-card text-foreground shadow-xs' : 'text-muted-foreground hover:text-foreground'" @click="logMode = 'live'">Live</button>
-                <button type="button" class="px-3 py-1 rounded-md text-xs font-medium transition-all" :class="logMode === 'history' ? 'bg-card text-foreground shadow-xs' : 'text-muted-foreground hover:text-foreground'" @click="logMode = 'history'">History</button>
+          <div id="detail-logs" class="mt-6">
+            <div class="flex items-center justify-between gap-3 mb-2">
+              <h3 class="text-[11px] font-semibold uppercase tracking-[0.06em] text-muted-foreground">Logs</h3>
+              <div class="flex items-center gap-2">
+                <div class="bg-muted p-0.5 rounded-full inline-flex border border-border/40">
+                  <button type="button" class="px-3 py-1 rounded-full text-xs font-medium transition-all" :class="logMode === 'live' ? 'bg-card text-foreground shadow-xs' : 'text-muted-foreground hover:text-foreground'" @click="logMode = 'live'">Live</button>
+                  <button type="button" class="px-3 py-1 rounded-full text-xs font-medium transition-all" :class="logMode === 'history' ? 'bg-card text-foreground shadow-xs' : 'text-muted-foreground hover:text-foreground'" @click="logMode = 'history'">History</button>
+                </div>
+                <button type="button" class="inline-flex h-7 w-7 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-muted/40 hover:text-foreground" :disabled="historyLoading || !processId" title="Refresh logs" @click="processId && fetchHistory(processId)">
+                  <RefreshCw class="w-3.5 h-3.5" :class="{ 'animate-spin': historyLoading }" />
+                </button>
               </div>
-              <button type="button" class="inline-flex h-7 w-7 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted/40 hover:text-foreground" :disabled="historyLoading || !processId" title="Refresh logs" @click="processId && fetchHistory(processId)">
-                <RefreshCw class="w-3.5 h-3.5" :class="{ 'animate-spin': historyLoading }" />
-              </button>
             </div>
-          </div>
-          <div v-if="logMode === 'history'" class="mb-2 flex flex-wrap items-center gap-2">
-            <div class="bg-muted p-0.5 rounded-lg inline-flex border border-border/40">
-              <button v-for="opt in streamOptions" :key="opt.value" type="button" class="px-2.5 py-1 rounded-md text-xs font-medium transition-all" :class="historySource === opt.value ? 'bg-card text-foreground shadow-xs' : 'text-muted-foreground hover:text-foreground'" @click="historySource = opt.value">{{ opt.label }}</button>
-            </div>
-            <div class="flex items-center gap-1.5">
-              <div class="bg-muted p-0.5 rounded-lg inline-flex border border-border/40">
-                <button v-for="n in tailOptions" :key="n" type="button" class="min-w-[2rem] px-2 py-1 rounded-md text-xs font-medium font-mono transition-all" :class="historyLines === n ? 'bg-card text-foreground shadow-xs' : 'text-muted-foreground hover:text-foreground'" @click="historyLines = n; processId && fetchHistory(processId)">{{ n }}</button>
+            <div v-if="logMode === 'history'" class="mb-2 flex flex-wrap items-center gap-2">
+              <div class="bg-muted p-0.5 rounded-full inline-flex border border-border/40">
+                <button v-for="opt in streamOptions" :key="opt.value" type="button" class="px-2.5 py-1 rounded-full text-xs font-medium transition-all" :class="historySource === opt.value ? 'bg-card text-foreground shadow-xs' : 'text-muted-foreground hover:text-foreground'" @click="historySource = opt.value">{{ opt.label }}</button>
               </div>
-              <span class="text-xs text-muted-foreground/50">lines</span>
+              <div class="flex items-center gap-1.5">
+                <div class="bg-muted p-0.5 rounded-full inline-flex border border-border/40">
+                  <button v-for="n in tailOptions" :key="n" type="button" class="min-w-[2rem] px-2 py-1 rounded-full text-xs font-medium font-mono transition-all" :class="historyLines === n ? 'bg-card text-foreground shadow-xs' : 'text-muted-foreground hover:text-foreground'" @click="historyLines = n; processId && fetchHistory(processId)">{{ n }}</button>
+                </div>
+                <span class="text-xs text-muted-foreground/50">lines</span>
+              </div>
+            </div>
+            <div class="rounded-xl border border-border/60 overflow-hidden bg-[#1e1e1e]">
+              <div v-if="logMode === 'live'" class="h-64"><LogTerminal ref="terminalRef" :logs="[]" /></div>
+              <div v-else class="h-64 overflow-auto p-3">
+                <div v-if="historyLoading" class="text-gray-400 text-sm">Loading...</div>
+                <div v-else-if="historyError" class="text-destructive/70 text-sm">{{ historyError }}</div>
+                <template v-else>
+                  <p v-if="historyHint" class="text-amber-300/90 text-xs mb-3">{{ historyHint }}</p>
+                  <pre class="text-xs text-gray-200 font-mono whitespace-pre-wrap break-words">{{ historyContent }}</pre>
+                </template>
+              </div>
             </div>
           </div>
-          <div class="rounded-xl border border-border/60 overflow-hidden bg-[#1e1e1e]">
-            <div v-if="logMode === 'live'" class="h-64"><LogTerminal ref="terminalRef" :logs="[]" /></div>
-            <div v-else class="h-64 overflow-auto p-3">
-              <div v-if="historyLoading" class="text-gray-400 text-sm">Loading...</div>
-              <div v-else-if="historyError" class="text-destructive/70 text-sm">{{ historyError }}</div>
-              <template v-else>
-                <p v-if="historyHint" class="text-amber-300/90 text-xs mb-3">{{ historyHint }}</p>
-                <pre class="text-xs text-gray-200 font-mono whitespace-pre-wrap break-words">{{ historyContent }}</pre>
-              </template>
-            </div>
-          </div>
-        </div>
 
           <!-- Events -->
-        <div class="px-5 md:px-7 mt-6">
-          <div class="flex items-center justify-between gap-3 mb-2">
-            <h3 class="text-[11px] font-semibold uppercase tracking-[0.06em] text-muted-foreground">Events</h3>
-            <button type="button" class="text-xs text-muted-foreground transition-colors hover:text-foreground" @click="processId && router.push(`/events?program_id=${processId}`)">
-              View all ↗
-            </button>
+          <div class="mt-6">
+            <div class="flex items-center justify-between gap-3 mb-2">
+              <h3 class="text-[11px] font-semibold uppercase tracking-[0.06em] text-muted-foreground">Events</h3>
+              <button type="button" class="text-xs text-muted-foreground transition-colors hover:text-foreground" @click="processId && router.push(`/events?program_id=${processId}`)">
+                View all ↗
+              </button>
+            </div>
+            <EventTimeline compact :program-id="processId ?? undefined" />
           </div>
-          <EventTimeline compact :program-id="processId ?? undefined" />
         </div>
 
-        <!-- Configuration -->
-
-          <div class="h-6"></div>
-        </div>
-
-        <!-- Configuration -->
+        <!-- Configuration pane -->
         <div v-show="activeTab === 'config'" class="absolute inset-0 overflow-y-auto p-5 md:p-7">
           <div v-if="isLoadingDetail" class="flex justify-center py-10"><span class="inline-block w-6 h-6 border-2 border-muted-foreground/30 border-t-foreground/50 rounded-full animate-spin"></span></div>
           <div v-else-if="!detailData" class="flex flex-col items-center justify-center h-full text-muted-foreground/50 gap-3">
@@ -845,7 +841,7 @@ function formatUptime(sec?: number): string {
           </div>
         </div>
 
-        <!-- Plugin detail tabs -->
+        <!-- Plugin panes -->
         <div
           v-for="tab in pluginTabs"
           :key="tab.id"
