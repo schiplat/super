@@ -33,9 +33,9 @@ pub const MIN_CLIENT_SECRET_LEN: usize = 8;
 pub const MAX_SELECTOR_LEN: usize = 320;
 
 /// Path the IdP redirects back to; must be registered verbatim.
-pub const SSO_CALLBACK_PATH: &str = "/api/v1/auth/sso/callback";
+pub const SSO_CALLBACK_PATH: &str = "/api/v1/auth/oidc/callback";
 /// Entry point the SPA links to.
-pub const SSO_LOGIN_PATH: &str = "/api/v1/auth/sso/login";
+pub const SSO_LOGIN_PATH: &str = "/api/v1/auth/oidc/login";
 
 /// Active authentication mode, as reported by `GET /api/v1/auth/status`.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
@@ -115,7 +115,7 @@ impl RuleMatch {
 }
 
 /// Full SSO configuration as stored in `auth.db` (one row) and accepted by
-/// `PUT /api/v1/auth/sso/config`.
+/// `PUT /api/v1/auth/oidc/config`.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
 pub struct SsoConfig {
     pub enabled: bool,

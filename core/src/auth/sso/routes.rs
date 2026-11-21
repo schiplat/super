@@ -26,13 +26,13 @@ use crate::auth::store::{AuditEvent, NewSession, PendingAuth};
 use crate::auth::{AuthGate, AuthState};
 
 const COOKIE_NAME: &str = "super_sso";
-const COOKIE_PATH: &str = "/api/v1/auth/sso/exchange";
+const COOKIE_PATH: &str = "/api/v1/auth/oidc/exchange";
 /// Carries the last sign-in's raw `id_token` as the RP-logout hint
 /// (`OpenID Connect RP-initiated logout` expects the RP to retain it).
 /// HttpOnly, scoped to the SSO paths, expires with the id_token itself;
 /// losing it only degrades sign-out to "local only".
 const HINT_COOKIE_NAME: &str = "super_sso_hint";
-const HINT_COOKIE_PATH: &str = "/api/v1/auth/sso";
+const HINT_COOKIE_PATH: &str = "/api/v1/auth/oidc";
 const PENDING_TTL_SECS: u64 = 10 * 60;
 const EXCHANGE_WINDOW_SECS: u64 = 120;
 
@@ -44,25 +44,25 @@ fn peer_ip(peer: &Peer) -> Option<IpAddr> {
 
 pub fn sso_routes() -> Router<AuthState> {
     Router::new()
-        .route("/api/v1/auth/sso/login", get(login))
-        .route("/api/v1/auth/sso/callback", get(callback))
-        .route("/api/v1/auth/sso/logout", get(logout))
+        .route("/api/v1/auth/oidc/login", get(login))
+        .route("/api/v1/auth/oidc/callback", get(callback))
+        .route("/api/v1/auth/oidc/logout", get(logout))
         .route(
-            "/api/v1/auth/sso/backchannel-logout",
+            "/api/v1/auth/oidc/backchannel-logout",
             post(backchannel_logout),
         )
-        .route("/api/v1/auth/sso/exchange", post(exchange))
-        .route("/api/v1/auth/sso/cli/start", post(cli_start))
-        .route("/api/v1/auth/sso/cli/poll", post(cli_poll))
-        .route("/api/v1/auth/sso/cli/approve", post(cli_approve))
-        .route("/api/v1/auth/sso/config", get(get_config).put(put_config))
-        .route("/api/v1/auth/sso/secret", post(put_secret))
-        .route("/api/v1/auth/sso/test", post(test))
-        .route("/api/v1/auth/sso/disable", post(disable))
-        .route("/api/v1/auth/sso/sessions", get(list_sessions))
-        .route("/api/v1/auth/sso/sessions/revoke-all", post(revoke_all))
-        .route("/api/v1/auth/sso/sessions/{id}", delete(revoke_session))
-        .route("/api/v1/auth/sso/audit", get(list_audit))
+        .route("/api/v1/auth/oidc/exchange", post(exchange))
+        .route("/api/v1/auth/oidc/cli/start", post(cli_start))
+        .route("/api/v1/auth/oidc/cli/poll", post(cli_poll))
+        .route("/api/v1/auth/oidc/cli/approve", post(cli_approve))
+        .route("/api/v1/auth/oidc/config", get(get_config).put(put_config))
+        .route("/api/v1/auth/oidc/secret", post(put_secret))
+        .route("/api/v1/auth/oidc/test", post(test))
+        .route("/api/v1/auth/oidc/disable", post(disable))
+        .route("/api/v1/auth/oidc/sessions", get(list_sessions))
+        .route("/api/v1/auth/oidc/sessions/revoke-all", post(revoke_all))
+        .route("/api/v1/auth/oidc/sessions/{id}", delete(revoke_session))
+        .route("/api/v1/auth/oidc/audit", get(list_audit))
 }
 
 // ------------------------------------------------------------------ browser
@@ -374,7 +374,7 @@ async fn exchange(State(state): State<AuthState>, headers: HeaderMap, peer: Peer
     response
 }
 
-/// `GET /api/v1/auth/sso/logout` — RP-initiated logout, reached as a top-level
+/// `GET /api/v1/auth/oidc/logout` — RP-initiated logout, reached as a top-level
 /// GET navigation (the provider's SameSite=Lax session cookie rides along; a
 /// POST would not, by the provider's logout-CSRF design).
 ///
@@ -466,7 +466,7 @@ struct BackchannelLogoutForm {
     logout_token: Option<String>,
 }
 
-/// `POST /api/v1/auth/sso/backchannel-logout` — provider-initiated session
+/// `POST /api/v1/auth/oidc/backchannel-logout` — provider-initiated session
 /// revocation (`OpenID Connect Back-Channel Logout 1.0`). Public by design:
 /// the signed logout token is the credential. Answers 200 for every verified
 /// token, including subjects superd does not know (no account enumeration)
@@ -843,7 +843,7 @@ async fn get_config(State(state): State<AuthState>) -> Response {
         "config": stored.as_ref().map(|s| &s.config),
         "redirect_uri": stored.as_ref().map(|s| s.config.redirect_uri()),
         "backchannel_logout_uri": base.as_ref()
-            .map(|base| format!("{base}/api/v1/auth/sso/backchannel-logout")),
+            .map(|base| format!("{base}/api/v1/auth/oidc/backchannel-logout")),
         "post_logout_redirect_uri": base.as_ref()
             .map(|base| format!("{base}/login?signedout=1")),
         // From the cached discovery only: no network on a settings-page read.

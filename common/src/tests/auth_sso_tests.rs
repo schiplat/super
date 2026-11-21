@@ -173,7 +173,7 @@ fn redirect_uri_is_origin_plus_callback() {
     config.public_base_url = "https://super.example.com/".into();
     assert_eq!(
         config.redirect_uri(),
-        "https://super.example.com/api/v1/auth/sso/callback"
+        "https://super.example.com/api/v1/auth/oidc/callback"
     );
 }
 

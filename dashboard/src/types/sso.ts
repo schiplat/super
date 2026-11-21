@@ -45,7 +45,7 @@ export interface SsoConfigView {
   break_glass: boolean
 }
 
-/** Result of `POST /api/v1/auth/sso/test`. */
+/** Result of `POST /api/v1/auth/oidc/test`. */
 export interface SsoProbe {
   ok: boolean
   issuer?: string

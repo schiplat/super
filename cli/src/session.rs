@@ -73,7 +73,7 @@ pub async fn login_sso(config: &mut CliConfig, url: Option<&str>) -> anyhow::Res
     let http = client::build_api_client(&target_url, None)?;
 
     let response = http
-        .post(format!("{base}/api/v1/auth/sso/cli/start"))
+        .post(format!("{base}/api/v1/auth/oidc/cli/start"))
         .send()
         .await?;
     let status = response.status();
@@ -114,7 +114,7 @@ pub async fn login_sso(config: &mut CliConfig, url: Option<&str>) -> anyhow::Res
         tokio::time::sleep(Duration::from_secs(interval)).await;
 
         let response = http
-            .post(format!("{base}/api/v1/auth/sso/cli/poll"))
+            .post(format!("{base}/api/v1/auth/oidc/cli/poll"))
             .json(&serde_json::json!({ "device_code": start.device_code }))
             .send()
             .await?;

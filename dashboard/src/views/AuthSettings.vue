@@ -110,12 +110,12 @@ const ssoConfigured = computed(() => !!view.value?.configured)
 const redirectUri = computed(
   () =>
     view.value?.redirect_uri ??
-    `${config.value.public_base_url.replace(/\/$/, '')}/api/v1/auth/sso/callback`,
+    `${config.value.public_base_url.replace(/\/$/, '')}/api/v1/auth/oidc/callback`,
 )
 const backchannelUri = computed(
   () =>
     view.value?.backchannel_logout_uri ??
-    `${config.value.public_base_url.replace(/\/$/, '')}/api/v1/auth/sso/backchannel-logout`,
+    `${config.value.public_base_url.replace(/\/$/, '')}/api/v1/auth/oidc/backchannel-logout`,
 )
 const postLogoutUri = computed(
   () =>
@@ -223,9 +223,9 @@ async function load() {
   notice.value = null
   try {
     const [configResponse, sessionsResponse, auditResponse] = await Promise.all([
-      apiClient.get<SsoConfigView>('/api/v1/auth/sso/config'),
-      apiClient.get<{ sessions: SsoSession[] }>('/api/v1/auth/sso/sessions'),
-      apiClient.get<{ events: SsoAuditEvent[]; total: number }>('/api/v1/auth/sso/audit', {
+      apiClient.get<SsoConfigView>('/api/v1/auth/oidc/config'),
+      apiClient.get<{ sessions: SsoSession[] }>('/api/v1/auth/oidc/sessions'),
+      apiClient.get<{ events: SsoAuditEvent[]; total: number }>('/api/v1/auth/oidc/audit', {
         params: { page: auditPage.value, page_size: auditPageSize.value },
       }),
     ])
@@ -281,7 +281,7 @@ async function save() {
   try {
     // A typed secret always replaces the stored one (write-only field).
     if (secret.value) {
-      await apiClient.post('/api/v1/auth/sso/secret', { secret: secret.value })
+      await apiClient.post('/api/v1/auth/oidc/secret', { secret: secret.value })
       secret.value = ''
       replacingSecret.value = false
     }
@@ -291,7 +291,7 @@ async function save() {
       session_ttl_secs: Math.round(hours * 3600),
       idle_timeout_secs: Math.round(minutes * 60),
     }
-    const response = await apiClient.put<SsoConfigView>('/api/v1/auth/sso/config', payload)
+    const response = await apiClient.put<SsoConfigView>('/api/v1/auth/oidc/config', payload)
     view.value = response.data
     config.value = response.data.config ?? payload
     rules.value = rulesFromConfig(config.value)
@@ -324,7 +324,7 @@ async function testConnection() {
   testing.value = true
   probe.value = null
   try {
-    const response = await apiClient.post<SsoProbe>('/api/v1/auth/sso/test')
+    const response = await apiClient.post<SsoProbe>('/api/v1/auth/oidc/test')
     probe.value = response.data
   } catch (error) {
     probe.value = { ok: false, error: apiError(error) }
@@ -338,7 +338,7 @@ async function disable() {
   notice.value = null
   try {
     const response = await apiClient.post<{ revoked_sessions: number }>(
-      '/api/v1/auth/sso/disable',
+      '/api/v1/auth/oidc/disable',
     )
     showDisable.value = false
     notice.value = {
@@ -355,8 +355,8 @@ async function disable() {
 
 async function refreshLists() {
   const [sessionsResponse, auditResponse] = await Promise.all([
-    apiClient.get<{ sessions: SsoSession[] }>('/api/v1/auth/sso/sessions'),
-    apiClient.get<{ events: SsoAuditEvent[]; total: number }>('/api/v1/auth/sso/audit', {
+    apiClient.get<{ sessions: SsoSession[] }>('/api/v1/auth/oidc/sessions'),
+    apiClient.get<{ events: SsoAuditEvent[]; total: number }>('/api/v1/auth/oidc/audit', {
       params: { page: auditPage.value, page_size: auditPageSize.value },
     }),
   ])
@@ -371,7 +371,7 @@ async function changeAuditPage(page: number) {
   auditLoading.value = true
   try {
     const response = await apiClient.get<{ events: SsoAuditEvent[]; total: number }>(
-      '/api/v1/auth/sso/audit',
+      '/api/v1/auth/oidc/audit',
       { params: { page: auditPage.value, page_size: auditPageSize.value } },
     )
     audit.value = response.data.events ?? []
@@ -390,7 +390,7 @@ async function changeAuditPageSize(size: number) {
 
 async function revoke(session: SsoSession) {
   try {
-    await apiClient.delete(`/api/v1/auth/sso/sessions/${session.id}`)
+    await apiClient.delete(`/api/v1/auth/oidc/sessions/${session.id}`)
     await refreshLists()
   } catch (error) {
     notice.value = { tone: 'danger', text: apiError(error) }

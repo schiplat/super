@@ -21,7 +21,7 @@ const ssoEnabled = computed(() => status.value?.sso?.enabled === true);
 const token = ref('');
 const loading = ref(true);
 const error = ref('');
-/** Set by `GET /auth/sso/logout` after an RP-initiated sign-out. */
+/** Set by `GET /auth/oidc/logout` after an RP-initiated sign-out. */
 const signedOut = ref(route.query.signedout === '1');
 
 const AUTH_ERRORS: Record<string, string> = {
@@ -43,14 +43,14 @@ function safePath(value: unknown, fallback = '/'): string {
 
 const redirectTarget = computed(() => safePath(route.query.redirect));
 const ssoHref = computed(
-  () => `/api/v1/auth/sso/login?return=${encodeURIComponent(redirectTarget.value)}`,
+  () => `/api/v1/auth/oidc/login?return=${encodeURIComponent(redirectTarget.value)}`,
 );
 
 async function finishSsoLogin() {
   loading.value = true;
   try {
     const res = await apiClient.post<{ token: string; return_to: string }>(
-      '/api/v1/auth/sso/exchange',
+      '/api/v1/auth/oidc/exchange',
     );
     localStorage.setItem('super_token', res.data.token);
     // Re-discover capabilities with the new session, then resolve the profile

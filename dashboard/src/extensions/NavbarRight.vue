@@ -34,7 +34,7 @@ async function handleLogout() {
   userMenuOpen.value = false;
   // Ask the backend which gate is active; it decides the way out. SSO
   // deployments end the provider session too (RP-initiated logout via
-  // `GET /auth/sso/logout`); a full navigation — the SPA session is over
+  // `GET /auth/oidc/logout`); a full navigation — the SPA session is over
   // either way.
   let mode: string | undefined;
   let ssoActive = false;
@@ -47,7 +47,7 @@ async function handleLogout() {
   }
   await authStore.logout();
   if (ssoActive) {
-    window.location.assign('/api/v1/auth/sso/logout');
+    window.location.assign('/api/v1/auth/oidc/logout');
   } else if (!mode || mode === 'none') {
     // No gate (loopback dev): there is no credential to revoke, but the menu
     // still offers Sign out — reset the SPA state instead of doing nothing.

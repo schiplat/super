@@ -160,7 +160,7 @@ async fn cli_poll(app: &Router, device_code: &str) -> (StatusCode, Value) {
         .clone()
         .oneshot(json_request(
             "POST",
-            "/api/v1/auth/sso/cli/poll",
+            "/api/v1/auth/oidc/cli/poll",
             None,
             json!({ "device_code": device_code }),
         ))
@@ -268,7 +268,7 @@ async fn post_backchannel(app: &Router, logout_token: Option<&str>) -> (StatusCo
     };
     let request = Request::builder()
         .method("POST")
-        .uri("/api/v1/auth/sso/backchannel-logout")
+        .uri("/api/v1/auth/oidc/backchannel-logout")
         .header(header::CONTENT_TYPE, "application/x-www-form-urlencoded")
         .body(Body::from(body))
         .unwrap();
@@ -288,7 +288,7 @@ async fn post_backchannel(app: &Router, logout_token: Option<&str>) -> (StatusCo
 async fn get_logout(app: &Router, hint: Option<&str>) -> axum::response::Response {
     let mut builder = Request::builder()
         .method("GET")
-        .uri("/api/v1/auth/sso/logout");
+        .uri("/api/v1/auth/oidc/logout");
     if let Some(hint) = hint {
         builder = builder.header(header::COOKIE, format!("super_sso_hint={hint}"));
     }
@@ -301,7 +301,7 @@ async fn get_logout(app: &Router, hint: Option<&str>) -> axum::response::Respons
 async fn begin_login(app: &Router) -> (String, String) {
     let response = app
         .clone()
-        .oneshot(get("/api/v1/auth/sso/login?return=%2Fprograms"))
+        .oneshot(get("/api/v1/auth/oidc/login?return=%2Fprograms"))
         .await
         .unwrap();
     assert!(response.status().is_redirection(), "{}", response.status());
@@ -321,7 +321,7 @@ async fn complete_login(app: &Router, oauth_state: &str) -> (String, String) {
     let response = app
         .clone()
         .oneshot(get(&format!(
-            "/api/v1/auth/sso/callback?code=code-1&state={oauth_state}"
+            "/api/v1/auth/oidc/callback?code=code-1&state={oauth_state}"
         )))
         .await
         .unwrap();
@@ -345,7 +345,7 @@ async fn complete_login(app: &Router, oauth_state: &str) -> (String, String) {
 async fn exchange(app: &Router, cookie: &str) -> (StatusCode, Option<Value>) {
     let request = Request::builder()
         .method("POST")
-        .uri("/api/v1/auth/sso/exchange")
+        .uri("/api/v1/auth/oidc/exchange")
         .header(header::COOKIE, cookie)
         .body(Body::empty())
         .unwrap();
@@ -417,7 +417,7 @@ async fn oidc_login_exchange_rbac_and_logout() {
     assert_eq!(status["mode"], "sso");
     assert_eq!(status["auth_secret_login_allowed"], false);
     assert_eq!(status["sso"]["enabled"], true);
-    assert_eq!(status["sso"]["login_path"], "/api/v1/auth/sso/login");
+    assert_eq!(status["sso"]["login_path"], "/api/v1/auth/oidc/login");
 
     // Admin session.
     let (admin_token, admin_cookie, admin_body) =
@@ -445,7 +445,7 @@ async fn oidc_login_exchange_rbac_and_logout() {
     for (method, uri) in [
         ("GET", "/api/v1/programs"),
         ("POST", "/api/v1/programs"),
-        ("GET", "/api/v1/auth/sso/sessions"),
+        ("GET", "/api/v1/auth/oidc/sessions"),
     ] {
         let response = app
             .clone()
@@ -456,7 +456,11 @@ async fn oidc_login_exchange_rbac_and_logout() {
     }
     let response = app
         .clone()
-        .oneshot(auth_request("GET", "/api/v1/auth/sso/config", &admin_token))
+        .oneshot(auth_request(
+            "GET",
+            "/api/v1/auth/oidc/config",
+            &admin_token,
+        ))
         .await
         .unwrap();
     assert_eq!(response.status(), StatusCode::OK);
@@ -481,8 +485,8 @@ async fn oidc_login_exchange_rbac_and_logout() {
     assert_eq!(response.status(), StatusCode::OK);
     for (method, uri) in [
         ("POST", "/api/v1/programs"),
-        ("GET", "/api/v1/auth/sso/sessions"),
-        ("GET", "/api/v1/auth/sso/config"),
+        ("GET", "/api/v1/auth/oidc/sessions"),
+        ("GET", "/api/v1/auth/oidc/config"),
     ] {
         let response = app
             .clone()
@@ -510,7 +514,7 @@ async fn oidc_login_exchange_rbac_and_logout() {
         .clone()
         .oneshot(json_request(
             "POST",
-            "/api/v1/auth/sso/cli/start",
+            "/api/v1/auth/oidc/cli/start",
             None,
             json!({}),
         ))
@@ -536,7 +540,7 @@ async fn oidc_login_exchange_rbac_and_logout() {
         .clone()
         .oneshot(json_request(
             "POST",
-            "/api/v1/auth/sso/cli/approve",
+            "/api/v1/auth/oidc/cli/approve",
             Some(&admin_token),
             json!({ "user_code": user_code }),
         ))
@@ -577,7 +581,7 @@ async fn oidc_login_exchange_rbac_and_logout() {
     // A forged state never mints a session.
     let response = app
         .clone()
-        .oneshot(get("/api/v1/auth/sso/callback?code=x&state=bogus"))
+        .oneshot(get("/api/v1/auth/oidc/callback?code=x&state=bogus"))
         .await
         .unwrap();
     assert!(response.status().is_redirection(), "{}", response.status());
@@ -645,7 +649,7 @@ async fn rp_logout_hops_to_the_provider_only_with_a_fresh_hint() {
     // and the end-session availability.
     let response = app
         .clone()
-        .oneshot(auth_request("POST", "/api/v1/auth/sso/test", &admin_token))
+        .oneshot(auth_request("POST", "/api/v1/auth/oidc/test", &admin_token))
         .await
         .unwrap();
     assert_eq!(response.status(), StatusCode::OK);
@@ -663,7 +667,7 @@ async fn rp_logout_hops_to_the_provider_only_with_a_fresh_hint() {
     let response = app
         .clone()
         .oneshot(get(&format!(
-            "/api/v1/auth/sso/callback?code=code-1&state={oauth_state}"
+            "/api/v1/auth/oidc/callback?code=code-1&state={oauth_state}"
         )))
         .await
         .unwrap();

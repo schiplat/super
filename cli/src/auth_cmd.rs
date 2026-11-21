@@ -110,7 +110,7 @@ async fn status(ctx: &Context) -> anyhow::Result<()> {
     .await?;
     let view = expect_json(
         ctx.client
-            .get(url(ctx, "/api/v1/auth/sso/config"))
+            .get(url(ctx, "/api/v1/auth/oidc/config"))
             .send()
             .await?,
         "reading the SSO configuration",
@@ -256,7 +256,7 @@ async fn enable(ctx: &Context, action: &SsoCommands) -> anyhow::Result<()> {
         let secret = read_secret_from_stdin()?;
         expect_ok(
             ctx.client
-                .post(url(ctx, "/api/v1/auth/sso/secret"))
+                .post(url(ctx, "/api/v1/auth/oidc/secret"))
                 .json(&json!({ "secret": secret }))
                 .send()
                 .await?,
@@ -269,7 +269,7 @@ async fn enable(ctx: &Context, action: &SsoCommands) -> anyhow::Result<()> {
     let view: ConfigView = serde_json::from_value(
         expect_json(
             ctx.client
-                .get(url(ctx, "/api/v1/auth/sso/config"))
+                .get(url(ctx, "/api/v1/auth/oidc/config"))
                 .send()
                 .await?,
             "reading the SSO configuration",
@@ -329,7 +329,7 @@ async fn enable(ctx: &Context, action: &SsoCommands) -> anyhow::Result<()> {
 
     let saved = expect_json(
         ctx.client
-            .put(url(ctx, "/api/v1/auth/sso/config"))
+            .put(url(ctx, "/api/v1/auth/oidc/config"))
             .json(&config)
             .send()
             .await?,
@@ -353,7 +353,7 @@ async fn secret(ctx: &Context) -> anyhow::Result<()> {
     let secret = read_secret_from_stdin()?;
     expect_ok(
         ctx.client
-            .post(url(ctx, "/api/v1/auth/sso/secret"))
+            .post(url(ctx, "/api/v1/auth/oidc/secret"))
             .json(&json!({ "secret": secret }))
             .send()
             .await?,
@@ -367,7 +367,7 @@ async fn secret(ctx: &Context) -> anyhow::Result<()> {
 async fn test(ctx: &Context) -> anyhow::Result<()> {
     let discovery = expect_json(
         ctx.client
-            .post(url(ctx, "/api/v1/auth/sso/test"))
+            .post(url(ctx, "/api/v1/auth/oidc/test"))
             .send()
             .await?,
         "discovery check",
@@ -388,7 +388,7 @@ async fn test(ctx: &Context) -> anyhow::Result<()> {
 async fn disable(ctx: &Context) -> anyhow::Result<()> {
     let result = expect_json(
         ctx.client
-            .post(url(ctx, "/api/v1/auth/sso/disable"))
+            .post(url(ctx, "/api/v1/auth/oidc/disable"))
             .send()
             .await?,
         "disabling SSO",

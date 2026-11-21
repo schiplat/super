@@ -53,7 +53,7 @@ fn operators_can_mutate_but_not_administer() {
     assert!(!is_allowed(
         &UserRole::Operator,
         &method("PUT"),
-        "/api/v1/auth/sso/config"
+        "/api/v1/auth/oidc/config"
     ));
 }
 
@@ -63,7 +63,7 @@ fn admins_can_do_everything() {
         ("GET", "/api/v1/programs"),
         ("POST", "/api/v1/programs"),
         ("POST", "/api/v1/system/shutdown"),
-        ("PUT", "/api/v1/auth/sso/config"),
+        ("PUT", "/api/v1/auth/oidc/config"),
     ] {
         assert!(is_allowed(&UserRole::Admin, &method(m), path), "{m} {path}");
     }
@@ -72,17 +72,17 @@ fn admins_can_do_everything() {
 #[test]
 fn admin_endpoints_require_admin_even_for_reads() {
     assert_eq!(
-        required_role(&method("GET"), "/api/v1/auth/sso/sessions"),
+        required_role(&method("GET"), "/api/v1/auth/oidc/sessions"),
         UserRole::Admin
     );
     assert_eq!(
-        required_role(&method("GET"), "/api/v1/auth/sso/config"),
+        required_role(&method("GET"), "/api/v1/auth/oidc/config"),
         UserRole::Admin
     );
     assert!(!is_allowed(
         &UserRole::Operator,
         &method("GET"),
-        "/api/v1/auth/sso/sessions"
+        "/api/v1/auth/oidc/sessions"
     ));
 }
 

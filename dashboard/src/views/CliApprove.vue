@@ -21,7 +21,7 @@ async function approve() {
   approving.value = true
   error.value = ''
   try {
-    await apiClient.post('/api/v1/auth/sso/cli/approve', { user_code: code.value })
+    await apiClient.post('/api/v1/auth/oidc/cli/approve', { user_code: code.value })
     done.value = true
   } catch (e: any) {
     error.value =

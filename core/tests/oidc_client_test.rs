@@ -114,7 +114,7 @@ async fn discovery_authorization_url_and_identity() {
     mount_jwks(&server, "k1").await;
 
     let client = OidcClient::new(config(&issuer), "client-secret", None).unwrap();
-    let redirect = "http://127.0.0.1:9002/api/v1/auth/sso/callback";
+    let redirect = "http://127.0.0.1:9002/api/v1/auth/oidc/callback";
     let url = client
         .authorization_url("state-1", "nonce-1", "challenge-1", redirect)
         .await

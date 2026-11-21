@@ -321,15 +321,15 @@ pub fn is_auth_exempt(path: &str) -> bool {
 pub fn is_sso_public(path: &str) -> bool {
     matches!(
         path,
-        "/api/v1/auth/sso/login"
-            | "/api/v1/auth/sso/callback"
-            | "/api/v1/auth/sso/logout"
+        "/api/v1/auth/oidc/login"
+            | "/api/v1/auth/oidc/callback"
+            | "/api/v1/auth/oidc/logout"
             // The signed logout token is the credential (no session, no CSRF
             // token); it is verified against the provider's JWKS.
-            | "/api/v1/auth/sso/backchannel-logout"
-            | "/api/v1/auth/sso/exchange"
-            | "/api/v1/auth/sso/cli/start"
-            | "/api/v1/auth/sso/cli/poll"
+            | "/api/v1/auth/oidc/backchannel-logout"
+            | "/api/v1/auth/oidc/exchange"
+            | "/api/v1/auth/oidc/cli/start"
+            | "/api/v1/auth/oidc/cli/poll"
     )
 }
 
