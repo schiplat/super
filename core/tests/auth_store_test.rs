@@ -3,7 +3,9 @@
 
 use common::{RoleRule, RuleMatch, SsoConfig, UserRole};
 use super_core::auth::AuthStore;
-use super_core::auth::store::{AuditEvent, NewSession, PendingAuth, SECRET_GRACE_SECS};
+use super_core::auth::store::{
+    AuditEvent, NewApiToken, NewSession, PendingAuth, SECRET_GRACE_SECS,
+};
 
 fn now() -> u64 {
     std::time::SystemTime::now()
@@ -284,4 +286,80 @@ async fn audit_round_trip_and_retention() {
     let removed = store.prune_audit(now() + 31 * 24 * 60 * 60).await.unwrap();
     assert_eq!(removed, 1);
     assert!(store.list_audit(10).await.unwrap().is_empty());
+}
+
+fn api_token<'a>(id: &'a str, hash: &'a [u8], role: &'a str) -> NewApiToken<'a> {
+    NewApiToken {
+        id,
+        token_sha256: hash,
+        token_prefix: "su_abcd1234…",
+        name: id,
+        role,
+        created_by: "tester",
+        created_at: now(),
+    }
+}
+
+/// Named API tokens: hash-only persistence, idempotent revocation, and the
+/// `has_admin_token` fact the status endpoint reports.
+#[tokio::test]
+async fn api_token_lifecycle() {
+    let (_dir, store) = open().await;
+    store
+        .insert_api_token(api_token("t1", &[1; 32], "operator"))
+        .await
+        .unwrap();
+    store
+        .insert_api_token(api_token("t2", &[2; 32], "admin"))
+        .await
+        .unwrap();
+
+    let rows = store.list_api_tokens().await.unwrap();
+    assert_eq!(rows.len(), 2);
+    assert_eq!(rows[0].id, "t1", "ordered by creation");
+
+    // Hash lookup resolves only live tokens.
+    let found = store
+        .find_api_token_by_hash(&[1; 32])
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(found.id, "t1");
+    assert_eq!(found.role, "operator");
+    assert!(
+        store
+            .find_api_token_by_hash(&[9; 32])
+            .await
+            .unwrap()
+            .is_none()
+    );
+
+    // Last-used tracking.
+    store.touch_api_token("t1").await.unwrap();
+    let rows = store.list_api_tokens().await.unwrap();
+    assert!(
+        rows.iter()
+            .find(|r| r.id == "t1")
+            .unwrap()
+            .last_used_at
+            .is_some(),
+        "touch records last_used_at"
+    );
+
+    // The admin-token fact flips with the last active admin token.
+    assert!(store.has_active_admin_token().await.unwrap());
+    assert!(store.revoke_api_token("t2").await.unwrap());
+    assert!(!store.has_active_admin_token().await.unwrap());
+
+    // Revocation is idempotent and immediately ends authentication.
+    assert!(store.revoke_api_token("t1").await.unwrap());
+    assert!(!store.revoke_api_token("t1").await.unwrap());
+    assert!(store.list_api_tokens().await.unwrap().is_empty());
+    assert!(
+        store
+            .find_api_token_by_hash(&[1; 32])
+            .await
+            .unwrap()
+            .is_none()
+    );
 }

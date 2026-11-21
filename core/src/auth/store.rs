@@ -150,6 +150,30 @@ pub struct CliPending {
     pub email_verified: Option<bool>,
 }
 
+/// One named API token. `token_sha256` is the only persisted credential
+/// material; `role` is the identity the token authenticates as.
+#[derive(Debug, Clone)]
+pub struct NewApiToken<'a> {
+    pub id: &'a str,
+    pub token_sha256: &'a [u8],
+    pub token_prefix: &'a str,
+    pub name: &'a str,
+    pub role: &'a str,
+    pub created_by: &'a str,
+    pub created_at: u64,
+}
+
+#[derive(Debug, Clone)]
+pub struct ApiTokenRow {
+    pub id: String,
+    pub token_prefix: String,
+    pub name: String,
+    pub role: String,
+    pub created_by: String,
+    pub created_at: u64,
+    pub last_used_at: Option<u64>,
+}
+
 /// One audit row to write.
 #[derive(Debug, Clone, Copy, Default)]
 pub struct AuditEvent<'a> {
@@ -219,6 +243,20 @@ fn cli_pending_from_row(row: &sqlx::sqlite::SqliteRow) -> anyhow::Result<CliPend
         name: row.try_get("name")?,
         groups_json: row.try_get("groups_json")?,
         email_verified: row.try_get::<Option<bool>, _>("email_verified")?,
+    })
+}
+
+fn api_token_from_row(row: &sqlx::sqlite::SqliteRow) -> anyhow::Result<ApiTokenRow> {
+    Ok(ApiTokenRow {
+        id: row.try_get("id")?,
+        token_prefix: row.try_get("token_prefix")?,
+        name: row.try_get("name")?,
+        role: row.try_get("role")?,
+        created_by: row.try_get("created_by")?,
+        created_at: row.try_get::<i64, _>("created_at")? as u64,
+        last_used_at: row
+            .try_get::<Option<i64>, _>("last_used_at")?
+            .map(|v| v as u64),
     })
 }
 
@@ -645,6 +683,84 @@ impl AuthStore {
                 .await
                 .context("revoke sessions by subject")?;
         Ok(result.rows_affected())
+    }
+
+    // ------------------------------------------------------------------ API tokens
+
+    pub async fn insert_api_token(&self, token: NewApiToken<'_>) -> anyhow::Result<()> {
+        sqlx::query(
+            "INSERT INTO api_tokens (id, token_sha256, token_prefix, name, role, created_by, created_at) \
+             VALUES (?, ?, ?, ?, ?, ?, ?)",
+        )
+        .bind(token.id)
+        .bind(token.token_sha256)
+        .bind(token.token_prefix)
+        .bind(token.name)
+        .bind(token.role)
+        .bind(token.created_by)
+        .bind(token.created_at as i64)
+        .execute(&self.pool)
+        .await
+        .context("insert api token")?;
+        Ok(())
+    }
+
+    /// Active (non-revoked) tokens, oldest first.
+    pub async fn list_api_tokens(&self) -> anyhow::Result<Vec<ApiTokenRow>> {
+        let rows = sqlx::query(
+            "SELECT id, token_prefix, name, role, created_by, created_at, last_used_at \
+             FROM api_tokens WHERE revoked_at IS NULL ORDER BY created_at, id",
+        )
+        .fetch_all(&self.pool)
+        .await
+        .context("list api tokens")?;
+        rows.iter().map(api_token_from_row).collect()
+    }
+
+    pub async fn find_api_token_by_hash(&self, hash: &[u8]) -> anyhow::Result<Option<ApiTokenRow>> {
+        let row = sqlx::query(
+            "SELECT id, token_prefix, name, role, created_by, created_at, last_used_at \
+             FROM api_tokens WHERE token_sha256 = ? AND revoked_at IS NULL",
+        )
+        .bind(hash)
+        .fetch_optional(&self.pool)
+        .await
+        .context("find api token")?;
+        row.map(|r| api_token_from_row(&r)).transpose()
+    }
+
+    /// Idempotent revoke; `Ok(true)` when this call revoked a live token.
+    pub async fn revoke_api_token(&self, id: &str) -> anyhow::Result<bool> {
+        let result =
+            sqlx::query("UPDATE api_tokens SET revoked_at = ? WHERE id = ? AND revoked_at IS NULL")
+                .bind(now_secs() as i64)
+                .bind(id)
+                .execute(&self.pool)
+                .await
+                .context("revoke api token")?;
+        Ok(result.rows_affected() == 1)
+    }
+
+    pub async fn touch_api_token(&self, id: &str) -> anyhow::Result<()> {
+        sqlx::query("UPDATE api_tokens SET last_used_at = ? WHERE id = ? AND revoked_at IS NULL")
+            .bind(now_secs() as i64)
+            .bind(id)
+            .execute(&self.pool)
+            .await
+            .context("touch api token")?;
+        Ok(())
+    }
+
+    /// Whether at least one active admin token exists (the `has_admin_token`
+    /// fact in `/auth/status`).
+    pub async fn has_active_admin_token(&self) -> anyhow::Result<bool> {
+        let count: i64 = sqlx::query_scalar(
+            "SELECT COUNT(*) FROM api_tokens WHERE revoked_at IS NULL AND role = 'admin'",
+        )
+        .fetch_one(&self.pool)
+        .await
+        .context("count admin api tokens")?;
+        Ok(count > 0)
     }
 
     pub async fn count_active_sessions(&self, now: u64) -> anyhow::Result<i64> {

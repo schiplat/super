@@ -51,6 +51,19 @@ impl EffectiveAuthSecret {
     pub fn into_secret(self) -> Option<String> {
         self.as_secret().map(str::to_string)
     }
+
+    /// Where the effective secret came from — display-only (`/auth/status`
+    /// → `secret_source`), so the settings page can say whether the
+    /// break-glass credential lives in the config file or in the generated
+    /// `data/auth_secret.generated`.
+    pub fn source_label(&self) -> Option<&'static str> {
+        match self {
+            Self::None => None,
+            Self::Configured(_) => Some("config"),
+            Self::PlaceholderLocal(_) => Some("placeholder"),
+            Self::Ephemeral(_) => Some("generated"),
+        }
+    }
 }
 
 /// True when `secret` is one of the shipped placeholders (`CHANGE-ME-…`,

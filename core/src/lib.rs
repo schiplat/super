@@ -40,6 +40,10 @@ pub struct SystemCore {
 
     pub paths: SystemPaths,
 
+    /// Where the effective `[server].auth_secret` came from (`config`,
+    /// `generated`, `placeholder`); display-only.
+    pub auth_secret_source: Option<&'static str>,
+
     // [Core Logic] Hold log guard so drop does not shut down the async log writer
     pub _log_guard: Option<WorkerGuard>,
 }
@@ -155,15 +159,18 @@ pub async fn bootstrap(extension: Box<dyn Extension>) -> anyhow::Result<SystemCo
     // Resolve the effective auth secret (after logging init so the ephemeral
     // secret is visible in logs). A shipped `CHANGE-ME-…` placeholder never
     // authenticates on a non-loopback TCP bind — see common::auth_secret.
+    let auth_secret_source: Option<&'static str>;
     let server_config = {
         let mut c = server_config;
         use common::auth_secret::EffectiveAuthSecret;
-        c.server.auth_secret = match common::auth_secret::effective_auth_secret(
+        let effective = common::auth_secret::effective_auth_secret(
             c.server.auth_secret.as_deref(),
             &root,
             &c.server.host,
             c.server.socket_only,
-        )? {
+        )?;
+        auth_secret_source = effective.source_label();
+        c.server.auth_secret = match effective {
             EffectiveAuthSecret::None => None,
             EffectiveAuthSecret::Configured(secret) => Some(secret),
             EffectiveAuthSecret::PlaceholderLocal(secret) => {
@@ -280,6 +287,7 @@ pub async fn bootstrap(extension: Box<dyn Extension>) -> anyhow::Result<SystemCo
         shutdown_tx,
         shutdown_rx,
         paths,
+        auth_secret_source,
         _log_guard: Some(guard), // main must hold guard
     })
 }

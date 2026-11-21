@@ -114,3 +114,24 @@ fn plugin_ui_assets_stay_readable() {
         "/api/v1/plugins/ui/ui.js"
     ));
 }
+
+#[test]
+fn token_management_is_admin_only() {
+    assert_eq!(
+        required_role(&method("GET"), "/api/v1/auth/tokens"),
+        UserRole::Admin
+    );
+    assert_eq!(
+        required_role(&method("POST"), "/api/v1/auth/tokens"),
+        UserRole::Admin
+    );
+    assert_eq!(
+        required_role(&method("DELETE"), "/api/v1/auth/tokens/x"),
+        UserRole::Admin
+    );
+    assert!(!is_allowed(
+        &UserRole::Operator,
+        &method("GET"),
+        "/api/v1/auth/tokens"
+    ));
+}

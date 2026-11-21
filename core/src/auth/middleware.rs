@@ -27,8 +27,12 @@ struct AuthInner {
     /// Static secret from `conf/super.toml`; `None` when none is configured.
     /// Kept dormant while the SSO gate is active — it is the break-glass.
     secret: Option<Arc<str>>,
+    /// Display-only: where the secret came from (`config`, `generated`,
+    /// `placeholder`) so the settings page can say where it lives.
+    secret_source: Option<String>,
     /// SSO store + configuration. Present in OSS mode even before SSO is
-    /// enabled, so the UI can turn it on without a restart.
+    /// enabled, so the UI can turn it on without a restart. The store is the
+    /// shared auth.db — SSO sessions and API tokens both live there.
     sso: Option<Arc<SsoRuntime>>,
     /// True on a non-loopback bind: a gate change must never resolve to
     /// `None`, or a reload would expose the API.
@@ -54,6 +58,7 @@ impl AuthState {
             inner: Arc::new(AuthInner {
                 gate: RwLock::new(super::AuthGate::CoreSecret),
                 secret: Some(Arc::from(secret.as_str())),
+                secret_source: None,
                 sso: None,
                 require_auth: false,
             }),
@@ -65,11 +70,14 @@ impl AuthState {
         sso: Option<Arc<SsoRuntime>>,
         gate: super::AuthGate,
         require_auth: bool,
+        // Display-only secret provenance (`/auth/status` → `secret_source`).
+        secret_source: Option<String>,
     ) -> Self {
         Self {
             inner: Arc::new(AuthInner {
                 gate: RwLock::new(gate),
                 secret: secret.map(|s| Arc::from(s.as_str())),
+                secret_source,
                 sso,
                 require_auth,
             }),
@@ -102,14 +110,22 @@ impl AuthState {
 
     /// `/api/v1/auth/status` payload, built from the live gate so the login
     /// page knows whether the static secret still works and whether SSO is on.
-    pub fn status_response(&self) -> AuthStatusResponse {
+    pub async fn status_response(&self) -> AuthStatusResponse {
         let gate = self.gate();
+        // OSS core serves token CRUD whenever it owns the auth store (the
+        // security plugin sets this true from its own side in licensed mode).
+        let token_management = self.inner.sso.is_some();
+        let has_admin_token = match self.inner.sso.as_ref() {
+            Some(sso) => sso.store().has_active_admin_token().await.unwrap_or(false),
+            None => false,
+        };
         AuthStatusResponse {
             auth_secret_disabled: false,
-            has_admin_token: false,
+            has_admin_token,
             can_disable_auth_secret: false,
             auth_secret_login_allowed: gate == super::AuthGate::CoreSecret,
-            token_management: false,
+            token_management,
+            secret_source: self.inner.secret_source.clone(),
             mode: gate.mode(),
             sso: self.inner.sso.as_ref().map(|sso| SsoStatus {
                 enabled: sso.enabled(),
@@ -240,6 +256,46 @@ impl AuthState {
             role,
         })
     }
+
+    /// Authenticate a named API token under the static-secret gate. Tokens
+    /// are additional credentials, checked **only after** `secret_matches`
+    /// fails, so the existing break-glass path is untouched. Each token
+    /// carries its own role — the first time OSS RBAC applies to real
+    /// credentials (a viewer token cannot mutate).
+    async fn token_authenticate(&self, token: &str) -> GateOutcome {
+        let Some(sso) = self.inner.sso.as_ref() else {
+            return GateOutcome::Unauthorized;
+        };
+        let hash = pkce::token_hash(token);
+        let row = match sso.store().find_api_token_by_hash(&hash).await {
+            Ok(row) => row,
+            Err(e) => {
+                tracing::error!(error = %e, "cannot read the api token store");
+                return GateOutcome::Unauthorized;
+            }
+        };
+        let Some(row) = row else {
+            return GateOutcome::Unauthorized;
+        };
+
+        if now_secs().saturating_sub(row.last_used_at.unwrap_or(0)) >= 60
+            && let Err(e) = sso.store().touch_api_token(&row.id).await
+        {
+            tracing::debug!(error = %e, "could not update api token last_used");
+        }
+
+        tracing::debug!(token = %row.id, role = %row.role, "api token authenticated");
+        let role = match row.role.as_str() {
+            "admin" => UserRole::Admin,
+            "operator" => UserRole::Operator,
+            _ => UserRole::Viewer,
+        };
+        GateOutcome::Authenticated(UserContext {
+            token_id: row.id.clone(),
+            name: row.name.clone(),
+            role,
+        })
+    }
 }
 
 fn now_secs() -> u64 {
@@ -358,10 +414,12 @@ pub async fn core_auth_middleware(
     if let Some(token) = extract_token(req.headers(), query_for_auth) {
         let outcome = match gate {
             super::AuthGate::CoreSecret => {
+                // The static secret keeps priority: its success path (root
+                // context, throttle accounting) is byte-for-byte unchanged.
                 if state.secret_matches(&token) {
                     GateOutcome::Authenticated(AuthState::root_context())
                 } else {
-                    GateOutcome::Unauthorized
+                    state.token_authenticate(&token).await
                 }
             }
             super::AuthGate::Sso => state.sso_authenticate(&token).await,

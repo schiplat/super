@@ -83,10 +83,17 @@ pub struct AuthStatusResponse {
     pub can_disable_auth_secret: bool,
     /// Whether Bearer `auth_secret` is accepted right now.
     pub auth_secret_login_allowed: bool,
-    /// True when multi-user token CRUD (`/auth/tokens`) is available.
-    /// OSS core auth sets this to `false`; the security plugin sets `true`.
+    /// True when multi-user token CRUD (`/auth/tokens`) is available. Both
+    /// the OSS core (named API tokens) and the security plugin set this —
+    /// which gate is active is `mode`, never this flag.
     #[serde(default)]
     pub token_management: bool,
+    /// Where the effective `[server].auth_secret` came from (`config`,
+    /// `generated`, `placeholder`) — display-only, so the settings page can
+    /// say where the break-glass credential lives. The security plugin does
+    /// not report it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub secret_source: Option<String>,
     /// The gate that actually guards the API right now.
     #[serde(default)]
     pub mode: AuthMode,

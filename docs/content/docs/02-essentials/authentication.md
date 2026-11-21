@@ -7,11 +7,11 @@ aliases:
   - /docs/05-advanced-management/authentication
 ---
 
-**On this page:** [OSS admin secret](#oss-admin-secret) (Community / no plugins) → [Licensed `security`](#licensed-deployments-require-security) (multi-user Access Tokens). Day-to-day RBAC and audit deep-dives live under [Advanced Management](/docs/05-advanced-management/). For signing in with your own identity provider, see [SSO (OIDC)](/docs/02-essentials/sso/).
+**On this page:** [OSS admin secret](#oss-admin-secret) (Community / no plugins) → [API tokens (OSS)](#api-tokens-oss) → [Licensed `security`](#licensed-deployments-require-security) (multi-user Access Tokens). Day-to-day RBAC and audit deep-dives live under [Advanced Management](/docs/05-advanced-management/). For signing in with your own identity provider, see [SSO (OIDC)](/docs/02-essentials/sso/).
 
 ## Can OSS use `--token`?
 
-**Yes.** OSS has no `sk-…` Access Tokens, but when you set a non-empty **`auth_secret`** in `conf/super.toml`, that string **is** the Bearer credential for:
+**Yes.** When you set a non-empty **`auth_secret`** in `conf/super.toml`, that string **is** the Bearer credential for:
 
 - `super --token <secret> …`
 - `export SUPER_TOKEN=<secret>`
@@ -23,13 +23,14 @@ aliases:
 super --token 'your-auth-secret' list
 ```
 
-`--token` only means “send this string as Bearer”; it does **not** mint or imply an `sk-…` token.
+`--token` only means “send this string as Bearer”. OSS additionally has **named API tokens** (`su_…`, see [API tokens](#api-tokens-oss)); licensed deployments have `sk-…` Access Tokens from the `security` plugin.
 
 > **Tip:** a secret passed as a CLI flag is visible in the local process list (`ps`) while the command runs. For interactive shells prefer `super login <secret>` (saved to `~/.super/cli.json`, mode `0600`) or `export SUPER_TOKEN=…`; keep `--token` for scripts that source the value from a protected store.
 
 | Credential | OSS | Subscription (`security` plugin) |
 | :--- | :--- | :--- |
-| `auth_secret` (`[server]` in `conf/super.toml`) | ✅ single shared secret | ✅ bootstrap Admin Bearer |
+| `auth_secret` (`[server]` in `conf/super.toml`) | ✅ single shared secret (break-glass) | ✅ bootstrap Admin Bearer |
+| Named API tokens (`su_…`, per-token role) | ✅ | — (`sk-…` tokens below) |
 | Multi-user Access Tokens (`sk-…`) | ❌ | ✅ |
 | [SSO / OIDC](/docs/02-essentials/sso/) (own identity provider) | ✅ | — (the `security` plugin owns users) |
 
@@ -81,6 +82,28 @@ curl -H "Authorization: Bearer $SECRET" \
 ```
 
 Dashboard: open `/`, paste the same string when prompted.
+
+## API tokens (OSS)
+
+Named, revocable credentials for the CLI and automation. Each token authenticates **with its own role** — the first time OSS RBAC applies to real credentials — so a viewer token cannot mutate anything. The dashboard login itself still uses the static secret.
+
+```bash
+super --token "$SECRET" token create ci --role operator   # plaintext shown once
+super --token "$SECRET" token list
+super --token "$SECRET" token revoke <id>
+super --token "$OP_TOKEN" list                            # the token is a Bearer credential
+```
+
+| Fact | Behavior |
+| :--- | :--- |
+| Storage | Only the SHA-256 hash, in the owner-only `data/auth.db` (next to SSO sessions) |
+| Roles | `viewer` (read-only) · `operator` (read + manage programs) · `admin` (everything, incl. tokens) |
+| Revocation | Immediate; `last_used` is tracked per token |
+| Gate | Lives under the static-secret gate — dormant once [SSO](/docs/02-essentials/sso/) owns the gate, exactly like the secret itself |
+| REST | `GET/POST /api/v1/auth/tokens`, `DELETE /api/v1/auth/tokens/{id}` (Admin; the list is a bare array) |
+| Dashboard | Settings → Authentication → **API tokens** (create with one-time reveal, revoke) |
+
+Licensed deployments: the `security` plugin serves the **same paths** with its `sk-…` Access Tokens and richer per-token management (renew, disable `auth_secret`) — see below.
 
 ## Transport security (TLS)
 

@@ -48,7 +48,7 @@ pub enum Commands {
         action: AuthCommands,
     },
 
-    /// Manage API access tokens (requires security plugin)
+    /// Manage API access tokens (OSS core or the security plugin)
     Token {
         #[command(subcommand)]
         action: TokenCommands,

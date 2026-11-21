@@ -34,6 +34,10 @@ pub fn required_role(method: &Method, path: &str) -> UserRole {
         return UserRole::Viewer;
     }
     if path.starts_with("/api/v1/auth/sso/")
+        // Token management is admin-only: a lower-privileged token must
+        // neither enumerate nor mint credentials (buz denies its identity
+        // plane to API tokens for the same reason).
+        || path.starts_with("/api/v1/auth/tokens")
         || path == "/api/v1/system/shutdown"
         || path == "/api/v1/system/reload"
     {

@@ -394,7 +394,7 @@ async fn oidc_login_exchange_rbac_and_logout() {
     store.put_secret("client-secret").await.unwrap();
     store.save_config(&config(&idp.uri()), None).await.unwrap();
     let runtime = Arc::new(SsoRuntime::load(store.clone()).await.unwrap());
-    let state = AuthState::with_sso(None, Some(runtime), AuthGate::Sso, false);
+    let state = AuthState::with_sso(None, Some(runtime), AuthGate::Sso, false, None);
     let app = {
         let api = Router::new().route(
             "/api/v1/programs",
@@ -594,7 +594,10 @@ async fn oidc_login_exchange_rbac_and_logout() {
 async fn no_gate_mode_keeps_the_open_instance_contract() {
     let app = {
         let api = Router::new().route("/api/v1/programs", axum::routing::get(|| async { "ok" }));
-        install_core_auth(api, AuthState::with_sso(None, None, AuthGate::None, false))
+        install_core_auth(
+            api,
+            AuthState::with_sso(None, None, AuthGate::None, false, None),
+        )
     };
 
     let response = app
@@ -630,7 +633,7 @@ async fn rp_logout_hops_to_the_provider_only_with_a_fresh_hint() {
     store.put_secret("client-secret").await.unwrap();
     store.save_config(&config(&idp.uri()), None).await.unwrap();
     let runtime = Arc::new(SsoRuntime::load(store.clone()).await.unwrap());
-    let state = AuthState::with_sso(None, Some(runtime.clone()), AuthGate::Sso, false);
+    let state = AuthState::with_sso(None, Some(runtime.clone()), AuthGate::Sso, false, None);
     let app = {
         let api = Router::new().route("/api/v1/programs", axum::routing::get(|| async { "ok" }));
         install_core_auth(api, state)
@@ -716,7 +719,7 @@ async fn rp_logout_hops_to_the_provider_only_with_a_fresh_hint() {
     );
 
     // SSO off: plain redirect to the login page, no signedout marker.
-    let state = AuthState::with_sso(None, None, AuthGate::None, false);
+    let state = AuthState::with_sso(None, None, AuthGate::None, false, None);
     let open_app = {
         let api = Router::new().route("/api/v1/programs", axum::routing::get(|| async { "ok" }));
         install_core_auth(api, state)
@@ -742,7 +745,7 @@ async fn backchannel_logout_revokes_the_subjects_sessions() {
     store.put_secret("client-secret").await.unwrap();
     store.save_config(&config(&idp.uri()), None).await.unwrap();
     let runtime = Arc::new(SsoRuntime::load(store.clone()).await.unwrap());
-    let state = AuthState::with_sso(None, Some(runtime), AuthGate::Sso, false);
+    let state = AuthState::with_sso(None, Some(runtime), AuthGate::Sso, false, None);
     let app = {
         let api = Router::new().route("/api/v1/programs", axum::routing::get(|| async { "ok" }));
         install_core_auth(api, state)
@@ -827,4 +830,217 @@ async fn backchannel_logout_revokes_the_subjects_sessions() {
     assert_eq!(status, StatusCode::BAD_REQUEST, "empty body must reject");
 
     assert_eq!(alive(&app, &viewer_token).await, StatusCode::OK);
+}
+
+/// Named API tokens under the static-secret gate. The secret path is
+/// untouched (root/Admin, same 401s); a token is an *additional* credential
+/// that authenticates with its own role, so OSS RBAC finally applies to real
+/// credentials. The JSON shapes are the plugin contract (`common::auth`)
+/// because the CLI `super token` commands consume them unchanged.
+#[tokio::test]
+async fn api_tokens_authenticate_under_the_secret_gate() {
+    let dir = tempfile::tempdir().unwrap();
+    let store = Arc::new(AuthStore::open(&dir.path().join("auth.db")).await.unwrap());
+    let runtime = Arc::new(SsoRuntime::load(store.clone()).await.unwrap());
+    let state = AuthState::with_sso(
+        Some("oss-secret".into()),
+        Some(runtime),
+        AuthGate::CoreSecret,
+        false,
+        Some("config".into()),
+    );
+    let app = {
+        let api = Router::new().route(
+            "/api/v1/programs",
+            axum::routing::get(|| async { "ok" }).post(|| async { "created" }),
+        );
+        install_core_auth(api, state)
+    };
+
+    // The static-secret path is byte-for-byte unchanged: root/Admin identity,
+    // and a wrong secret is still a plain 401.
+    let response = app
+        .clone()
+        .oneshot(auth_request("GET", "/api/v1/auth/me", "oss-secret"))
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    let me = json_body(response).await;
+    assert_eq!(me["role"], "admin");
+    assert_eq!(me["token_id"], "root");
+    let response = app
+        .clone()
+        .oneshot(auth_request("GET", "/api/v1/programs", "not-the-secret"))
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+
+    // Status reports the token surface: CRUD available, no admin token yet,
+    // and where the break-glass secret came from.
+    let response = app
+        .clone()
+        .oneshot(get("/api/v1/auth/status"))
+        .await
+        .unwrap();
+    let status = json_body(response).await;
+    assert_eq!(status["mode"], "secret");
+    assert_eq!(status["token_management"], true);
+    assert_eq!(status["has_admin_token"], false);
+    assert_eq!(status["secret_source"], "config");
+
+    // Create an operator token: the plaintext is returned exactly once and
+    // the record only ever carries the prefix.
+    let response = app
+        .clone()
+        .oneshot(json_request(
+            "POST",
+            "/api/v1/auth/tokens",
+            Some("oss-secret"),
+            json!({ "name": "ci", "role": "operator" }),
+        ))
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::CREATED);
+    let created = json_body(response).await;
+    let operator_token = created["token"].as_str().unwrap().to_string();
+    assert!(operator_token.starts_with("su_"), "{created}");
+    let operator_id = created["record"]["id"].as_str().unwrap().to_string();
+    assert_eq!(created["record"]["role"], "operator");
+    assert_eq!(created["record"]["name"], "ci");
+    assert!(
+        created["record"]["token_prefix"]
+            .as_str()
+            .unwrap()
+            .ends_with('…')
+    );
+
+    // The list is a bare array (the CLI deserializes Vec<AuthTokenInfo>).
+    let response = app
+        .clone()
+        .oneshot(auth_request("GET", "/api/v1/auth/tokens", "oss-secret"))
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    let list = json_body(response).await;
+    assert_eq!(list.as_array().unwrap().len(), 1);
+    assert_eq!(list[0]["id"], operator_id);
+    assert!(
+        !list.to_string().contains(&operator_token),
+        "the token plaintext must never leave the create response"
+    );
+
+    // The operator token authenticates with its own role: reads OK, writes
+    // still need Operator (this one is Operator, so POST passes), and the
+    // token-management plane is Admin-only.
+    let response = app
+        .clone()
+        .oneshot(auth_request("GET", "/api/v1/programs", &operator_token))
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    let response = app
+        .clone()
+        .oneshot(auth_request("POST", "/api/v1/programs", &operator_token))
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    let response = app
+        .clone()
+        .oneshot(auth_request("POST", "/api/v1/auth/tokens", &operator_token))
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::FORBIDDEN, "minting is Admin");
+    let response = app
+        .clone()
+        .oneshot(auth_request("GET", "/api/v1/auth/me", &operator_token))
+        .await
+        .unwrap();
+    let me = json_body(response).await;
+    assert_eq!(me["role"], "operator");
+    assert_eq!(me["token_id"], operator_id);
+
+    // A viewer token cannot mutate.
+    let response = app
+        .clone()
+        .oneshot(json_request(
+            "POST",
+            "/api/v1/auth/tokens",
+            Some("oss-secret"),
+            json!({ "name": "dashboard-readonly", "role": "viewer" }),
+        ))
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::CREATED);
+    let viewer_token = json_body(response).await["token"]
+        .as_str()
+        .unwrap()
+        .to_string();
+    let response = app
+        .clone()
+        .oneshot(auth_request("GET", "/api/v1/programs", &viewer_token))
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    let response = app
+        .clone()
+        .oneshot(auth_request("POST", "/api/v1/programs", &viewer_token))
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::FORBIDDEN);
+
+    // `has_admin_token` flips with the first active admin token.
+    let response = app
+        .clone()
+        .oneshot(json_request(
+            "POST",
+            "/api/v1/auth/tokens",
+            Some("oss-secret"),
+            json!({ "name": "ops2", "role": "admin" }),
+        ))
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::CREATED);
+    let admin_token = json_body(response).await["token"]
+        .as_str()
+        .unwrap()
+        .to_string();
+    let response = app
+        .clone()
+        .oneshot(get("/api/v1/auth/status"))
+        .await
+        .unwrap();
+    assert_eq!(json_body(response).await["has_admin_token"], true);
+    // An admin token can manage tokens, like the secret can.
+    let response = app
+        .clone()
+        .oneshot(auth_request("GET", "/api/v1/auth/tokens", &admin_token))
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+
+    // Revocation is immediate and the token leaves the active list.
+    let response = app
+        .clone()
+        .oneshot(auth_request(
+            "DELETE",
+            &format!("/api/v1/auth/tokens/{operator_id}"),
+            "oss-secret",
+        ))
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::NO_CONTENT);
+    let response = app
+        .clone()
+        .oneshot(auth_request("GET", "/api/v1/programs", &operator_token))
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+    let response = app
+        .clone()
+        .oneshot(auth_request("GET", "/api/v1/auth/tokens", "oss-secret"))
+        .await
+        .unwrap();
+    let list = json_body(response).await;
+    assert_eq!(list.as_array().unwrap().len(), 2);
+    assert!(!list.to_string().contains("ci"));
 }

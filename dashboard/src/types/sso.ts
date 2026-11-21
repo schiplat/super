@@ -85,9 +85,29 @@ export interface SsoAuditEvent {
 export interface AuthStatusLite {
   mode: SsoGate
   auth_secret_login_allowed?: boolean
+  /** True when multi-user token CRUD (`/api/v1/auth/tokens`) is available. */
+  token_management?: boolean
+  /** Where the break-glass secret came from: config | generated | placeholder. */
+  secret_source?: 'config' | 'generated' | 'placeholder' | null
   sso?: {
     enabled: boolean
     available: boolean
     login_path: string
   } | null
+}
+
+/** Named API token (safe fields; the plaintext is only shown once at create). */
+export interface ApiTokenInfo {
+  id: string
+  name: string
+  token_prefix: string
+  role: SsoRole
+  created_at: number
+  /** Superset of the plugin contract — core adds usage tracking. */
+  last_used_at: number | null
+}
+
+export interface ApiTokenCreateResult {
+  token: string
+  record: ApiTokenInfo
 }

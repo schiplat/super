@@ -113,7 +113,9 @@ export const useCapabilitiesStore = defineStore('capabilities', () => {
       // wall, even though the status endpoint answers. Older builds omit
       // `mode`, which keeps the previous behaviour.
       auth.value = authProbe.body?.mode !== 'none';
-      security.value = authProbe.body?.token_management === true;
+      // `token_management` is true for OSS core token CRUD too — the security
+      // plugin is identified by its gate mode, never by token CRUD.
+      security.value = authProbe.body?.mode === 'plugin';
     } else {
       auth.value = cfg.auth_required === true;
       security.value = false;

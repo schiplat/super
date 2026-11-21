@@ -585,7 +585,13 @@ async fn async_main() -> anyhow::Result<()> {
             );
         }
 
-        let state = auth::AuthState::with_sso(secret, sso_runtime.clone(), gate, !loopback);
+        let state = auth::AuthState::with_sso(
+            secret,
+            sso_runtime.clone(),
+            gate,
+            !loopback,
+            core.auth_secret_source.map(str::to_string),
+        );
         api_router = auth::install_core_auth(api_router, state.clone());
         auth_required = gate.requires_auth();
 
