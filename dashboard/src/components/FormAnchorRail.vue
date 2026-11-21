@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, onUnmounted, ref } from 'vue'
+import { computed, onMounted, onUnmounted, ref } from 'vue'
 
 export interface RailSection {
   key: string
@@ -22,12 +22,11 @@ const emit = defineEmits<{ navigate: [key: string]; back: [] }>()
  *   embedded webviews never dispatch scroll events for programmatic scrolling)
  * - hover-follow: the pointer over the form is the attention anchor, so the
  *   highlight follows the section under it (recomputed on every scroll too)
- * - click-pin: navigating pins the highlight to the clicked section until
- *   genuine user scrolling (wheel / touch / keys) re-enables the spy
  */
-const internalActive = ref(props.sections[0]?.key ?? '')
-const pinnedSection = ref<string | null>(null)
+const scrollActive = ref(props.sections[0]?.key ?? '')
 const hoverSection = ref<string | null>(null)
+/** Hover wins over the scroll position. */
+const activeSection = computed(() => hoverSection.value ?? scrollActive.value)
 
 let sectionScroller: HTMLElement | null = null
 let cursorPoint: { x: number; y: number } | null = null
@@ -54,19 +53,10 @@ function sectionUnderFold(): string {
 }
 
 function refreshHighlight() {
-  if (!pinnedSection.value) {
-    internalActive.value = sectionUnderFold()
-  }
+  scrollActive.value = sectionUnderFold()
   hoverSection.value = cursorPoint
     ? sectionAtPoint(cursorPoint.x, cursorPoint.y)
     : null
-}
-
-function unpin() {
-  if (pinnedSection.value) {
-    pinnedSection.value = null
-    refreshHighlight()
-  }
 }
 
 function onScrollSpy() {
@@ -115,9 +105,7 @@ function scrollToSection(key: string) {
   // scrolls on this container, and navigation must not depend on the animation.
   scroller.scrollTo({ top: target, behavior: 'instant' })
   lastKnownTop = target
-  pinnedSection.value = key
-  hoverSection.value = null
-  internalActive.value = key
+  scrollActive.value = key
   emit('navigate', key)
 }
 
@@ -129,9 +117,6 @@ onMounted(() => {
   scroller.addEventListener('scroll', onScrollSpy, { passive: true })
   scroller.addEventListener('mousemove', onRailHover, { passive: true })
   scroller.addEventListener('mouseleave', onRailLeave)
-  scroller.addEventListener('wheel', unpin, { passive: true })
-  scroller.addEventListener('touchmove', unpin, { passive: true })
-  scroller.addEventListener('keydown', unpin)
   pollFrame = window.setInterval(onScrollSpy, 250)
   onScrollSpy()
 })
@@ -141,9 +126,6 @@ onUnmounted(() => {
     sectionScroller.removeEventListener('scroll', onScrollSpy)
     sectionScroller.removeEventListener('mousemove', onRailHover)
     sectionScroller.removeEventListener('mouseleave', onRailLeave)
-    sectionScroller.removeEventListener('wheel', unpin)
-    sectionScroller.removeEventListener('touchmove', unpin)
-    sectionScroller.removeEventListener('keydown', unpin)
   }
   clearTimeout(hoverFrame)
   clearInterval(pollFrame)
@@ -175,7 +157,7 @@ defineExpose({ scrollToSection })
           :key="section.key"
           type="button"
           class="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-left text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/30"
-          :class="internalActive === section.key
+          :class="activeSection === section.key
             ? 'bg-muted text-foreground'
             : 'text-muted-foreground hover:bg-muted/40 hover:text-foreground'"
           @click="scrollToSection(section.key)"
