@@ -1,12 +1,12 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
-import { Activity, ArrowRight, CircleAlert, CirclePlay, CircleStop, Server } from 'lucide-vue-next'
+import { Activity, ArrowRight, CircleAlert, CirclePlay, CircleStop } from 'lucide-vue-next'
 import { format } from 'date-fns'
 import apiClient from '@/api/client'
 import { API_PATHS } from '@/api/paths'
 import { useProgramStore } from '@/stores/program'
-import SystemMetricsPanel from '@/components/SystemMetricsPanel.vue'
+import HostCard from '@/components/HostCard.vue'
 import UiButton from '@/components/ui/UiButton.vue'
 import UiEmptyState from '@/components/ui/UiEmptyState.vue'
 import UiSection from '@/components/ui/UiSection.vue'
@@ -75,7 +75,7 @@ onMounted(async () => {
   void store.fetchPrograms()
   try {
     const response = await apiClient.get<ProgramEventRecord[]>(API_PATHS.EVENT_HISTORY.QUERY, {
-      params: { limit: 8, order: 'desc' },
+      params: { limit: 12, order: 'desc' },
     })
     events.value = response.data ?? []
   } catch (e: any) {
@@ -106,8 +106,9 @@ onMounted(async () => {
     </div>
 
     <div class="grid gap-6 xl:grid-cols-2">
-      <!-- Needs attention -->
-      <UiSection title="Needs attention" description="Failing, restarting, or unhealthy programs.">
+      <!-- Left column: attention + host metrics share the column width -->
+      <div class="flex flex-col gap-6">
+        <UiSection title="Needs attention" description="Failing, restarting, or unhealthy programs." class="shrink-0">
         <div v-if="store.isLoading && store.programs.length === 0" class="space-y-2">
           <div v-for="row in 3" :key="row" class="h-10 animate-pulse rounded-xl bg-muted/40"></div>
         </div>
@@ -131,10 +132,13 @@ onMounted(async () => {
           </button>
         </div>
         <UiEmptyState v-else title="Everything is healthy" hint="No failing or unhealthy programs." />
-      </UiSection>
+        </UiSection>
 
-      <!-- Recent events -->
-      <UiSection title="Recent events" description="The newest lifecycle and health events.">
+        <HostCard class="flex-1" />
+      </div>
+
+      <!-- Right column: the event timeline stretches to match -->
+      <UiSection title="Recent events" description="The newest lifecycle and health events." class="h-full">
         <template #actions>
           <UiButton variant="ghost" size="sm" @click="router.push('/events')">
             All events
@@ -165,13 +169,5 @@ onMounted(async () => {
         <UiEmptyState v-else title="No events yet" hint="Events appear once programs start running." />
       </UiSection>
     </div>
-
-    <!-- Host resources -->
-    <UiSection title="Host" description="Resources on the machine running superd.">
-      <div class="flex items-center gap-3 py-1">
-        <Server class="h-4 w-4 text-muted-foreground/40" />
-        <SystemMetricsPanel />
-      </div>
-    </UiSection>
   </div>
 </template>
