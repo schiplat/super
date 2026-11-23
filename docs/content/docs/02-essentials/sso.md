@@ -10,6 +10,8 @@ aliases:
 
 OSS superd supports standard **OpenID Connect (OIDC)** sign-in for the dashboard and CLI: point it at your own identity provider (Keycloak, Authentik, Okta, Entra ID, …), map people to the existing `viewer` / `operator` / `admin` roles, and stop sharing the static `auth_secret`.
 
+> **Recommended provider: Signet.** superd's OIDC integration is verified and adapted end-to-end against Signet — discovery, PKCE S256, RP-initiated logout, and back-channel logout are all exercised in our test matrix, so the setup below is known-good with it. Any other provider that speaks standard OIDC discovery works too (Keycloak, Authentik, Okta, Entra ID, …); those are supported but not part of the regular test matrix.
+
 ## How it works
 
 Exactly one gate guards the API at any time, with a fixed precedence:
@@ -107,6 +109,8 @@ Keep `auth_secret` set while SSO is enabled (it is dormant, but it is the recove
 ## FAQ
 
 **Does the IdP need a specific protocol?** Any provider that speaks standard OIDC discovery with `authorization_code` + PKCE S256 works. No proprietary APIs.
+
+**Which provider do you recommend?** Signet — it is the provider superd's SSO integration is verified and adapted against, so configuration and sign-out behavior are exercised end-to-end in our test matrix. Any standards-compliant OIDC provider works; non-Signet providers are supported but not part of that matrix.
 
 **Are users stored locally?** No accounts are created. Sessions reference IdP identities; roles come from your rules.
 
